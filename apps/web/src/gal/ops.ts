@@ -14,19 +14,23 @@ import {
   createAutomorphismGroup,
   createDirectProduct,
   elementOrder,
+  extendFromGenerators,
   factorizeOrder,
   findAllNormalSubgroups,
   findAllPSubgroups,
   findAllSubgroups,
   findSylowSubgroups,
   getCentralizer,
+  getGeneratorElements,
   getGroupCenter,
+  getHomomorphismProperties,
   getNormalizer,
   isSubgroupElementSet,
   resolveElement,
   subgroupFromElementIds,
   subgroupSetKey,
   subgroupStructureSymbol,
+  verifyHomomorphism,
   type Group,
   type GroupElement,
   type HomomorphismMap,
@@ -94,10 +98,23 @@ export const MECHANISM_ORDER: Mechanism[] = [
  * ——前缀填不上的对象参数意味着"还得多选一个节点"，而末尾的标量参数
  * 可以由用户后续在输入框里补。
  */
-export type ParamType = 'group' | 'subset' | 'action' | 'map' | 'element' | 'prime' | 'int'
+export type ParamType =
+  | 'group'
+  | 'subset'
+  | 'action'
+  | 'map'
+  | 'element'
+  | 'prime'
+  | 'int'
+  | 'genImage'
 
-/** 画布上选不出来的参数（须由文本 / 编辑器补），`opsFor` 视作"可后补"。 */
-export const SCALAR_PARAM_TYPES: ParamType[] = ['element', 'prime', 'int']
+/**
+ * 画布上选不出来的参数（须由文本 / 编辑器补），`opsFor` 视作"可后补"。
+ *
+ * `genImage`（生成元的像，如 `r2→e`）是 U3 映射构建器的产物：
+ * 它是**一对**记号（生成元 → 像），画布上一个节点表达不了，所以归入这一类。
+ */
+export const SCALAR_PARAM_TYPES: ParamType[] = ['element', 'prime', 'int', 'genImage']
 
 export function isScalarParam(t: ParamType): boolean {
   return SCALAR_PARAM_TYPES.includes(t)
@@ -151,6 +168,16 @@ export interface OpDef {
    * 长度必须等于 `arity + (optional ?? 0)`（模块加载时断言）。
    */
   params: OpParam[]
+  /**
+   * 末尾**可变参数**（0..n 个）——`映射(G, H, r2→e, s→s)` 的像对就是这么来的。
+   * 声明在 `params` 之外（不计入 arity），填不填都不影响 `opsFor` 的匹配。
+   */
+  variadic?: OpParam
+  /**
+   * 该操作**不能直接执行**，凑齐对象参数后要弹编辑器（U3 的映射构建器）。
+   * 文本一行表达不了生成元的像，得让用户填（见 ARCHITECTURE §6.1 的输入层三形态）。
+   */
+  editor?: boolean
   /** 必需参数个数 */
   arity: number
   /** 末尾可选参数个数 */
@@ -319,6 +346,32 @@ function mapArgOf(a: OpArg | undefined): GalMap | null {
   return a.value.type === 'map' ? a.value.map : null
 }
 
+/** 元素 id → 展示记号（core 的报错结构里给的是 id，展示前要翻一遍）。 */
+function elementLabel(group: Group, id: string): string {
+  return group.elements.find((e) => e.id === id)?.label ?? id
+}
+
+/**
+ * 生成元记号 → core 的生成元项。
+ *
+ * 生成元有三种写法要对上：core 的 `gen.name`（如 `r2`、`s12`、`a`）、
+ * 生成元**元素**的 `label`（如 `s`、`(12)`、`1`）与 `id`。
+ * 编辑器填的是 name（好读），用户手写时常写 label，所以都认。
+ *
+ * 注意 core 的 `extendFromGenerators` 收的 Map 的 key 是**元素 id**，
+ * 不是名字——这里返回 `el` 就是为了这个（踩过：传名字一律得到 null）。
+ */
+function generatorOf(group: Group, text: string): { genName: string; el: GroupElement } | null {
+  const gens = getGeneratorElements(group)
+  const hit = gens.find((g) => g.gen.name === text || g.el.label === text || g.el.id === text)
+  return hit ? { genName: hit.gen.name, el: hit.el } : null
+}
+
+/** 生成元的候选记号（报错提示 / 编辑器下拉都要用）。 */
+export function generatorNames(group: Group): string[] {
+  return getGeneratorElements(group).map((g) => g.gen.name)
+}
+
 /**
  * Ω 中某记号对应的下标。Ω = G 本身时元素记号走 `resolveElement`
  * （于是 `(123)` / `123` / `…,+1,+2,+3` 都能命中同一个元素）。
@@ -482,6 +535,111 @@ export const OPS: OpDef[] = [
         value: { type: 'group', group: Q },
         label: prettySymbol(Q.symbol),
         sub: `|G/N| = ${Q.order}`,
+      }
+    },
+  },
+  {
+    id: 'map',
+    notation: '映射(G, H, r2→e, …)',
+    mechanism: 'atomic',
+    primitive: true,
+    doc: '同态 f : G → H，由**生成元的像**给出（如 r2→e, s→s）',
+    impl: 'extendFromGenerators + verifyHomomorphism',
+    call: ['映射', '同态', 'map', 'hom'],
+    params: [
+      { name: 'G', type: 'group' },
+      { name: 'H', type: 'group' },
+    ],
+    variadic: { name: '像', type: 'genImage' },
+    arity: 2,
+    editor: true,
+    result: 'map',
+    run: (a) => {
+      const G = groupOf(a[0])
+      const H = groupOf(a[1])
+      if (!G || !H) return fail('映射需要源群与靶群', '映射(G, H, r2→e, s→s)')
+      const gens = getGeneratorElements(G)
+      if (gens.length === 0) return fail(`${textOf(a[0])} 没有生成元，无法由生成元的像定义映射`)
+
+      const pairs: { genName: string; genId: string; image: GroupElement }[] = []
+      const seen = new Set<string>()
+      for (let i = 2; i < a.length; i++) {
+        const raw = a[i].text
+        // 三种箭头都认：→（编辑器产出）/ -> / =>（手写友好）
+        const parts = raw.split(/→|->|=>/)
+        if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
+          return fail(`像对的写法不对：${raw}`, '应形如 r2→e（生成元 → 像）')
+        }
+        const genText = parts[0].trim()
+        const g = generatorOf(G, genText)
+        if (!g) {
+          return fail(
+            `${textOf(a[0])} 里没有生成元 ${genText}`,
+            `生成元：${gens.map((x) => x.gen.name).join(', ')}`,
+          )
+        }
+        if (seen.has(g.genName)) return fail(`生成元 ${genText} 给了两个像`)
+        const img = resolveElement(H, parts[1].trim())
+        if (!img) {
+          return fail(
+            `${textOf(a[1])} 里没有元素 ${parts[1].trim()}`,
+            `元素：${H.elements.map((e) => e.label).slice(0, 24).join(', ')}`,
+          )
+        }
+        seen.add(g.genName)
+        pairs.push({ genName: g.genName, genId: g.el.id, image: img })
+      }
+      if (pairs.length === 0) {
+        return fail('至少要给一个生成元的像', '映射(G, H, r2→e)')
+      }
+
+      // core 的延拓 Map 收的是**生成元元素 id**（不是名字）
+      const genMapping = new Map(pairs.map((p) => [p.genId, p.image.id]))
+      const full = extendFromGenerators(G, H, genMapping)
+      if (!full) {
+        return fail(
+          '这组像无法唯一延拓成映射',
+          `生成元之间的乘法关系没被保持（在 ${textOf(a[0])} 里成立的等式，到 ${textOf(a[1])} 里不成立）`,
+        )
+      }
+      const res = verifyHomomorphism(G, H, full)
+      if (!res.isHomomorphism) {
+        const v = res.violation
+        if (v) {
+          return fail(
+            `不是同态：f(${elementLabel(G, v.a)}·${elementLabel(G, v.b)}) ≠ f(${elementLabel(G, v.a)})·f(${elementLabel(G, v.b)})`,
+            `左 = ${elementLabel(H, v.lhs)}；右 = ${elementLabel(H, v.rhs)}`,
+          )
+        }
+        return fail('这组像不构成同态')
+      }
+
+      const props = getHomomorphismProperties(G, H, res)
+      const kernel = G.elements.filter((e) => res.kernel.includes(e.id))
+      const image = H.elements.filter((e) => res.image.includes(e.id))
+      const map: GalMap = {
+        domain: G,
+        codomain: H,
+        mapping: full,
+        genImages: pairs.map((p) => ({ generator: p.genName, image: p.image })),
+        isHomomorphism: true,
+        isInjective: props.isInjective,
+        isSurjective: props.isSurjective,
+        kernel,
+        image,
+      }
+      const kind = props.isIsomorphism
+        ? '同构 ≅'
+        : props.isInjective
+          ? '单射（嵌入）'
+          : props.isSurjective
+            ? '满射'
+            : '同态'
+      return {
+        ok: true,
+        value: { type: 'map', map },
+        label: `${prettySymbol(G.symbol)} → ${prettySymbol(H.symbol)}`,
+        sub: `${kind} · |ker| = ${kernel.length} · |im| = ${image.length}`,
       }
     },
   },
@@ -1237,7 +1395,8 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
     case 'element':
     case 'prime':
     case 'int':
-      return false // 标量：画布上选不出来
+    case 'genImage':
+      return false // 画布上选不出来（由文本 / 编辑器补）
   }
 }
 

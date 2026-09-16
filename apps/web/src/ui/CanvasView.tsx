@@ -303,12 +303,12 @@ export function CanvasView({
             e.kind === 'action' ? 'arrow-action' : e.kind === 'map' ? 'arrow-map' : 'arrow-prov'
           const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
           return (
-            <g key={e.id}>
+            <g key={e.id} className={`gedge gedge-${e.kind}`}>
               <path
                 d={`M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`}
                 fill="none"
                 stroke={stroke}
-                strokeWidth={e.kind === 'provenance' ? 1.3 : 1.8}
+                strokeWidth={e.kind === 'provenance' ? 1.3 : e.kind === 'map' ? 2.4 : 1.8}
                 strokeDasharray={e.kind === 'provenance' ? '5 4' : undefined}
                 markerEnd={`url(#${marker})`}
               />

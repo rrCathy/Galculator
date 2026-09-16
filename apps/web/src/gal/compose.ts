@@ -63,3 +63,21 @@ export function composeCall(op: OpDef, args: (string | null)[]): string | null {
 export function previewCall(op: OpDef, args: (string | null)[]): string {
   return composeCall(op, args) ?? `${op.notation}`
 }
+
+/**
+ * 编辑器产出的映射定义行（U3）：
+ *
+ *   `映射(G, H, r2→e, s→s)`
+ *
+ * 生成元的像连**顺序都是确定的**（按源群生成元表的次序），所以同一组像
+ * 永远编出同一行——App 的去重逻辑因此照常管用（不会攒出一堆等价行）。
+ */
+export function composeMapLine(
+  op: OpDef,
+  refs: string[],
+  pairs: { gen: string; img: string }[],
+): string {
+  const head = callHead(op) ?? '映射'
+  const args = [...refs, ...pairs.map((p) => `${p.gen}→${p.img}`)]
+  return `${head}(${args.join(', ')})`
+}

@@ -16,13 +16,16 @@ import type { GalValue } from './value'
  * （U2 的验证脚本就是这么做的）。
  *
  * ```
- * idle ──click(node)──→ selected ──click(径向)──→ menu
- * menu ──click(一元操作)──→ 执行 ──→ selected(新对象)
- * menu ──click(多元操作)──→ pending(opId,[node])
+ * idle ──click(node)──→ selected ──click(悬浮球)──→ menu
+ * menu ──click(单对象操作)──→ 执行 ──→ selected(新对象)
+ * menu ──click(多对象操作)──→ pending(opId,[node])
  * menu ──click(需要标量的一元操作)──→ fill(opId,[node])
- * pending ──click(node)──→ pending(opId, picked+[node]) ──凑够对象参数──→ 执行 或 fill
- * pending / fill ──Esc / 点空白──→ idle
+ * pending ──click(node)──→ pending(opId, picked+[node]) ──凑够对象参数──→ 执行 / fill / editor
+ * pending / fill / editor ──Esc / 点空白──→ idle
  * ```
+ *
+ * `editor` 是 U3 补的一档：**映射**这类操作的实参一行文本表达不了
+ * （要填生成元的像），凑齐对象参数后转交构建器，而不是直接执行。
  */
 export type Interaction =
   | { kind: 'idle' }
@@ -32,10 +35,12 @@ export type Interaction =
   | { kind: 'pending'; opId: string; picked: string[] }
   /** 等标量参数：顶部补参条，回车执行 */
   | { kind: 'fill'; opId: string; picked: string[]; scalars: (string | null)[] }
+  /** 交给编辑器（映射构建器）：对象参数已齐，还要用户填生成元的像 */
+  | { kind: 'editor'; opId: string; picked: string[] }
 
 export const IDLE: Interaction = { kind: 'idle' }
 
-/** 竖卡要展示哪个对象（pending 时停在**第一个**参数——它是"源"）。 */
+/** 竖卡要展示哪个对象（pending / editor 时停在**第一个**参数——它是"源"）。 */
 export function focusId(inter: Interaction): string | null {
   switch (inter.kind) {
     case 'selected':
@@ -43,20 +48,25 @@ export function focusId(inter: Interaction): string | null {
       return inter.target
     case 'pending':
     case 'fill':
+    case 'editor':
       return inter.picked[0] ?? null
     default:
       return null
   }
 }
 
-/** 需要高亮的节点（pending/fill 时已点过的那些）。 */
+/** 需要高亮的节点（pending/fill/editor 时已点过的那些）。 */
 export function pickedIds(inter: Interaction): string[] {
-  return inter.kind === 'pending' || inter.kind === 'fill' ? inter.picked : []
+  return inter.kind === 'pending' || inter.kind === 'fill' || inter.kind === 'editor'
+    ? inter.picked
+    : []
 }
 
 /** 正在进行的操作 id（提示条要显示它的记法）。 */
 export function activeOpId(inter: Interaction): string | null {
-  return inter.kind === 'pending' || inter.kind === 'fill' ? inter.opId : null
+  return inter.kind === 'pending' || inter.kind === 'fill' || inter.kind === 'editor'
+    ? inter.opId
+    : null
 }
 
 /**
@@ -107,6 +117,7 @@ const MENU_LABEL: Record<string, string> = {
   image: '像 im',
   closure: '生成子群 ⟨S⟩',
   elementOrder: '元素阶 ord',
+  map: '映射 f: G → H',
 }
 
 export function menuLabel(op: OpDef): string {
@@ -123,6 +134,12 @@ export const PARAM_LABEL: Record<ParamType, string> = {
   element: '元素记号',
   prime: '素数',
   int: '整数',
+  genImage: '生成元 → 像',
+}
+
+/** 该操作凑齐对象参数后要不要弹编辑器（映射构建器）。 */
+export function needsEditor(op: OpDef): boolean {
+  return !!op.editor
 }
 
 /** pending 提示条文案：下一个要选的是哪一位。 */

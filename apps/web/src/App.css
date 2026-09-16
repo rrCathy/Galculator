@@ -1003,6 +1003,206 @@ body {
   background: rgba(163, 45, 45, 0.12);
 }
 
+/* ── 映射构建器（U3 对象编辑器）────────────────────────── */
+
+.map-builder {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  z-index: 18;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 430px;
+  max-width: calc(100vw - 24px);
+  padding: 12px 14px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+}
+
+.mb-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mb-head strong {
+  font-weight: 500;
+}
+
+.mb-arrow {
+  color: var(--text-faint);
+}
+
+.mb-x {
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mb-x:hover {
+  background: #eceae3;
+  color: var(--text);
+}
+
+.mb-hint {
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.mb-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mb-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mb-gen {
+  min-width: 34px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.mb-to {
+  color: var(--text-faint);
+}
+
+.mb-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  outline: none;
+}
+
+.mb-row select:focus {
+  border-color: var(--blue);
+}
+
+.mb-auto {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.mb-auto:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.mb-check {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.mb-check.empty {
+  background: var(--panel);
+  color: var(--text-dim);
+}
+
+.mb-check.ok {
+  background: #e1f5ee;
+  color: #0a5744;
+}
+
+.mb-check.bad {
+  background: var(--danger-fill);
+  color: var(--danger);
+}
+
+.mb-ok-mark {
+  color: #0f6e56;
+}
+
+.mb-bad-mark {
+  color: var(--danger);
+}
+
+.mb-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mb-name {
+  width: 74px;
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  text-align: center;
+  outline: none;
+}
+
+.mb-name:focus {
+  border-color: var(--blue);
+}
+
+.mb-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.mb-btn.primary {
+  margin-left: auto;
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.mb-btn:hover:not(:disabled) {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.mb-btn:disabled {
+  border-color: var(--border);
+  color: var(--text-faint);
+  cursor: default;
+  opacity: 0.65;
+}
+
 /* KaTeX 与周围文字对齐 */
 
 .katex {

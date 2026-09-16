@@ -182,9 +182,10 @@ export function resolveArg(raw: string, objects: Map<string, GalObject>): OpArg 
 /* ── 分发 ─────────────────────────────────────────────── */
 
 function runOp(op: OpDef, args: OpArg[]): EvalResult {
-  const max = op.arity + (op.optional ?? 0)
+  // 可变参数（如映射的「生成元→像」对）不限个数，所以上界只在没有 variadic 时才管用
+  const max = op.variadic ? Number.POSITIVE_INFINITY : op.arity + (op.optional ?? 0)
   if (args.length < op.arity || args.length > max) {
-    const need = op.optional ? `${op.arity}~${max}` : `${op.arity}`
+    const need = op.variadic ? `${op.arity}+` : op.optional ? `${op.arity}~${max}` : `${op.arity}`
     return {
       ok: false,
       error: `${op.notation} 需要 ${need} 个参数，收到 ${args.length} 个`,

@@ -1,3 +1,4 @@
+import type { Group } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from './types'
 
 /**
@@ -28,23 +29,126 @@ export function computeLevels(objects: GalObject[]): Map<string, number> {
   return memo
 }
 
+/** 结果群是母群的子群（升级为真群对象）的那几个操作——它们带**包含箭头**。 */
+const SUBGROUP_RESULT_OPS = new Set([
+  'center',
+  'centralizer',
+  'normalizer',
+  'commutatorGroup',
+  'closure',
+])
+
+/** 群对象 → 它在画布上的节点 id（同一个群可能有多个对象，取第一个）。 */
+function groupNodeId(objects: GalObject[], group: Group): string | null {
+  const exact = objects.find((o) => o.value.type === 'group' && o.value.group === group)
+  if (exact) return exact.id
+  const alike = objects.find(
+    (o) =>
+      o.value.type === 'group' &&
+      o.value.group.symbol === group.symbol &&
+      o.value.group.order === group.order,
+  )
+  return alike?.id ?? null
+}
+
+/**
+ * 结构伴生边（U3）——**操作 = 结果对象 + 结构伴生**：
+ * 一个操作在长出结果节点的同时，也长出了它和旧对象之间的那条**映射箭头**。
+ *
+ * | 操作 | 伴生箭头 |
+ * |---|---|
+ * | `Q = G / N` | `π : G → Q`（自然投影）|
+ * | `P = A × B` | `π₁ : P → A`、`π₂ : P → B`（积投影）|
+ * | `Z(G)` `[G,G]` `C_G` `N_G` `⟨S⟩` | `H ↪ G`（包含，H 是母群的子群）|
+ * | `ker f` / `im f` | `ker ↪ dom`、`im ↪ cod`（母群从映射的端群取）|
+ *
+ * 这些箭头**不是**"来源线"那种辅助信息，它们是交换图上的一等公民（实线）。
+ * 所以有伴生箭头的对象**不再画来源线**——否则同一对节点上会叠两条反向的线。
+ */
+function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
+  edges: GalEdge[]
+  consumed: Set<string>
+} {
+  const edges: GalEdge[] = []
+  const consumed = new Set<string>()
+  const byId = new Map(objects.map((o) => [o.id, o]))
+
+  /** 子群结果的母群：从来源里找——直接来源是群就用它；是映射就用映射的端群。 */
+  const parentOf = (o: GalObject, want: 'domain' | 'codomain'): string | null => {
+    for (const s of o.sources) {
+      const src = byId.get(s)
+      if (!src) continue
+      if (src.value.type === 'group') return groupNodeId(objects, src.value.group)
+      if (src.value.type === 'map') {
+        const g = src.value.map[want]
+        const id = groupNodeId(objects, g)
+        if (id) return id
+      }
+    }
+    return null
+  }
+
+  for (const o of objects) {
+    if (o.value.type !== 'group' || !nodeIds.has(o.id)) continue
+    const op = o.opId ?? ''
+
+    if (op === 'quotient') {
+      const g = parentOf(o, 'domain')
+      if (g && g !== o.id) {
+        edges.push({ id: `${g}->${o.id}:pi`, kind: 'map', from: g, to: o.id, label: 'π' })
+        consumed.add(o.id)
+      }
+      continue
+    }
+
+    if (op === 'directProduct') {
+      const factors = o.sources.filter((s) => nodeIds.has(s)).slice(0, 2)
+      factors.forEach((f, i) => {
+        edges.push({
+          id: `${o.id}->${f}:proj${i}`,
+          kind: 'map',
+          from: o.id,
+          to: f,
+          label: i === 0 ? 'π₁' : 'π₂',
+        })
+      })
+      if (factors.length > 0) consumed.add(o.id)
+      continue
+    }
+
+    const isSubgroupResult = SUBGROUP_RESULT_OPS.has(op) || op === 'kernel' || op === 'image'
+    if (!isSubgroupResult) continue
+    const parent = parentOf(o, op === 'image' ? 'codomain' : 'domain')
+    if (parent && parent !== o.id) {
+      edges.push({
+        id: `${o.id}->${parent}:incl`,
+        kind: 'map',
+        from: o.id,
+        to: parent,
+        label: '↪',
+      })
+      consumed.add(o.id)
+    }
+  }
+
+  return { edges, consumed }
+}
+
 /**
  * 画布图派生（docs/INTERACTION.md §10.2）。
  *
- *   每个对象 → 一个节点（数值除外）
+ *   每个对象 → 一个节点（数值除外；映射不占节点，只画箭头）
  *   每个操作的源 → 一条边；作用是「作用线」，其余是「来源线」
- *
- * 映射（`map`）在画布上是 domain→codomain 的**实线箭头**而非节点，
- * 需要对象编辑器产出映射对象后接入——见 value.ts 的 GalMap。
+ *   映射对象 → **实线箭头**（domain → codomain）；某些操作另带**结构伴生箭头**
  */
 export function deriveCanvas(objects: GalObject[]): CanvasGraph {
   const levels = computeLevels(objects)
 
   const nodes: CanvasNode[] = []
   for (const o of objects) {
-    // 数值 → 左栏「数值区」，不进画布
+    // 数值 → 左侧「数值」抽屉，不进画布
     if (o.value.type === 'number') continue
-    // 映射 → 只画边不占节点（待对象编辑器接入）
+    // 映射 → 只画箭头不占节点
     if (o.value.type === 'map') continue
     nodes.push({
       ...o,
@@ -55,13 +159,16 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
 
   const ids = new Set(nodes.map((n) => n.id))
   const edges: GalEdge[] = []
+
+  // ① 来源线 / 作用线
+  const { edges: structural, consumed } = alongsideEdges(objects, ids)
   for (const n of nodes) {
+    if (consumed.has(n.id)) continue // 已有结构伴生箭头，别叠一条来源线
     const isAction = n.value.type === 'action'
     for (const src of n.sources) {
       if (!ids.has(src)) continue
       edges.push({
         id: `${src}->${n.id}`,
-        // 作用 = 特殊样式的箭头（作用线）；其余 = 辅助性的来源线
         kind: isAction ? 'action' : 'provenance',
         from: src,
         to: n.id,
@@ -69,5 +176,27 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       })
     }
   }
-  return { nodes, edges }
+
+  // ② 结构伴生箭头（一等公民，实线）
+  edges.push(...structural)
+
+  // ③ 显式映射对象 → 实线箭头（标签就是映射的名字）
+  for (const o of objects) {
+    if (o.value.type !== 'map') continue
+    const from = groupNodeId(objects, o.value.map.domain)
+    const to = groupNodeId(objects, o.value.map.codomain)
+    if (!from || !to || !ids.has(from) || !ids.has(to)) continue
+    edges.push({ id: `map:${o.id}`, kind: 'map', from, to, label: o.id })
+  }
+
+  // 去重（同一 from→to 只留一条；结构伴生优先于来源线）
+  const seen = new Set<string>()
+  const deduped = edges.filter((e) => {
+    const key = `${e.from}->${e.to}:${e.kind}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  return { nodes, edges: deduped }
 }

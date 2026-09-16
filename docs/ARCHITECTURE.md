@@ -96,7 +96,7 @@
 | 原子构造 | `群(记号)` | `parseGroupNotation` → `createGroupFromSymbol` |
 | 原子构造 | `积(A,B)` | `createDirectProduct` / `createSemidirectProduct` |
 | 原子构造 | `商(G,N)` | `computeQuotientGroup` |
-| 原子构造 | `映射(G→H)` | `verifyHomomorphism`（对象编辑器输入）|
+| 原子构造 | `映射(G→H)` | `getGeneratorElements` → `extendFromGenerators` → `verifyHomomorphism`（U3 已落地）|
 | 原子构造 | `作用(G↷Ω)` | `computeConjugationPerms` / `computeLeftTranslationPerms` / `computeCosetActionPerms` |
 | 作用导出 | `轨道(A,x)` | `computeOrbits` |
 | 作用导出 | `稳定子(A,x)` | `computeStabilizers` |
@@ -249,12 +249,19 @@
 1. 选源群 G、目标群 H
 2. 列出 G 的生成元 —— `getGeneratorElements(group)` → `{gen, el}[]`
 3. 逐个填 H 中的像 —— 引用走 `resolveElement`（接受 id / label / value / 循环记号）
-4. `extendFromGenerators(source, target, Map<生成元名, 像引用>)` 补全成完整映射
+4. `extendFromGenerators(source, target, Map<生成元元素 id, 像元素 id>)` 补全成完整映射
 5. `verifyHomomorphism(source, target, mapping)` 校验；不满足关系时返回 `violation{a, b, lhs, rhs}`，据此给**定向提示**（"f(a)f(b) ≠ f(ab)"）
 
 作用的自定义箭头同理（源作用由生成元的置换决定）。
 
-> **引擎侧已完整，缺的只是一张表单。** 落地后画布上才有第一条**实线映射边**（见 INTERACTION §7.2）。
+> **U3 已落地（映射部分）**：`ui/MapBuilder.tsx` + 注册表的 `映射` 操作（`editor: true`）。
+> 表单产出的是**一行文本** `映射(G, H, r→0, s→0)`，交给同一个求值器——"点出来的"与"手写的"等价。
+> 画布上因此有了第一条**实线映射边**（INTERACTION §7.2）。
+>
+> **踩过的坑**：`extendFromGenerators` / `extractGeneratorMapping` 的 Map **key 是生成元元素的 id**，
+> 不是 `gen.name`——传名字一律得到 `null`（静默失败，没有任何报错）。
+>
+> **尚未做**：自定义作用的表单；伴生箭头（π / π₁ / ↪）目前只画边、还不是映射对象。
 
 ### 6.2 搭积木（集合构造）
 
