@@ -292,6 +292,8 @@ export default function App() {
       }
       setInter({ kind: 'selected', target: id })
       setOrbStage('closed')
+      // 点对象 = 想看它 —— 信息面板直接打开（与"点对象行"的行为一致）
+      setOpenInfo(true)
     },
     [inter, pendOp, runOp],
   )

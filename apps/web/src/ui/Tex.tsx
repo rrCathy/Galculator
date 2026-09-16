@@ -1,40 +1,101 @@
 import { useMemo } from 'react'
 import katex from 'katex'
+import { shouldTex, toTex } from '../gal/tex'
 
 /**
- * KaTeX 渲染（UI v3 接上）。
+ * KaTeX 渲染（面板 + 画布）。
  *
- * 分工要说清楚：**面板里用 KaTeX，画布节点标签仍用 Unicode 近似**。
+ * 分工在这轮（U4）改了：**两处都走 KaTeX**。原先"画布用 Unicode 近似"的
+ * 三条理由现在都能对付过去：
  *
- * - core 的群符号本来就是 TeX（`C_{2}\times C_{2}` / `\mathbb{Z}_{6}`），
- *   喂 KaTeX 是零成本的；而 `prettySymbol` 那套 Unicode 折叠（`C₂×C₂`）
- *   在遇到 `S_{4}^{2}` / `\mathbb{Z}_{2}^{2}` 这类会失真，只配当**纯文本**场景的兜底。
- * - 画布是 SVG，KaTeX 输出的是 HTML，要塞进去得走 `<foreignObject>`，
- *   而节点尺寸是"按标签实测宽度自适应"的——那就要渲染后回量一次、再重排一次。
- *   更要命的是节点标签是**混合语义的展示串**（`Z ∩ C`、`⟨r⟩`、`Sub(D₄)` 里的
- *   `C` 是用户起的对象名），不是从 TeX 源生成的。所以画布这一层留到以后单做。
+ *  1. SVG 里塞 HTML —— 走 `<foreignObject>`（现代浏览器都支持）；
+ *  2. 尺寸要渲染后回量 —— 改用**离屏测量**（`measureTex`）：同一个标签只量一次、
+ *     结果缓存，而且换 KaTeX 之后量得**比原来的字符宽度估算更准**；
+ *  3. 标签是混合语义串（`Z ∩ C`、`Sub(D₄)`）—— 新增 `gal/tex.ts` 的 `toTex()`
+ *     把 Unicode 展示串反推成 LaTeX（`Z \cap C`、`\operatorname{Sub}(D_{4})`）。
  */
-export function Tex({ tex, className }: { tex: string; className?: string }) {
-  const html = useMemo(() => {
-    try {
-      // output: 'html' —— 默认还输出一份 MathML，复制时会重复，这里不需要
-      return katex.renderToString(tex, { throwOnError: false, output: 'html' })
-    } catch {
-      return null
-    }
-  }, [tex])
 
+const OPTIONS = { throwOnError: false, output: 'html' } as const
+
+/** 渲染一段 TeX 为 HTML；失败返回 null（调用方降级成纯文本）。 */
+export function renderTex(tex: string): string | null {
+  try {
+    return katex.renderToString(tex, OPTIONS)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 展示串 → KaTeX HTML（先反推 LaTeX）。
+ *
+ * **不做"像不像 TeX"的猜测**：`toTex` 对纯 ASCII 是恒等变换，
+ * 于是 `A` 也进 KaTeX（渲染成数学斜体 A，在数学语境里本来就更对）。
+ */
+const htmlCache = new Map<string, string | null>()
+
+export function labelTexHtml(label: string): string | null {
+  const hit = htmlCache.get(label)
+  if (hit !== undefined) return hit
+  const out = renderTex(toTex(label))
+  htmlCache.set(label, out)
+  return out
+}
+
+/* ── 离屏测量：画布节点尺寸自适应的依据 ─────────────────── */
+
+let host: HTMLDivElement | null = null
+const sizeCache = new Map<string, { w: number; h: number }>()
+
+/**
+ * 量一个标签在给定字号下占多大（返回 CSS 像素 = SVG 世界单位）。
+ *
+ * 离屏容器一次创建、反复使用；结果按 `标签@字号` 缓存。
+ * 字体异步加载会让首帧偏窄，所以 `document.fonts.ready` 之后清一次缓存。
+ */
+export function measureTex(label: string, fontPx: number): { w: number; h: number } | null {
+  if (typeof document === 'undefined') return null
+  const key = `${label}@${fontPx}`
+  const hit = sizeCache.get(key)
+  if (hit) return hit
+
+  const html = labelTexHtml(label)
+  if (html === null) return null
+
+  if (!host) {
+    host = document.createElement('div')
+    host.style.cssText =
+      'position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;white-space:nowrap;'
+    document.body.appendChild(host)
+  }
+  host.style.fontSize = `${fontPx}px`
+  host.innerHTML = html
+  const el = host.firstElementChild as HTMLElement | null
+  const rect = el?.getBoundingClientRect()
+  if (!rect) return null
+  const out = { w: rect.width, h: rect.height }
+  sizeCache.set(key, out)
+  return out
+}
+
+if (typeof document !== 'undefined' && document.fonts?.ready) {
+  void document.fonts.ready.then(() => sizeCache.clear())
+}
+
+/* ── 组件 ─────────────────────────────────────────────── */
+
+export function Tex({ tex, className }: { tex: string; className?: string }) {
+  const html = useMemo(() => renderTex(tex), [tex])
   if (html === null) return <span className={className}>{tex}</span>
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 /**
- * 把展示用的 TeX 片段渲染出来；若不是 TeX（用户起的中文名、`A ∩ B` 这类拼接串）
- * 就原样当文本。判断标准很粗但够用：**看起来像反斜杠/上下标/花括号的才当 TeX**。
+ * 把展示串渲染出来——**能转 TeX 就转**（`shouldTex` 只用来挡纯粹的 ASCII 名字，
+ * 那种情况 KaTeX 与纯文本视觉差别很小，不如省一次排版）。
  */
-const TEX_HINT = /[\\^_{}]/
-
 export function TexOrText({ text, className }: { text: string; className?: string }) {
-  if (!TEX_HINT.test(text)) return <span className={className}>{text}</span>
-  return <Tex tex={text} className={className} />
+  const html = useMemo(() => (shouldTex(text) ? renderTex(toTex(text)) : null), [text])
+  if (html === null) return <span className={className}>{text}</span>
+  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 }

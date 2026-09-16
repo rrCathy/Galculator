@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode } from '../gal/types'
+import { labelTexHtml, measureTex } from './Tex'
 
 /** 基础留白（viewBox 单位） */
 const BASE_PAD = 20
@@ -12,7 +13,7 @@ const GAP_X = 30
 const GROUP_H = 54
 const ACTION_H = 42
 const SET_MIN_R = 32
-const SET_MAX_R = 58
+const SET_MAX_R = 66
 
 const INPUT_FILL = '#E6F1FB'
 const INPUT_STROKE = '#185FA5'
@@ -27,6 +28,8 @@ const ACTION_TEXT = '#0A5744'
 const PROV = '#B9B6AD'
 const ACTION_EDGE = '#0F6E56'
 const MAP_EDGE = '#2C2C2A'
+/** 结构伴生箭头（pi / pi1 / 包含）：蓝灰，与映射对象的深色区分开 */
+const ALONGSIDE_EDGE = '#4A6FA5'
 const PICK_STROKE = '#C2410C'
 
 interface Pt {
@@ -69,32 +72,42 @@ function textWidth(s: string, fontSize: number): number {
 }
 
 /**
+ * 标签宽度：**先问 KaTeX 实测**（离屏容器，带缓存），拿不到再退回字符估算。
+ *
+ * U4 起画布标签也走 KaTeX 了，所以尺寸依据换成实测——比估算更准，
+ * 而且 `\operatorname{Sub}(D_{4})` 这种带函数名的串只有实测才量得对。
+ */
+function labelWidth(s: string, font: number): number {
+  return measureTex(s, font)?.w ?? textWidth(s, font)
+}
+
+/**
  * 节点尺寸由**标签实际宽度**决定。
  * 固定尺寸会让 `pSub(D₄, 2)` 这种长标签撑破圆形、或被视口裁掉。
  */
 function measure(n: CanvasNode): Box {
   if (n.shape === 'set') {
     let font = 15
-    let labelW = textWidth(n.label, font)
+    let labelW = labelWidth(n.label, font)
     const maxInner = 2 * (SET_MAX_R - 12)
     if (labelW > maxInner) {
       font = 12.5
-      labelW = textWidth(n.label, font)
+      labelW = labelWidth(n.label, font)
     }
     if (labelW > maxInner) {
       font = 11
-      labelW = textWidth(n.label, font)
+      labelW = labelWidth(n.label, font)
     }
-    const subW = n.sub ? textWidth(n.sub, 11.5) : 0
-    const r = Math.min(SET_MAX_R, Math.max(SET_MIN_R, Math.max(labelW, subW) / 2 + 12))
+    const subW = n.sub ? labelWidth(n.sub, 11.5) : 0
+    const r = Math.min(SET_MAX_R, Math.max(SET_MIN_R, Math.max(labelW, subW) / 2 + 14))
     return { hw: r, hh: r, round: true, font, subFont: 11.5 }
   }
   const font = n.shape === 'action' ? 12.5 : 16
   const minW = n.shape === 'action' ? 104 : 96
-  const maxW = n.shape === 'action' ? 210 : 200
+  const maxW = n.shape === 'action' ? 220 : 210
   const h = n.shape === 'action' ? ACTION_H : GROUP_H
   return {
-    hw: Math.min(maxW, Math.max(minW, textWidth(n.label, font) + 28)) / 2,
+    hw: Math.min(maxW, Math.max(minW, labelWidth(n.label, font) + 28)) / 2,
     hh: h / 2,
     round: false,
     font,
@@ -327,7 +340,19 @@ export function CanvasView({
           const pts = view.edgePts[k]
           if (!pts) return null
           const { p1, p2 } = pts
-          const stroke = e.kind === 'action' ? ACTION_EDGE : e.kind === 'map' ? MAP_EDGE : PROV
+          // 三种 map 边要能一眼分开：
+          //   · 显式映射对象（带 objectId）→ 深色粗线（数学主角）
+          //   · 结构伴生（pi / pi1 / hook）→ 蓝灰细线（派生出来的结构关系）
+          //   · 来源线 → 淡虚线
+          const isExplicitMap = e.kind === 'map' && !!e.objectId
+          const stroke =
+            e.kind === 'action'
+              ? ACTION_EDGE
+              : isExplicitMap
+                ? MAP_EDGE
+                : e.kind === 'map'
+                  ? ALONGSIDE_EDGE
+                  : PROV
           const marker =
             e.kind === 'action' ? 'arrow-action' : e.kind === 'map' ? 'arrow-map' : 'arrow-prov'
           const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
@@ -355,7 +380,13 @@ export function CanvasView({
                 fill="none"
                 stroke={isSelected ? PICK_STROKE : stroke}
                 strokeWidth={
-                  isSelected ? 3.2 : e.kind === 'provenance' ? 1.3 : e.kind === 'map' ? 2.4 : 1.8
+                  isSelected
+                    ? 3.2
+                    : e.kind === 'provenance'
+                      ? 1.3
+                      : isExplicitMap
+                        ? 2.4
+                        : 1.7
                 }
                 strokeDasharray={e.kind === 'provenance' ? '5 4' : undefined}
                 markerEnd={`url(#${marker})`}
@@ -368,6 +399,10 @@ export function CanvasView({
                   dominantBaseline="central"
                   fontSize={12}
                   fill={isSelected ? PICK_STROKE : stroke}
+                  stroke="#fff"
+                  strokeWidth={3.5}
+                  paintOrder="stroke"
+                  strokeLinejoin="round"
                 >
                   {e.label}
                 </text>
@@ -392,16 +427,19 @@ export function CanvasView({
             n.shape === 'action' ? ACTION_FILL : n.origin === 'input' ? INPUT_FILL : DERIVED_FILL
           const text =
             n.shape === 'action' ? ACTION_TEXT : n.origin === 'input' ? INPUT_TEXT : DERIVED_TEXT
-          // 副行偏移随统一缩放同步
-          const k = b.subFont / 11.5
-          const labelDy = n.sub ? -9 * k : 0
-          const subDy = 12 * k
           const edge = isPicked ? PICK_STROKE : stroke
+          const labelHtml = labelTexHtml(n.label)
+          const subHtml = n.sub ? labelTexHtml(n.sub) : null
+          // 内容高度按实测算：KaTeX 自带 strut，直接拿框高居中会整体偏上
+          const labelH = measureTex(n.label, b.font)?.h ?? b.font * 1.3
+          const subH = n.sub ? (measureTex(n.sub, b.subFont)?.h ?? b.subFont * 1.3) : 0
+          const contentH = labelH + subH + 2
 
           return (
             <g
               key={n.id}
               className={`gnode${dimmed ? ' dim' : ''}`}
+              data-label={n.label}
               onClick={(e) => {
                 e.stopPropagation()
                 if (dimmed) return
@@ -431,29 +469,33 @@ export function CanvasView({
                   strokeDasharray={n.shape === 'action' ? '6 4' : undefined}
                 />
               )}
-              <text
-                x={p.x}
-                y={p.y + labelDy}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fontSize={b.font}
-                fontWeight={500}
-                fill={text}
+              {/* 标签走 KaTeX（HTML），所以用 foreignObject 承载 */}
+              <foreignObject
+                x={p.x - b.hw}
+                y={p.y - contentH / 2}
+                width={b.hw * 2}
+                height={contentH}
+                className="gnode-fo"
               >
-                {n.label}
-              </text>
-              {n.sub && (
-                <text
-                  x={p.x}
-                  y={p.y + subDy}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fontSize={b.subFont}
-                  fill={stroke}
-                >
-                  {n.sub}
-                </text>
-              )}
+                <div className="gnode-label" style={{ color: text }}>
+                  <span
+                    className="gnode-main"
+                    style={{ fontSize: b.font }}
+                    {...(labelHtml
+                      ? { dangerouslySetInnerHTML: { __html: labelHtml } }
+                      : { children: n.label })}
+                  />
+                  {n.sub && (
+                    <span
+                      className="gnode-sub"
+                      style={{ fontSize: b.subFont, color: stroke }}
+                      {...(subHtml
+                        ? { dangerouslySetInnerHTML: { __html: subHtml } }
+                        : { children: n.sub })}
+                    />
+                  )}
+                </div>
+              </foreignObject>
             </g>
           )
         })}

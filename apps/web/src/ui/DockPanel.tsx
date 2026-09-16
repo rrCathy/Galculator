@@ -13,6 +13,7 @@ export function DockPanel({
   open,
   onToggle,
   direction = 'down',
+  bodyWidth,
   actions,
   children,
 }: {
@@ -22,6 +23,12 @@ export function DockPanel({
   onToggle: () => void
   /** `up` = 从下往上拉（数值区） */
   direction?: 'down' | 'up'
+  /**
+   * 面板体宽度（px）。默认 168（一行定义的宽度）；
+   * **信息面板要宽一档**——它装的是结论、元素表格、子群列表这些"看的东西"，
+   * 窄了只能横滚，等于没显示。
+   */
+  bodyWidth?: number
   /** 展开后标题栏右侧的附加按钮 */
   actions?: ReactNode
   children: ReactNode
@@ -36,7 +43,11 @@ export function DockPanel({
         </button>
         {open && actions}
       </header>
-      {open && <div className="dock-body">{children}</div>}
+      {open && (
+        <div className="dock-body" style={bodyWidth ? { width: bodyWidth } : undefined}>
+          {children}
+        </div>
+      )}
     </section>
   )
 }

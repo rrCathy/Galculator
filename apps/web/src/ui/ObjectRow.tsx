@@ -1,4 +1,5 @@
 import type { LineState } from '../gal/build'
+import { TexOrText } from './Tex'
 
 /**
  * 一行对象（对象区 / 操作区共用）——**单行紧凑**（UI v3.1 二次收窄）：
@@ -34,7 +35,9 @@ export function ObjectRow({
     >
       <span className="row-name">{o.id}</span>
       <span className="row-eq">=</span>
-      <code className="row-def">{o.def}</code>
+      <span className="row-def">
+        <TexOrText text={o.def} />
+      </span>
       <button
         className="x"
         onClick={(e) => {

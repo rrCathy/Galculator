@@ -9,6 +9,7 @@ import {
   type Group,
 } from '@groupviz/core'
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL } from '../gal/value'
+import { groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { Tex, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
@@ -44,8 +45,17 @@ export function InfoDock({
 }) {
   const group = node && node.value.type === 'group' ? node.value.group : null
 
+  // 结论层：这个对象"所以呢"——同构于什么 / 第一同构定理在这里具体是什么
+  const insights = useMemo<Insight[]>(() => {
+    const v = node?.value
+    if (!v) return []
+    if (v.type === 'group') return groupInsights(v.group)
+    if (v.type === 'map') return mapInsights(v.map)
+    return []
+  }, [node])
+
   return (
-    <DockPanel title="信息" open={open} onToggle={onToggle}>
+    <DockPanel title="信息" open={open} onToggle={onToggle} bodyWidth={298}>
       {!node && <div className="empty">点画布上的对象，看它的信息</div>}
 
       {node && (
@@ -61,6 +71,20 @@ export function InfoDock({
               {node.id} = {node.def}
             </span>
           </div>
+
+          {insights.length > 0 && (
+            <div className="insights">
+              {insights.map((ins, i) => (
+                <div key={i} className={`insight insight-${ins.tone}`}>
+                  <span className="insight-label">{ins.label}</span>
+                  <div className="insight-body">
+                    <Tex tex={ins.tex} />
+                    {ins.detail && <div className="insight-detail">{ins.detail}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {group ? (
             <>

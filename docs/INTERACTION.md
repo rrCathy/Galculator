@@ -339,7 +339,21 @@ pending / fill / editor ──Esc──→ idle
 
 **「可用操作清单」面板取消**：它已经被节点旁的悬浮球（§4.3）和顶部的多对象球（§4.4）取代。
 
-**信息面板的三 tab**：
+**信息面板 = 结论区 + 三 tab**（U4 起，信息面板比其他抽屉宽一档：298px）：
+
+顶部是**结论区**（`gal/insights.ts`）——回答"**所以呢**"，而不是"长什么样"：
+
+| 结论 | 内容 |
+|---|---|
+| **同构**（key）| `S₄/N ≅ S₃`——识别走 `detectIsomorphicGroup`，只在**识别结果与自身符号不同**时说（`G = S_4` 说"同构于 S₄"是废话）|
+| **阶**（note）| `\|G\| = 24 = 2³·3`——素因子分解（Sylow 分析的入口）|
+| **第一同构定理**（key）| `C₆/ker f ≅ im f` + 数字核对 `\|G\|/\|ker\| = 6/2 = 3，\|im\| = 3 —— 两边相等 ✓` |
+| **具体结论**（key）| 满射时直接给 `C₆/ker f ≅ C₃`（商群与靶群同构）；非满射给 `im f ⊆ H` |
+
+> 用户的原话："我在信息面板翻来覆去没看到什么『同构于……』字样，那用户看什么呢，看记号吗。"
+> 这一区就是回答那句话的。识别的别名做了归一：core 用 `D_{3}` 表示三阶对称群，UI 里显示成 `S_{3}`（同一个群）。
+
+下面是三 tab：
 
 | tab | 内容 |
 |---|---|
@@ -490,6 +504,15 @@ interface WordPred { kind: 'word'; lhs: string; rhs: string; vars: string[] }   
 
 来源线**默认显示，可全局关闭**。SVG 上分别带 `gedge-map` / `gedge-action` / `gedge-provenance` 类名。
 
+**同一个 `map` 类里还要再分两种**（用户那张 S₄→S₃ 的图证明有必要——全黑实线挤在一起看不出主次）：
+
+| 边 | 颜色 | 宽 | 含义 |
+|---|---|---|---|
+| **显式映射对象**（带 `objectId`）| 深黑 `#2C2C2A` | 2.4 | 用户造的映射，交换图的主角 |
+| **结构伴生**（π / π₁ / ↪）| 蓝灰 `#4A6FA5` | 1.7 | 操作派生出来的结构关系，配角 |
+
+边标签加了**白色描边 halo**（`paint-order: stroke`）——不然线从字上穿过去，`π` / `↪` 根本读不出来。
+
 **点选命中区**：实线只有 2.4 宽，直接点很难中——所以每条可点选的边额外叠一条
 `strokeWidth: 14` 的透明命中线（`.gedge-hit`）。
 
@@ -621,18 +644,28 @@ interface CanvasGraph { nodes: CanvasNode[]; edges: GalEdge[] }
 - 移动端 / 小屏：四个抽屉会挤成一团，折叠方案未定
 - 宏的参数化程度（命名捕获）待 Proof Spec 落地后再议
 
-### 13.3 KaTeX 的适用范围（v3 定）
+### 13.3 KaTeX 的适用范围 —— ✅ 两处都走 KaTeX（U4 改）
 
-`ui/Tex.tsx` 两条路：`<Tex>` 强制渲染；`<TexOrText>` 按"像不像 TeX"自动择路（`[\\^_{}]` 命中才当 TeX）。
+**v3 那版是"面板走 KaTeX、画布用 Unicode 近似"**，理由是画布那三条难点
+（SVG 里塞 HTML / 尺寸要回量 / 标签是混合语义串）。
+用户看过实物后的评价是"**没看到 tex 渲染**"——三条难点这轮全解决了：
 
-**面板里一律走 KaTeX**：core 给的群符号 / 子群结构符号本来就是 TeX，零成本、不失真
-（Unicode 折叠在 `S_{4}^{2}` / `\mathbb{Z}_{2}^{2}` 这类上会出洋相）。
+| 难点 | 解法 |
+|---|---|
+| SVG 里塞 HTML | 节点标签改走 `<foreignObject>`（Chromium / Firefox / Safari 都支持）|
+| 尺寸要回量 | 改**离屏测量**（`ui/Tex.tsx` 的 `measureTex`）：离屏容器里渲染后量一次，按 `标签@字号` 缓存。比原来的字符宽度估算**更准**，也不需要"渲染后重排" |
+| 标签不是 TeX 源 | 新增 `gal/tex.ts` 的 `toTex()`：把 Unicode 展示串**反推**成 LaTeX |
 
-**画布节点标签仍用 Unicode 近似（`prettySymbol`）——这是有意的**：
+`toTex` 的转换顺序（顺序本身是知识）：**上下标 → 运算符/希腊字母 → 函数名 → 中文**。
 
-1. 画布是 SVG，KaTeX 输出的是 HTML，要塞进去得走 `<foreignObject>`；
-2. 节点尺寸是"按标签实测宽度自适应"的——换成 foreignObject 就得**渲染后回量一次、再重排一次**；
-3. 更要命的是：节点标签是**混合语义的展示串**（`Z ∩ C`、`⟨r⟩`、`Sub(D₄)` 里的 `C` 是用户起的对象名），
-   不是从 TeX 源生成的，拼不出干净的 TeX。
+- 上下标：`₀-₉` / `ₐₑ…` → `_{}`；`⁰-⁹` → `^{}`
+- 运算符：`∩ ∪ × · ∘ → ↦ ↪ ≅ ⊴ ⊆ ⊂ ∈ ⟨⟩ ∖` → `\cap \cup \times \cdot \circ \to \mapsto \hookrightarrow \cong \trianglelefteq \subseteq \subset \in \langle \rangle \setminus`
+- **函数名**要包 `\operatorname{}`：不包的话 `Sub` 会被排成 `S·u·b`——那在数学里是乘积的意思
+- **中文**要包 `\text{}`：math mode 下的 CJK 渲染失败（`9 个子群` → `9 \text{个子群}`）
 
-所以这一层留到以后单做（真要做，就是"标签带可选 TeX 源 + 二次测量"那套）。
+`ui/Tex.tsx` 三条路：`<Tex>` 强制按 TeX 渲染；`<TexOrText>` 先过 `toTex` 再渲染
+（`shouldTex` 只用来挡**纯 ASCII 名字**——`A` 走 KaTeX 与纯文本视觉差别很小，省一次排版）；
+`labelTexHtml` / `measureTex` 供画布用（都带缓存）。
+
+> **走查脚本注意**：画布节点标签不再在 `<text>` 里了——KaTeX 的 DOM 里 `S₄` 的 `textContent`
+> 是 `S4`（数字是独立 span）。定位统一走 `<g class="gnode" data-label="S₄">` 上的 **`data-label`**。
