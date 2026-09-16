@@ -1203,8 +1203,12 @@ export function opByCall(name: string): OpDef | undefined {
 
 /* ── opsFor：三个入口共用的一张派生 ─────────────────────── */
 
-/** 单个参数位置的类型匹配（`subset` 对群对象的放宽见 `ParamType` 注释）。 */
-function paramMatches(t: ParamType, v: GalValue, earlier: GalValue[]): boolean {
+/**
+ * 单个参数位置的类型匹配（`subset` 对群对象的放宽见 `ParamType` 注释）。
+ *
+ * 除 `opsFor` 外，U2 的 pending 也用它——点第二个参数时要知道"这个节点能不能当这一位"。
+ */
+export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): boolean {
   switch (t) {
     case 'group':
       return v.type === 'group'
@@ -1261,7 +1265,7 @@ export function opsFor(selection: GalValue[]): OpDef[] {
       const p = op.params[i]
       // 标量参数不能由画布提供，所以它不可能落在选中前缀里
       if (isScalarParam(p.type)) return false
-      if (!paramMatches(p.type, selection[i], selection.slice(0, i))) return false
+      if (!paramAccepts(p.type, selection[i], selection.slice(0, i))) return false
     }
     for (let i = selection.length; i < op.params.length; i++) {
       const p = op.params[i]

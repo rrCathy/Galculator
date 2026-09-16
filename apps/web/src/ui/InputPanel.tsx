@@ -4,8 +4,9 @@ import { evalExpr } from '../gal/evalDef'
 import type { EvalResult } from '../gal/evalDef'
 import { checkName, isNameLike, nextAutoName, RESERVED_CALL_NAMES } from '../gal/naming'
 import { VALUE_TYPE_LABEL, type GalValue } from '../gal/value'
-import type { GalObject } from '../gal/types'
+import type { CanvasNode, GalObject } from '../gal/types'
 import type { LineState } from '../gal/build'
+import { Inspector } from './Inspector'
 
 interface Props {
   lineStates: LineState[]
@@ -13,11 +14,11 @@ interface Props {
   objects: GalObject[]
   onAdd: (line: string) => void
   onRemove: (index: number) => void
-  /**
-   * 画布上当前选中的对象。
-   * U0：操作面板据此过滤（`opsFor` 的第一个消费者）；U2 会把它长成节点旁的径向菜单。
-   */
+  /** 画布上当前选中的对象（操作面板据此收敛；U2 起径向菜单是主入口） */
   selected: { label: string; value: GalValue } | null
+  /** 竖卡要展示的对象；`null` = 输入态（交互模型 §5 的左栏两态） */
+  inspect: CanvasNode | null
+  onCloseInspect: () => void
 }
 
 /**
@@ -34,7 +35,15 @@ function splitInline(s: string): { name: string; rhs: string } {
   return { name: '', rhs: s }
 }
 
-export function InputPanel({ lineStates, objects, onAdd, onRemove, selected }: Props) {
+export function InputPanel({
+  lineStates,
+  objects,
+  onAdd,
+  onRemove,
+  selected,
+  inspect,
+  onCloseInspect,
+}: Props) {
   const [nameDraft, setNameDraft] = useState('')
   const [exprDraft, setExprDraft] = useState('')
   const [showOps, setShowOps] = useState(false)
@@ -95,89 +104,102 @@ export function InputPanel({ lineStates, objects, onAdd, onRemove, selected }: P
         <span className="brand-sub">群论计算器</span>
       </header>
 
-      <Zone title="对象" rows={inputs} onRemove={onRemove} empty="声明一个群，如 G = D_4" />
-      <Zone title="操作" rows={derived} onRemove={onRemove} empty="对已有对象运算，如 Z = Z(G)" />
+      {inspect ? (
+        <Inspector node={inspect} onClose={onCloseInspect} />
+      ) : (
+        <>
+          <Zone title="对象" rows={inputs} onRemove={onRemove} empty="声明一个群，如 G = D_4" />
+          <Zone
+            title="操作"
+            rows={derived}
+            onRemove={onRemove}
+            empty="对已有对象运算，如 Z = Z(G)"
+          />
 
-      <div className="zone">
-        <div className="zone-title">
-          数值 {numbers.length > 0 && <span className="count">{numbers.length}</span>}
-        </div>
-        {numbers.length === 0 && <div className="empty">标量结果按计算顺序累积，如 n = ord(G, r2)</div>}
-        {numbers.map((s) => {
-          const o = s.object!
-          const shown = o.value.type === 'number' ? o.value.label : ''
-          return (
-            <div key={s.index} className="row row-number">
-              <div className="row-top">
-                <span className="row-name">{o.id}</span>
-                <span className="row-eq">=</span>
-                <code className="row-def">{o.def}</code>
-                <span className="row-num">{shown}</span>
-                <button className="x" onClick={() => onRemove(s.index)} title="删除">
-                  ×
-                </button>
-              </div>
+          <div className="zone">
+            <div className="zone-title">
+              数值 {numbers.length > 0 && <span className="count">{numbers.length}</span>}
             </div>
-          )
-        })}
-      </div>
-
-      {bad.length > 0 && (
-        <div className="zone">
-          <div className="zone-title">问题 {bad.length}</div>
-          {bad.map((s) => (
-            <div key={s.index} className="row row-bad">
-              <div className="row-top">
-                <code className="row-def">{s.raw}</code>
-                <button className="x" onClick={() => onRemove(s.index)} title="删除">
-                  ×
-                </button>
-              </div>
-              <div className="row-err">
-                {s.error}
-                {s.hint ? ` · ${s.hint}` : ''}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="zone palette">
-        <button className="palette-toggle" onClick={() => setShowOps((v) => !v)}>
-          <span className="zone-title">可用操作</span>
-          <span className="count">{OPS.length}</span>
-          <span className="chev">{showOps ? '收起' : '展开'}</span>
-        </button>
-        {showOps && (
-          <div className="palette-body">
-            {selected && (
-              <div className="palette-scope">
-                <span className="palette-scope-text">
-                  选中 <b>{selected.label}</b> · 可用 <b>{selOps.length}</b> 条
-                </span>
-                <button
-                  className="palette-scope-toggle"
-                  onClick={() => setOnlyForSelection((v) => !v)}
-                >
-                  {onlyForSelection ? '看全部' : '只看可用的'}
-                </button>
-              </div>
+            {numbers.length === 0 && (
+              <div className="empty">标量结果按计算顺序累积，如 n = ord(G, r2)</div>
             )}
-            {filtering ? (
-              <OpGroup
-                title={`可用于「${selected!.label}」`}
-                ops={selOps}
-                onPick={pick}
-                empty="这个对象暂时没有可用操作"
-              />
-            ) : (
-              opsByMechanism().map((g) => (
-                <OpGroup key={g.mechanism} title={g.label} ops={g.ops} onPick={pick} />
-              ))
+            {numbers.map((s) => {
+              const o = s.object!
+              const shown = o.value.type === 'number' ? o.value.label : ''
+              return (
+                <div key={s.index} className="row row-number">
+                  <div className="row-top">
+                    <span className="row-name">{o.id}</span>
+                    <span className="row-eq">=</span>
+                    <code className="row-def">{o.def}</code>
+                    <span className="row-num">{shown}</span>
+                    <button className="x" onClick={() => onRemove(s.index)} title="删除">
+                      ×
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {bad.length > 0 && (
+            <div className="zone">
+              <div className="zone-title">问题 {bad.length}</div>
+              {bad.map((s) => (
+                <div key={s.index} className="row row-bad">
+                  <div className="row-top">
+                    <code className="row-def">{s.raw}</code>
+                    <button className="x" onClick={() => onRemove(s.index)} title="删除">
+                      ×
+                    </button>
+                  </div>
+                  <div className="row-err">
+                    {s.error}
+                    {s.hint ? ` · ${s.hint}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="zone palette">
+            <button className="palette-toggle" onClick={() => setShowOps((v) => !v)}>
+              <span className="zone-title">可用操作</span>
+              <span className="count">{OPS.length}</span>
+              <span className="chev">{showOps ? '收起' : '展开'}</span>
+            </button>
+            {showOps && (
+              <div className="palette-body">
+                {selected && (
+                  <div className="palette-scope">
+                    <span className="palette-scope-text">
+                      选中 <b>{selected.label}</b> · 可用 <b>{selOps.length}</b> 条
+                    </span>
+                    <button
+                      className="palette-scope-toggle"
+                      onClick={() => setOnlyForSelection((v) => !v)}
+                    >
+                      {onlyForSelection ? '看全部' : '只看可用的'}
+                    </button>
+                  </div>
+                )}
+                {filtering ? (
+                  <OpGroup
+                    title={`可用于「${selected!.label}」`}
+                    ops={selOps}
+                    onPick={pick}
+                    empty="这个对象暂时没有可用操作"
+                  />
+                ) : (
+                  opsByMechanism().map((g) => (
+                    <OpGroup key={g.mechanism} title={g.label} ops={g.ops} onPick={pick} />
+                  ))
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <div className="composer">
         <div className="composer-row">
@@ -205,12 +227,7 @@ export function InputPanel({ lineStates, objects, onAdd, onRemove, selected }: P
             添加
           </button>
         </div>
-        <ComposerStatus
-          nameCheck={nameCheck}
-          autoName={autoName}
-          expr={expr}
-          preview={preview}
-        />
+        <ComposerStatus nameCheck={nameCheck} autoName={autoName} expr={expr} preview={preview} />
       </div>
     </aside>
   )
@@ -236,9 +253,7 @@ function ComposerStatus({
 }) {
   if (nameCheck.error) return <div className="composer-status bad">{nameCheck.error}</div>
 
-  const warn = nameCheck.warn ? (
-    <div className="composer-status warn">{nameCheck.warn}</div>
-  ) : null
+  const warn = nameCheck.warn ? <div className="composer-status warn">{nameCheck.warn}</div> : null
 
   if (expr && preview && !preview.ok) {
     return (

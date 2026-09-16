@@ -1,7 +1,8 @@
 # Galculator 项目长期笔记
 
 ## 仓库与文档（2026-09-16 收敛）
-- **git 仓库已初始化**（`main`，身份沿用全局 cathylinlin/bluejam001@163.com）。此前**不是** git 仓库 → 删除不可回滚；现已可回滚。**无 remote，未 push**（对外动作先问）。
+- **git 仓库已初始化**（`main`，身份沿用全局 cathylinlin/bluejam001@163.com）。此前**不是** git 仓库 → 删除不可回滚；现已可回滚。
+- **远端已上线（2026-09-16）**：`origin` = `git@github.com:rrCathy/Galculator.git`（**public**；由用户手动建的空库——MCP 的 GitHub token 无建仓权限）。`main` 已 push 并跟踪 `origin/main`，远端 HEAD `4a3a279`（U0+U1 那一个提交）。**push 必须 `dangerouslyDisableSandbox`**（默认沙箱拦 `~/.ssh`）。
 - `.gitattributes`：`* text=auto eol=lf` + 二进制例外。仓库存 LF，不加这条 Windows 检出会翻 CRLF 导致整文件 diff 噪音。
 - 忽略：`node_modules/` `dist/` `.tmp-*`（含根目录 `.tmp-npm/`）。纳入 `pnpm-lock.yaml`、`docs/assets/*.png`、`.workbuddy/memory/*`。
 - **活文档 4 份**：`README.md`（门面/定位/快速开始）· `docs/ARCHITECTURE.md`（内核：值类型/10 原语/操作清单/引擎依赖 §11/契约索引 §12）· `docs/INTERACTION.md`（**UI 规范 v2**）· `docs/PROOF_SPEC.md` · `docs/ROADMAP.md`。
@@ -77,7 +78,7 @@
 - **宏与 Proof Spec 同构**（`(opId,参数引用)` 序列）→ 先纯重放，排在 M1 之后复用执行器。**M1 依赖改为 U0–U3**。
 - **集合对象对齐 GroupViz 的 subset**：`{label,color,isSubgroup,isNormalSubgroup,type:'subset'|'subgroup'|'normal-subgroup'}` + `SUBSET_COLORS`（`types/view.d.ts`）。
 - **5 条决策（2026-09-16 全部定案）**：① 径向菜单**三类两层**（看/算/造）② 宏**先纯重放**，排 M1 之后复用 Proof Spec 执行器 ③ 集合描述式 = **属性谓词分面 + 字谓词**两条都做，`∧∨` 组合，不开放任意表达式 ④ 拖动 = **钉住 + 吸附网格 + 一键恢复自动 + 持久化**，顶部「手动布局」徽标 ⑤ 固化集合**不自动升级**（用户定 A）：仍是 subset，命中子群时给提示由用户点升级。
-- **阶段 U0–U7**（ROADMAP）：**U0 ✅**（2026-09-16：注册表 params + `opsFor` + 集合运算 + 子群升级真群对象 + 左栏操作面板随选中收敛）· **U1 ✅**（2026-09-16：两块输入框 + 自动命名 + 边打边校验）/ U2 状态机 + 径向菜单 + 竖卡 / U3 映射构建器 + 结构伴生箭头 / U4 工具条 + 群目录 + 查表 / **U5 集合构造器** / U6 拖动 + 手动布局 / U7 宏。
+- **阶段 U0–U7**（ROADMAP）：**U0 ✅**（2026-09-16：注册表 params + `opsFor` + 集合运算 + 子群升级真群对象 + 左栏操作面板随选中收敛）· **U1 ✅**（2026-09-16：两块输入框 + 自动命名 + 边打边校验）· **U2 ✅**（2026-09-16：径向菜单三类两层 + 一键执行 + 竖卡）/ U3 映射构建器 + 结构伴生箭头（下一个）/ U4 工具条 + 群目录 + 查表 / **U5 集合构造器** / U6 拖动 + 手动布局 / U7 宏。
 
 ## 操作架构（2026-09-15 定稿 → docs/ARCHITECTURE.md，M0.5 已落地代码）
 - **两个平面**：①造对象平面 = 原子构造 / 作用导出 / 枚举+筛 / 迭代 ②**属性平面** = 不变量清单（按类型），喂给 **筛选 / 判定 / 识别**（三者本质都是"查属性"）。算术为独立库。
@@ -88,7 +89,9 @@
 - **识别不是独立类** = 收集全部属性 + 匹配小群库（属性平面的视图）。
 - **输入层三种形态**：文本定义（群/集合/数值）· **对象编辑器**（映射/作用，填生成元的像）· 搭积木（枚举块 + 属性筛块）。
 - **配方是元数据**（声明"等价于哪些原语复合"）：只用于解释与逐步演示，**求值走 core 最优路径**。
-- **代码落点（v0.0.0，apps/web/src/gal/）**：`value.ts` 6 值类型 + 归一化 · `ops.ts` **操作注册表 27 条**（`OpDef` = mechanism/primitive/recipe/impl/call/infix/**params（命名参数+类型）**/arity/result/run + **`opsFor(selection)`**）· `naming.ts` **自动命名 + 名字体检**（保留名从注册表 83 个 `call` 名自动导出，不手写）· `evalDef.ts` 五级分发（对象引用→调用→顶层中缀→记号→报错，sources 自动收集）· `build.ts` 行→对象表（纯函数）· `derive.ts` 对象表→画布图。UI：`InputPanel` 三区 + 注册表驱动的操作面板（**按选中对象收敛**）+ **两块输入框**（名字可空走自动命名；表达式复用 `evalExpr` 边打边校验）；`CanvasView` SVG 自绘（标签实测宽度自适应节点 + 同层对齐去重叠 + 统一缩放）。
+- **U2 已落地（2026-09-16）**：交互状态机（`gal/interaction.ts`，纯状态可单测）`idle → selected → menu → pending / fill`——**`fill` 是原方案漏掉的一档**（`pSub(G,p)`/`ord(G,g)` 末尾是标量，画布点不出来）；径向菜单三类两层（`ui/RadialMenu.tsx`：看=竖卡 / 算=一元直接执行 / 造=多元进 pending）；**执行路径统一**：点出来的操作先 `gal/compose.ts` 编回一行文本 → `evalExpr`（"点出来的"与"打出来的"行为一致，左栏真多一行可读可改；同名同标签去重）；pending 四件反馈（提示条/十字光标/已选高亮/**不可点变暗**）；左栏详情态竖卡（`ui/Inspector.tsx`，底部详情条已搬入并删除）；`Esc`/点空白取消。
+- **坑（重要）**：菜单「造」类**不能用 `opsFor` 筛**——`opsFor` 语义是"选中值能把参数填满"，单选一个对象时多元操作根本不在结果里，用它分类必然为空。要直接遍历 `OPS` + `paramAccepts(params[0].type, v, [])`。此 bug 单元断言没抓到（断言写反了），**只有真浏览器走查抓到**。
+- **代码落点（v0.0.0，apps/web/src/gal/）**：`value.ts` 6 值类型 + 归一化 · `ops.ts` **操作注册表 27 条**（`OpDef` = mechanism/primitive/recipe/impl/call/infix/**params（命名参数+类型）**/arity/result/run + **`opsFor(selection)`** + `paramAccepts`）· `naming.ts` **自动命名 + 名字体检**（保留名从注册表 83 个 `call` 名自动导出，不手写）· `compose.ts` **操作+实参 → 定义行** · `interaction.ts` **状态机 + 算/造二分 + canPick** · `evalDef.ts` 五级分发（sources 自动收集）· `build.ts` 行→对象表（纯函数）· `derive.ts` 对象表→画布图。UI（`src/ui/`）：`InputPanel` 左栏两态（三区 + 操作面板 + 两块输入框）/ `Inspector` 竖卡 / `CanvasView` SVG 自绘（布局 + 上报节点屏幕坐标给菜单）/ `RadialMenu` 三类两层环绕。
 - **U0 已落地（2026-09-16）**：`ParamType` 7 类（group/subset/action/map/element/prime/int，**标量参数只能在末尾**，模块加载断言）；`opsFor` 三条规则（前缀匹配 / 剩余必需参数须是标量 / 需再选对象的操作不出现）；`subset` 接群节点有条件（前面有群参数时要求是其子群，否则两群相选会冒出多余商群）；集合运算 `∩ ∪ \ ·`（同母群校验，产出 elements 不升级）；闭包 `⟨S⟩`（`closeUnderMultiply` → 真群对象，也吃 `闭包(G, r2)`）；`ker`/`im`（吃 map + `GalMap.mapping`）；**子群一律升级为真群对象**（`buildSubgroupGroup`，画布圆变方，`Z(Z(G))` 合法）；元素参数走 `resolveElement`；左栏操作面板是 `opsFor` 的第一个入口。
 - **U1 已落地（2026-09-16）**：输入框拆「名字 | 表达式」两块；名字留空自动命名（序列 `A B D F …` → `A₁ B₁ …`，**大小写不敏感地**避开已用名 + 83 个注册表调用名 + `e/p/g/h`；名字栏 `placeholder` 显示将分配的名）；手写名字只拦"非法字符 / 重名"，命中操作名**只提醒**（`Z = Z(G)` 是明确表达）；表达式边打边校验（预览即所得，非法则红字 + 定向提示 + 「添加」置灰）；提醒与预览**并存两行**；兼容整行粘贴 `G = D_4`。
 - **遗留**：`map` 值类型无生产者（`ker`/`im` 已注册但等 U3 表单）；陪集作用的轨道/稳定子分支；半直积 ⋊；识别类。
