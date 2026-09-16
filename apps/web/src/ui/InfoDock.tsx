@@ -12,7 +12,7 @@ import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL } from '../gal/value'
 import { Tex, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
-import type { CanvasNode } from '../gal/types'
+import type { GalObject } from '../gal/types'
 
 const ENUM_CAP = 144
 
@@ -39,7 +39,8 @@ export function InfoDock({
   onToggle: () => void
   tab: InfoTab
   onTab: (t: InfoTab) => void
-  node: CanvasNode | null
+  /** 焦点**对象**——不限于节点：映射只画箭头，但同样有信息可看 */
+  node: GalObject | null
 }) {
   const group = node && node.value.type === 'group' ? node.value.group : null
 
@@ -87,7 +88,7 @@ export function InfoDock({
   )
 }
 
-function BasicTab({ group, node }: { group: Group; node: CanvasNode }) {
+function BasicTab({ group, node }: { group: Group; node: GalObject }) {
   const info = useMemo(() => {
     const small = group.order <= ENUM_CAP
     const inLibrary = group.isoSymbol ? getSmallGroupBySymbol(group.isoSymbol) : null
@@ -178,7 +179,7 @@ function SubgroupsTab({ group }: { group: Group }) {
   )
 }
 
-function OtherTab({ node }: { node: CanvasNode }) {
+function OtherTab({ node }: { node: GalObject }) {
   const v = node.value
   switch (v.type) {
     case 'elements':
@@ -233,6 +234,32 @@ function OtherTab({ node }: { node: CanvasNode }) {
           <Row k="同态">
             <span>{v.map.isHomomorphism ? '是' : '否'}</span>
           </Row>
+          {v.map.isInjective !== null && (
+            <Row k="单 / 满">
+              <span>
+                {v.map.isInjective ? '单射' : '非单'}
+                {' · '}
+                {v.map.isSurjective ? '满射' : '非满'}
+              </span>
+            </Row>
+          )}
+          {v.map.kernel && (
+            <Row k="核">
+              <span>|ker| = {v.map.kernel.length}</span>
+            </Row>
+          )}
+          {v.map.image && (
+            <Row k="像">
+              <span>|im| = {v.map.image.length}</span>
+            </Row>
+          )}
+          {v.map.genImages.length > 0 && (
+            <Row k="生成元">
+              <span className="insp-elems">
+                {v.map.genImages.map((g) => `${g.generator} ↦ ${g.image.label}`).join('，')}
+              </span>
+            </Row>
+          )}
         </>
       )
     case 'number':

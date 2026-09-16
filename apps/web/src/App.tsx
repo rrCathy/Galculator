@@ -78,7 +78,11 @@ export default function App() {
   const usedNames = useMemo(() => objects.map((o) => o.id), [objects])
 
   const focus = focusId(inter)
-  const focusedNode = graph.nodes.find((n) => n.id === focus) ?? null
+  /**
+   * 焦点**对象**（不一定是节点）：映射不占节点、只画箭头，但它是一等对象——
+   * 点箭头就能选中它（U3.1）。所以这里查的是对象表，不是节点表。
+   */
+  const focusedObj = useMemo(() => objects.find((o) => o.id === focus) ?? null, [objects, focus])
   const anchor = focus ? (anchors.find((a) => a.id === focus) ?? null) : null
 
   const pendOp = useMemo(() => {
@@ -86,8 +90,8 @@ export default function App() {
     return id ? (opById(id) ?? null) : null
   }, [inter])
 
-  /** 对象悬浮球里的「单对象操作」（产数值的已被排除） */
-  const singleOps = useMemo(() => (focusedNode ? singleOpsFor(focusedNode.value) : []), [focusedNode])
+  /** 对象悬浮球里的「单对象操作」（产数值的已被排除）——映射会拿到 ker / im */
+  const singleOps = useMemo(() => (focusedObj ? singleOpsFor(focusedObj.value) : []), [focusedObj])
   /** 顶部多对象球的内容：全局列表 */
   const allMultiOps = useMemo(() => multiOps(), [])
 
@@ -417,7 +421,7 @@ export default function App() {
         pickableIds={pickableIds}
       />
 
-      {focusedNode && anchor && !busy && (
+      {focusedObj && anchor && !busy && (
         <ObjectOrb
           anchor={anchor}
           stage={orbStage}
@@ -432,7 +436,8 @@ export default function App() {
             setOpenInfo(true)
             setOrbStage('closed')
           }}
-          onRun={(op) => startOp(op, focusedNode.id)}
+          value={focusedObj.value}
+          onRun={(op) => startOp(op, focusedObj.id)}
         />
       )}
 
@@ -456,7 +461,7 @@ export default function App() {
           onToggle={() => setOpenInfo((v) => !v)}
           tab={infoTab}
           onTab={setInfoTab}
-          node={busy ? null : focusedNode}
+          node={busy ? null : focusedObj}
         />
       </div>
 

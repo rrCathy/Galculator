@@ -44,14 +44,21 @@ interface Box {
   subFont: number
 }
 
-/** 上报给宿主（App）的节点屏幕位置——径向菜单要贴着节点画在 HTML 层上。 */
+/** 上报给宿主（App）的锚点位置——悬浮球要贴在它旁边。 */
 export interface NodeAnchor {
   id: string
-  /** 相对画布容器的像素坐标（节点中心） */
+  /** 相对画布容器的像素坐标（节点中心 / 箭头中点） */
   x: number
   y: number
-  /** 节点在屏幕上的半径（菜单据此往外让开） */
+  /** 节点在屏幕上的半径（球据此往外让开）；箭头是 0 */
   r: number
+  /**
+   * `node` = 节点中心；`edge` = 箭头中点。
+   *
+   * 映射在画布上**不占节点、只画箭头**，但它是一等对象（U3.1 起可点选）——
+   * 所以箭头也要有锚点，悬浮球才知道该浮在哪。
+   */
+  kind: 'node' | 'edge'
 }
 
 /** 文本宽度估算：CJK / 全角约 1em，拉丁与数字约 0.58em。 */
@@ -214,7 +221,19 @@ export function CanvasView({
       font: b.font * s,
       subFont: b.subFont * s,
     }))
-    return { screen, boxes: screenBoxes }
+
+    // 边的两端在这里算好：渲染与「箭头中点上报」（映射的可点锚点）共用同一份
+    const edgePts = graph.edges.map((e) => {
+      const i = idx.get(e.from) ?? -1
+      const j = idx.get(e.to) ?? -1
+      if (i < 0 || j < 0) return null
+      return {
+        p1: edgeAnchor(screen[i], screenBoxes[i], screen[j]),
+        p2: edgeAnchor(screen[j], screenBoxes[j], screen[i]),
+      }
+    })
+
+    return { screen, boxes: screenBoxes, edgePts }
   }, [graph])
 
   // viewBox → 容器像素：菜单浮层用像素坐标
@@ -227,16 +246,28 @@ export function CanvasView({
     const scale = Math.min(size.w / VW, size.h / VH)
     const offX = (size.w - VW * scale) / 2
     const offY = (size.h - VH * scale) / 2
-    onAnchors(
-      graph.nodes.map((n, i) => ({
-        id: n.id,
-        x: offX + view.screen[i].x * scale,
-        y: offY + view.screen[i].y * scale,
-        r: Math.max(view.boxes[i].hw, view.boxes[i].hh) * scale,
-      })),
-      size,
-    )
-  }, [view, size, graph.nodes, onAnchors])
+    const anchors: NodeAnchor[] = graph.nodes.map((n, i) => ({
+      id: n.id,
+      x: offX + view.screen[i].x * scale,
+      y: offY + view.screen[i].y * scale,
+      r: Math.max(view.boxes[i].hw, view.boxes[i].hh) * scale,
+      kind: 'node',
+    }))
+    // 映射箭头的中点也上报——箭头背后的对象要能选中（点箭头 → ker / im）
+    graph.edges.forEach((e, k) => {
+      if (!e.objectId) return
+      const pts = view.edgePts[k]
+      if (!pts) return
+      anchors.push({
+        id: e.objectId,
+        x: offX + ((pts.p1.x + pts.p2.x) / 2) * scale,
+        y: offY + ((pts.p1.y + pts.p2.y) / 2) * scale,
+        r: 0,
+        kind: 'edge',
+      })
+    })
+    onAnchors(anchors, size)
+  }, [view, size, graph.nodes, graph.edges, onAnchors])
 
   if (!view) {
     return (
@@ -292,23 +323,40 @@ export function CanvasView({
           ))}
         </defs>
 
-        {graph.edges.map((e) => {
-          const i = graph.nodes.findIndex((n) => n.id === e.from)
-          const j = graph.nodes.findIndex((n) => n.id === e.to)
-          if (i < 0 || j < 0) return null
-          const p1 = edgeAnchor(view.screen[i], view.boxes[i], view.screen[j])
-          const p2 = edgeAnchor(view.screen[j], view.boxes[j], view.screen[i])
+        {graph.edges.map((e, k) => {
+          const pts = view.edgePts[k]
+          if (!pts) return null
+          const { p1, p2 } = pts
           const stroke = e.kind === 'action' ? ACTION_EDGE : e.kind === 'map' ? MAP_EDGE : PROV
           const marker =
             e.kind === 'action' ? 'arrow-action' : e.kind === 'map' ? 'arrow-map' : 'arrow-prov'
           const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+          // 箭头背后的对象（映射）→ 可点选，于是能"点箭头 → ker / im"
+          const selectable = !!e.objectId
+          const isSelected = selectable && e.objectId === selectedId
+          const line = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`
           return (
-            <g key={e.id} className={`gedge gedge-${e.kind}`}>
+            <g key={e.id} className={`gedge gedge-${e.kind}${isSelected ? ' on' : ''}`}>
+              {selectable && (
+                <path
+                  className="gedge-hit"
+                  d={line}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth={14}
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    onSelect(e.objectId!)
+                  }}
+                />
+              )}
               <path
-                d={`M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`}
+                d={line}
                 fill="none"
-                stroke={stroke}
-                strokeWidth={e.kind === 'provenance' ? 1.3 : e.kind === 'map' ? 2.4 : 1.8}
+                stroke={isSelected ? PICK_STROKE : stroke}
+                strokeWidth={
+                  isSelected ? 3.2 : e.kind === 'provenance' ? 1.3 : e.kind === 'map' ? 2.4 : 1.8
+                }
                 strokeDasharray={e.kind === 'provenance' ? '5 4' : undefined}
                 markerEnd={`url(#${marker})`}
               />
@@ -319,7 +367,7 @@ export function CanvasView({
                   textAnchor="middle"
                   dominantBaseline="central"
                   fontSize={12}
-                  fill={stroke}
+                  fill={isSelected ? PICK_STROKE : stroke}
                 >
                   {e.label}
                 </text>

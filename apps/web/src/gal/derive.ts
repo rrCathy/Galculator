@@ -180,13 +180,13 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
   // ② 结构伴生箭头（一等公民，实线）
   edges.push(...structural)
 
-  // ③ 显式映射对象 → 实线箭头（标签就是映射的名字）
+  // ③ 显式映射对象 → 实线箭头（标签就是映射的名字，且箭头**背后是这个对象**，可点选）
   for (const o of objects) {
     if (o.value.type !== 'map') continue
     const from = groupNodeId(objects, o.value.map.domain)
     const to = groupNodeId(objects, o.value.map.codomain)
     if (!from || !to || !ids.has(from) || !ids.has(to)) continue
-    edges.push({ id: `map:${o.id}`, kind: 'map', from, to, label: o.id })
+    edges.push({ id: `map:${o.id}`, kind: 'map', from, to, label: o.id, objectId: o.id })
   }
 
   // 去重（同一 from→to 只留一条；结构伴生优先于来源线）

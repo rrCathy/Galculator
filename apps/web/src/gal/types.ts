@@ -50,6 +50,14 @@ export interface GalEdge {
   from: string
   to: string
   label?: string
+  /**
+   * 这条边**背后的对象**（若它是一等对象）——映射箭头才有。
+   *
+   * 有了它，箭头就能**被点选**：点箭头 → 选中那个映射对象 →
+   * 悬浮球出现在箭头旁 → 直接点 `ker` / `im`（比手打 `K = ker(F)` 顺手得多）。
+   * 结构伴生箭头（π / π₁ / ↪）目前还不是对象，所以没有这个字段。
+   */
+  objectId?: string
 }
 
 /** 画布图 = 对象-关系图，由对象表派生（见 docs/INTERACTION.md §10）。 */
