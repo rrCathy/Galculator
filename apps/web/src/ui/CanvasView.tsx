@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode } from '../gal/types'
 
-const PAD = 56
+/** 基础留白（viewBox 单位）——让开浮层面板的那部分走 `insets` */
+const BASE_PAD = 20
 const VW = 900
 const VH = 620
 
@@ -116,6 +117,7 @@ export function CanvasView({
   onAnchors,
   pickedIds,
   pickableIds,
+  insets,
 }: {
   graph: CanvasGraph
   selectedId: string | null
@@ -128,6 +130,11 @@ export function CanvasView({
   pickedIds?: string[]
   /** 当前允许点的节点；`null` = 不限制（非 pending 态） */
   pickableIds?: string[] | null
+  /**
+   * 浮层面板占掉的**容器像素**区域（左 / 下）。画布内容会避开它，
+   * 否则节点会整片钻到抽屉底下——UI v3 把面板改成浮层后必须补这一步。
+   */
+  insets?: { left?: number; bottom?: number }
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: VW, h: VH })
@@ -190,10 +197,20 @@ export function CanvasView({
     })
     const worldW = Math.max(maxX - minX, 1)
     const worldH = Math.max(maxY - minY, 1)
+
+    // 浮层面板占掉的那块让出来（容器像素 → viewBox 单位），否则节点会钻到面板底下
+    const toViewBox = Math.min(size.w / VW, size.h / VH) || 1
+    const padL = BASE_PAD + (insets?.left ?? 0) / toViewBox
+    const padT = BASE_PAD
+    const padR = BASE_PAD
+    const padB = BASE_PAD + (insets?.bottom ?? 0) / toViewBox
+    const usableW = Math.max(VW - padL - padR, 160)
+    const usableH = Math.max(VH - padT - padB, 160)
+
     // 统一缩放（含字号），避免"位置缩了、节点没缩"导致的互相压盖
-    const s = Math.min((VW - 2 * PAD) / worldW, (VH - 2 * PAD) / worldH, 1)
-    const offX = (VW - worldW * s) / 2 - minX * s
-    const offY = (VH - worldH * s) / 2 - minY * s
+    const s = Math.min(usableW / worldW, usableH / worldH, 1)
+    const offX = padL + (usableW - worldW * s) / 2 - minX * s
+    const offY = padT + (usableH - worldH * s) / 2 - minY * s
 
     const screen: Pt[] = pos.map((p) => ({ x: offX + p.x * s, y: offY + p.y * s }))
     const screenBoxes: Box[] = boxes.map((b) => ({
@@ -204,7 +221,7 @@ export function CanvasView({
       subFont: b.subFont * s,
     }))
     return { screen, boxes: screenBoxes }
-  }, [graph])
+  }, [graph, size.w, size.h, insets?.left, insets?.bottom])
 
   // viewBox → 容器像素：菜单浮层用像素坐标
   useEffect(() => {

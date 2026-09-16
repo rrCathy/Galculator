@@ -60,22 +60,59 @@ export function activeOpId(inter: Interaction): string | null {
 }
 
 /**
- * 径向菜单的「算 / 造」二分（交互模型 §4.3）。
+ * **单对象操作**（UI v3：对象悬浮球 → 第 4 个按钮）：只需这一个对象就能算完，点了立刻创建对象。
  *
- * 两者的判定口径**不一样**，这是容易搞错的地方：
- *   - **算**：`opsFor([v])` 里那些"只需这一个对象"的操作——选中即能算完；
- *   - **造**：**不能**用 `opsFor` 筛。`opsFor` 的语义是"选中的值能把参数填满"，
- *     所以单选一个对象时 `G × H` 这类多元操作**根本不在结果里**，拿它分类必然为空。
- *     造类要找的是"以该对象为**第一个参数**、但还要再选"的操作，故直接遍历注册表。
- *
- * 「看」不在这里——它只往竖卡填内容，不产生对象，所以不是注册表里的操作。
+ * 两处过滤：
+ *   - `objectArity ≤ 1`——只需一个对象（末尾的标量参数交给补参条）；
+ *   - **排除产数值的**（`ord` 这类）——用户定了"计算先不弄"，所以它不进菜单。
  */
-export function splitForNode(value: GalValue): { compute: OpDef[]; build: OpDef[] } {
-  const compute = opsFor([value]).filter((op) => objectArity(op) <= 1)
-  const build = OPS.filter(
-    (op) => objectArity(op) > 1 && paramAccepts(op.params[0].type, value, []),
-  )
-  return { compute, build }
+export function singleOpsFor(value: GalValue): OpDef[] {
+  return opsFor([value]).filter((op) => objectArity(op) <= 1 && op.result !== 'number')
+}
+
+/**
+ * **多对象操作**（UI v3：显示区正上方的悬浮球）：**全局**列表，不依赖选中了谁。
+ *
+ * 这里**不能**用 `opsFor` 去筛——它的语义是"选中的值能把参数填满"，
+ * 而"多对象操作"恰恰是"参数还没填满"的那些，用 `opsFor` 筛必然为空。
+ * （U2 就是栽在这儿：菜单里的「造」类恒空。）
+ */
+export function multiOps(): OpDef[] {
+  return OPS.filter((op) => objectArity(op) > 1)
+}
+
+/** 悬浮球面板里的短标签：一圈放不下 `pSub(G, p)` 这种全记法。 */
+const MENU_LABEL: Record<string, string> = {
+  directProduct: '直积 ×',
+  quotient: '商 /',
+  intersection: '交 ∩',
+  union: '并 ∪',
+  difference: '差 \\',
+  productSet: '积集 ·',
+  center: '中心 Z',
+  centralizer: '中心化子 C_G',
+  normalizer: '正规化子 N_G',
+  commutatorGroup: '换位子群 [G,G]',
+  automorphismGroup: '自同构 Aut',
+  subgroups: '所有子群',
+  pSubgroups: 'p-子群',
+  sylow: 'Sylow p-子群',
+  normalSubgroups: '正规子群',
+  conjugationAction: '共轭作用',
+  leftTranslationAction: '正则作用',
+  orbits: '轨道',
+  stabilizers: '稳定子',
+  fixedPoints: '不动点',
+  kernel: '核 ker',
+  image: '像 im',
+  closure: '生成子群 ⟨S⟩',
+  elementOrder: '元素阶 ord',
+}
+
+export function menuLabel(op: OpDef): string {
+  if (MENU_LABEL[op.id]) return MENU_LABEL[op.id]
+  const paren = op.notation.indexOf('(')
+  return paren > 0 ? op.notation.slice(0, paren) : op.notation
 }
 
 export const PARAM_LABEL: Record<ParamType, string> = {

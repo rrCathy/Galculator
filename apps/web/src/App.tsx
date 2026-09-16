@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildLines } from './gal/build'
 import { deriveCanvas } from './gal/derive'
 import { evalExpr } from './gal/evalDef'
@@ -9,15 +9,21 @@ import {
   canPick,
   focusId,
   IDLE,
+  multiOps,
   pickedIds,
   pendingHint,
-  splitForNode,
+  singleOpsFor,
   type Interaction,
 } from './gal/interaction'
+import { computedNumbers, type NumericEntry } from './gal/numeric'
 import { nextAutoName } from './gal/naming'
-import { InputPanel } from './ui/InputPanel'
 import { CanvasView, type NodeAnchor } from './ui/CanvasView'
-import { RadialMenu, type MenuStage } from './ui/RadialMenu'
+import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
+import { MultiOrb } from './ui/MultiOrb'
+import { ObjectDock } from './ui/ObjectDock'
+import { OpDock } from './ui/OpDock'
+import { InfoDock, type InfoTab } from './ui/InfoDock'
+import { NumericDock } from './ui/NumericDock'
 import type { GalValue } from './gal/value'
 
 /**
@@ -35,16 +41,31 @@ const DEFAULT_LINES = [
   'n = ord(G, r2)',
 ]
 
-/** `entry` = 只显示节点旁那个入口按钮；其余是径向菜单的两层（§4.3） */
-type Stage = 'entry' | MenuStage
-
+/**
+ * 应用外壳（UI v3）。
+ *
+ * 布局原则改了：**画布占满窗口，面板浮在它上面**。
+ *   左上 —— 并排三个下拉抽屉：对象（含输入框）· 操作 · 信息
+ *   左下 —— 数值上拉抽屉
+ *   顶部中央 —— 多对象操作悬浮球
+ *   节点左上角 —— 对象悬浮球（看 / 单对象操作）
+ */
 export default function App() {
   const [lines, setLines] = useState<string[]>(DEFAULT_LINES)
   const [inter, setInter] = useState<Interaction>(IDLE)
-  const [stage, setStage] = useState<Stage>('entry')
+  const [orbStage, setOrbStage] = useState<OrbStage>('closed')
+  const [multiOpen, setMultiOpen] = useState(false)
   const [anchors, setAnchors] = useState<NodeAnchor[]>([])
   const [canvasSize, setCanvasSize] = useState({ w: 900, h: 620 })
   const [notice, setNotice] = useState<{ text: string; hint?: string } | null>(null)
+
+  // 默认只展开「对象」：三个都摊开会把画布左上角整片盖住，连顶部那颗球都压上去了
+  const [openObjects, setOpenObjects] = useState(true)
+  const [openOps, setOpenOps] = useState(false)
+  const [openInfo, setOpenInfo] = useState(false)
+  const [openNumeric, setOpenNumeric] = useState(true)
+  const [infoTab, setInfoTab] = useState<InfoTab>('basic')
+  const [dragged, setDragged] = useState<NumericEntry[]>([])
 
   const { lineStates, objects } = useMemo(() => buildLines(lines), [lines])
   const graph = useMemo(() => deriveCanvas(objects), [objects])
@@ -61,11 +82,10 @@ export default function App() {
     return id ? (opById(id) ?? null) : null
   }, [inter])
 
-  /** 径向菜单第二层的内容：算（一元）/ 造（以它为第一个参数、还需再选） */
-  const groups = useMemo(() => {
-    if (!focusedNode) return { compute: [] as OpDef[], build: [] as OpDef[] }
-    return splitForNode(focusedNode.value)
-  }, [focusedNode])
+  /** 对象悬浮球里的「单对象操作」（产数值的已被排除） */
+  const singleOps = useMemo(() => (focusedNode ? singleOpsFor(focusedNode.value) : []), [focusedNode])
+  /** 顶部多对象球的内容：全局列表 */
+  const allMultiOps = useMemo(() => multiOps(), [])
 
   /** pending 时可点的节点（匹配规则与 opsFor 同一份，所以永远一致） */
   const pickableIds = useMemo(() => {
@@ -78,15 +98,53 @@ export default function App() {
       .map((n) => n.id)
   }, [inter, pendOp, graph.nodes, valuesById])
 
+  const numericEntries = useMemo<NumericEntry[]>(
+    () => [...computedNumbers(objects), ...dragged],
+    [objects, dragged],
+  )
+
   const onAnchors = useCallback((a: NodeAnchor[], s: { w: number; h: number }) => {
     setAnchors(a)
     setCanvasSize(s)
   }, [])
 
+  /**
+   * 浮层面板占掉的区域量出来交给画布，让节点避开。
+   * 面板宽度随开合变（收起只剩标题胶囊），所以用 ResizeObserver 跟，而不是只在开合时算一次。
+   */
+  const dockTopRef = useRef<HTMLDivElement>(null)
+  const dockBottomRef = useRef<HTMLDivElement>(null)
+  const [insets, setInsets] = useState({ left: 0, bottom: 0 })
+
+  useEffect(() => {
+    const measure = () => {
+      const t = dockTopRef.current?.getBoundingClientRect()
+      const b = dockBottomRef.current?.getBoundingClientRect()
+      const next = {
+        left: t && t.width > 0 ? Math.round(t.right) : 0,
+        bottom: b && b.height > 0 ? Math.round(window.innerHeight - b.bottom) : 0,
+      }
+      setInsets((p) => (p.left === next.left && p.bottom === next.bottom ? p : next))
+    }
+    measure()
+    const els = [dockTopRef.current, dockBottomRef.current].filter(Boolean) as HTMLElement[]
+    if (typeof ResizeObserver === 'undefined' || els.length === 0) return
+    const ro = new ResizeObserver(measure)
+    els.forEach((el) => ro.observe(el))
+    return () => ro.disconnect()
+  }, [openObjects, openOps, openInfo, openNumeric, lines])
+
   const reset = useCallback(() => {
     setInter(IDLE)
-    setStage('entry')
+    setOrbStage('closed')
+    setMultiOpen(false)
     setNotice(null)
+  }, [])
+
+  const removeLine = useCallback((index: number) => {
+    setLines((p) => p.filter((_, k) => k !== index))
+    setInter(IDLE)
+    setOrbStage('closed')
   }, [])
 
   /* ── 执行：把点选出来的操作编成一行定义，交给同一个求值器 ───────── */
@@ -111,14 +169,14 @@ export default function App() {
       const dup = objects.find((o) => o.def === expr && o.label === check.label)
       if (dup) {
         setInter({ kind: 'selected', target: dup.id })
-        setStage('entry')
+        setOrbStage('closed')
         setNotice(null)
         return
       }
       const name = nextAutoName(usedNames)
       setLines((p) => [...p, `${name} = ${expr}`])
       setInter({ kind: 'selected', target: name })
-      setStage('entry')
+      setOrbStage('closed')
       setNotice(null)
     },
     [byId, objects, usedNames],
@@ -130,7 +188,7 @@ export default function App() {
       const slots = scalarSlots(op)
       if (objectArity(op) > 1) {
         setInter({ kind: 'pending', opId: op.id, picked: [from] })
-        setStage('entry')
+        setOrbStage('closed')
         return
       }
       if (slots.length > 0) {
@@ -139,13 +197,21 @@ export default function App() {
           scalars[s] = scalarDefault(op, s)
         })
         setInter({ kind: 'fill', opId: op.id, picked: [from], scalars })
-        setStage('entry')
+        setOrbStage('closed')
         return
       }
       runOp(op, [from])
     },
     [runOp],
   )
+
+  /** 顶部球选了一个多对象操作 → 空着手进 pending，等用户点对象。 */
+  const startMultiOp = useCallback((op: OpDef) => {
+    setMultiOpen(false)
+    setOrbStage('closed')
+    setNotice(null)
+    setInter({ kind: 'pending', opId: op.id, picked: [] })
+  }, [])
 
   /* ── 画布点击 ──────────────────────────────────────── */
 
@@ -171,7 +237,7 @@ export default function App() {
         return
       }
       setInter({ kind: 'selected', target: id })
-      setStage('entry')
+      setOrbStage('closed')
     },
     [inter, pendOp, runOp],
   )
@@ -180,14 +246,40 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (inter.kind === 'pending' || inter.kind === 'fill') reset()
-      else if (stage !== 'entry') setStage('entry')
-      else reset()
+      else if (orbStage !== 'closed' || multiOpen) {
+        setOrbStage('closed')
+        setMultiOpen(false)
+      } else reset()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [inter, stage, reset])
+  }, [inter, orbStage, multiOpen, reset])
 
-  /* ── 提示条 ────────────────────────────────────────── */
+  /* ── 数值区 ────────────────────────────────────────── */
+
+  const removeNumeric = useCallback(
+    (key: string) => {
+      if (key.startsWith('c:')) {
+        const id = key.slice(2)
+        const st = lineStates.find((s) => s.ok && s.object?.id === id)
+        if (st) removeLine(st.index)
+        return
+      }
+      setDragged((p) => p.filter((d) => d.key !== key))
+    },
+    [lineStates, removeLine],
+  )
+
+  const dropNumber = useCallback((label: string, value: number) => {
+    setDragged((p) => {
+      const key = `d:${label}:${value}`
+      if (p.some((d) => d.key === key)) return p
+      return [...p, { key, label, value, source: 'drag' }]
+    })
+    setOpenNumeric(true)
+  }, [])
+
+  /* ── 待选 / 补参提示条 ─────────────────────────────── */
 
   const banner = (() => {
     if (!pendOp) return null
@@ -196,9 +288,11 @@ export default function App() {
         <div className="pending-bar">
           <span className="pending-hint">{pendingHint(pendOp, inter.picked.length)}</span>
           <code className="pending-what">{pendOp.notation}</code>
-          <span className="pending-picked">
-            已选 {inter.picked.map((id) => byId.get(id)?.label ?? id).join(' , ')}
-          </span>
+          {inter.picked.length > 0 && (
+            <span className="pending-picked">
+              已选 {inter.picked.map((id) => byId.get(id)?.label ?? id).join(' , ')}
+            </span>
+          )}
           <button className="pending-btn" onClick={reset}>
             Esc 取消
           </button>
@@ -230,7 +324,10 @@ export default function App() {
               />
             </label>
           ))}
-          <button className="pending-btn primary" onClick={() => runOp(pendOp, inter.picked, inter.scalars)}>
+          <button
+            className="pending-btn primary"
+            onClick={() => runOp(pendOp, inter.picked, inter.scalars)}
+          >
             执行
           </button>
           <button className="pending-btn" onClick={reset}>
@@ -242,70 +339,95 @@ export default function App() {
     return null
   })()
 
+  const busy = inter.kind === 'pending' || inter.kind === 'fill'
+
   return (
     <div className="app">
-      <InputPanel
-        lineStates={lineStates}
-        objects={objects}
-        onAdd={(l) => setLines((p) => [...p, l])}
-        onRemove={(i) => setLines((p) => p.filter((_, k) => k !== i))}
-        selected={focusedNode ? { label: focusedNode.label, value: focusedNode.value } : null}
-        inspect={inter.kind === 'selected' ? focusedNode : null}
-        onCloseInspect={() => reset()}
+      <CanvasView
+        graph={graph}
+        selectedId={busy ? null : focus}
+        onSelect={onNodeClick}
+        onBackgroundClick={reset}
+        onAnchors={onAnchors}
+        pickedIds={pickedIds(inter)}
+        pickableIds={pickableIds}
+        insets={insets}
       />
-      <main className="stage">
-        <div className="stage-canvas">
-          <CanvasView
-            graph={graph}
-            selectedId={inter.kind === 'pending' || inter.kind === 'fill' ? null : focus}
-            onSelect={onNodeClick}
-            onBackgroundClick={reset}
-            onAnchors={onAnchors}
-            pickedIds={pickedIds(inter)}
-            pickableIds={pickableIds}
-          />
 
-          {focusedNode && anchor && stage === 'entry' && inter.kind !== 'pending' && inter.kind !== 'fill' && (
-            <button
-              className="radial-entry"
-              style={{ left: anchor.x + anchor.r + 14, top: anchor.y }}
-              title="可用操作（在这个对象旁边）"
-              onClick={() => setStage('ring')}
-            >
-              ◎
-            </button>
-          )}
+      {focusedNode && anchor && !busy && (
+        <ObjectOrb
+          anchor={anchor}
+          stage={orbStage}
+          singleOps={singleOps}
+          containerW={canvasSize.w}
+          containerH={canvasSize.h}
+          onOpen={() => setOrbStage('ring')}
+          onClose={() => setOrbStage('closed')}
+          onToggleOps={() => setOrbStage(orbStage === 'ops' ? 'ring' : 'ops')}
+          onInspect={(tab) => {
+            setInfoTab(tab)
+            setOpenInfo(true)
+            setOrbStage('closed')
+          }}
+          onRun={(op) => startOp(op, focusedNode.id)}
+        />
+      )}
 
-          {focusedNode && anchor && stage !== 'entry' && (
-            <RadialMenu
-              anchor={anchor}
-              stage={stage}
-              compute={groups.compute}
-              build={groups.build}
-              containerW={canvasSize.w}
-              containerH={canvasSize.h}
-              onInspect={() => setStage('entry')}
-              onOpenGroup={(g) => setStage(g === '算' ? 'compute' : 'build')}
-              onBack={() => setStage('ring')}
-              onPick={(op) => startOp(op, focusedNode.id)}
-            />
-          )}
+      <div className="dock-topleft" ref={dockTopRef}>
+        <ObjectDock
+          open={openObjects}
+          onToggle={() => setOpenObjects((v) => !v)}
+          lineStates={lineStates}
+          objects={objects}
+          onAdd={(l) => setLines((p) => [...p, l])}
+          onRemove={removeLine}
+        />
+        <OpDock
+          open={openOps}
+          onToggle={() => setOpenOps((v) => !v)}
+          lineStates={lineStates}
+          onRemove={removeLine}
+        />
+        <InfoDock
+          open={openInfo}
+          onToggle={() => setOpenInfo((v) => !v)}
+          tab={infoTab}
+          onTab={setInfoTab}
+          node={busy ? null : focusedNode}
+        />
+      </div>
 
-          {banner}
+      <MultiOrb
+        open={multiOpen}
+        onToggle={() => setMultiOpen((v) => !v)}
+        ops={allMultiOps}
+        onPick={startMultiOp}
+        minLeft={insets.left}
+      />
 
-          {notice && (
-            <div className="notice">
-              <span>
-                {notice.text}
-                {notice.hint ? ` · ${notice.hint}` : ''}
-              </span>
-              <button onClick={() => setNotice(null)} title="关闭">
-                ×
-              </button>
-            </div>
-          )}
+      <div className="dock-bottomleft" ref={dockBottomRef}>
+        <NumericDock
+          open={openNumeric}
+          onToggle={() => setOpenNumeric((v) => !v)}
+          entries={numericEntries}
+          onRemove={removeNumeric}
+          onDropNumber={dropNumber}
+        />
+      </div>
+
+      {banner}
+
+      {notice && (
+        <div className="notice">
+          <span>
+            {notice.text}
+            {notice.hint ? ` · ${notice.hint}` : ''}
+          </span>
+          <button onClick={() => setNotice(null)} title="关闭">
+            ×
+          </button>
         </div>
-      </main>
+      )}
     </div>
   )
 }
