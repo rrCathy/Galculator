@@ -197,6 +197,7 @@ _（`G / Z` 带 `G →(π) Q`、`Z(G)` 带 `Z ↪ G`；实线 = 映射，淡虚�
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 内核架构：值类型 / 10 原语 / 60+ 操作清单 / 引擎依赖 / 契约索引 |
 | [docs/INTERACTION.md](docs/INTERACTION.md) | **UI 规范 v2**：操作入口（`opsFor` + 径向菜单）/ 输入层 / 集合构造器 / 画布图 / 布局 |
+| [docs/DIAGRAM_SPEC.md](docs/DIAGRAM_SPEC.md) | **交换图规范**：课本级排版的六条硬规范 / 现状诊断 / **什么对象适合上画布** |
 | [docs/PROOF_SPEC.md](docs/PROOF_SPEC.md) | Proof Spec 规范（证明模板 schema + Sylow I 实例）|
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 规划：UI 重构线 U0–U7 + 里程碑 M0–M4 |
 | [docs/archive/](docs/archive/) | 已完成使命的历史文档（交接 prompt / 早期规划稿）|
