@@ -20,6 +20,7 @@ import { nextAutoName } from './gal/naming'
 import { CanvasView, type NodeAnchor } from './ui/CanvasView'
 import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
 import { MultiOrb } from './ui/MultiOrb'
+import { ComposerOrb } from './ui/ComposerOrb'
 import { ObjectDock } from './ui/ObjectDock'
 import { OpDock } from './ui/OpDock'
 import { InfoDock, type InfoTab } from './ui/InfoDock'
@@ -66,6 +67,7 @@ export default function App() {
   const [openNumeric, setOpenNumeric] = useState(true)
   const [infoTab, setInfoTab] = useState<InfoTab>('basic')
   const [dragged, setDragged] = useState<NumericEntry[]>([])
+  const [composerOpen, setComposerOpen] = useState(false)
 
   const { lineStates, objects } = useMemo(() => buildLines(lines), [lines])
   const graph = useMemo(() => deriveCanvas(objects), [objects])
@@ -109,22 +111,22 @@ export default function App() {
   }, [])
 
   /**
-   * 浮层面板占掉的区域量出来交给画布，让节点避开。
-   * 面板宽度随开合变（收起只剩标题胶囊），所以用 ResizeObserver 跟，而不是只在开合时算一次。
+   * 量出左上/左下面板各自的右边界，给顶部多对象球与底部输入球做避让——
+   * **只挪球，不动画布**（UI v3.1）：面板收展时画布节点纹丝不动。
    */
   const dockTopRef = useRef<HTMLDivElement>(null)
   const dockBottomRef = useRef<HTMLDivElement>(null)
-  const [insets, setInsets] = useState({ left: 0, bottom: 0 })
+  const [barriers, setBarriers] = useState({ top: 0, bottom: 0 })
 
   useEffect(() => {
     const measure = () => {
       const t = dockTopRef.current?.getBoundingClientRect()
       const b = dockBottomRef.current?.getBoundingClientRect()
       const next = {
-        left: t && t.width > 0 ? Math.round(t.right) : 0,
-        bottom: b && b.height > 0 ? Math.round(window.innerHeight - b.bottom) : 0,
+        top: t && t.width > 0 ? Math.round(t.right) : 0,
+        bottom: b && b.width > 0 ? Math.round(b.right) : 0,
       }
-      setInsets((p) => (p.left === next.left && p.bottom === next.bottom ? p : next))
+      setBarriers((p) => (p.top === next.top && p.bottom === next.bottom ? p : next))
     }
     measure()
     const els = [dockTopRef.current, dockBottomRef.current].filter(Boolean) as HTMLElement[]
@@ -138,6 +140,7 @@ export default function App() {
     setInter(IDLE)
     setOrbStage('closed')
     setMultiOpen(false)
+    setComposerOpen(false)
     setNotice(null)
   }, [])
 
@@ -246,6 +249,7 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (inter.kind === 'pending' || inter.kind === 'fill') reset()
+      else if (composerOpen) setComposerOpen(false)
       else if (orbStage !== 'closed' || multiOpen) {
         setOrbStage('closed')
         setMultiOpen(false)
@@ -253,7 +257,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [inter, orbStage, multiOpen, reset])
+  }, [inter, orbStage, multiOpen, composerOpen, reset])
 
   /* ── 数值区 ────────────────────────────────────────── */
 
@@ -351,7 +355,6 @@ export default function App() {
         onAnchors={onAnchors}
         pickedIds={pickedIds(inter)}
         pickableIds={pickableIds}
-        insets={insets}
       />
 
       {focusedNode && anchor && !busy && (
@@ -378,8 +381,6 @@ export default function App() {
           open={openObjects}
           onToggle={() => setOpenObjects((v) => !v)}
           lineStates={lineStates}
-          objects={objects}
-          onAdd={(l) => setLines((p) => [...p, l])}
           onRemove={removeLine}
         />
         <OpDock
@@ -402,7 +403,15 @@ export default function App() {
         onToggle={() => setMultiOpen((v) => !v)}
         ops={allMultiOps}
         onPick={startMultiOp}
-        minLeft={insets.left}
+        minLeft={barriers.top}
+      />
+
+      <ComposerOrb
+        open={composerOpen}
+        onToggle={() => setComposerOpen((v) => !v)}
+        objects={objects}
+        onAdd={(l) => setLines((p) => [...p, l])}
+        minLeft={barriers.bottom}
       />
 
       <div className="dock-bottomleft" ref={dockBottomRef}>

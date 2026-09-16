@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode } from '../gal/types'
 
-/** 基础留白（viewBox 单位）——让开浮层面板的那部分走 `insets` */
+/** 基础留白（viewBox 单位） */
 const BASE_PAD = 20
 const VW = 900
 const VH = 620
@@ -117,7 +117,6 @@ export function CanvasView({
   onAnchors,
   pickedIds,
   pickableIds,
-  insets,
 }: {
   graph: CanvasGraph
   selectedId: string | null
@@ -130,11 +129,6 @@ export function CanvasView({
   pickedIds?: string[]
   /** 当前允许点的节点；`null` = 不限制（非 pending 态） */
   pickableIds?: string[] | null
-  /**
-   * 浮层面板占掉的**容器像素**区域（左 / 下）。画布内容会避开它，
-   * 否则节点会整片钻到抽屉底下——UI v3 把面板改成浮层后必须补这一步。
-   */
-  insets?: { left?: number; bottom?: number }
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: VW, h: VH })
@@ -198,12 +192,12 @@ export function CanvasView({
     const worldW = Math.max(maxX - minX, 1)
     const worldH = Math.max(maxY - minY, 1)
 
-    // 浮层面板占掉的那块让出来（容器像素 → viewBox 单位），否则节点会钻到面板底下
-    const toViewBox = Math.min(size.w / VW, size.h / VH) || 1
-    const padL = BASE_PAD + (insets?.left ?? 0) / toViewBox
+    // 面板是浮层，画布**不让位**（UI v3.1）：收起展开时节点纹丝不动，
+    // 面板与节点的偶发重叠交给用户开合面板解决
+    const padL = BASE_PAD
     const padT = BASE_PAD
     const padR = BASE_PAD
-    const padB = BASE_PAD + (insets?.bottom ?? 0) / toViewBox
+    const padB = BASE_PAD
     const usableW = Math.max(VW - padL - padR, 160)
     const usableH = Math.max(VH - padT - padB, 160)
 
@@ -221,7 +215,7 @@ export function CanvasView({
       subFont: b.subFont * s,
     }))
     return { screen, boxes: screenBoxes }
-  }, [graph, size.w, size.h, insets?.left, insets?.bottom])
+  }, [graph])
 
   // viewBox → 容器像素：菜单浮层用像素坐标
   useEffect(() => {
@@ -248,7 +242,7 @@ export function CanvasView({
     return (
       <div className="canvas-wrap" ref={wrapRef}>
         <div className="canvas-empty">
-          <p>左栏输入一行定义，画布长出第一个对象</p>
+          <p>点下方的 ✎ 输入一行定义，画布长出第一个对象</p>
           <code>G = D_4</code>
         </div>
       </div>

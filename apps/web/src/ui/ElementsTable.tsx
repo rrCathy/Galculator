@@ -13,10 +13,11 @@ export function writeNumberPayload(e: DragEvent, label: string, value: number) {
 }
 
 /**
- * 元素横滚表格（UI v3）：
- * **列 = 元素、行 = 属性**，元素多时横向滚动，行首列粘住。
+ * 元素表格（UI v3.1 转置）：**行 = 元素、列 = 属性**。
+ * 每行一个元素，往右看它的一串属性（阶 / ∈Z? / 共轭类 / 类大小 / 中心化子）；
+ * 行首元素标签粘住，行多时纵向滚动。
  *
- * 属性行里的数字**可以直接拖进左下角的数值区**——"在其他面板发现的数字拖进来"，
+ * 数字格**可以直接拖进左下角的数值区**——"在其他面板发现的数字拖进来"，
  * 这是数值区两个来源之一（另一个是用户主动计算）。
  */
 export function ElementsTable({ group }: { group: Group }) {
@@ -28,33 +29,29 @@ export function ElementsTable({ group }: { group: Group }) {
         <table className="etable">
           <thead>
             <tr>
-              <th className="etable-corner" />
-              {table.facts.map((f) => (
-                <th key={f.element.id} className="etable-el">
-                  <TexOrText text={f.element.label} />
-                </th>
+              <th className="etable-corner">元素</th>
+              {table.rows.map((row) => (
+                <th key={row.key}>{row.label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {table.rows.map((row) => (
-              <tr key={row.key}>
-                <th className="etable-rowhead">{row.label}</th>
-                {row.values.map((v, i) => {
+            {table.facts.map((f, i) => (
+              <tr key={f.element.id}>
+                <th className="etable-rowhead">
+                  <TexOrText text={f.element.label} />
+                </th>
+                {table.rows.map((row) => {
+                  const v = row.values[i]
                   const canDrag = row.numeric && v !== '—'
                   return (
                     <td
-                      key={i}
+                      key={row.key}
                       className={`etable-cell${canDrag ? ' can-drag' : ''}`}
                       draggable={canDrag}
                       onDragStart={
                         canDrag
-                          ? (e) =>
-                              writeNumberPayload(
-                                e,
-                                `${row.label}(${table.facts[i].element.label})`,
-                                Number(v),
-                              )
+                          ? (e) => writeNumberPayload(e, `${row.label}(${f.element.label})`, Number(v))
                           : undefined
                       }
                       title={canDrag ? '拖到左下角数值区' : undefined}
