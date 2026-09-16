@@ -1,7 +1,16 @@
 # Galculator 项目长期笔记
 
+## 仓库与文档（2026-09-16 收敛）
+- **git 仓库已初始化**（`main`，身份沿用全局 cathylinlin/bluejam001@163.com）。此前**不是** git 仓库 → 删除不可回滚；现已可回滚。**无 remote，未 push**（对外动作先问）。
+- `.gitattributes`：`* text=auto eol=lf` + 二进制例外。仓库存 LF，不加这条 Windows 检出会翻 CRLF 导致整文件 diff 噪音。
+- 忽略：`node_modules/` `dist/` `.tmp-*`（含根目录 `.tmp-npm/`）。纳入 `pnpm-lock.yaml`、`docs/assets/*.png`、`.workbuddy/memory/*`。
+- **活文档 4 份**：`README.md`（门面/定位/快速开始）· `docs/ARCHITECTURE.md`（内核：值类型/10 原语/操作清单/引擎依赖 §11/契约索引 §12）· `docs/INTERACTION.md`（**UI 规范 v2**）· `docs/PROOF_SPEC.md` · `docs/ROADMAP.md`。
+- **`docs/archive/`** 收 3 份完成使命的文档（`DESIGN.md` / `UI_PLAN.md` / `GROUPVIZ_HANDOFF.md`），并在 `archive/README.md` **登记每份的去向**。规则：只移动不删除 / 归档前确认内容已被吸收 / 头部加归档标注。
+
 ## 项目定位
 群论计算器——交互式"计算 + 证明可见化"工具，对标 Desmos/GeoGebra。市面空白领域。
+- 与 Desmos 的根本区别：**Desmos 的画布是输出，Galculator 的画布是操作台**。三档参照：Desmos/GeoGebra（交互即时反馈）· Group Explorer（群论可视化约定）· Lean/Coq（**明确不碰**）。
+- **理念（用户原话）**：**用户应该在对象旁边完成他想要的操作。**
 
 ## 已定决策
 - 部署：web 优先，成熟后做 app。
@@ -29,7 +38,8 @@
 - 渲染层**自研交换图画布**（core 的 `computeLatticeLayout` + 自写 SVG）：`@groupviz/react` 虽已发包，但 **`sylow` 视图未入包**，且证明可见化本就要自绘。
 - GroupViz 侧对接待办已完成：门面导出 `descriptor` / `src/core` 越界引用清零 / 新增 `binomialMod`（Lucas）。
 
-## 交互模型（2026-09-13 定稿，docs/INTERACTION.md）
+## 交互模型 → **v2**（docs/INTERACTION.md，2026-09-16 定稿）
+> v1 是 2026-09-13 版；v2 吸收了 UI_PLAN，5 条决策全部定案。
 - 画布 = **交换图**（对象=节点，操作=箭头，位置由关系决定），非坐标系。
 - 视觉编码：**形状=类型**（群=方 / 集合=圆 / 映射=箭头 / 作用=作用线），**颜色=来源**（蓝=输入 / 紫=计算）。
 - 输入：左侧栏**三区**（对象 / 操作 / 数值），统一语法「名字 = 定义」；对象与操作在输入层同构。
@@ -54,18 +64,20 @@
 - **小群库**：`getAllSmallGroups()` → `SmallGroupEntry{order,index,group,precomputed}` · `getSmallGroup(order,index?)` · `getSmallGroupBySymbol` · `getPrecomputed(group)` → `{subgroups,normalSubgroups,conjugacyClasses,center,isSimple}`（**库群零计算**）
 - **守卫阈值**（`guards.ts`）：`INTERACTIVE_LIMIT` 120 · `ENUMERATION_LIMIT` 144 · `STATIC_LIMIT` 240/480 · `SYLOW_MAX_ORDER` 144
 
-## UI 方向（2026-09-15 规划 → docs/UI_PLAN.md + ROADMAP 的 U0–U6）
+## UI 方向（2026-09-16 定稿 → docs/INTERACTION.md v2 §4 / ROADMAP 的 U0–U7）
 - **理念（用户原话）**：**用户应该在对象旁边完成他想要的操作。** 与 Desmos 的最大区别 = **交换图本身可交互**（直接在图上操作对象）。
 - **地基**：注册表补 `OpDef.params`（**命名参数 + 类型**）→ 纯函数 `opsFor(selection)` 同时喂三个入口（节点旁径向菜单 / 顶部工具条 / 查表面板）。"操作别扭"的根因 = 入口死、操作活、靠用户脑中对齐。
 - **交互状态机**：`idle → selected → menu`；`idle/工具条 → pending(opId,picked[]) → 凑够 arity → 执行/editor`；`LayoutMode = auto|manual`。
 - **左栏两态**：输入态（三区 + 两块输入框）/ 详情态（**竖卡**，输入区折叠成一行）—— 竖卡是临时详情，不并存。
 - **输入框两块**：`名字(可空) | 表达式`；自动命名 `A,B,…,Z,A₁,B₁…`，**必须避开注册表所有调用名**（否则 `Z = …` 会遮蔽 `Z(G)`）。
 - **径向菜单三类两层**：看（只填竖卡）/ 算（一元产出对象）/ 造（多元进 pending）。
-- **集合构造（UI_PLAN §9）**：点击流与文本流 = **同一个 `FilterSpec` AST 的两个前端**；点击流要**顺手写出等价文本**（教学价值）。竖卡列表做成**带分面的表格**（列头可点、就地筛选），**筛选状态 = 对象表里的一行** → 结果节点可再编辑（改成 `阶=3` 整图重派生，免费）。
+- **集合构造（INTERACTION §6）**：点击流与文本流 = **同一个 `FilterSpec` AST 的两个前端**；点击流要**顺手写出等价文本**（教学价值）。竖卡列表做成**带分面的表格**（列头可点、就地筛选），**筛选状态 = 对象表里的一行** → 结果节点可再编辑（改成 `阶=3` 整图重派生，免费）。
 - **「类型 × 属性」表（架构 §4）的第二重身份**：同时是竖卡表格的列定义。**一处定义，两处消费（筛选 + 展示）**，列随对象类型变。
 - **谓词两条**：属性谓词（分面，可补全）+ **字谓词**（`x²=e`/`xy=yx`，走 `parseWord` + `group.multiply` 折叠）。属性谓词可自动翻译成字谓词（`阶=2 ⇔ x²=e`）。
 - **宏与 Proof Spec 同构**（`(opId,参数引用)` 序列）→ 先纯重放，排在 M1 之后复用执行器。**M1 依赖改为 U0–U3**。
 - **集合对象对齐 GroupViz 的 subset**：`{label,color,isSubgroup,isNormalSubgroup,type:'subset'|'subgroup'|'normal-subgroup'}` + `SUBSET_COLORS`（`types/view.d.ts`）。
+- **5 条决策（2026-09-16 全部定案）**：① 径向菜单**三类两层**（看/算/造）② 宏**先纯重放**，排 M1 之后复用 Proof Spec 执行器 ③ 集合描述式 = **属性谓词分面 + 字谓词**两条都做，`∧∨` 组合，不开放任意表达式 ④ 拖动 = **钉住 + 吸附网格 + 一键恢复自动 + 持久化**，顶部「手动布局」徽标 ⑤ 固化集合**不自动升级**（用户定 A）：仍是 subset，命中子群时给提示由用户点升级。
+- **阶段 U0–U7**（ROADMAP）：U0 注册表 params + `opsFor` + 集合运算 + 子群升级真群 / U1 两块输入框 + 自动命名 / U2 状态机 + 径向菜单 + 竖卡 / U3 映射构建器 + 结构伴生箭头 / U4 工具条 + 群目录 + 查表 / **U5 集合构造器** / U6 拖动 + 手动布局 / U7 宏。
 
 ## 操作架构（2026-09-15 定稿 → docs/ARCHITECTURE.md，M0.5 已落地代码）
 - **两个平面**：①造对象平面 = 原子构造 / 作用导出 / 枚举+筛 / 迭代 ②**属性平面** = 不变量清单（按类型），喂给 **筛选 / 判定 / 识别**（三者本质都是"查属性"）。算术为独立库。
