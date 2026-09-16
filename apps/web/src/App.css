@@ -1291,3 +1291,12 @@ body {
   display: block;
   font-size: 0.72em;
 }
+
+/* 交换图式节点：符号 + 一小块淡底（常驻，否则多条线穿过时看不清符号） */
+.gnode-hit {
+  transition: fill 0.12s;
+}
+
+.gnode:hover .gnode-hit {
+  fill: rgba(24, 95, 165, 0.13);
+}

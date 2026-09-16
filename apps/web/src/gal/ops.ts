@@ -524,9 +524,9 @@ export const OPS: OpDef[] = [
       if (!S) return fail('商需要第二个参数是子群', '可传元素集、恰含一个子群的子群集，或已是群对象的子群')
       // 用 G 作母群校验：元素 id 不在 G 里 / 不封闭 / 无单位元 → null
       const sub = asCoreSubgroup(G, S.elements)
-      if (!sub) return fail(`${textOf(a[1])} 不是 ${textOf(a[0])} 的子群`, '要求含单位元且乘法封闭')
+      if (!sub) return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的子群`, '要求含单位元且乘法封闭')
       if (!sub.isNormal) {
-        return fail(`${textOf(a[1])} 不是 ${textOf(a[0])} 的正规子群`, '商群 G/N 要求 N ⊴ G')
+        return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的正规子群`, '商群 G/N 要求 N ⊴ G')
       }
       const Q = computeQuotientGroup(G, sub)
       if (!Q) return fail('商群构造失败')
@@ -559,7 +559,7 @@ export const OPS: OpDef[] = [
       const H = groupOf(a[1])
       if (!G || !H) return fail('映射需要源群与靶群', '映射(G, H, r2→e, s→s)')
       const gens = getGeneratorElements(G)
-      if (gens.length === 0) return fail(`${textOf(a[0])} 没有生成元，无法由生成元的像定义映射`)
+      if (gens.length === 0) return fail(`${refText(a[0])} 没有生成元，无法由生成元的像定义映射`)
 
       const pairs: { genName: string; genId: string; image: GroupElement }[] = []
       const seen = new Set<string>()
@@ -574,7 +574,7 @@ export const OPS: OpDef[] = [
         const g = generatorOf(G, genText)
         if (!g) {
           return fail(
-            `${textOf(a[0])} 里没有生成元 ${genText}`,
+            `${refText(a[0])} 里没有生成元 ${genText}`,
             `生成元：${gens.map((x) => x.gen.name).join(', ')}`,
           )
         }
@@ -582,7 +582,7 @@ export const OPS: OpDef[] = [
         const img = resolveElement(H, parts[1].trim())
         if (!img) {
           return fail(
-            `${textOf(a[1])} 里没有元素 ${parts[1].trim()}`,
+            `${refText(a[1])} 里没有元素 ${parts[1].trim()}`,
             `元素：${H.elements.map((e) => e.label).slice(0, 24).join(', ')}`,
           )
         }
@@ -599,7 +599,7 @@ export const OPS: OpDef[] = [
       if (!full) {
         return fail(
           '这组像无法唯一延拓成映射',
-          `生成元之间的乘法关系没被保持（在 ${textOf(a[0])} 里成立的等式，到 ${textOf(a[1])} 里不成立）`,
+          `生成元之间的乘法关系没被保持（在 ${refText(a[0])} 里成立的等式，到 ${refText(a[1])} 里不成立）`,
         )
       }
       const res = verifyHomomorphism(G, H, full)
@@ -662,7 +662,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'action', action },
-        label: `共轭作用(${textOf(a[0])})`,
+        label: `共轭作用(${refText(a[0])})`,
         sub: `|Ω| = ${G.order}`,
       }
     },
@@ -686,7 +686,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'action', action },
-        label: `正则作用(${textOf(a[0])})`,
+        label: `正则作用(${refText(a[0])})`,
         sub: `|Ω| = ${G.order}`,
       }
     },
@@ -707,7 +707,7 @@ export const OPS: OpDef[] = [
       const G = groupOf(a[0])
       if (!G) return fail('Aut(·) 需要一个群')
       const A = createAutomorphismGroup(G)
-      if (!A) return fail(`${textOf(a[0])} 的自同构群太大，本地算不了`, '待后端 GAP 通道')
+      if (!A) return fail(`${refText(a[0])} 的自同构群太大，本地算不了`, '待后端 GAP 通道')
       return {
         ok: true,
         value: { type: 'group', group: A },
@@ -804,8 +804,8 @@ export const OPS: OpDef[] = [
       const els = getGroupCenter(G)
       return {
         ok: true,
-        value: { type: 'group', group: subgroupGroupOf(G, els, `Z(${textOf(a[0])})`) },
-        label: `Z(${textOf(a[0])})`,
+        value: { type: 'group', group: subgroupGroupOf(G, els, `Z(${refText(a[0])})`) },
+        label: `Z(${refText(a[0])})`,
         sub: `|Z| = ${els.length}${structSuffix(G, els)}`,
       }
     },
@@ -833,8 +833,8 @@ export const OPS: OpDef[] = [
       const els = getCentralizer(G, S.elements)
       return {
         ok: true,
-        value: { type: 'group', group: subgroupGroupOf(G, els, `C(${textOf(a[1])})`) },
-        label: `C(${textOf(a[1])})`,
+        value: { type: 'group', group: subgroupGroupOf(G, els, `C(${refText(a[1])})`) },
+        label: `C(${refText(a[1])})`,
         sub: `|C| = ${els.length}${structSuffix(G, els)}`,
       }
     },
@@ -862,8 +862,8 @@ export const OPS: OpDef[] = [
       const els = getNormalizer(G, S.elements)
       return {
         ok: true,
-        value: { type: 'group', group: subgroupGroupOf(G, els, `N(${textOf(a[1])})`) },
-        label: `N(${textOf(a[1])})`,
+        value: { type: 'group', group: subgroupGroupOf(G, els, `N(${refText(a[1])})`) },
+        label: `N(${refText(a[1])})`,
         sub: `|N| = ${els.length}${structSuffix(G, els)}`,
       }
     },
@@ -885,7 +885,7 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const A = actionOf(a[0])
       if (!A) return fail('轨道(·) 的第一个参数必须是作用', '先用 共轭作用(G) / 正则作用(G) 造一个')
-      const x = textOf(a[1])
+      const x = refText(a[1])
       const idx = omegaIndexOf(A, x)
       if (idx < 0) return fail(`Ω 中没有元素 ${x}`, `Ω = {${omegaLabels(A).slice(0, 24).join(', ')}}`)
       const { orbits, orbitOf } = computeOrbits(A.perms, A.n)
@@ -917,7 +917,7 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const A = actionOf(a[0])
       if (!A) return fail('稳定子(·) 的第一个参数必须是作用')
-      const x = textOf(a[1])
+      const x = refText(a[1])
       const idx = omegaIndexOf(A, x)
       if (idx < 0) return fail(`Ω 中没有元素 ${x}`, `Ω = {${omegaLabels(A).slice(0, 24).join(', ')}}`)
       const stabs = computeStabilizers(A.group, A.perms, A.n)
@@ -977,8 +977,8 @@ export const OPS: OpDef[] = [
       const els = M.domain.elements.filter((e) => ids.has(e.id))
       return {
         ok: true,
-        value: { type: 'group', group: subgroupGroupOf(M.domain, els, `ker(${textOf(a[0])})`) },
-        label: `ker(${textOf(a[0])})`,
+        value: { type: 'group', group: subgroupGroupOf(M.domain, els, `ker(${refText(a[0])})`) },
+        label: `ker(${refText(a[0])})`,
         sub: `|ker| = ${els.length}`,
       }
     },
@@ -1003,8 +1003,8 @@ export const OPS: OpDef[] = [
       const els = M.codomain.elements.filter((e) => ids.has(e.id))
       return {
         ok: true,
-        value: { type: 'group', group: subgroupGroupOf(M.codomain, els, `im(${textOf(a[0])})`) },
-        label: `im(${textOf(a[0])})`,
+        value: { type: 'group', group: subgroupGroupOf(M.codomain, els, `im(${refText(a[0])})`) },
+        label: `im(${refText(a[0])})`,
         sub: `|im| = ${els.length}`,
       }
     },
@@ -1030,7 +1030,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'subgroups', group: G, subgroups: subs },
-        label: `Sub(${textOf(a[0])})`,
+        label: `Sub(${refText(a[0])})`,
         sub: `${subs.length} 个子群`,
       }
     },
@@ -1061,7 +1061,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'subgroups', group: G, subgroups: subs },
-        label: `pSub(${textOf(a[0])}, ${p})`,
+        label: `pSub(${refText(a[0])}, ${p})`,
         sub: `${subs.length} 个 ${p}-子群`,
       }
     },
@@ -1093,7 +1093,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'subgroups', group: G, subgroups: subs },
-        label: `Syl(${textOf(a[0])}, ${p})`,
+        label: `Syl(${refText(a[0])}, ${p})`,
         sub: `n${subscript(String(p))} = ${subs.length}，阶 ${order}`,
       }
     },
@@ -1117,7 +1117,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'subgroups', group: G, subgroups: subs },
-        label: `正规子群(${textOf(a[0])})`,
+        label: `正规子群(${refText(a[0])})`,
         sub: `${subs.length} 个正规子群`,
       }
     },
@@ -1140,7 +1140,7 @@ export const OPS: OpDef[] = [
       const G = groupOf(a[0])
       if (!G) return fail('换位子群(·) 需要一个群')
       const els = commutatorClosure(G, G.elements, G.elements)
-      const t = textOf(a[0])
+      const t = refText(a[0])
       return {
         ok: true,
         value: { type: 'group', group: subgroupGroupOf(G, els, `[${t},${t}]`) },
@@ -1223,9 +1223,9 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('ord(·) 的第一个参数必须是群')
-      const txt = textOf(a[1])
+      const txt = refText(a[1])
       const el = resolveElement(G, txt)
-      if (!el) return fail(`${textOf(a[0])} 中没有元素 ${txt}`, `元素：${elementListHint(G)}`)
+      if (!el) return fail(`${refText(a[0])} 中没有元素 ${txt}`, `元素：${elementListHint(G)}`)
       const o = elementOrder(G, el)
       return {
         ok: true,

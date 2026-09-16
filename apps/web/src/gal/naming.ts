@@ -32,7 +32,12 @@ export function isReservedName(name: string): boolean {
 }
 
 /** 合法名字：拉丁字母 / 数字 / 下划线 / 中文。 */
-const NAME_RE = /^[A-Za-z0-9_\u4e00-\u9fff]+$/
+/**
+ * 名字允许：拉丁字母 / 数字 / 下划线 / 中文 / **希腊字母**。
+ * 希腊字母是刻意的——数学里映射习惯叫 φ、ψ，群同态写成 `φ : G → H`
+ * 比 `f` 更"像交换图"（用户提的）。
+ */
+const NAME_RE = /^[A-Za-z0-9_\u4e00-\u9fff\u0370-\u03ff\u1f00-\u1fff]+$/
 
 /** 是否像一个名字（用于"整行粘贴"的拆分判断）。 */
 export function isNameLike(s: string): boolean {
@@ -57,7 +62,7 @@ export function checkName(raw: string, used: Iterable<string>): NameCheck {
   const name = raw.trim()
   if (!name) return { ok: true }
   if (!NAME_RE.test(name)) {
-    return { ok: false, error: '名字只能用字母 / 数字 / 下划线 / 中文' }
+    return { ok: false, error: '名字只能用字母（含希腊字母）/ 数字 / 下划线 / 中文' }
   }
   const lower = name.toLowerCase()
   for (const u of used) {

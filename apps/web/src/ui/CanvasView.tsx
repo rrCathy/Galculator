@@ -98,20 +98,23 @@ function measure(n: CanvasNode): Box {
       font = 11
       labelW = labelWidth(n.label, font)
     }
-    const subW = n.sub ? labelWidth(n.sub, 11.5) : 0
-    const r = Math.min(SET_MAX_R, Math.max(SET_MIN_R, Math.max(labelW, subW) / 2 + 14))
-    return { hw: r, hh: r, round: true, font, subFont: 11.5 }
+    const r = Math.min(SET_MAX_R, Math.max(SET_MIN_R, labelW / 2 + 12))
+    return { hw: r, hh: r, round: true, font, subFont: 11 }
   }
-  const font = n.shape === 'action' ? 12.5 : 16
-  const minW = n.shape === 'action' ? 104 : 96
-  const maxW = n.shape === 'action' ? 220 : 210
-  const h = n.shape === 'action' ? ACTION_H : GROUP_H
+  // 群 / 作用：**尺寸贴着标签走**——交换图里对象就是它的符号，不该是"装信息的卡片"
+  let font = n.shape === 'action' ? 13 : 18
+  let w = labelWidth(n.label, font)
+  if (w > 250) {
+    font = 13
+    w = labelWidth(n.label, font)
+  }
+  const h = measureTex(n.label, font)?.h ?? font * 1.4
   return {
-    hw: Math.min(maxW, Math.max(minW, labelWidth(n.label, font) + 28)) / 2,
-    hh: h / 2,
+    hw: Math.max(w / 2 + 10, 24),
+    hh: Math.max(h / 2 + 4, 13),
     round: false,
     font,
-    subFont: n.shape === 'action' ? 10.5 : 11.5,
+    subFont: 11,
   }
 }
 
@@ -429,11 +432,32 @@ export function CanvasView({
             n.shape === 'action' ? ACTION_TEXT : n.origin === 'input' ? INPUT_TEXT : DERIVED_TEXT
           const edge = isPicked ? PICK_STROKE : stroke
           const labelHtml = labelTexHtml(n.label)
-          const subHtml = n.sub ? labelTexHtml(n.sub) : null
           // 内容高度按实测算：KaTeX 自带 strut，直接拿框高居中会整体偏上
           const labelH = measureTex(n.label, b.font)?.h ?? b.font * 1.3
-          const subH = n.sub ? (measureTex(n.sub, b.subFont)?.h ?? b.subFont * 1.3) : 0
-          const contentH = labelH + subH + 2
+          const contentH = labelH + 2
+          // **画布是交换图，不是卡片列表**：节点只放符号（没有副行、没有信息栏），
+          // 但符号后面留**一小块淡背景**——纯裸符号在多条线穿过时会看不清，
+          // 一块淡底就够把它"托"出来，同时保留"对象就是它的符号"这个感觉。
+          // 底色沿用「颜色 = 来源」：输入对象偏蓝、运算结果偏紫。
+          const inputish = n.origin === 'input'
+          const bodyFill = b.round
+            ? 'rgba(83, 74, 183, 0.07)'
+            : n.shape === 'action'
+              ? 'rgba(15, 110, 86, 0.07)'
+              : selected || isPicked
+                ? inputish
+                  ? 'rgba(24, 95, 165, 0.16)'
+                  : 'rgba(83, 74, 183, 0.16)'
+                : inputish
+                  ? 'rgba(24, 95, 165, 0.07)'
+                  : 'rgba(83, 74, 183, 0.07)'
+          const bodyStroke = b.round
+            ? selected || isPicked
+              ? edge
+              : 'rgba(83, 74, 183, 0.3)'
+            : selected || isPicked || n.shape === 'action'
+              ? edge
+              : 'transparent'
 
           return (
             <g
@@ -449,24 +473,26 @@ export function CanvasView({
             >
               {b.round ? (
                 <circle
+                  className="gnode-hit"
                   cx={p.x}
                   cy={p.y}
                   r={b.hw}
-                  fill={fill}
-                  stroke={edge}
-                  strokeWidth={selected ? 2.2 : 1}
+                  fill={bodyFill}
+                  stroke={bodyStroke}
+                  strokeWidth={selected || isPicked ? 2 : 1}
                 />
               ) : (
                 <rect
+                  className="gnode-hit"
                   x={p.x - b.hw}
                   y={p.y - b.hh}
                   width={b.hw * 2}
                   height={b.hh * 2}
-                  rx={11}
-                  fill={fill}
-                  stroke={edge}
-                  strokeWidth={selected ? 2.2 : 1}
-                  strokeDasharray={n.shape === 'action' ? '6 4' : undefined}
+                  rx={9}
+                  fill={bodyFill}
+                  stroke={bodyStroke}
+                  strokeWidth={selected || isPicked ? 2 : 1.4}
+                  strokeDasharray={n.shape === 'action' ? '5 4' : undefined}
                 />
               )}
               {/* 标签走 KaTeX（HTML），所以用 foreignObject 承载 */}
@@ -485,15 +511,8 @@ export function CanvasView({
                       ? { dangerouslySetInnerHTML: { __html: labelHtml } }
                       : { children: n.label })}
                   />
-                  {n.sub && (
-                    <span
-                      className="gnode-sub"
-                      style={{ fontSize: b.subFont, color: stroke }}
-                      {...(subHtml
-                        ? { dangerouslySetInnerHTML: { __html: subHtml } }
-                        : { children: n.sub })}
-                    />
-                  )}
+                  {/* 副行（|G| = 24 这类）不再画在画布上——交换图的节点只有符号，
+                      要数字去信息面板看 */}
                 </div>
               </foreignObject>
             </g>

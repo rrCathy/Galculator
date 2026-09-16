@@ -54,7 +54,13 @@ export function MapBuilder({
   const [nameDraft, setNameDraft] = useState('')
   const [autoNote, setAutoNote] = useState<string | null>(null)
 
-  const autoName = useMemo(() => nextAutoName(usedNames), [usedNames])
+  /** 映射的默认名：**优先希腊字母**（φ / ψ）——`φ : G → H` 比 `f` 更像交换图 */
+  const autoName = useMemo(() => {
+    const used = new Set(usedNames.map((n) => n.toLowerCase()))
+    if (!used.has('φ')) return 'φ'
+    if (!used.has('ψ')) return 'ψ'
+    return nextAutoName(usedNames)
+  }, [usedNames])
   const nameCheck = useMemo(() => checkName(nameDraft, usedNames), [nameDraft, usedNames])
 
   /** 每个生成元都填了像 → 试延拓并校验。 */

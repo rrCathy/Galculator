@@ -116,6 +116,31 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
       continue
     }
 
+    if (op === 'firstIso') {
+      // 第一同构定理的三条线：`G --φ--> H`（用户画的）+ 工具补的两条：
+      //   `G --π--> G/ker φ` 与 `G/ker φ --≅--> im φ`（满射时 im φ = H）
+      const m = (() => {
+        for (const src of o.sources) {
+          const hit = byId.get(src)
+          if (hit?.value.type === 'map') return hit.value.map
+        }
+        return null
+      })()
+      if (!m) continue
+      const dom = groupNodeId(objects, m.domain)
+      if (dom) {
+        edges.push({ id: `${dom}->${o.id}:pi`, kind: 'map', from: dom, to: o.id, label: 'π' })
+      }
+      if (m.isSurjective) {
+        const cod = groupNodeId(objects, m.codomain)
+        if (cod && cod !== o.id) {
+          edges.push({ id: `${o.id}->${cod}:iso`, kind: 'map', from: o.id, to: cod, label: '≅' })
+        }
+      }
+      consumed.add(o.id)
+      continue
+    }
+
     const isSubgroupResult = SUBGROUP_RESULT_OPS.has(op) || op === 'kernel' || op === 'image'
     if (!isSubgroupResult) continue
     const parent = parentOf(o, op === 'image' ? 'codomain' : 'domain')
