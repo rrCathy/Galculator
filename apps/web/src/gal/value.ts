@@ -1,20 +1,63 @@
 import type { Group, GroupElement, HomomorphismMap } from '@groupviz/core'
 
 /**
- * 值类型（6 种）—— 架构 §3 / 交互模型 §2。
+ * 值类型（7 种）—— 架构 §3 / 交互模型 §2。
  *
- * 操作产出的**一切**都是这六类之一。画布只承载前五类里"有节点"的那些；
- * 数值走左栏「数值区」（`number` 不上画布）。
+ * 操作产出的**一切**都是这七类之一。
+ * **「去哪」不在这里决定**——由下面的 `ValueSort`（存在层级）决定。
  */
-export type ValueType = 'group' | 'elements' | 'subgroups' | 'map' | 'action' | 'number'
+export type ValueType = 'group' | 'elements' | 'set' | 'subgroups' | 'map' | 'action' | 'number'
 
 export const VALUE_TYPE_LABEL: Record<ValueType, string> = {
   group: '群',
   elements: '元素集',
+  set: '集合',
   subgroups: '子群集',
   map: '映射',
   action: '作用',
   number: '数值',
+}
+
+/* ── 存在层级：一个值「在数学图景里的位置」───────────────────── */
+
+/**
+ * 存在层级（docs/DIAGRAM_SPEC.md §3）—— 与 `ValueType` **正交**：
+ *
+ * | 维度 | 回答的问题 | 影响 |
+ * |---|---|---|
+ * | `ValueType` | 数据长什么样（怎么存、怎么算）| 求值层 |
+ * | `ValueSort` | 它在图里处于什么位置 | **去哪**（画布 / 面板 / 数值区）|
+ *
+ * 为什么要拆开：`elements`（元素集）与 `subgroups`（子群集）在数据结构上相似，
+ * 但在数学图景里一个是**对象**（能当映射的源或靶）、一个是**列表**（不能）。
+ * v3 的 `canvasShape()` 把两者都判成 `'set'`，于是画布上分不出"对象"与"表格"。
+ */
+export type ValueSort =
+  /** 交换图的顶点：群、集合 —— 能作为某个映射的源或靶 */
+  | 'vertex'
+  /** 交换图的边：映射、作用 —— 连接两个顶点 */
+  | 'edge'
+  /** 列表：子群集 —— 是信息不是对象，不上画布（但可"取出"成员为对象）*/
+  | 'list'
+  /** 标量：数值 —— 进数值区 */
+  | 'scalar'
+
+export function sortOf(v: GalValue): ValueSort {
+  switch (v.type) {
+    case 'group':
+    case 'elements':
+    case 'set':
+      return 'vertex'
+    case 'map':
+    case 'action':
+      // 作用不是 `G → H`（是 `G×Ω → Ω`），但它在图里扮演的是"关系"的角色，
+      // 所以与映射同属 edge 档；两者的**视觉**由 `kind` 区分（实线 vs 作用线）。
+      return 'edge'
+    case 'subgroups':
+      return 'list'
+    case 'number':
+      return 'scalar'
+  }
 }
 
 /* ── 子群：三种 core 形态拉平为一种 ───────────────────────── */
@@ -123,11 +166,44 @@ export interface GalAction {
   subgroup?: NormalizedSubgroup
 }
 
+/* ── 集合（Ω 的载体）───────────────────────────────────────── */
+
+/**
+ * 集合的成员。
+ *
+ * 成员**不一定是群元素**——所以不能复用 `elements`（那一类的成员被绑死成
+ * `GroupElement`）。Ω 就是这种情形：
+ *   - Sylow III 里 `Ω = Syl_p(G)`，成员是**子群**
+ *   - Sylow I 里 Ω 是 `p^k` 元子集，成员是**子集**
+ *   - 共轭作用里 `Ω = G`，成员才是群元素
+ *
+ * `subgroupElements` 让成员保留"它是个子群"的信息——面板上「取出为对象」靠它
+ * （`buildSubgroupGroup` 能把元素集变成真群对象）。
+ */
+export interface SetMember {
+  /** 展示记号（`⟨r2, s⟩` / `H₁` / `r2` …）*/
+  label: string
+  /** 成员背后的子群元素集（若它是子群）*/
+  subgroupElements?: GroupElement[]
+}
+
+/** 集合：群作用的作用对象 Ω，也是"列表提升"的产物。 */
+export interface GalSet {
+  /** 上下文群（Ω 的成员取自哪里）*/
+  group: Group
+  /** 展示名 */
+  label: string
+  members: SetMember[]
+  /** 由哪个对象提升而来（`底集(S)` 的 S）*/
+  from?: string
+}
+
 /* ── 值 ─────────────────────────────────────────────────── */
 
 export type GalValue =
   | { type: 'group'; group: Group }
   | { type: 'elements'; group: Group; elements: GroupElement[] }
+  | { type: 'set'; set: GalSet }
   | { type: 'subgroups'; group: Group; subgroups: NormalizedSubgroup[] }
   | { type: 'map'; map: GalMap }
   | { type: 'action'; action: GalAction }
@@ -140,6 +216,8 @@ export function contextGroup(v: GalValue): Group | null {
       return v.group
     case 'elements':
       return v.group
+    case 'set':
+      return v.set.group
     case 'subgroups':
       return v.group
     case 'action':
@@ -152,32 +230,28 @@ export function contextGroup(v: GalValue): Group | null {
 }
 
 /**
- * 画布形状 —— 形状编码类型（交互模型 §2）：
- *   group   → 方（圆角矩形）
- *   set     → 圆（元素集 / 子群集）
- *   action  → 虚线方（作用线节点）
- *   edge    → 不占节点，只画一条边（映射）
- *   none    → 不上画布（数值 → 左栏数值区）
+ * 画布形状 —— **由存在层级（`sortOf`）派生**，不再各自 switch 一遍。
+ *
+ * 这是本轮的关键修正：从前 `elements` 与 `subgroups` 都落到 `'set'`，
+ * 画布上"集合对象"与"子群列表"长得一样。现在判据只有一条。
  */
 export type CanvasShape = 'group' | 'set' | 'action' | 'edge' | 'none'
 
 export function canvasShape(v: GalValue): CanvasShape {
-  switch (v.type) {
-    case 'group':
-      return 'group'
-    case 'elements':
-    case 'subgroups':
-      return 'set'
-    case 'action':
-      return 'action'
-    case 'map':
-      return 'edge'
-    case 'number':
+  switch (sortOf(v)) {
+    case 'list':
+    case 'scalar':
       return 'none'
+    case 'edge':
+      // 过渡：`action` 的层级已是 edge（它是一条关系），但作用线还没做，
+      // 所以暂时仍占一个节点。下一批把 `G ↷ Ω` 画出来后就返回 'edge'。
+      return v.type === 'map' ? 'edge' : 'action'
+    case 'vertex':
+      return v.type === 'group' ? 'group' : 'set'
   }
 }
 
-/** 画布上是否呈现为节点。 */
+/** 画布上是否呈现为**节点**。 */
 export function isCanvasValue(v: GalValue): boolean {
   const s = canvasShape(v)
   return s === 'group' || s === 'set' || s === 'action'

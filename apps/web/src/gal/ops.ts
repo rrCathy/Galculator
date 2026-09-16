@@ -42,6 +42,7 @@ import {
   type GalAction,
   type GalMap,
   type GalValue,
+  type SetMember,
   type ValueType,
 } from './value'
 
@@ -785,6 +786,56 @@ export const OPS: OpDef[] = [
     run: (a) => setOp(a, '·'),
   },
 
+  {
+    id: 'underlyingSet',
+    notation: '底集(S)',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '取底集：忘记结构，只把里面的东西当作点 —— 这是造 Ω（被作用的集合）的正规做法',
+    recipe: '原子构造（取底集 / 忘记结构）',
+    impl: '本地（NormalizedSubgroup / GroupElement → SetMember）',
+    call: ['底集', 'asSet', 'underlying'],
+    params: [{ name: 'S', type: 'subset' }],
+    arity: 1,
+    result: 'set',
+    run: (a) => {
+      const arg = a[0]
+      if (!arg || arg.kind !== 'object') return fail('底集(·) 需要一个子群集 / 元素集 / 群')
+      const v = arg.value
+      const name = refText(arg)
+
+      let members: SetMember[]
+      let group: Group
+      if (v.type === 'subgroups') {
+        // 子群集 → 每个子群成为**一个点**，同时保留它的元素集
+        // （面板上「取出为对象」靠它；Sylow III 的 Ω = Syl_p(G) 就是这条路）
+        group = v.group
+        members = v.subgroups.map((s) => ({ label: s.label, subgroupElements: s.elements }))
+      } else if (v.type === 'elements') {
+        group = v.group
+        members = v.elements.map((e) => ({ label: e.label }))
+      } else if (v.type === 'group') {
+        group = v.group
+        members = v.group.elements.map((e) => ({ label: e.label }))
+      } else {
+        return fail(
+          `${name} 没有底集可取`,
+          '底集(·) 接受子群集（如 Syl(G, 2)）· 元素集 · 群',
+        )
+      }
+
+      return {
+        ok: true,
+        value: {
+          type: 'set',
+          set: { group, label: `底集(${name})`, members, from: arg.ref },
+        },
+        label: `底集(${name})`,
+        sub: `|Ω| = ${members.length}`,
+      }
+    },
+  },
+
   /* ══ 作用导出 ══════════════════════════════════════════ */
   {
     id: 'center',
@@ -905,15 +956,18 @@ export const OPS: OpDef[] = [
     notation: '稳定子(A, x)',
     mechanism: 'action',
     primitive: true,
-    doc: 'x 的稳定子：使 g·x = x 的元素 g 全体',
-    impl: 'computeStabilizers',
+    doc: 'x 的稳定子：使 g·x = x 的元素 g 全体（G 的子群）',
+    impl: 'computeStabilizers → buildSubgroupGroup',
     call: ['稳定子', 'stabilizer', 'stab'],
     params: [
       { name: 'A', type: 'action' },
       { name: 'x', type: 'element' },
     ],
     arity: 2,
-    result: 'elements',
+    // **稳定子是 G 的子群**，所以和其它子群结果一样升级为真群对象
+    // （U0 那批升级漏了它：`Stab` 的 result 还停在 'elements'，
+    //  于是它没法继续参与群运算，和其它子群结果不一致）。
+    result: 'group',
     run: (a) => {
       const A = actionOf(a[0])
       if (!A) return fail('稳定子(·) 的第一个参数必须是作用')
@@ -925,9 +979,9 @@ export const OPS: OpDef[] = [
       const els = A.group.elements.filter((e) => ids.has(e.id))
       return {
         ok: true,
-        value: { type: 'elements', group: A.group, elements: els },
+        value: { type: 'group', group: subgroupGroupOf(A.group, els, `Stab(${x})`) },
         label: `Stab(${x})`,
-        sub: `|Stab| = ${els.length}`,
+        sub: `|Stab| = ${els.length}${structSuffix(A.group, els)}`,
       }
     },
   },

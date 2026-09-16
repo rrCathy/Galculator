@@ -27,7 +27,7 @@ import { ObjectDock } from './ui/ObjectDock'
 import { OpDock } from './ui/OpDock'
 import { InfoDock, type InfoTab } from './ui/InfoDock'
 import { NumericDock } from './ui/NumericDock'
-import type { GalValue } from './gal/value'
+import type { GalValue, NormalizedSubgroup } from './gal/value'
 
 /**
  * 默认示范（U0–U2 能力清单）：
@@ -163,6 +163,35 @@ export default function App() {
     setOpenInfo(true)
     setNotice(null)
   }, [])
+
+  /**
+   * 「取出为对象」：把子群集里的一项变成一行定义（DIAGRAM_SPEC §3）。
+   *
+   * 列表不上画布，**但它是入口不是终点**——因为列表里的每一项本身就是个对象
+   * （子群）。走的是同一条路：编出一行文本 → 交给同一个求值器，
+   * 于是"取出来的"与"手写的"完全等价，用户也看得见系统写了什么。
+   */
+  const extractSubgroup = useCallback(
+    (sub: NormalizedSubgroup) => {
+      const v = focusedObj?.value
+      if (!v || v.type !== 'subgroups') return
+      // 上下文群必须取**群**那一行的名字——子群集那一行（S）本身不是群，
+      // 拿它当 `闭包(S, …)` 的上下文会被求值器拒掉（真浏览器走查抓到的）。
+      const parent = objects.find(
+        (o) => o.value.type === 'group' && o.value.group === v.group,
+      )
+      if (!parent) return
+      const name = nextAutoName(objects.map((o) => o.id))
+      // 平凡子群没有生成元，用单位元记号兜底（`闭包(G, e)` 合法）
+      const gens =
+        sub.generators.length > 0
+          ? sub.generators.map((g) => g.label)
+          : [v.group.identity.label]
+      setLines((p) => [...p, `${name} = 闭包(${parent.id}, ${gens.join(', ')})`])
+      setNotice(null)
+    },
+    [focusedObj, objects],
+  )
 
   /* ── 执行：把点选出来的操作编成一行定义，交给同一个求值器 ───────── */
 
@@ -464,6 +493,7 @@ export default function App() {
           tab={infoTab}
           onTab={setInfoTab}
           node={busy ? null : focusedObj}
+          onExtract={extractSubgroup}
         />
       </div>
 

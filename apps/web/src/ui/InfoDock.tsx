@@ -8,7 +8,7 @@ import {
   listCosetStripSubgroups,
   type Group,
 } from '@groupviz/core'
-import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL } from '../gal/value'
+import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type NormalizedSubgroup } from '../gal/value'
 import { groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { Tex, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
@@ -35,6 +35,7 @@ export function InfoDock({
   tab,
   onTab,
   node,
+  onExtract,
 }: {
   open: boolean
   onToggle: () => void
@@ -42,6 +43,13 @@ export function InfoDock({
   onTab: (t: InfoTab) => void
   /** 焦点**对象**——不限于节点：映射只画箭头，但同样有信息可看 */
   node: GalObject | null
+  /**
+   * 「取出为对象」：把列表里的一个成员变成一行定义。
+   *
+   * 列表（子群集）不上画布，但它是**入口**不是终点——DIAGRAM_SPEC §3：
+   * "能作为某个映射的源或靶的，才配当顶点"，而子群集里的每一项**本身**就是子群。
+   */
+  onExtract?: (sub: NormalizedSubgroup) => void
 }) {
   const group = node && node.value.type === 'group' ? node.value.group : null
 
@@ -104,7 +112,7 @@ export function InfoDock({
               {tab === 'subgroups' && <SubgroupsTab group={group} />}
             </>
           ) : (
-            <OtherTab node={node} />
+            <OtherTab node={node} onExtract={onExtract} />
           )}
         </>
       )}
@@ -203,7 +211,13 @@ function SubgroupsTab({ group }: { group: Group }) {
   )
 }
 
-function OtherTab({ node }: { node: GalObject }) {
+function OtherTab({
+  node,
+  onExtract,
+}: {
+  node: GalObject
+  onExtract?: (sub: NormalizedSubgroup) => void
+}) {
   const v = node.value
   switch (v.type) {
     case 'elements':
@@ -219,17 +233,42 @@ function OtherTab({ node }: { node: GalObject }) {
       return (
         <div className="insp-tags">
           {v.subgroups.slice(0, 30).map((s, i) => (
-            <span key={i} className="sub-tag" title={`阶 ${s.order} · 指数 ${s.index ?? '—'}`}>
+            <button
+              key={i}
+              type="button"
+              className="sub-tag sub-tag-btn"
+              title={`阶 ${s.order} · 指数 ${s.index ?? '—'} · 点击取出为对象`}
+              onClick={() => onExtract?.(s)}
+            >
               {s.label}
               <em>|H|={s.order}</em>
               {s.isNormal && <b>⊴</b>}
               {s.isSylow && <b className="syl">Syl</b>}
-            </span>
+            </button>
           ))}
           {v.subgroups.length > 30 && (
             <div className="insp-line dim">…共 {v.subgroups.length} 个</div>
           )}
         </div>
+      )
+    case 'set':
+      // 集合（Ω）：成员可能是子群、子集或元素——统一按记号列出来
+      return (
+        <>
+          <Row k="基数">
+            <span>{v.set.members.length}</span>
+          </Row>
+          <div className="insp-tags">
+            {v.set.members.slice(0, 40).map((m, i) => (
+              <span key={i} className="sub-tag">
+                {m.label}
+              </span>
+            ))}
+          </div>
+          {v.set.members.length > 40 && (
+            <div className="insp-line dim">…共 {v.set.members.length} 个</div>
+          )}
+        </>
       )
     case 'action':
       return (

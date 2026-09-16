@@ -1,5 +1,6 @@
 import type { Group } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from './types'
+import { canvasShape } from './value'
 
 /**
  * 派生深度 = 依赖链长度。输入对象为 0，其派生结果为 1，再派生为 2……
@@ -171,13 +172,15 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
 
   const nodes: CanvasNode[] = []
   for (const o of objects) {
-    // 数值 → 左侧「数值」抽屉，不进画布
-    if (o.value.type === 'number') continue
-    // 映射 → 只画箭头不占节点
-    if (o.value.type === 'map') continue
+    // **去哪由存在层级决定**（DIAGRAM_SPEC §3）：
+    //   none  → 不上画布：`list`（子群集）去面板、`scalar`（数值）去数值区
+    //   edge  → 只画边不占节点：映射（作用暂时仍占节点，见 value.ts 的过渡注释）
+    //   group / set / action → 占一个节点
+    const shape = canvasShape(o.value)
+    if (shape === 'none' || shape === 'edge') continue
     nodes.push({
       ...o,
-      shape: o.value.type === 'group' ? 'group' : o.value.type === 'action' ? 'action' : 'set',
+      shape,
       level: levels.get(o.id) ?? 0,
     })
   }

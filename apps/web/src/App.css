@@ -373,6 +373,21 @@ body {
   color: #0f6e56;
 }
 
+/* 可点击的标签 —— 「取出为对象」：列表是入口，不是终点（DIAGRAM_SPEC §3）*/
+.sub-tag-btn {
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: inherit;
+  color: var(--text);
+}
+
+.sub-tag-btn:hover {
+  border-color: var(--blue);
+  background: #f2f8fd;
+  color: var(--blue);
+}
+
 /* ── 输入悬浮球（画面正下方中央，UI v3.1）────────────────── */
 
 .composer-orb {
