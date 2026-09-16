@@ -150,6 +150,14 @@ export default function App() {
     setOrbStage('closed')
   }, [])
 
+  /** 面板里点对象行 = 选中它：画布高亮 + 对象球出现 + 信息面板打开（信息都在那边看） */
+  const selectFromDock = useCallback((id: string) => {
+    setInter({ kind: 'selected', target: id })
+    setOrbStage('closed')
+    setOpenInfo(true)
+    setNotice(null)
+  }, [])
+
   /* ── 执行：把点选出来的操作编成一行定义，交给同一个求值器 ───────── */
 
   const runOp = useCallback(
@@ -382,12 +390,14 @@ export default function App() {
           onToggle={() => setOpenObjects((v) => !v)}
           lineStates={lineStates}
           onRemove={removeLine}
+          onSelect={selectFromDock}
         />
         <OpDock
           open={openOps}
           onToggle={() => setOpenOps((v) => !v)}
           lineStates={lineStates}
           onRemove={removeLine}
+          onSelect={selectFromDock}
         />
         <InfoDock
           open={openInfo}

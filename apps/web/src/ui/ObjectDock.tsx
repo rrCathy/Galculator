@@ -13,11 +13,14 @@ export function ObjectDock({
   onToggle,
   lineStates,
   onRemove,
+  onSelect,
 }: {
   open: boolean
   onToggle: () => void
   lineStates: LineState[]
   onRemove: (index: number) => void
+  /** 点行 = 选中对象，信息在「信息」面板看 */
+  onSelect: (id: string) => void
 }) {
   const okRows = lineStates.filter((s) => s.ok && s.object)
   const inputs = okRows.filter(
@@ -29,7 +32,7 @@ export function ObjectDock({
     <DockPanel title="对象" count={inputs.length} open={open} onToggle={onToggle}>
       {inputs.length === 0 && <div className="empty">点下方 ✎ 声明一个群，如 G = D_4</div>}
       {inputs.map((s) => (
-        <ObjectRow key={s.index} state={s} onRemove={onRemove} />
+        <ObjectRow key={s.index} state={s} onRemove={onRemove} onSelect={onSelect} />
       ))}
 
       {bad.length > 0 && (
