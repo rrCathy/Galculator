@@ -1,0 +1,13 @@
+# 统一行尾：仓库与工作区都用 LF。
+# 不加这一条，Windows 上检出时 Git 会把 LF 翻成 CRLF，
+# 之后任何 add 都静默重新规范化，产生无法阅读的整文件 diff。
+* text=auto eol=lf
+
+# 二进制文件不做行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
