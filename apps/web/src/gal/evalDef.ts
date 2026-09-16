@@ -29,12 +29,27 @@ const UNICODE_ALIASES: [RegExp, string][] = [
   [/⋊/g, ' rtimes '],
   [/∩/g, ' ∩ '],
   [/∪/g, ' ∪ '],
+  [/∖/g, ' \\ '],
+  [/·/g, ' · '],
+  [/\\cdot\b/g, ' · '],
 ]
+
+/**
+ * `⟨S⟩` → `闭包(S)`（记号包裹 → 函数调用，注册表的 call 名）。
+ *
+ * 只改写**不带逗号**的形态：带逗号的 `⟨(12),(34)⟩` 是「由置换生成群」的记号，
+ * 母群未定，留给 `parseGroupNotation`——别在这里抢先解释成"某个上下文群里的闭包"。
+ * 要按上下文群生成，写 `闭包(G, (12), (34))`。
+ */
+function normalizeAngle(s: string): string {
+  return s.replace(/⟨([^⟨⟩,]+)⟩/g, (_, inner: string) => `闭包(${inner.trim()})`)
+}
 
 /** Unicode 运算符 → 规范化 ASCII 形态（`C_2 × C_3` → `C_2 x C_3`）。 */
 export function normalizeExpr(s: string): string {
   let t = s.trim()
   for (const [re, to] of UNICODE_ALIASES) t = t.replace(re, to)
+  t = normalizeAngle(t)
   return t.replace(/\s+/g, ' ').trim()
 }
 
@@ -104,7 +119,8 @@ interface InfixHit {
 /**
  * 只在**顶层**（括号外）找中缀符号。
  * 字母类符号（`x`）必须被非标识符字符包夹，否则 `max` 会被切坏；
- * `/` 例外——`G/N` 这种无空格写法很常见。
+ * `/` 与 `·` 例外——`G/N`、`A·B` 这种紧贴写法很常见；`\` 反而**必须**有边界，
+ * 因为它是 LaTeX 转义的起头（`\times`）。
  */
 function findTopLevelInfix(t: string): InfixHit | null {
   let depth = 0
@@ -123,7 +139,8 @@ function findTopLevelInfix(t: string): InfixHit | null {
       if (!t.startsWith(sym, i)) continue
       const before = i === 0 ? '' : t[i - 1]
       const after = i + sym.length >= t.length ? '' : t[i + sym.length]
-      if (sym === '/' || (!IDENT_CHAR.test(before) && !IDENT_CHAR.test(after))) {
+      const tight = sym === '/' || sym === '·'
+      if (tight || (!IDENT_CHAR.test(before) && !IDENT_CHAR.test(after))) {
         return { pos: i, len: sym.length, sym }
       }
     }

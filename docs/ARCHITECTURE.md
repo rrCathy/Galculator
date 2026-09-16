@@ -106,6 +106,19 @@
 
 > `不动点` 仍走 core 的 `computeFixedPoints`（快路径），但它的**语义**是"轨道长度 1 的特例"。
 
+### 3.5 子群的类型升级（U0 落地）
+
+`Z(G)` / `[G,G]` / `C_G` / `N_G` / `ker f` / `im f` / `⟨S⟩` 这些**产出子群**的操作，
+返回的不是"元素集"而是**真群对象**（core `buildSubgroupGroup`；元素沿用母群的对象，id 一致）：
+
+- 值类型是 `group` 而不是 `elements` → 画布上**圆变方**（"类型改变是最强视觉信号"，INTERACTION §2）
+- 于是 `Z(Z(G))`、`⟨Z(G)⟩`、`G / Z(G)` 全部合法
+- 元素 id 与母群一致，所以 `subgroupFromElementIds` / `isSubgroupElementSet` / 商群的正规性判定不受影响
+- 副行带结构符号（`|Z| = 2 · C₂`，来自 `subgroupStructureSymbol`），识别不出时不留脏尾巴
+
+反例（**不升级**）：集合运算 `∩` `∪` `\` `·` 的产出仍是 `elements`——
+它命中子群时只提示、由用户认可（决策 ⑤：固化集合不自动升级）。
+
 ## 4. 类型 × 属性（= 筛的谓词库）
 
 | 类型 | 属性（不变量） |
@@ -136,8 +149,8 @@
 
 | 操作 | 记法 | 模式 | 实现 |
 |---|---|---|---|
-| 交 / 并 / 差 | `A ∩ B` `A ∪ B` `A \ B` | 原子构造 | 元素集运算 |
-| 积集 | `A · B` | 原子构造 | |
+| 交 / 并 / 差 | `A ∩ B` `A ∪ B` `A \ B` | 原子构造 | 本地元素集运算（按元素 id，校验同母群）|
+| 积集 | `A · B` | 原子构造 | 本地元素集运算（走母群 `multiply`）|
 | 描述式 | `{x ∈ G : φ(x)}` | 枚举 + 筛 | 谓词求值（消费属性库）|
 | 陪集 | `gH` `Hg` | 原子构造 | `computeCosets` |
 | 共轭子群 | `gHg⁻¹` | 原子构造 | `conjugateSubgroup` |
@@ -160,8 +173,8 @@
 | 操作 | 记法 | 模式 | 实现 |
 |---|---|---|---|
 | 同态 | `f : G → H` | 原子构造（**对象编辑器**）| `verifyHomomorphism` |
-| 核 | `ker f` | 作用导出 | 稳定子(诱导作用) |
-| 像 | `im f` | 作用导出 | 轨道(诱导作用) |
+| 核 | `ker f` | 作用导出 | `computeKernelFromMapping`（配方 = 稳定子(诱导作用)）|
+| 像 | `im f` | 作用导出 | `computeImageFromMapping`（配方 = 轨道(诱导作用)）|
 | 共轭 / 正则 / 陪集作用 | `G ↷ Ω` | 原子构造 | `compute*Perms` |
 | 轨道 | `Orb(x)` | 作用导出 | `computeOrbits` |
 | 稳定子 | `Stab(x)` | 作用导出 | `computeStabilizers` |

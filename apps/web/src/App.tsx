@@ -7,8 +7,20 @@ import { CanvasView } from './ui/CanvasView'
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalValue } from './gal/value'
 import type { CanvasNode } from './gal/types'
 
-/** 默认示范：一个群 → 它的中心（子群）→ 商群，外加一个子群集与一个数值。 */
-const DEFAULT_LINES = ['G = D_4', 'Z = Z(G)', 'Q = G / Z', 'S = Sub(G)', 'n = ord(G, r2)']
+/**
+ * 默认示范（U0 能力清单）：
+ *   `G = D_4` 记号建群 · `Z(G)` 子群升级为**真群对象**（圆 → 方，于是 `Z(Z(G))` 合法）
+ *   `换位子群(G)` 迭代闭包 · `Z ∩ C` 集合运算 · `G / Z` 商群 · `Sub(G)` 枚举 · `ord` 数值进栈
+ */
+const DEFAULT_LINES = [
+  'G = D_4',
+  'Z = Z(G)',
+  'C = 换位子群(G)',
+  'J = Z ∩ C',
+  'Q = G / Z',
+  'S = Sub(G)',
+  'n = ord(G, r2)',
+]
 
 export default function App() {
   const [lines, setLines] = useState<string[]>(DEFAULT_LINES)
@@ -23,8 +35,10 @@ export default function App() {
     <div className="app">
       <InputPanel
         lineStates={lineStates}
+        objects={objects}
         onAdd={(l) => setLines((p) => [...p, l])}
         onRemove={(i) => setLines((p) => p.filter((_, k) => k !== i))}
+        selected={sel ? { label: sel.label, value: sel.value } : null}
       />
       <main className="stage">
         <CanvasView graph={graph} selectedId={selected} onSelect={setSelected} />
@@ -106,6 +120,13 @@ function ValueDetail({ v }: { v: GalValue }) {
           <Item k="交换">
             <span>{v.group.isAbelian ? '是' : '否'}</span>
           </Item>
+          {v.group.elements.length <= 24 && (
+            <Item k="元素">
+              <span className="detail-elems">
+                {v.group.elements.map((e) => e.label).join(' ')}
+              </span>
+            </Item>
+          )}
         </>
       )
     case 'elements':

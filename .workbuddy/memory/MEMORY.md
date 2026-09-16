@@ -60,7 +60,7 @@
 - **元素引用**：`resolveElement(group, ref)` 接受 id / label / value / **循环记号**（`(123)`）；`resolveElementRefs` 返回 `{elements, ids, unresolved}`
 - **结构伴生映射**：`naturalProjectionMapping` · `subgroupInclusionMapping` · `directProductProjectionMapping` · `trivialMapping`（→ 交换图上的实线箭头）
 - **映射（同态）**：类型 `Homomorphism{id,source,target,mapping,result?,name?}`（不要另立结构）；`getGeneratorElements` · `extendFromGenerators(src,tgt,Map<生成元名,像引用>)` · `verifyHomomorphism`（返回 `violation{a,b,lhs,rhs}`）· `computeKernelFromMapping` · `computeImageFromMapping` · `getHomomorphismProperties` · `autoBuildMapping`
-- **子群命名与候选**：`subgroupStructureSymbol(group, elementIds)`（不必先造 Group）· `listCosetStripSubgroups(group)`（按共轭轨道合并的候选）· `subgroupFromElementIds` · `isSubgroupElementSet` · `buildCosetViewData`
+- **子群命名与候选**：`subgroupStructureSymbol(group, elementIds)`（不必先造 Group，O(|H|²) 惰性用）· `listCosetStripSubgroups(group)`（按共轭轨道合并的候选）· `subgroupFromElementIds(group, refs, opts?)` → `Subgroup | null`（校验单位元 + 乘法封闭，非法返回 null）· `isSubgroupElementSet(group, refs)` · `buildCosetViewData` · **`closeUnderMultiply(group, seed)`** → 元素集（迭代到封闭，闭包 op 用它）
 - **小群库**：`getAllSmallGroups()` → `SmallGroupEntry{order,index,group,precomputed}` · `getSmallGroup(order,index?)` · `getSmallGroupBySymbol` · `getPrecomputed(group)` → `{subgroups,normalSubgroups,conjugacyClasses,center,isSimple}`（**库群零计算**）
 - **守卫阈值**（`guards.ts`）：`INTERACTIVE_LIMIT` 120 · `ENUMERATION_LIMIT` 144 · `STATIC_LIMIT` 240/480 · `SYLOW_MAX_ORDER` 144
 
@@ -77,7 +77,7 @@
 - **宏与 Proof Spec 同构**（`(opId,参数引用)` 序列）→ 先纯重放，排在 M1 之后复用执行器。**M1 依赖改为 U0–U3**。
 - **集合对象对齐 GroupViz 的 subset**：`{label,color,isSubgroup,isNormalSubgroup,type:'subset'|'subgroup'|'normal-subgroup'}` + `SUBSET_COLORS`（`types/view.d.ts`）。
 - **5 条决策（2026-09-16 全部定案）**：① 径向菜单**三类两层**（看/算/造）② 宏**先纯重放**，排 M1 之后复用 Proof Spec 执行器 ③ 集合描述式 = **属性谓词分面 + 字谓词**两条都做，`∧∨` 组合，不开放任意表达式 ④ 拖动 = **钉住 + 吸附网格 + 一键恢复自动 + 持久化**，顶部「手动布局」徽标 ⑤ 固化集合**不自动升级**（用户定 A）：仍是 subset，命中子群时给提示由用户点升级。
-- **阶段 U0–U7**（ROADMAP）：U0 注册表 params + `opsFor` + 集合运算 + 子群升级真群 / U1 两块输入框 + 自动命名 / U2 状态机 + 径向菜单 + 竖卡 / U3 映射构建器 + 结构伴生箭头 / U4 工具条 + 群目录 + 查表 / **U5 集合构造器** / U6 拖动 + 手动布局 / U7 宏。
+- **阶段 U0–U7**（ROADMAP）：**U0 ✅**（2026-09-16：注册表 params + `opsFor` + 集合运算 + 子群升级真群对象 + 左栏操作面板随选中收敛）· **U1 ✅**（2026-09-16：两块输入框 + 自动命名 + 边打边校验）/ U2 状态机 + 径向菜单 + 竖卡 / U3 映射构建器 + 结构伴生箭头 / U4 工具条 + 群目录 + 查表 / **U5 集合构造器** / U6 拖动 + 手动布局 / U7 宏。
 
 ## 操作架构（2026-09-15 定稿 → docs/ARCHITECTURE.md，M0.5 已落地代码）
 - **两个平面**：①造对象平面 = 原子构造 / 作用导出 / 枚举+筛 / 迭代 ②**属性平面** = 不变量清单（按类型），喂给 **筛选 / 判定 / 识别**（三者本质都是"查属性"）。算术为独立库。
@@ -88,5 +88,7 @@
 - **识别不是独立类** = 收集全部属性 + 匹配小群库（属性平面的视图）。
 - **输入层三种形态**：文本定义（群/集合/数值）· **对象编辑器**（映射/作用，填生成元的像）· 搭积木（枚举块 + 属性筛块）。
 - **配方是元数据**（声明"等价于哪些原语复合"）：只用于解释与逐步演示，**求值走 core 最优路径**。
-- **代码落点（v0.0.0，apps/web/src/gal/）**：`value.ts` 6 值类型 + 归一化 · `ops.ts` **操作注册表 20 条**（`OpDef` = mechanism/primitive/recipe/impl/call/infix/arity/result/run）· `evalDef.ts` 五级分发（对象引用→调用→顶层中缀→记号→报错，sources 自动收集）· `build.ts` 行→对象表（纯函数）· `derive.ts` 对象表→画布图。UI：`InputPanel` 三区 + 注册表驱动的操作面板；`CanvasView` SVG 自绘（标签实测宽度自适应节点 + 同层对齐去重叠 + 统一缩放）。
-- **遗留**：`map` 值类型无生产者（待对象编辑器）；陪集作用的轨道/稳定子分支；半直积 ⋊；识别类。
+- **代码落点（v0.0.0，apps/web/src/gal/）**：`value.ts` 6 值类型 + 归一化 · `ops.ts` **操作注册表 27 条**（`OpDef` = mechanism/primitive/recipe/impl/call/infix/**params（命名参数+类型）**/arity/result/run + **`opsFor(selection)`**）· `naming.ts` **自动命名 + 名字体检**（保留名从注册表 83 个 `call` 名自动导出，不手写）· `evalDef.ts` 五级分发（对象引用→调用→顶层中缀→记号→报错，sources 自动收集）· `build.ts` 行→对象表（纯函数）· `derive.ts` 对象表→画布图。UI：`InputPanel` 三区 + 注册表驱动的操作面板（**按选中对象收敛**）+ **两块输入框**（名字可空走自动命名；表达式复用 `evalExpr` 边打边校验）；`CanvasView` SVG 自绘（标签实测宽度自适应节点 + 同层对齐去重叠 + 统一缩放）。
+- **U0 已落地（2026-09-16）**：`ParamType` 7 类（group/subset/action/map/element/prime/int，**标量参数只能在末尾**，模块加载断言）；`opsFor` 三条规则（前缀匹配 / 剩余必需参数须是标量 / 需再选对象的操作不出现）；`subset` 接群节点有条件（前面有群参数时要求是其子群，否则两群相选会冒出多余商群）；集合运算 `∩ ∪ \ ·`（同母群校验，产出 elements 不升级）；闭包 `⟨S⟩`（`closeUnderMultiply` → 真群对象，也吃 `闭包(G, r2)`）；`ker`/`im`（吃 map + `GalMap.mapping`）；**子群一律升级为真群对象**（`buildSubgroupGroup`，画布圆变方，`Z(Z(G))` 合法）；元素参数走 `resolveElement`；左栏操作面板是 `opsFor` 的第一个入口。
+- **U1 已落地（2026-09-16）**：输入框拆「名字 | 表达式」两块；名字留空自动命名（序列 `A B D F …` → `A₁ B₁ …`，**大小写不敏感地**避开已用名 + 83 个注册表调用名 + `e/p/g/h`；名字栏 `placeholder` 显示将分配的名）；手写名字只拦"非法字符 / 重名"，命中操作名**只提醒**（`Z = Z(G)` 是明确表达）；表达式边打边校验（预览即所得，非法则红字 + 定向提示 + 「添加」置灰）；提醒与预览**并存两行**；兼容整行粘贴 `G = D_4`。
+- **遗留**：`map` 值类型无生产者（`ker`/`im` 已注册但等 U3 表单）；陪集作用的轨道/稳定子分支；半直积 ⋊；识别类。

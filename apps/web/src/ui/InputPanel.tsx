@@ -1,23 +1,81 @@
-import { useState } from 'react'
-import { OPS, opsByMechanism, opTemplate } from '../gal/ops'
-import { VALUE_TYPE_LABEL } from '../gal/value'
+import { useMemo, useState, type KeyboardEvent } from 'react'
+import { OPS, opsByMechanism, opsFor, opTemplate, type OpDef } from '../gal/ops'
+import { evalExpr } from '../gal/evalDef'
+import type { EvalResult } from '../gal/evalDef'
+import { checkName, isNameLike, nextAutoName, RESERVED_CALL_NAMES } from '../gal/naming'
+import { VALUE_TYPE_LABEL, type GalValue } from '../gal/value'
+import type { GalObject } from '../gal/types'
 import type { LineState } from '../gal/build'
 
 interface Props {
   lineStates: LineState[]
+  /** 已求值的对象表——草稿实时校验与自动命名避让都要它 */
+  objects: GalObject[]
   onAdd: (line: string) => void
   onRemove: (index: number) => void
+  /**
+   * 画布上当前选中的对象。
+   * U0：操作面板据此过滤（`opsFor` 的第一个消费者）；U2 会把它长成节点旁的径向菜单。
+   */
+  selected: { label: string; value: GalValue } | null
 }
 
-export function InputPanel({ lineStates, onAdd, onRemove }: Props) {
-  const [draft, setDraft] = useState('')
+/**
+ * 兼容"整行粘贴"：`G = D_4` 拆成名字与表达式。
+ * `x^2 = e` 这种左半边不是名字（含 `^`）的，整体当表达式（U5 的字谓词）。
+ */
+function splitInline(s: string): { name: string; rhs: string } {
+  const eq = s.indexOf('=')
+  if (eq > 0) {
+    const head = s.slice(0, eq).trim()
+    const tail = s.slice(eq + 1).trim()
+    if (isNameLike(head) && tail) return { name: head, rhs: tail }
+  }
+  return { name: '', rhs: s }
+}
+
+export function InputPanel({ lineStates, objects, onAdd, onRemove, selected }: Props) {
+  const [nameDraft, setNameDraft] = useState('')
+  const [exprDraft, setExprDraft] = useState('')
   const [showOps, setShowOps] = useState(false)
+  const [onlyForSelection, setOnlyForSelection] = useState(true)
+
+  const usedNames = useMemo(() => objects.map((o) => o.id), [objects])
+  const byId = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects])
+  const autoName = useMemo(() => nextAutoName(usedNames), [usedNames])
+  const nameCheck = useMemo(() => checkName(nameDraft, usedNames), [nameDraft, usedNames])
+
+  const expr = exprDraft.trim()
+  const inline = useMemo(() => splitInline(expr), [expr])
+  const preview = useMemo<EvalResult | null>(
+    () => (inline.rhs ? evalExpr(inline.rhs, byId) : null),
+    [inline.rhs, byId],
+  )
+
+  const finalName = nameDraft.trim() || inline.name || autoName
+  const canSubmit = !!inline.rhs && !!preview?.ok && !nameCheck.error
 
   const submit = () => {
-    const v = draft.trim()
-    if (!v) return
-    onAdd(v)
-    setDraft('')
+    if (!canSubmit) return
+    onAdd(`${finalName} = ${inline.rhs}`)
+    setNameDraft('')
+    setExprDraft('')
+  }
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') submit()
+    if (e.key === 'Escape') {
+      setNameDraft('')
+      setExprDraft('')
+    }
+  }
+
+  const selOps = useMemo(() => (selected ? opsFor([selected.value]) : []), [selected])
+  const filtering = !!selected && onlyForSelection
+
+  const pick = (op: OpDef) => {
+    setExprDraft(opTemplate(op))
+    setShowOps(false)
   }
 
   const okRows = lineStates.filter((s) => s.ok && s.object)
@@ -92,43 +150,158 @@ export function InputPanel({ lineStates, onAdd, onRemove }: Props) {
         </button>
         {showOps && (
           <div className="palette-body">
-            {opsByMechanism().map((g) => (
-              <div key={g.mechanism} className="palette-group">
-                <div className="palette-group-title">{g.label}</div>
-                {g.ops.map((op) => (
-                  <button
-                    key={op.id}
-                    className="palette-op"
-                    title={op.doc}
-                    onClick={() => {
-                      setDraft(opTemplate(op))
-                      setShowOps(false)
-                    }}
-                  >
-                    <code>{opTemplate(op)}</code>
-                    <span className="palette-op-doc">{op.doc}</span>
-                  </button>
-                ))}
+            {selected && (
+              <div className="palette-scope">
+                <span className="palette-scope-text">
+                  选中 <b>{selected.label}</b> · 可用 <b>{selOps.length}</b> 条
+                </span>
+                <button
+                  className="palette-scope-toggle"
+                  onClick={() => setOnlyForSelection((v) => !v)}
+                >
+                  {onlyForSelection ? '看全部' : '只看可用的'}
+                </button>
               </div>
-            ))}
+            )}
+            {filtering ? (
+              <OpGroup
+                title={`可用于「${selected!.label}」`}
+                ops={selOps}
+                onPick={pick}
+                empty="这个对象暂时没有可用操作"
+              />
+            ) : (
+              opsByMechanism().map((g) => (
+                <OpGroup key={g.mechanism} title={g.label} ops={g.ops} onPick={pick} />
+              ))
+            )}
           </div>
         )}
       </div>
 
       <div className="composer">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submit()
-          }}
-          placeholder="名字 = 定义"
-          spellCheck={false}
-          autoComplete="off"
+        <div className="composer-row">
+          <input
+            className="composer-name"
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={autoName}
+            title={`留空则自动命名为「${autoName}」`}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <span className="composer-eq">=</span>
+          <input
+            className="composer-expr"
+            value={exprDraft}
+            onChange={(e) => setExprDraft(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder="表达式，如 Z(G) · G / N · ⟨G, (123)⟩"
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <button onClick={submit} disabled={!canSubmit}>
+            添加
+          </button>
+        </div>
+        <ComposerStatus
+          nameCheck={nameCheck}
+          autoName={autoName}
+          expr={expr}
+          preview={preview}
         />
-        <button onClick={submit}>添加</button>
       </div>
     </aside>
+  )
+}
+
+/**
+ * 输入区下方的状态区。
+ *
+ * 名字提醒与表达式预览**并存**（各占一行）——手写 `sub` 这种命中操作名的名字时，
+ * 若表达式恰好合法，提醒不该被预览挤掉。
+ * 优先级：名字错误 > 表达式错误 > 表达式预览 > （提醒已单列）> 自动命名提示。
+ */
+function ComposerStatus({
+  nameCheck,
+  autoName,
+  expr,
+  preview,
+}: {
+  nameCheck: { ok: boolean; error?: string; warn?: string }
+  autoName: string
+  expr: string
+  preview: EvalResult | null
+}) {
+  if (nameCheck.error) return <div className="composer-status bad">{nameCheck.error}</div>
+
+  const warn = nameCheck.warn ? (
+    <div className="composer-status warn">{nameCheck.warn}</div>
+  ) : null
+
+  if (expr && preview && !preview.ok) {
+    return (
+      <>
+        {warn}
+        <div className="composer-status bad">
+          {preview.error}
+          {preview.hint ? ` · ${preview.hint}` : ''}
+        </div>
+      </>
+    )
+  }
+
+  if (expr && preview?.ok) {
+    return (
+      <>
+        {warn}
+        <div className="composer-status good">
+          <span className="ok-mark">✓</span>
+          <span className={`chip chip-${preview.value.type}`}>
+            {VALUE_TYPE_LABEL[preview.value.type]}
+          </span>
+          <span className="status-label">{preview.label}</span>
+          {preview.sub && <span className="status-meta">{preview.sub}</span>}
+          <span className="status-meta">回车提交</span>
+        </div>
+      </>
+    )
+  }
+
+  if (warn) return warn
+
+  return (
+    <div className="composer-status hint">
+      名字留空 → 自动命名「{autoName}」（已避开注册表的 {RESERVED_CALL_NAMES.length} 个调用名）
+    </div>
+  )
+}
+
+function OpGroup({
+  title,
+  ops,
+  onPick,
+  empty,
+}: {
+  title: string
+  ops: OpDef[]
+  onPick: (op: OpDef) => void
+  empty?: string
+}) {
+  return (
+    <div className="palette-group">
+      <div className="palette-group-title">
+        {title} <span className="count">{ops.length}</span>
+      </div>
+      {ops.length === 0 && empty && <div className="empty">{empty}</div>}
+      {ops.map((op) => (
+        <button key={op.id} className="palette-op" title={op.doc} onClick={() => onPick(op)}>
+          <code>{opTemplate(op)}</code>
+          <span className="palette-op-doc">{op.doc}</span>
+        </button>
+      ))}
+    </div>
   )
 }
 

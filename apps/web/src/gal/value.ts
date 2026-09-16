@@ -1,4 +1,4 @@
-import type { Group, GroupElement } from '@groupviz/core'
+import type { Group, GroupElement, HomomorphismMap } from '@groupviz/core'
 
 /**
  * 值类型（6 种）—— 架构 §3 / 交互模型 §2。
@@ -84,6 +84,12 @@ export function normalizeSubgroups(list: RawSubgroupLike[], group: Group): Norma
 export interface GalMap {
   domain: Group
   codomain: Group
+  /**
+   * 完整映射表（元素 id → 元素 id）。同态由生成元的像唯一决定，
+   * `genImages` 供编辑器回显，`mapping` 供 ker / im 求值（core 的
+   * `computeKernelFromMapping` / `computeImageFromMapping` 吃整表）。
+   */
+  mapping?: HomomorphismMap
   /** 生成元名 → 像元素 */
   genImages: { generator: string; image: GroupElement }[]
   isHomomorphism: boolean
