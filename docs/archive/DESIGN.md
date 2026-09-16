@@ -13,7 +13,7 @@
 ## 2. 架构与引擎依赖
 
 - 三层：前端（UI + 交换图画布）/ 证明引擎（Proof Spec 执行器）/ 计算后端（GAP）。
-- **内核架构（对象模型 / 操作体系 / 求值）见 [docs/ARCHITECTURE.md](ARCHITECTURE.md)。**
+- **内核架构（对象模型 / 操作体系 / 求值）见 [docs/ARCHITECTURE.md](../ARCHITECTURE.md)。**
 
 ### 2.1 引擎依赖（已是 npm 包）
 
@@ -42,17 +42,17 @@
 
 - 证明模板 = 步骤序列（`claim` / `compute` / `conclude`）。
 - `compute` 双 target：`local`（GroupViz 原语）/ `backend`（GAP 端点）。
-- 详见 [docs/PROOF_SPEC.md](PROOF_SPEC.md)。
+- 详见 [docs/PROOF_SPEC.md](../PROOF_SPEC.md)。
 
 ## 4. 计算后端
 
-- **M0 / M1 前端即可跑通**：`@groupviz/core` 已含 Sylow I 全部原语（见 [PROOF_SPEC.md](PROOF_SPEC.md) §4），A₄ 这类小群无需后端。
+- **M0 / M1 前端即可跑通**：`@groupviz/core` 已含 Sylow I 全部原语（见 [PROOF_SPEC.md](../PROOF_SPEC.md) §4），A₄ 这类小群无需后端。
 - 后端（GAP）**推迟到需要时**：复用 / 扩展 GroupViz 的 GAP 后端（`gap_service.py` + import-group），补大群与 `parseGroupNotation` 的 `backend` 分支。
 - 分工原则：local 原语优先，backend 补大群 / 大组合数 / 未本地化的记号。
 
 ## 5. 输入模型
 
-- **详见 [docs/INTERACTION.md](INTERACTION.md) §3。**
+- **详见 [docs/INTERACTION.md](../INTERACTION.md) §3。**
 - 一句话：左侧栏三区（对象 / 操作 / 数值），统一语法「名字 = 定义」。
 - 记号导入：`@groupviz/core` 的 `parseGroupNotation(input)`（v2.2.2+ 统一入口；吃人类写法 `S_3` / `F21` / `C4` / `Q8` …；**本地优先**——能本地建群就不退化到后端）。
 - 分层：记号 / 构造子 / 生成元（置换 / 矩阵）/ 目录点选。
@@ -60,7 +60,7 @@
 
 ## 6. 展示层
 
-- **详见 [docs/INTERACTION.md](INTERACTION.md)。**
+- **详见 [docs/INTERACTION.md](../INTERACTION.md)。**
 - 画布 = **交换图**（对象=节点，操作=箭头），非坐标系；见 INTERACTION §1。
 - 视觉编码：形状 = 类型（群=方 / 集合=圆 / 映射=箭头），颜色 = 来源（蓝=输入 / 紫=计算）。
 - 数学符号：KaTeX（算法层输出 TeX 字符串，零依赖）。
