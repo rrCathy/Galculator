@@ -211,7 +211,10 @@ export function CanvasView({
      * 而不是按几何猜。
      */
     const isVerticalConstraint = (e: GalEdge): boolean =>
-      !e.objectId && (e.label === 'π' || e.label === 'π₁' || e.label === 'π₂' || e.label === '↪')
+      // **作用线**也算：课本里 `G ↷ Ω` 本来就是往下画的（DIAGRAM_SPEC §5.2 的三层结构）
+      e.kind === 'action' ||
+      (!e.objectId &&
+        (e.label === 'π' || e.label === 'π₁' || e.label === 'π₂' || e.label === '↪'))
 
     const uf = Array.from({ length: n }, (_, i) => i)
     const find = (i: number): number => {
@@ -225,14 +228,32 @@ export function CanvasView({
       }
       return r
     }
+    //
+    // 合并用**贪心**：短跨度优先，且**不许跨过**已在同一列的节点。
+    // 否则两个不同来源的竖直边会把无关节点串成一列，长箭头从中间的节点身上穿过去
+    // ——默认示范里 `Stab ↪ S₄` 就会从 `S₄/ker φ` 中间穿过（真截图里抓到的）。
+    const members: number[][] = Array.from({ length: n }, (_, i) => [i])
+    const lvl = (i: number) => graph.nodes[i].level
+    const verticals: { i: number; j: number; gap: number }[] = []
     for (const e of graph.edges) {
       if (!isVerticalConstraint(e)) continue
       const i = idx.get(e.from)
       const j = idx.get(e.to)
       if (i === undefined || j === undefined || i === j) continue
+      verticals.push({ i, j, gap: Math.abs(lvl(i) - lvl(j)) })
+    }
+    verticals.sort((a, b) => a.gap - b.gap)
+    for (const { i, j } of verticals) {
       const ri = find(i)
       const rj = find(j)
-      if (ri !== rj) uf[ri] = rj
+      if (ri === rj) continue
+      const lo = Math.min(lvl(i), lvl(j))
+      const hi = Math.max(lvl(i), lvl(j))
+      // 中间夹着别的节点 → 这条边会穿过去，不合并（让它走自己的列）
+      if ([...members[ri], ...members[rj]].some((k) => lvl(k) > lo && lvl(k) < hi)) continue
+      uf[ri] = rj
+      members[rj] = [...members[ri], ...members[rj]]
+      members[ri] = []
     }
 
     // 一行内两个节点不能占同一列（否则叠在一起）——撞了就右移到最近的空列
@@ -345,14 +366,35 @@ export function CanvasView({
       subFont: b.subFont * s,
     }))
 
-    // 边的两端在这里算好：渲染与「箭头中点上报」（映射的可点锚点）共用同一份
+    // 边的几何在这里算好：渲染与「箭头可点锚点」共用同一份。
+    // **自环**（`G ↷ G`，如共轭作用 / 正则作用）要单独画一条弧——
+    // 两端重合时"从节点边界出发的直线"没有意义。
+    const LOOP_H = 34
     const edgePts = graph.edges.map((e) => {
       const i = idx.get(e.from) ?? -1
       const j = idx.get(e.to) ?? -1
       if (i < 0 || j < 0) return null
+      if (i === j) {
+        const c = screen[i]
+        const b = screenBoxes[i]
+        const x0 = c.x - b.hw * 0.55
+        const x1 = c.x + b.hw * 0.55
+        const y0 = c.y - b.hh
+        return {
+          p1: { x: x0, y: y0 },
+          p2: { x: x1, y: y0 },
+          d: `M ${x0} ${y0} C ${x0 - 8} ${y0 - LOOP_H} ${x1 + 8} ${y0 - LOOP_H} ${x1} ${y0}`,
+          labelPt: { x: c.x, y: y0 - LOOP_H * 0.78 },
+        }
+      }
+      const p1 = edgeAnchor(screen[i], screenBoxes[i], screen[j])
+      const p2 = edgeAnchor(screen[j], screenBoxes[j], screen[i])
       return {
-        p1: edgeAnchor(screen[i], screenBoxes[i], screen[j]),
-        p2: edgeAnchor(screen[j], screenBoxes[j], screen[i]),
+        p1,
+        p2,
+        d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`,
+        // 标签放 **30% 处**（靠起点）：多条箭头汇聚到同一节点时中点会糊成一团
+        labelPt: { x: p1.x + (p2.x - p1.x) * 0.3, y: p1.y + (p2.y - p1.y) * 0.3 },
       }
     })
 
@@ -383,8 +425,8 @@ export function CanvasView({
       if (!pts) return
       anchors.push({
         id: e.objectId,
-        x: offX + ((pts.p1.x + pts.p2.x) / 2) * scale,
-        y: offY + ((pts.p1.y + pts.p2.y) / 2) * scale,
+        x: offX + pts.labelPt.x * scale,
+        y: offY + pts.labelPt.y * scale,
         r: 0,
         kind: 'edge',
       })
@@ -468,11 +510,11 @@ export function CanvasView({
           // 标签放在箭头的 **30% 处**（靠近起点）而不是中点：
           // 多条箭头汇聚到同一个节点时（第二同构定理里 5 条 `↪` 都指向 D₄），
           // 中点标签会挤成一团糊掉；靠起点放能自然散开。
-          const mid = { x: p1.x + (p2.x - p1.x) * 0.3, y: p1.y + (p2.y - p1.y) * 0.3 }
-          // 箭头背后的对象（映射）→ 可点选，于是能"点箭头 → ker / im"
+          const mid = pts.labelPt
+          // 箭头背后的对象（映射 / 作用）→ 可点选，于是能"点箭头 → ker / im"
           const selectable = !!e.objectId
           const isSelected = selectable && e.objectId === selectedId
-          const line = `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`
+          const line = pts.d
           return (
             <g key={e.id} className={`gedge gedge-${e.kind}${isSelected ? ' on' : ''}`}>
               {selectable && (
@@ -497,9 +539,11 @@ export function CanvasView({
                     ? 3.2
                     : e.kind === 'provenance'
                       ? 1.3
-                      : isExplicitMap
-                        ? 2.4
-                        : 1.7
+                      : e.kind === 'action'
+                        ? 2.2
+                        : isExplicitMap
+                          ? 2.4
+                          : 1.7
                 }
                 strokeDasharray={e.kind === 'provenance' ? '5 4' : undefined}
                 markerEnd={`url(#${marker})`}

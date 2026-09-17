@@ -1,6 +1,6 @@
 import type { Group } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from './types'
-import { canvasShape } from './value'
+import { canvasShape, type GalSet } from './value'
 
 /**
  * 派生深度 = 依赖链长度。输入对象为 0，其派生结果为 1，再派生为 2……
@@ -41,6 +41,8 @@ const SUBGROUP_RESULT_OPS = new Set([
   // 那时它也该有 `↪` 包含箭头（第二同构定理的 `H∩N ↪ H` 靠这条）
   'intersection',
   'productSet',
+  // 稳定子：`Stab(H) ↪ G`（母群从作用取，见 parentOf）
+  'stabilizers',
 ])
 
 /** 群对象 → 它在画布上的节点 id（同一个群可能有多个对象，取第一个）。 */
@@ -52,6 +54,19 @@ function groupNodeId(objects: GalObject[], group: Group): string | null {
       o.value.type === 'group' &&
       o.value.group.symbol === group.symbol &&
       o.value.group.order === group.order,
+  )
+  return alike?.id ?? null
+}
+
+/** 找 Ω 对应的那个集合节点（先按引用同一性，再按标签 + 基数）。 */
+function setNodeId(objects: GalObject[], omega: GalSet): string | null {
+  const exact = objects.find((o) => o.value.type === 'set' && o.value.set === omega)
+  if (exact) return exact.id
+  const alike = objects.find(
+    (o) =>
+      o.value.type === 'set' &&
+      o.value.set.label === omega.label &&
+      o.value.set.members.length === omega.members.length,
   )
   return alike?.id ?? null
 }
@@ -78,12 +93,17 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
   const consumed = new Set<string>()
   const byId = new Map(objects.map((o) => [o.id, o]))
 
-  /** 子群结果的母群：从来源里找——直接来源是群就用它；是映射就用映射的端群。 */
+  /**
+   * 子群结果的母群：从来源里找——
+   * 直接来源是群就用它；是映射就用映射的端群；是**作用**就用作用的群
+   * （`Stab(H)` 的母群是 G —— DIAGRAM_SPEC §5.2 的 `Stab ↪ G`）。
+   */
   const parentOf = (o: GalObject, want: 'domain' | 'codomain'): string | null => {
     for (const s of o.sources) {
       const src = byId.get(s)
       if (!src) continue
       if (src.value.type === 'group') return groupNodeId(objects, src.value.group)
+      if (src.value.type === 'action') return groupNodeId(objects, src.value.action.group)
       if (src.value.type === 'map') {
         const g = src.value.map[want]
         const id = groupNodeId(objects, g)
@@ -189,30 +209,105 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
     })
   }
 
+  // ── 作用的 Ω 升格为节点（DIAGRAM_SPEC §6.4 第 1 条）──────────────
+  //
+  // Ω 从前只是 `GalAction.n` 这个数字，图里根本不存在；但 Sylow 的整条推理链
+  // （轨道分解 / 轨道-稳定子）都以它为主角。这里给它一个家：
+  //   ① `omegaBase === 'self'` → Ω = G 自身，家就是 G 的节点（作用线画成自环）
+  //   ② `omega.from` / 同引用 / 同标签 → 用户自己那行 `Ω = 底集(S)` 的节点
+  //   ③ 都没有（`共轭作用在(G, 底集(S))` 内联写法）→ **就地造一个 Ω 节点**
+  const omegaHome = new Map<string, string>()
+  for (const o of objects) {
+    if (o.value.type !== 'action') continue
+    const A = o.value.action
+    const omega = A.omega
+    if (!omega) continue
+    if (A.omegaBase === 'self') {
+      const gid = groupNodeId(objects, A.group)
+      if (gid) omegaHome.set(o.id, gid)
+      continue
+    }
+    let home: string | null =
+      omega.from && objects.some((x) => x.id === omega.from) ? omega.from : null
+    if (!home) home = setNodeId(objects, omega)
+    if (!home) {
+      home = `${o.id}/Ω`
+      nodes.push({
+        id: home,
+        origin: 'derived',
+        label: 'Ω',
+        def: `${o.id} 的作用点集`,
+        sources: [o.id],
+        value: { type: 'set', set: omega },
+        opId: 'omega',
+        recipe: '作用的 Ω',
+        shape: 'set',
+        level: (levels.get(o.id) ?? 0) + 1,
+      })
+    }
+    omegaHome.set(o.id, home)
+  }
+
   const ids = new Set(nodes.map((n) => n.id))
   const edges: GalEdge[] = []
 
-  // ① 来源线 / 作用线
+  // ① 来源线（淡虚线，辅助）
   const { edges: structural, consumed } = alongsideEdges(objects, ids)
+  // 轨道的边：`Orb ↪ Ω`（DIAGRAM_SPEC §5.2 的下层）。
+  // 轨道长度**等于 Ω 时写 `=`** —— 那就是「作用传递」，
+  // 也正是 Sylow II 的结论（G 在 Syl_p(G) 上只有一个轨道）。
+  for (const o of objects) {
+    if (o.opId !== 'orbits' || !ids.has(o.id)) continue
+    for (const s of o.sources) {
+      const src = objects.find((x) => x.id === s)
+      if (src?.value.type !== 'action') continue
+      const home = omegaHome.get(s)
+      const size = o.value.type === 'set' ? o.value.set.members.length : 0
+      if (home && home !== o.id) {
+        edges.push({
+          id: `${o.id}->${home}:incl`,
+          kind: 'map',
+          from: o.id,
+          to: home,
+          label: size > 0 && size === src.value.action.n ? '=' : '↪',
+        })
+      }
+      consumed.add(o.id)
+      break
+    }
+  }
+
   for (const n of nodes) {
     if (consumed.has(n.id)) continue // 已有结构伴生箭头，别叠一条来源线
-    const isAction = n.value.type === 'action'
     for (const src of n.sources) {
-      if (!ids.has(src)) continue
-      edges.push({
-        id: `${src}->${n.id}`,
-        kind: isAction ? 'action' : 'provenance',
-        from: src,
-        to: n.id,
-        label: isAction ? '↷' : undefined,
-      })
+      if (!ids.has(src) || src === n.id) continue
+      edges.push({ id: `${src}->${n.id}`, kind: 'provenance', from: src, to: n.id })
     }
   }
 
   // ② 结构伴生箭头（一等公民，实线）
   edges.push(...structural)
 
-  // ③ 显式映射对象 → 实线箭头（标签就是映射的名字，且箭头**背后是这个对象**，可点选）
+  // ③ 作用线：`G ↷ Ω`（一等边，DIAGRAM_SPEC §6.4 第 2 条）
+  //
+  // 作用不再是画布上的一个方块 —— 它是**关系**。Ω = G 自身时画成 G 上的**自环**
+  // （共轭作用 / 正则作用都是这种），否则从 G 指到 Ω 那个节点。
+  for (const o of objects) {
+    if (o.value.type !== 'action') continue
+    const from = groupNodeId(objects, o.value.action.group)
+    const to = omegaHome.get(o.id)
+    if (!from || !to || !ids.has(from) || !ids.has(to)) continue
+    edges.push({
+      id: `act:${o.id}`,
+      kind: 'action',
+      from,
+      to,
+      label: '↷',
+      objectId: o.id,
+    })
+  }
+
+  // ④ 显式映射对象 → 实线箭头（标签就是映射的名字，且箭头**背后是这个对象**，可点选）
   for (const o of objects) {
     if (o.value.type !== 'map') continue
     const from = groupNodeId(objects, o.value.map.domain)
@@ -224,7 +319,9 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
   // 去重（同一 from→to 只留一条；结构伴生优先于来源线）
   const seen = new Set<string>()
   const deduped = edges.filter((e) => {
-    const key = `${e.from}->${e.to}:${e.kind}`
+    // 键带 `objectId`：共轭作用与正则作用都是 G 上的自环，
+    // 不带的话后一条会被前一条吃掉。
+    const key = `${e.from}->${e.to}:${e.kind}:${e.objectId ?? ''}`
     if (seen.has(key)) return false
     seen.add(key)
     return true

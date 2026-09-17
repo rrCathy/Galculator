@@ -144,12 +144,19 @@ export interface GalMap {
 
 /* ── 作用（一等对象，画布上是作用线）───────────────────────── */
 
-export type ActionKind = 'conjugation' | 'leftTranslation' | 'coset' | 'custom'
+export type ActionKind =
+  | 'conjugation'
+  | 'leftTranslation'
+  | 'coset'
+  /** G 通过共轭作用在一族子群上（Sylow III 的 `G ↷ Syl_p(G)`）*/
+  | 'conjugationOnSubgroups'
+  | 'custom'
 
 export const ACTION_KIND_LABEL: Record<ActionKind, string> = {
   conjugation: '共轭作用',
   leftTranslation: '左正则作用',
   coset: '陪集作用',
+  conjugationOnSubgroups: '共轭作用在子群集上',
   custom: '自定义作用',
 }
 
@@ -164,6 +171,22 @@ export interface GalAction {
   setLabels?: string[]
   /** kind='coset' 时的子群 */
   subgroup?: NormalizedSubgroup
+  /**
+   * **Ω 本身**（DIAGRAM_SPEC §6.4 第 1 条：Ω 升格为对象）。
+   *
+   * 从前 Ω 只是 `n` 这个数字加一串 `setLabels`——它在图里根本不存在。
+   * 但 Sylow 的整条推理链（轨道分解、轨道-稳定子）都以 Ω 为主角，
+   * 所以作用把它一并交出来：
+   *   - `omega.from` 指向一个集合对象（`底集(Syl_p(G))`）→ 作用线指向那个节点
+   *   - 没有 `from` 时 Ω = G 自身（共轭 / 正则作用）→ 作用线是 G 上的自环
+   */
+  omega?: GalSet
+  /**
+   * Ω 的来源（决定作用线画到哪）：
+   *   - `self`   Ω 就是 G 自身（共轭作用 / 正则作用）→ 作用线是 **G 上的自环**
+   *   - `object` Ω 是另一个对象（集合）→ 作用线从 G 指向那个节点
+   */
+  omegaBase?: 'self' | 'object'
 }
 
 /* ── 集合（Ω 的载体）───────────────────────────────────────── */
@@ -243,16 +266,16 @@ export function canvasShape(v: GalValue): CanvasShape {
     case 'scalar':
       return 'none'
     case 'edge':
-      // 过渡：`action` 的层级已是 edge（它是一条关系），但作用线还没做，
-      // 所以暂时仍占一个节点。下一批把 `G ↷ Ω` 画出来后就返回 'edge'。
-      return v.type === 'map' ? 'edge' : 'action'
+      // 两种边都不占节点：映射画 `G → H`，作用画 `G ↷ Ω`。
+      // 作用的目标节点是它的 Ω —— 由 derive 找（或造）出来（DIAGRAM_SPEC §6.4 第 1 条）。
+      return 'edge'
     case 'vertex':
       return v.type === 'group' ? 'group' : 'set'
   }
 }
 
-/** 画布上是否呈现为**节点**。 */
+/** 画布上是否呈现为**节点**（群 / 集合；映射与作用都是边）。 */
 export function isCanvasValue(v: GalValue): boolean {
   const s = canvasShape(v)
-  return s === 'group' || s === 'set' || s === 'action'
+  return s === 'group' || s === 'set'
 }

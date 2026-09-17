@@ -1,5 +1,7 @@
 import {
+  computeOrbits,
   computeQuotientGroup,
+  computeStabilizers,
   detectIsomorphicGroup,
   factorizeOrder,
   type Group,
@@ -7,7 +9,7 @@ import {
   type Subgroup,
 } from '@groupviz/core'
 import { prettySymbol, superscript } from './pretty'
-import type { GalMap } from './value'
+import type { GalAction, GalMap } from './value'
 
 /**
  * 结论层（U4）—— **"计算器"该说的话**。
@@ -166,6 +168,111 @@ export function mapInsights(map: GalMap): Insight[] {
       tex: `\\operatorname{im} f \\le ${H.symbol},\\quad \\lvert \\operatorname{im} f \\rvert = ${im}`,
       text: `im f ⊆ ${prettySymbol(H.symbol)}，|im f| = ${im}`,
       detail: '像落在靶群里；商群的同构类未识别出（超出本地识别范围）',
+    })
+  }
+
+  return out
+}
+
+/* ── 作用的结论 ───────────────────────────────────────── */
+
+/** 作用在第一个点上的稳定子（G 的元素表）。 */
+function stabilizerOf(A: GalAction, point = 0): GroupElement[] {
+  const stabs = computeStabilizers(A.group, A.perms, A.n)
+  const ids = new Set(stabs.get(point) ?? [])
+  return A.group.elements.filter((e) => ids.has(e.id))
+}
+
+/**
+ * 作用对象的结论。
+ *
+ * 这一层对 Sylow 定理是**整条 MVP 的落点**：`G ↷ Syl_p(G)` 之后要说的三句话
+ * 全在这里 —— `n_p ≡ 1 (mod p)`、`n_p | m`、`n_p = [G : N_G(H)]`，
+ * 以及「唯一 ⟺ 正规」。这些都是用户看着记号看不出来、但工具一算就知道的。
+ */
+export function actionInsights(A: GalAction): Insight[] {
+  const out: Insight[] = []
+  const G = A.group
+
+  // ── ① 轨道分解 ──
+  const { orbits } = computeOrbits(A.perms, A.n)
+  const sizes = orbits.map((o) => o.elements.length).sort((a, b) => b - a)
+  const transitive = sizes.length === 1 && sizes[0] === A.n
+  if (A.n > 0) {
+    const isConj = A.kind === 'conjugation'
+    out.push({
+      label: isConj ? '共轭类（类方程）' : '轨道分解',
+      tone: transitive ? 'key' : 'note',
+      tex: `\lvert \Omega \rvert = ${A.n} = ${sizes.join(' + ')}`,
+      text: `|Ω| = ${A.n} = ${sizes.join(' + ')}`,
+      detail: transitive
+        ? '只有一个轨道 → 作用**传递**'
+        : `${sizes.length} 个轨道${isConj ? '（这正是类方程）' : ''}`,
+    })
+  }
+
+  // ── ② Sylow III：共轭作用在 Syl_p(G) 上 ──
+  if (A.kind === 'conjugationOnSubgroups' && A.omega) {
+    const pK = A.omega.members[0]?.subgroupElements?.length ?? 0
+    const fs = pK > 0 ? factorizeOrder(pK) : []
+    // Sylow p-子群的阶恰是 p^k（一个素因子的幂）
+    if (fs.length !== 1) return out
+    const p = fs[0].prime
+    const k = fs[0].exponent
+    const np = A.n
+    const m = G.order / pK
+
+    out.push({
+      label: 'Sylow III',
+      tone: 'key',
+      tex: `n_{${p}} = ${np} \equiv 1 \pmod{${p}}, \qquad n_{${p}} \mid ${m}`,
+      text: `n_${p} = ${np} ≡ 1 (mod ${p})，且 n_${p} | ${m}`,
+      detail:
+        `核对：${np} mod ${p} = ${np % p}${np % p === 1 ? ' ✓' : ' ✗'}` +
+        `，${m} / ${np} = ${m / np}${m % np === 0 ? ' ✓' : ' ✗'}`,
+    })
+
+    // 轨道-稳定子：n_p 就是唯一那个轨道的大小，Stab 即 N_G(H)
+    const stab = stabilizerOf(A)
+    if (stab.length > 0) {
+      const ok = np * stab.length === G.order
+      out.push({
+        label: '轨道-稳定子',
+        tone: 'key',
+        tex: `n_{${p}} = [G : N_G(H)] = ${G.order} / ${stab.length} = ${G.order / stab.length}`,
+        text: `n_${p} = [G : N_G(H)] = |G| / |N_G(H)| = ${G.order} / ${stab.length} = ${G.order / stab.length}`,
+        detail: `|Orb| · |Stab| = ${np} · ${stab.length} = ${np * stab.length} = |G| ${ok ? '✓' : '✗'}`,
+      })
+    }
+
+    out.push(
+      np === 1
+        ? {
+            label: '正规 ⟺ 唯一',
+            tone: 'key',
+            tex: `n_{${p}} = 1 \;\Longrightarrow\; H \trianglelefteq G`,
+            text: `n_${p} = 1 ⟹ 唯一的 Sylow ${p}-子群 H 是正规子群`,
+            detail: '唯一的 Sylow p-子群必正规（反之，正规的 Sylow p-子群必唯一）',
+          }
+        : {
+            label: '非正规',
+            tone: 'note',
+            tex: `n_{${p}} = ${np} > 1 \;\Longrightarrow\; H \ntrianglelefteq G`,
+            text: `n_${p} = ${np} > 1 ⟹ 这些 Sylow ${p}-子群都不正规`,
+            detail: `Sylow ${p}-子群共 ${np} 个，彼此共轭（Sylow II）；阶 p^${k}，指数 ${m}`,
+          },
+    )
+  }
+
+  // ── ③ 共轭作用在 G 自身：不动点就是中心 ──
+  if (A.kind === 'conjugation' && A.omegaBase === 'self') {
+    const fix = stabilizerOf(A, 0).length > 0 ? sizes.filter((x) => x === 1).length : 0
+    out.push({
+      label: '中心',
+      tone: 'note',
+      tex: `Z(G) = \operatorname{Fix}(G \curvearrowright G)`,
+      text: 'Z(G) = 共轭作用的不动点全体',
+      detail: `长度 1 的轨道有 ${fix} 个 —— 它们对应 G 的中心元`,
     })
   }
 

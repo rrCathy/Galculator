@@ -11,6 +11,7 @@ import {
   computeOrbits,
   computeQuotientGroup,
   computeStabilizers,
+  conjugateSubgroup,
   createAutomorphismGroup,
   createDirectProduct,
   elementOrder,
@@ -41,6 +42,7 @@ import {
   normalizeSubgroups,
   type GalAction,
   type GalMap,
+  type GalSet,
   type GalValue,
   type SetMember,
   type ValueType,
@@ -417,10 +419,39 @@ export function generatorNames(group: Group): string[] {
  * （于是 `(123)` / `123` / `…,+1,+2,+3` 都能命中同一个元素）。
  */
 function omegaIndexOf(A: GalAction, text: string): number {
-  if (A.setLabels && A.setLabels.length > 0) return A.setLabels.indexOf(text)
+  if (A.setLabels && A.setLabels.length > 0) {
+    const raw = text.trim()
+    const exact = A.setLabels.indexOf(raw)
+    if (exact >= 0) return exact
+    // 多生成元的子群标签带逗号（`⟨(12)(34), (13)(24)⟩`），而实参按逗号切分
+    // —— 所以再试一次"去掉所有空白"的比对
+    const squeeze = (x: string) => x.replace(/\s+/g, '')
+    const loose = A.setLabels.findIndex((l) => squeeze(l) === squeeze(raw))
+    if (loose >= 0) return loose
+    // 还是对不上就按**下标**：Ω 是集合（成员是子群）时，纯数字的唯一解释
+    // 就是"第几个点"——面板上每项都带 `#n`，这正是给带逗号标签留的入口。
+    if (A.omega && A.omegaBase === 'object' && /^\d+$/.test(raw)) {
+      const i = Number(raw) - 1
+      if (i >= 0 && i < A.setLabels.length) return i
+    }
+    return -1
+  }
   const el = resolveElementLoose(A.group, text)
   if (!el) return -1
   return A.group.elements.findIndex((e) => e.id === el.id)
+}
+
+/**
+ * Ω 对不上时的提示串。
+ * 集合型 Ω 的成员标签可能很长（`⟨(12)(34), (13)(24)⟩`），所以带上下标——
+ * 用户可以照 `#n` 写数字，绕开逗号切分。
+ */
+function omegaHint(A: GalAction): string {
+  const labels = omegaLabels(A)
+  const head = labels.slice(0, 12)
+  return A.omega && A.omegaBase === 'object'
+    ? `Ω 的 ${labels.length} 个点：${head.map((l, i) => `#${i + 1} ${l}`).join(' · ')}`
+    : `Ω = {${head.join(', ')}}`
 }
 
 function omegaLabels(A: GalAction): string[] {
@@ -436,6 +467,144 @@ function omegaElements(A: GalAction, indices: number[]): GroupElement[] | null {
 
 /** 枚举类操作的规模上限（与 core 的守卫阈值同量级）*/
 const ENUM_LIMIT = 120
+
+
+/* ── 共轭作用在子群集上（Sylow 定理的主角动作）────────────── */
+
+/** 子群（元素数组）的规范键。core 的 `conjugateSubgroup` 也返回排序结果，两边对得上。 */
+function subgroupKeyOf(els: GroupElement[]): string {
+  return els.map((e) => e.id).sort().join('|')
+}
+
+/**
+ * 把一个「被作用的点集 Ω」实参读成结构化形式。
+ *
+ * 三种来源：
+ *   - `set`（`底集(Syl_p(G))` 的产物）：成员可能带 `subgroupElements` → **点就是子群**
+ *   - `elements`：点是 G 的元素（共轭类 / 正规子群集 …）
+ *   - `group`：同上（Ω = G 自身）
+ *
+ * `points` 为 null 表示"点是元素"而不是子群 —— 这两条路走的是两套置换算法。
+ */
+interface OmegaArg {
+  group: Group
+  label: string
+  members: SetMember[]
+  /** 点背后的子群元素集（按 `members` 对齐）；点是元素时为 null */
+  points: GroupElement[][] | null
+}
+
+function omegaArgOf(a: OpArg | undefined): OmegaArg | null {
+  if (!a || a.kind !== 'object') return null
+  const v = a.value
+  if (v.type === 'set') {
+    const subs = v.set.members.map((m) => m.subgroupElements)
+    const allSubs = subs.length > 0 && subs.every((x): x is GroupElement[] => !!x)
+    return {
+      group: v.set.group,
+      label: v.set.label,
+      members: v.set.members,
+      points: allSubs ? subs : null,
+    }
+  }
+  if (v.type === 'elements') {
+    return {
+      group: v.group,
+      label: `底集(${refText(a)})`,
+      members: v.elements.map((e) => ({ label: e.label })),
+      points: null,
+    }
+  }
+  if (v.type === 'group') {
+    return {
+      group: v.group,
+      label: `底集(${refText(a)})`,
+      members: v.group.elements.map((e) => ({ label: e.label })),
+      points: null,
+    }
+  }
+  return null
+}
+
+/**
+ * G 通过共轭作用在一族**子群**上 → 每个 g 在点集上的置换。
+ *
+ * 用 core 的 `conjugateSubgroup` 算 `gHg⁻¹`。要验证每个 g 都把点集**映到自身**：
+ * 不封闭说明这族子群不是共轭闭的（比如只挑了一部分 Sylow 子群）——
+ * 这时给的是定向报错而不是静默算错。
+ */
+function conjugationPermsOnSubgroups(
+  G: Group,
+  points: GroupElement[][],
+): { perms: Map<string, number[]> } | { error: string; hint?: string } {
+  const keys = points.map(subgroupKeyOf)
+  const index = new Map<string, number>()
+  keys.forEach((k, i) => {
+    if (!index.has(k)) index.set(k, i)
+  })
+  if (index.size !== keys.length) {
+    return { error: 'Ω 里有重复的点', hint: '同一个子群在 Ω 里出现了两次' }
+  }
+  const perms = new Map<string, number[]>()
+  for (const g of G.elements) {
+    const perm: number[] = []
+    for (const H of points) {
+      const j = index.get(subgroupKeyOf(conjugateSubgroup(G, H, g)))
+      if (j === undefined) {
+        return {
+          error: `${elementLabel(G, g.id)} 把 Ω 里的某个子群映到了 Ω 之外`,
+          hint: 'Ω 必须在共轭下封闭（Sylow p-子群的全体就是封闭的）',
+        }
+      }
+      perm.push(j)
+    }
+    perms.set(g.id, perm)
+  }
+  return { perms }
+}
+
+/**
+ * Ω 是**元素集**时的共轭置换：借 core 在 G 上的共轭置换，
+ * 再检查 Ω 是不是若干个共轭轨道的并（正规子群 / 共轭类 / G 自身都是）。
+ */
+function conjugationPermsOnElements(
+  G: Group,
+  O: OmegaArg,
+): { perms: Map<string, number[]>; omega?: undefined } | { error: string; hint?: string } {
+  const full = computeConjugationPerms(G)
+  const posInG = (label: string) => G.elements.findIndex((e) => e.label === label)
+  const src = O.members.map((m) => posInG(m.label))
+  if (src.some((i) => i < 0)) {
+    return { error: 'Ω 里有 G 中找不到的元素', hint: 'Ω 的成员必须是 G 的元素' }
+  }
+  const posInO = new Map<string, number>()
+  O.members.forEach((m, i) => {
+    if (!posInO.has(m.label)) posInO.set(m.label, i)
+  })
+  const perms = new Map<string, number[]>()
+  for (const g of G.elements) {
+    const p = full.get(g.id)
+    if (!p) return { error: 'core 没有给出该共轭置换' }
+    const perm: number[] = []
+    for (const i of src) {
+      const j = posInO.get(G.elements[p[i]].label)
+      if (j === undefined) {
+        return {
+          error: `${elementLabel(G, g.id)} 把 Ω 里的元素映到了 Ω 之外`,
+          hint: 'Ω 要在共轭下封闭：取共轭类、正规子群或 G 自身',
+        }
+      }
+      perm.push(j)
+    }
+    perms.set(g.id, perm)
+  }
+  return { perms }
+}
+
+/** Ω 的展示名（作用线的副行与结论用）。 */
+function omegaDisplayName(O: OmegaArg): string {
+  return O.points ? `Syl / 子群集（${O.members.length} 个点）` : `G 的元素（${O.members.length} 个点）`
+}
 
 const COSET_OMEGA_HINT = 'Ω 是陪集而非 G 的元素；陪集视图接入后再支持'
 
@@ -723,12 +892,25 @@ export const OPS: OpDef[] = [
       const G = groupOf(a[0])
       if (!G) return fail('共轭作用需要一个群')
       const perms = computeConjugationPerms(G)
-      const action: GalAction = { group: G, kind: 'conjugation', n: G.order, perms }
+      const action: GalAction = {
+        group: G,
+        kind: 'conjugation',
+        n: G.order,
+        perms,
+        // Ω = G 自身（DIAGRAM_SPEC §6.4 第 1 条）：作用线因此是 G 上的**自环**。
+        // 元素一个个列出来，面板上就能看到 Ω 是什么。
+        omega: {
+          group: G,
+          label: `底集(${refText(a[0])})`,
+          members: G.elements.map((e) => ({ label: e.label })),
+        },
+        omegaBase: 'self',
+      }
       return {
         ok: true,
         value: { type: 'action', action },
         label: `共轭作用(${refText(a[0])})`,
-        sub: `|Ω| = ${G.order}`,
+        sub: `|Ω| = ${G.order} · Ω = ${refText(a[0])} 自身`,
       }
     },
   },
@@ -747,12 +929,86 @@ export const OPS: OpDef[] = [
       const G = groupOf(a[0])
       if (!G) return fail('正则作用需要一个群')
       const perms = computeLeftTranslationPerms(G)
-      const action: GalAction = { group: G, kind: 'leftTranslation', n: G.order, perms }
+      const action: GalAction = {
+        group: G,
+        kind: 'leftTranslation',
+        n: G.order,
+        perms,
+        omega: {
+          group: G,
+          label: `底集(${refText(a[0])})`,
+          members: G.elements.map((e) => ({ label: e.label })),
+        },
+        omegaBase: 'self',
+      }
       return {
         ok: true,
         value: { type: 'action', action },
         label: `正则作用(${refText(a[0])})`,
-        sub: `|Ω| = ${G.order}`,
+        sub: `|Ω| = ${G.order} · Ω = ${refText(a[0])} 自身`,
+      }
+    },
+  },
+  {
+    id: 'conjugationOnSet',
+    notation: '共轭作用在(G, Ω)',
+    mechanism: 'atomic',
+    primitive: true,
+    doc: 'G 通过共轭 g·x·g⁻¹ 作用在集合 Ω 上 —— Sylow 定理的主角动作（Ω = Syl_p(G)）',
+    recipe: '原子构造（作用）',
+    impl: 'conjugateSubgroup（core）→ 点集上的置换',
+    call: ['共轭作用在', 'conjOn', 'conjugationOn'],
+    params: [
+      { name: 'G', type: 'group' },
+      { name: 'Ω', type: 'subset' },
+    ],
+    arity: 2,
+    result: 'action',
+    run: (a) => {
+      const G = groupOf(a[0])
+      if (!G) return fail('共轭作用在(·) 的第一个参数必须是群')
+      const O = omegaArgOf(a[1])
+      if (!O) {
+        return fail(
+          '共轭作用在(·) 的第二个参数必须是集合 Ω',
+          '如 Ω = 底集(Syl_p(G))：先把子群集取底集成集合，再让 G 作用上去',
+        )
+      }
+      if (!sameGroup(G, O.group)) {
+        return fail(
+          'G 与 Ω 来自不同的群',
+          `${prettySymbol(G.symbol)} 与 ${prettySymbol(O.group.symbol)}`,
+        )
+      }
+      if (G.order > ENUM_LIMIT) {
+        return fail(`${prettySymbol(G.symbol)} 太大（阶 ${G.order}），共轭置换算不动`, `上限 ${ENUM_LIMIT}`)
+      }
+
+      const r = O.points
+        ? conjugationPermsOnSubgroups(G, O.points)
+        : conjugationPermsOnElements(G, O)
+      if ('error' in r) return fail(r.error, r.hint)
+
+      const action: GalAction = {
+        group: G,
+        kind: O.points ? 'conjugationOnSubgroups' : 'conjugation',
+        n: O.members.length,
+        perms: r.perms,
+        // Ω 的成员记号（`⟨r⟩` / `⟨s⟩` …）——轨道 / 稳定子按它定位点
+        setLabels: O.members.map((m) => m.label),
+        omega: {
+          group: O.group,
+          label: O.label,
+          members: O.members,
+          from: a[1]?.kind === 'object' ? a[1].ref : undefined,
+        },
+        omegaBase: 'object',
+      }
+      return {
+        ok: true,
+        value: { type: 'action', action },
+        label: `共轭作用在(${refText(a[0])}, ${refText(a[1])})`,
+        sub: `|Ω| = ${O.members.length} · ${omegaDisplayName(O)}`,
       }
     },
   },
@@ -1002,9 +1258,25 @@ export const OPS: OpDef[] = [
       if (!A) return fail('轨道(·) 的第一个参数必须是作用', '先用 共轭作用(G) / 正则作用(G) 造一个')
       const x = refText(a[1])
       const idx = omegaIndexOf(A, x)
-      if (idx < 0) return fail(`Ω 中没有元素 ${x}`, `Ω = {${omegaLabels(A).slice(0, 24).join(', ')}}`)
+      if (idx < 0) return fail(`Ω 中没有点 ${x}`, omegaHint(A))
       const { orbits, orbitOf } = computeOrbits(A.perms, A.n)
       const members = orbits[orbitOf[idx]]?.elements ?? []
+
+      // Ω 是**集合**（成员可能是子群，如 `Syl_p(G)`）→ 轨道是 Ω 的子集，
+      // 产出 `set`：轨道本身就该是个能继续被作用 / 被取出的对象。
+      if (A.omega && A.omegaBase === 'object') {
+        const picked = members.map((i) => A.omega?.members[i]).filter((m): m is SetMember => !!m)
+        return {
+          ok: true,
+          value: {
+            type: 'set',
+            set: { group: A.group, label: `轨道(${x})`, members: picked },
+          },
+          label: `Orb(${x})`,
+          sub: `|Orb| = ${members.length}${members.length === A.n ? ' · 传递（就是整个 Ω）' : ''}`,
+        }
+      }
+
       const els = omegaElements(A, members)
       if (!els) return fail('陪集作用的轨道暂不支持', COSET_OMEGA_HINT)
       return {
@@ -1037,7 +1309,7 @@ export const OPS: OpDef[] = [
       if (!A) return fail('稳定子(·) 的第一个参数必须是作用')
       const x = refText(a[1])
       const idx = omegaIndexOf(A, x)
-      if (idx < 0) return fail(`Ω 中没有元素 ${x}`, `Ω = {${omegaLabels(A).slice(0, 24).join(', ')}}`)
+      if (idx < 0) return fail(`Ω 中没有点 ${x}`, omegaHint(A))
       const stabs = computeStabilizers(A.group, A.perms, A.n)
       const ids = new Set(stabs.get(idx) ?? [])
       const els = A.group.elements.filter((e) => ids.has(e.id))
@@ -1065,6 +1337,18 @@ export const OPS: OpDef[] = [
       const A = actionOf(a[0])
       if (!A) return fail('不动点(·) 需要作用')
       const pts = computeFixedPoints(A.perms, A.n)
+      if (A.omega && A.omegaBase === 'object') {
+        const picked = pts.map((i) => A.omega?.members[i]).filter((m): m is SetMember => !!m)
+        return {
+          ok: true,
+          value: {
+            type: 'set',
+            set: { group: A.group, label: '不动点(A)', members: picked },
+          },
+          label: 'Fix(A)',
+          sub: `|Fix| = ${pts.length}`,
+        }
+      }
       const els = omegaElements(A, pts)
       if (!els) return fail('陪集作用的不动点暂不支持', COSET_OMEGA_HINT)
       return {
@@ -1497,7 +1781,8 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
     case 'map':
       return v.type === 'map'
     case 'subset': {
-      if (v.type === 'elements' || v.type === 'subgroups') return true
+      // `set` 也是集合（Ω）——`底集(Syl_p(G))` 的产物，共轭作用要它
+      if (v.type === 'elements' || v.type === 'subgroups' || v.type === 'set') return true
       if (v.type !== 'group') return false
       // 群对象当集合读。两种情形：
       //   · 本操作前面**没有**群参数（`∩` `∪` `\` `·`）——群总是可以当集合读；

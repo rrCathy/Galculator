@@ -9,7 +9,7 @@ import {
   type Group,
 } from '@groupviz/core'
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type NormalizedSubgroup } from '../gal/value'
-import { groupInsights, mapInsights, type Insight } from '../gal/insights'
+import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { Tex, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
@@ -59,6 +59,8 @@ export function InfoDock({
     if (!v) return []
     if (v.type === 'group') return groupInsights(v.group)
     if (v.type === 'map') return mapInsights(v.map)
+    // 作用：轨道分解 + （Sylow III）n_p 的三条等式 —— MVP 的落点
+    if (v.type === 'action') return actionInsights(v.action)
     return []
   }, [node])
 
@@ -270,17 +272,39 @@ function OtherTab({
           )}
         </>
       )
-    case 'action':
+    case 'action': {
+      const A = v.action
+      const members = A.omega?.members ?? []
       return (
         <>
           <Row k="类型">
-            <span>{ACTION_KIND_LABEL[v.action.kind]}</span>
+            <span>{ACTION_KIND_LABEL[A.kind]}</span>
+          </Row>
+          <Row k="群">
+            <span>
+              <Tex tex={A.group.symbol} />（|G| = {A.group.order}）
+            </span>
           </Row>
           <Row k="Ω">
-            <span>{v.action.n} 个点</span>
+            <span>
+              {A.n} 个点
+              {A.omegaBase === 'self' ? '（就是 G 自身）' : ''}
+            </span>
           </Row>
+          {members.length > 0 && (
+            <Row k="点">
+              <span className="insp-elems">
+                {members
+                  .slice(0, 16)
+                  .map((m, i) => `#${i + 1} ${m.label}`)
+                  .join(' · ')}
+                {members.length > 16 ? ` …共 ${members.length} 个` : ''}
+              </span>
+            </Row>
+          )}
         </>
       )
+    }
     case 'map':
       return (
         <>

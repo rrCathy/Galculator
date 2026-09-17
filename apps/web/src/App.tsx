@@ -35,13 +35,15 @@ import type { GalValue, NormalizedSubgroup } from './gal/value'
  *   `换位子群(G)` 迭代闭包 · `Z ∩ C` 集合运算 · `G / Z` 商群 · `Sub(G)` 枚举 · `ord` 数值进栈
  */
 const DEFAULT_LINES = [
-  'G = D_4',
-  'Z = Z(G)',
-  'C = 换位子群(G)',
-  'J = Z ∩ C',
-  'Q = G / Z',
-  'S = Sub(G)',
-  'n = ord(G, r2)',
+  // Sylow III 的完整故事（MVP 的落点）：
+  //   造 Ω → 让 G 作用上去 → 轨道 / 稳定子 → 三条结论
+  // 打开就能看到交换图：`G ↷ Ω`、`Orb(H) = Ω`（传递）、`N_G(H) ↪ G`
+  'G = S_4',
+  'Syl = Syl_p(G, 3)',
+  'Ω = 底集(Syl)',
+  'A = 共轭作用在(G, Ω)',
+  'O = 轨道(A, 1)',
+  'N = 稳定子(A, 1)',
 ]
 
 /**
@@ -54,7 +56,10 @@ const DEFAULT_LINES = [
  *   节点左上角 —— 对象悬浮球（看 / 单对象操作）
  */
 export default function App() {
-  const [lines, setLines] = useState<string[]>(DEFAULT_LINES)
+  const [lines, setLines] = useState<string[]>(() =>
+    // `?empty=1` 从**空画布**起（走查脚本用它，免得依赖默认示范的内容）
+    typeof location !== 'undefined' && location.search.includes('empty') ? [] : DEFAULT_LINES,
+  )
   const [inter, setInter] = useState<Interaction>(IDLE)
   const [orbStage, setOrbStage] = useState<OrbStage>('closed')
   const [multiOpen, setMultiOpen] = useState(false)
@@ -82,7 +87,13 @@ export default function App() {
    * 焦点**对象**（不一定是节点）：映射不占节点、只画箭头，但它是一等对象——
    * 点箭头就能选中它（U3.1）。所以这里查的是对象表，不是节点表。
    */
-  const focusedObj = useMemo(() => objects.find((o) => o.id === focus) ?? null, [objects, focus])
+  const focusedObj = useMemo(() => {
+    const hit = objects.find((o) => o.id === focus)
+    if (hit) return hit
+    // 有些节点是 derive **就地造**的（作用的 Ω）——它们不在对象表里，
+    // 但同样该能点、能看信息（CanvasNode 就是带 shape/level 的 GalObject）。
+    return graph.nodes.find((n) => n.id === focus) ?? null
+  }, [objects, graph.nodes, focus])
   const anchor = focus ? (anchors.find((a) => a.id === focus) ?? null) : null
 
   const pendOp = useMemo(() => {

@@ -1,101 +1,102 @@
 # Galculator 项目长期笔记
 
-## 仓库与文档（2026-09-16 收敛）
-- **git 仓库已初始化**（`main`，身份沿用全局 cathylinlin/bluejam001@163.com）。此前**不是** git 仓库 → 删除不可回滚；现已可回滚。
-- **远端已上线（2026-09-16）**：`origin` = `git@github.com:rrCathy/Galculator.git`（**public**；由用户手动建的空库——MCP 的 GitHub token 无建仓权限）。`main` 已 push 并跟踪 `origin/main`，远端 HEAD `4a3a279`（U0+U1 那一个提交）。**push 必须 `dangerouslyDisableSandbox`**（默认沙箱拦 `~/.ssh`）。
-- `.gitattributes`：`* text=auto eol=lf` + 二进制例外。仓库存 LF，不加这条 Windows 检出会翻 CRLF 导致整文件 diff 噪音。
-- 忽略：`node_modules/` `dist/` `.tmp-*`（含根目录 `.tmp-npm/`）。纳入 `pnpm-lock.yaml`、`docs/assets/*.png`、`.workbuddy/memory/*`。
-- **活文档 4 份**：`README.md`（门面/定位/快速开始）· `docs/ARCHITECTURE.md`（内核：值类型/10 原语/操作清单/引擎依赖 §11/契约索引 §12）· `docs/INTERACTION.md`（**UI 规范 v2**）· `docs/PROOF_SPEC.md` · `docs/ROADMAP.md`。
-- **`docs/archive/`** 收 3 份完成使命的文档（`DESIGN.md` / `UI_PLAN.md` / `GROUPVIZ_HANDOFF.md`），并在 `archive/README.md` **登记每份的去向**。规则：只移动不删除 / 归档前确认内容已被吸收 / 头部加归档标注。
+> **本文件只放"跨会话必须记住"的东西**（决策、契约、坑、API）。进度与细节在 `docs/`（ROADMAP / INTERACTION / ARCHITECTURE / DIAGRAM_SPEC），别往这里抄。
+> 每日流水在 `.workbuddy/memory/YYYY-MM-DD.md`。
 
 ## 项目定位
-群论计算器——交互式"计算 + 证明可见化"工具，对标 Desmos/GeoGebra。市面空白领域。
-- 与 Desmos 的根本区别：**Desmos 的画布是输出，Galculator 的画布是操作台**。三档参照：Desmos/GeoGebra（交互即时反馈）· Group Explorer（群论可视化约定）· Lean/Coq（**明确不碰**）。
+群论计算器——交互式"计算 + 证明可见化"工具，对标 Desmos/GeoGebra，市面空白。
+- 与 Desmos 的根本区别：**Desmos 的画布是输出，Galculator 的画布是操作台**。参照三档：Desmos/GeoGebra（交互即时反馈）· Group Explorer（群论可视化约定）· Lean/Coq（**明确不碰**）。
 - **理念（用户原话）**：**用户应该在对象旁边完成他想要的操作。**
+- 风格：交换图简约风。部署 web 优先，成熟后做 app。
+- **MVP**：通过群作用证明 Sylow 定理（演示性证明，非形式化）。群作用是一级对象。
+
+## 仓库与文档
+- **git 已初始化**（`main`）；**远端** `git@github.com:rrCathy/Galculator.git`（public，用户手建的空库——MCP 的 GitHub token 无建仓权限）。
+- **`git push` 必须 `dangerouslyDisableSandbox`**（默认沙箱拦 `~/.ssh`）；推完用 `curl https://api.github.com/repos/rrCathy/Galculator/commits/main` 核对远端 HEAD。
+- `.gitattributes`：`* text=auto eol=lf` + 二进制例外（仓库存 LF，否则 Windows 检出翻 CRLF 产生整文件 diff 噪音）。
+- 忽略：`node_modules/` `dist/` `.tmp-*`。纳入 `pnpm-lock.yaml`、`docs/assets/*.png`、`.workbuddy/memory/*`。
+- **活文档 5 份**：`README.md`（门面）· `docs/ARCHITECTURE.md`（内核：值类型/10 原语/操作清单/引擎依赖）· `docs/INTERACTION.md`（UI 规范）· `docs/DIAGRAM_SPEC.md`（**交换图排版规范 + 定理复现体检报告**）· `docs/ROADMAP.md`。`docs/archive/` 收完成使命的旧文档（只移动不删除，`archive/README.md` 登记去向）。
 
 ## 已定决策
-- 部署：web 优先，成熟后做 app。
-- 计算栈：Sage/GAP 后端（SymPy 不做主力）。
-- 可视化：GroupViz 引擎（import 包），非 iframe。
-- 风格：交换图（commutative diagram）简约风，参考 Desmos。
+- 计算栈：Sage/GAP 后端（SymPy 不做主力），但 **M0/M1 前端即够**，后端推迟。
+- 依赖：**直接装 `@groupviz/core` + `@groupviz/react` v2.3.0**（非源码 alias）。
+- 渲染层**自研交换图画布**（core 的 `computeLatticeLayout` + 自写 SVG）——`@groupviz/react` 虽已发包，但 `sylow` 视图未入包，且证明可见化本就要自绘。
+- **核心契约两条**：①群描述 = GroupViz 的 **GroupDescriptor v1**（不重造）②**Proof Spec**（计算器独有）：证明模板 = 步骤序列（声明|计算调用）+ 展示方式。Sylow I/II/III = 三份模板。
+- GroupViz 侧：已有 GAP 4.16 后端（六端点）；对接待办已完成（门面导出 `descriptor` / `src/core` 越界引用清零 / 新增 `binomialMod`）。
 
-## 核心契约（最高优先打磨）
-1. **群描述 = GroupViz 的 GroupDescriptor v1**（src/core/descriptor.ts，zod：symbol/order/elements/multiply 乘法表/properties/construction/source）。不重造 Group Spec，直接对齐。
-2. **Proof Spec（计算器独有）**：证明模板 = 步骤序列（声明 | 计算调用）+ 展示方式（符号/交换图/高亮）。Sylow I/II/III = 三份模板。
+## 核心概念（最容易搞混的三条）
+1. **存在层级 `ValueSort`**（`value.ts`）：`vertex`（group/elements/set → 画布节点）· `edge`（map/action → 画布边）· `list`（subgroups → 信息面板，**可"取出为对象"**）· `scalar`（number → 数值区）。与 `ValueType` **正交**；`sortOf()` 一处定义、三处消费。**判据：能作为某个映射的源或靶的，才配当顶点**（DIAGRAM_SPEC §3）。
+2. **交换图的三条硬规范**（DIAGRAM_SPEC §1）：**对象落在格点上**（箭头只是注解）· **水平箭头同高、垂直箭头同列**（第一判据）· 箭头方向只有水平/垂直/对角。布局是**硬约束**不是"尽量对齐"（软约束得到 nearly-but-not-quite aligned，比明显不对齐更难看）。
+3. **图的两种"层"**：**对象级**（顶点=群/集合/子群，Sylow 证明用的）vs **元素级**（顶点=Ω 的点，轨道=连通分量，只在讲解举例时画）。**画布画"对象之间的关系"，面板画"元素之间的关系"**（DIAGRAM_SPEC §6）。一种语法 + 三层密度（对象级默认 / 集合内部展开 / 元素级去面板）。
 
-## MVP
-通过群作用证明 Sylow 定理（演示性证明，非形式化）。群作用为一级对象。Wielandt 证明步骤：pᵏ 元子集 → 轨道分解 → orbit-stabilizer → 夹逼。
+## 操作架构（ARCHITECTURE §2–§5）
+- **两个平面**：①造对象平面（原子构造 / 作用导出 / 枚举+筛 / 迭代）②**属性平面**（不变量清单，喂给 筛选/判定/识别——三者本质都是"查属性"）。
+- **三个层次**：机制 → **原语**（互不可导出的最小操作，共 **10** 个：原子构造 5 = 群记号·积·商·映射·作用；作用导出 2 = 轨道·稳定子；枚举筛 2；迭代 1）→ 实例（60+ 条）。
+- 降级为实例：`闭包 ⟨S⟩` = 迭代(乘法,封闭)；`不动点` = 轨道长度 1 特例；`所有 X-子群` = `筛(枚举(G,子群), 属性)`。
+- **配方是元数据**（声明等价于哪些原语复合）：只用于解释与逐步演示，**求值走 core 最优路径**。
 
-## 关键协作（GroupViz 对接）
-- **双包已发布**：`@groupviz/core` / `@groupviz/react` 均 **v2.3.0**（2026-09 实测）。core 纯算法、零 React/DOM；react 收录 **10 个受控 Scene**。
-- GroupViz 已有 GAP 4.16 后端（backend/gap_service.py + import-group + 六端点）。
-- Sylow 已算结果（computeSylowAnalysis）未算证明；群作用五源（actions.ts）是 Proof Spec 的原语。
-- 对接四结论：①群描述复用 GroupDescriptor v1 ②护城河=证明层 ③后端扩展 GroupViz GAP 不另起 Sage ④Proof Spec 执行器放前端。
+## core API 速查（v2.3.0）
+> 包在 `node_modules/.pnpm/@groupviz+core@2.3.0/node_modules/@groupviz/core`，类型声明 `index.d.ts` + 分模块 `.d.ts`。
 
-## 已拍板（2026-09）
-- 依赖：**直接装 `@groupviz/core` + `@groupviz/react` v2.3.0**（原"先用 `src/core` 源码 alias"方案作废——包已发布）。
-- 后端：扩展 GroupViz 的 GAP 后端；但 **M0/M1 前端即够**，后端推迟到需要时。
-- 演示性证明（非形式化）；Sylow I/II/III = 三份模板，全做。
-- 渲染层**自研交换图画布**（core 的 `computeLatticeLayout` + 自写 SVG）：`@groupviz/react` 虽已发包，但 **`sylow` 视图未入包**，且证明可见化本就要自绘。
-- GroupViz 侧对接待办已完成：门面导出 `descriptor` / `src/core` 越界引用清零 / 新增 `binomialMod`（Lucas）。
-
-## 交互模型 → **v2**（docs/INTERACTION.md，2026-09-16 定稿）
-> v1 是 2026-09-13 版；v2 吸收了 UI_PLAN，5 条决策全部定案。
-- 画布 = **交换图**（对象=节点，操作=箭头，位置由关系决定），非坐标系。
-- 视觉编码：**形状=类型**（群=方 / 集合=圆 / 映射=箭头 / 作用=作用线），**颜色=来源**（蓝=输入 / 紫=计算）。
-- 输入：左侧栏**三区**（对象 / 操作 / 数值），统一语法「名字 = 定义」；对象与操作在输入层同构。
-- **操作 = 结果对象 + 结构伴生**（伴生的映射/作用/包含 = 交换图箭头的真正来源，图由操作"长"出来）。
-- 两种边：映射边（实线，一等对象）/ 来源线（淡虚线，辅助，默认显示可关）。
-- 布局：分层（Sugiyama）+ **混合位置**（系统自动标准布局 + 用户拖拽微调 + 网格吸附）。
-- 数值进「数值区（栈）」，不上画布。
-- 节点浓缩两分：**数学浓缩**（复合节点，如商 G/N，复用 GroupViz `cosetInternal*` 字段）/ **视觉折叠**（纯收纳）。
-- **画布图契约（§10）**：`CanvasGraph { nodes, edges }` 由 `derive(objects, ops)` 派生（非手画）。Node: kind(group|set) / origin(input|derived) / label / sub / level / collapse / ref；Edge: kind(map 实线 | provenance 淡虚线)。布局用 core `computeLatticeLayout`，拥挤用其 **LOD 三档**（full/compact/dots）；数学浓缩用 `mergeLatticeByConjugacy`。
-
-## core 关键导出（v2.3.0，Proof Spec op 对标）
 - 记号：`parseGroupNotation`（统一入口，本地优先）
-- 布局/格：`computeLatticeLayout`、`SubgroupLatticeNode`/`Edge`、`mergeLatticeByConjugacy`
+- 布局：`computeLatticeLayout`、`mergeLatticeByConjugacy`
 - Sylow：`factorizeOrder`、`binomialMod`、`findSylowSubgroups`、`computeSylowAnalysis`、`sylowConjugationPerms`
-- 作用：`computeCosetActionPerms`、`computeOrbits`、`computeStabilizers`、`verifyOrbitStabilizer`
-- 协议：`serializeDescriptor` / `deserializeDescriptor` / `GroupDescriptorSchemaV1`
-- **子群 → 真群对象**：`buildSubgroupGroup(parent, elements, symbol, generators?)` → `Group`（元素沿用母群对象，id 一致）
-- **元素引用**：`resolveElement(group, ref)` 接受 id / label / value / **循环记号**（`(123)`）；`resolveElementRefs` 返回 `{elements, ids, unresolved}`
-- **结构伴生映射**：`naturalProjectionMapping` · `subgroupInclusionMapping` · `directProductProjectionMapping` · `trivialMapping`（→ 交换图上的实线箭头）
-- **映射（同态）**：类型 `Homomorphism{id,source,target,mapping,result?,name?}`（不要另立结构）；`getGeneratorElements` → `{gen, el}[]` · `extendFromGenerators(src,tgt,Map<**生成元元素 id**, 像元素 id>)` · `verifyHomomorphism`（返回 `violation{a,b,lhs,rhs}`，全是元素 **id**，展示前要翻 label）· `computeKernelFromMapping` · `computeImageFromMapping` · `getHomomorphismProperties` · `autoBuildMapping`（`{type,map}|null`，认不出时退回 `trivialMapping`）· `extractGeneratorMapping`
-  - **坑（静默失败）**：`extendFromGenerators` / `extractGeneratorMapping` 的 Map **key 是生成元元素的 id**，不是 `gen.name`——传名字一律得到 `null`，没有任何报错。生成元记号要同时认 `gen.name`（`r`/`s12`/`a`）与 `el.label`（`s`/`(12)`/`1`）。
-- **子群命名与候选**：`subgroupStructureSymbol(group, elementIds)`（不必先造 Group，O(|H|²) 惰性用）· `listCosetStripSubgroups(group)`（按共轭轨道合并的候选）· `subgroupFromElementIds(group, refs, opts?)` → `Subgroup | null`（校验单位元 + 乘法封闭，非法返回 null）· `isSubgroupElementSet(group, refs)` · `buildCosetViewData` · **`closeUnderMultiply(group, seed)`** → 元素集（迭代到封闭，闭包 op 用它）
-- **小群库**：`getAllSmallGroups()` → `SmallGroupEntry{order,index,group,precomputed}` · `getSmallGroup(order,index?)` · `getSmallGroupBySymbol` · `getPrecomputed(group)` → `{subgroups,normalSubgroups,conjugacyClasses,center,isSimple}`（**库群零计算**）
+- **共轭（Sylow III 的正题）**：**`conjugateSubgroup(group, elements, g)`** = `gHg⁻¹`（返回**排序**后的元素数组 → 可按 id 排序做键）· **`sylowConjugationPerms(group, subgroups)`** = G 在 Syl_p(G) 全体的共轭作用（`Map<元素id, 置换>`）
+- 作用：`computeCosetActionPerms`、`computeOrbits`、`computeStabilizers`、`verifyOrbitStabilizer`、`computeConjugationPerms`、`computeLeftTranslationPerms`、`computeFixedPoints`
+- **子群 → 真群对象**：`buildSubgroupGroup(parent, elements, symbol, generators?)`（元素沿用母群对象，id 一致）
+- **元素引用**：`resolveElement(group, ref)` 认 id / label / value / **循环记号**（`(123)`）；`resolveElementRefs` 返回 `{elements, ids, unresolved}`
+- **结构伴生映射**：`naturalProjectionMapping` · `subgroupInclusionMapping` · `directProductProjectionMapping` · `trivialMapping`
+- **映射（同态）**：类型 `Homomorphism{id,source,target,mapping,result?,name?}`（不要另立结构）· `getGeneratorElements` → `{gen, el}[]` · `extendFromGenerators` · `verifyHomomorphism`（返回 `violation{a,b,lhs,rhs}`，**全是元素 id**，展示前要翻 label）· `computeKernelFromMapping` · `computeImageFromMapping` · `getHomomorphismProperties` · `autoBuildMapping`（`{type,map}|null`）· `extractGeneratorMapping`
+- **子群命名与候选**：`subgroupStructureSymbol(group, elementIds)`（O(|H|²) 惰性）· `listCosetStripSubgroups(group)`（按共轭轨道合并）· `subgroupFromElementIds` · `isSubgroupElementSet` · `buildCosetViewData` · `closeUnderMultiply`
+- **小群库**：`getAllSmallGroups()` · `getSmallGroup(order,index?)` · `getSmallGroupBySymbol` · `getPrecomputed(group)` → `{subgroups,normalSubgroups,conjugacyClasses,center,isSimple}`（**库群零计算**）
+- **识别**：`detectIsomorphicGroup(group)` → 同构符号（如 `S_4/V_4 → "D_{3}"`，**core 的 D₃ 就是 S₃**，UI 要归一）；超限返回 null
 - **守卫阈值**（`guards.ts`）：`INTERACTIVE_LIMIT` 120 · `ENUMERATION_LIMIT` 144 · `STATIC_LIMIT` 240/480 · `SYLOW_MAX_ORDER` 144
 
-## UI 方向（2026-09-16 定稿 → docs/INTERACTION.md v2 §4 / ROADMAP 的 U0–U7）
-- **理念（用户原话）**：**用户应该在对象旁边完成他想要的操作。** 与 Desmos 的最大区别 = **交换图本身可交互**（直接在图上操作对象）。
-- **地基**：注册表补 `OpDef.params`（**命名参数 + 类型**）→ 纯函数 `opsFor(selection)` 同时喂三个入口（节点旁径向菜单 / 顶部工具条 / 查表面板）。"操作别扭"的根因 = 入口死、操作活、靠用户脑中对齐。
-- **交互状态机**：`idle → selected → menu`；`idle/工具条 → pending(opId,picked[]) → 凑够 arity → 执行/editor`；`LayoutMode = auto|manual`。
-- **左栏两态**：输入态（三区 + 两块输入框）/ 详情态（**竖卡**，输入区折叠成一行）—— 竖卡是临时详情，不并存。
-- **输入框两块**：`名字(可空) | 表达式`；自动命名 `A,B,…,Z,A₁,B₁…`，**必须避开注册表所有调用名**（否则 `Z = …` 会遮蔽 `Z(G)`）。
-- **径向菜单三类两层**：看（只填竖卡）/ 算（一元产出对象）/ 造（多元进 pending）。
-- **集合构造（INTERACTION §6）**：点击流与文本流 = **同一个 `FilterSpec` AST 的两个前端**；点击流要**顺手写出等价文本**（教学价值）。竖卡列表做成**带分面的表格**（列头可点、就地筛选），**筛选状态 = 对象表里的一行** → 结果节点可再编辑（改成 `阶=3` 整图重派生，免费）。
-- **「类型 × 属性」表（架构 §4）的第二重身份**：同时是竖卡表格的列定义。**一处定义，两处消费（筛选 + 展示）**，列随对象类型变。
-- **谓词两条**：属性谓词（分面，可补全）+ **字谓词**（`x²=e`/`xy=yx`，走 `parseWord` + `group.multiply` 折叠）。属性谓词可自动翻译成字谓词（`阶=2 ⇔ x²=e`）。
-- **宏与 Proof Spec 同构**（`(opId,参数引用)` 序列）→ 先纯重放，排在 M1 之后复用执行器。**M1 依赖改为 U0–U3**。
-- **集合对象对齐 GroupViz 的 subset**：`{label,color,isSubgroup,isNormalSubgroup,type:'subset'|'subgroup'|'normal-subgroup'}` + `SUBSET_COLORS`（`types/view.d.ts`）。
-- **5 条决策（2026-09-16 全部定案）**：① 径向菜单**三类两层**（看/算/造）② 宏**先纯重放**，排 M1 之后复用 Proof Spec 执行器 ③ 集合描述式 = **属性谓词分面 + 字谓词**两条都做，`∧∨` 组合，不开放任意表达式 ④ 拖动 = **钉住 + 吸附网格 + 一键恢复自动 + 持久化**，顶部「手动布局」徽标 ⑤ 固化集合**不自动升级**（用户定 A）：仍是 subset，命中子群时给提示由用户点升级。
-- **阶段 U0–U7**（ROADMAP）：**U0 ✅**（注册表 params + `opsFor` + 集合运算 + 子群升级真群对象）· **U1 ✅**（两块输入框 + 自动命名 + 边打边校验）· **U2 ✅**（径向菜单 + 一键执行 + 竖卡）· **U2.5 ✅**（UI v3 + v3.1：面板浮层化 + 悬浮球 + 多对象球 + 输入球 + 元素表格 + KaTeX + 数值拖动）· **U3 ✅**（映射构建器 + 画布实线箭头 + 结构伴生 π/π₁π₂/↪ + `ker`/`im` 打通）· **U3.1 ✅**（映射是对象、箭头可点选 → ker/im 一步可点）· **U4 ✅**（结论层：同构识别 / 第一同构定理 + 画布与面板真 TeX）· **U5 ✅**（交换图化：节点只有符号 + 给出 φ 自动补另两条线）· **U6 进行中**（对象栈分层 ✅ · **布局网格化 ✅** · 作用线 ⏳ · 共轭作用在子群集 ⏳ · 集合展开 ⏳）· U7 工具条 + 群目录 + 查表 / 宏。
-- **布局网格化（2026-09-17，U6-A 落地）**：交换图的**第一判据** = 水平箭头同高、垂直箭头同列（DIAGRAM_SPEC §1.2）。硬约束三件：**行 = 派生层**（同层 y 严格相等）· **列 = 竖直约束的连通分量**（并查集；**只有 `π`/`π₁`/`π₂`/`↪` 要求同列**——用户造的映射是水平的、`≅` 是对角的、来源线是辅助，都不参与）· **列宽 = 该列最宽节点**。`computeLatticeLayout` 降级为"只出初值"。**踩坑**：第一版按**几何**猜（`dy ≥ dx` 就同列）→ `≅` 这条对角边把 `C₆`/`C₃`/`C₆/ker φ` 传染成一列、两节点完全重合；**布局约束必须按边的语义来，不能从"它现在画成什么样"反推**。
+### core 的坑（都是静默失败，最贵）
+- **`extendFromGenerators` / `extractGeneratorMapping` 的 Map key 是「生成元元素的 id」**，不是 `gen.name`——传名字一律得 `null`，**无任何报错**。生成元记号要同时认 `gen.name`（`r`/`s12`/`a`）与 `el.label`（`s`/`(12)`/`1`）。
+- **`createGroupFromSymbol` 不吃裸符号**——要先过 `parseGroupNotation`。
+- **core 的 `C_n` 是加法群**（生成元名 `a`、元素 `0..n-1`），课本写乘法循环群 `r^k` → 本地加 `resolveElementLoose` 三级回退（精确 → 生成元的幂 `r4`/`r^4` → 单生成元群单字母别名 `r`/`a`/`g` 互通）。
+- **`subgroupStructureSymbol` 返回 TeX**，展示前必须过 `prettySymbol`，否则漏出 `C_{2}\times C_{2}`。
+- **写「core 没有 X」之前先 `grep` 一遍 `.d.ts`**。踩过：凭印象说「共轭作用在子群集上 core 无现成函数，要自己实现」，翻 `algebra/sylow.d.ts` 才发现 `conjugateSubgroup` / `sylowConjugationPerms` 都在。
 
-## 操作架构（2026-09-15 定稿 → docs/ARCHITECTURE.md，M0.5 已落地代码）
-- **两个平面**：①造对象平面 = 原子构造 / 作用导出 / 枚举+筛 / 迭代 ②**属性平面** = 不变量清单（按类型），喂给 **筛选 / 判定 / 识别**（三者本质都是"查属性"）。算术为独立库。
-- **三个层次**（别再混为一谈）：**机制**（操作怎么造出来）→ **原语**（每个机制里互不可导出的最小操作，共 **10** 个）→ **实例**（填参得到的 60+ 条）。
-- **10 原语**：原子构造 5（群记号·积·商·映射·作用）+ 作用导出 2（轨道·稳定子）+ 枚举筛 2 + 迭代 1。
-- **降级为实例**：`闭包 ⟨S⟩` = 迭代(乘法,封闭)；`不动点` = 轨道长度 1 特例。
-- **`所有 X-子群` 不是一族操作** = `筛(枚举(G,子群), 属性)`，对外给配方名。
-- **识别不是独立类** = 收集全部属性 + 匹配小群库（属性平面的视图）。
-- **输入层三种形态**：文本定义（群/集合/数值）· **对象编辑器**（映射/作用，填生成元的像）· 搭积木（枚举块 + 属性筛块）。
-- **配方是元数据**（声明"等价于哪些原语复合"）：只用于解释与逐步演示，**求值走 core 最优路径**。
-- **U2 已落地（2026-09-16）**：交互状态机（`gal/interaction.ts`，纯状态可单测）`idle → selected → menu → pending / fill`——**`fill` 是原方案漏掉的一档**（`pSub(G,p)`/`ord(G,g)` 末尾是标量，画布点不出来）；径向菜单三类两层（`ui/RadialMenu.tsx`：看=竖卡 / 算=一元直接执行 / 造=多元进 pending）；**执行路径统一**：点出来的操作先 `gal/compose.ts` 编回一行文本 → `evalExpr`（"点出来的"与"打出来的"行为一致，左栏真多一行可读可改；同名同标签去重）；pending 四件反馈（提示条/十字光标/已选高亮/**不可点变暗**）；左栏详情态竖卡（`ui/Inspector.tsx`，底部详情条已搬入并删除）；`Esc`/点空白取消。
-- **坑（重要）**：菜单「造」类**不能用 `opsFor` 筛**——`opsFor` 语义是"选中值能把参数填满"，单选一个对象时多元操作根本不在结果里，用它分类必然为空。要直接遍历 `OPS` + `paramAccepts(params[0].type, v, [])`。此 bug 单元断言没抓到（断言写反了），**只有真浏览器走查抓到**。
-- **U2.5 已落地（2026-09-16，UI v3）**：**面板从侧栏改成浮层抽屉**——画布铺满窗口，左上并排「对象」（含两块输入框）/「操作」（运算产生的对象）/「信息」（三 tab 共用），左下「数值」上拉抽屉；默认只展开对象+数值。**画布给抽屉让位 → v3.1 已撤销**（用户拍板收展不动画布，`insets` 已删；悬浮球仍避让抽屉右边界，只挪球）。**对象悬浮球**（节点左上角深色，环绕 4 按钮：基本/元素/子群 = 切信息 tab；操作 = 单对象操作下拉面板，**点一下即建对象**）；环绕**只铺上半圈+左侧**（球在节点左上，整圈均分会让正下方那颗压住标签）。**多对象球**挂显示区正上方（全局 8 条，位置避让抽屉）。**元素表格**（v3.1 转正为行=元素、列=属性，行首 sticky；v3 首版按用户原话做成列=元素，看到实物后要求翻转）。**数值区**只放拖动收集 + 主动计算两种。**KaTeX 接上**（面板里的 TeX 真渲染；画布标签仍 Unicode，理由见 INTERACTION §13.3）。删掉 `InputPanel`/`Inspector`/`RadialMenu` 与"可用操作清单"面板。
-- **代码落点（v0.0.0，apps/web/src/）**：`gal/value.ts` 6 值类型 + 归一化 · `gal/ops.ts` **操作注册表 27 条**（`OpDef` = mechanism/primitive/recipe/impl/call/infix/**params（命名参数+类型）**/arity/result/run + **`opsFor(selection)`** + `paramAccepts`）· `gal/naming.ts` 自动命名 + 名字体检（保留名从注册表 83 个 `call` 名自动导出）· `gal/compose.ts` 操作+实参 → 定义行 · `gal/interaction.ts` **状态机 + `singleOpsFor` / `multiOps` + canPick**（`idle→selected→menu→pending/fill`）· `gal/numeric.ts` 数值条目 + 拖拽载荷 · `gal/summary.ts` 元素属性汇总 · `gal/evalDef.ts` 五级分发 · `gal/build.ts` 行→对象表 · `gal/derive.ts` 对象表→画布图。UI（`ui/`）：`CanvasView` SVG 自绘（布局 + 上报节点坐标；面板收展不影响它）· `DockPanel` 浮层抽屉 · `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` 四个抽屉 · `ComposerOrb` **正下方输入球**（v3.1：两块输入框搬出抽屉挂球上，卡片常开、焦点落表达式框）· `ElementsTable` 元素表格 · `ObjectOrb`/`MultiOrb` 两颗球 · `ObjectRow` · `Tex` KaTeX。
-- **U0 已落地（2026-09-16）**：`ParamType` 7 类（group/subset/action/map/element/prime/int，**标量参数只能在末尾**，模块加载断言）；`opsFor` 三条规则（前缀匹配 / 剩余必需参数须是标量 / 需再选对象的操作不出现）；`subset` 接群节点有条件（前面有群参数时要求是其子群，否则两群相选会冒出多余商群）；集合运算 `∩ ∪ \ ·`（同母群校验，产出 elements 不升级）；闭包 `⟨S⟩`（`closeUnderMultiply` → 真群对象，也吃 `闭包(G, r2)`）；`ker`/`im`（吃 map + `GalMap.mapping`）；**子群一律升级为真群对象**（`buildSubgroupGroup`，画布圆变方，`Z(Z(G))` 合法）；元素参数走 `resolveElement`；左栏操作面板是 `opsFor` 的第一个入口。
-- **U1 已落地（2026-09-16）**：输入框拆「名字 | 表达式」两块；名字留空自动命名（序列 `A B D F …` → `A₁ B₁ …`，**大小写不敏感地**避开已用名 + 83 个注册表调用名 + `e/p/g/h`；名字栏 `placeholder` 显示将分配的名）；手写名字只拦"非法字符 / 重名"，命中操作名**只提醒**（`Z = Z(G)` 是明确表达）；表达式边打边校验（预览即所得，非法则红字 + 定向提示 + 「添加」置灰）；提醒与预览**并存两行**；兼容整行粘贴 `G = D_4`。
-- **U3 已落地（2026-09-16）**：`ops.ts` 加 **`variadic`**（末尾可变参数）+ **`editor: true`**（凑齐对象参数转交编辑器）+ `genImage` 参数类型；新 op **`映射(G, H, r2→e, s→s)`**（`extendFromGenerators` + `verifyHomomorphism`，非**同态**给违规元素对定向报错）；`ui/MapBuilder.tsx` 构建器（生成元逐个填像 + 边填边校验 + 自动填充 + 名字自动命名，产出**一行文本**交给同一求值器）；状态机补 **`editor` 档**；`derive.ts` 新增 **`alongsideEdges`**（商群 π / 直积 π₁π₂ / 子群 ↪，ker·im 的母群从**映射端群**取；**有伴生箭头就不画来源线**，避免反向叠线）；边带类名 `gedge-*`。验证 U3 38/38（含第一同构定理）· 走查 18/18。
-- **遗留**：自定义作用的编辑器（共轭/正则已可用）；伴生箭头还不是映射对象（不能对 π 做 ker/im）；陪集作用的轨道/稳定子分支；半直积 ⋊；识别类。
+## 代码落点（apps/web/src/）
+- `gal/`：`value.ts`（值类型 + `ValueSort` + 归一化）· `ops.ts`（**操作注册表 30 条**：`OpDef` = mechanism/primitive/recipe/impl/call/infix/`params`(命名参数+类型)/arity/`variadic`/`editor`/result/run + `opsFor` + `paramAccepts`）· `naming.ts`（自动命名，保留名从注册表导出，**必须避开所有 `call` 名**）· `compose.ts`（操作+实参 → 定义行）· `interaction.ts`（状态机 `idle→selected→menu→pending/fill/editor` + `singleOpsFor`/`multiOps`/`canPick`）· `evalDef.ts`（五级分发：对象引用→调用→顶层中缀→记号→报错）· `build.ts`（行→对象表，含 `firstIsoObjects` 隐式顶点）· `derive.ts`（对象表→画布图 + `alongsideEdges`）· `insights.ts`（结论层）· `tex.ts`（Unicode→LaTeX）· `numeric.ts` · `summary.ts`
+- `ui/`：`CanvasView`（SVG 自绘 + **硬约束网格布局** + 上报锚点）· `DockPanel` · `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` · `ComposerOrb`（正下方输入球）· `ObjectOrb`/`MultiOrb` · `MapBuilder` · `ElementsTable` · `ObjectRow` · `Tex`
+
+### 项目内的坑
+- **「造」类操作不能用 `opsFor` 筛**——它的语义是"选中值能把参数填满"，单选一个对象时多元操作不在结果里。要直接遍历 `OPS` + `paramAccepts(op.params[0].type, v, [])`。
+- **从 UI 状态取 id 去拼表达式**是危险动作（id 的语义无类型保护）。实例：`取出为对象` 第一版拿焦点 id（那是子群集 `S`）拼出 `闭包(S, e)` —— **tsc 与单测全过**，只有求值器拒。凡见此类代码，补真浏览器走查断言。
+- **`闭包` 的上下文群形态**：`if (G0 && a.length > 1)` 才成立——单个群参数（`闭包(J)`）要走"取它的元素当种子"，否则返回平凡群（U0 埋的老 bug，体检才挖出）。
+- **集合运算 `∩`/`·`** 在结果是子群时**升级为真群对象**（这是定理不是猜测）；∪/∖ 不升级（决策 ⑤ 针对的是**用户手工造集合**，那种要判断）。
+- **`stabilizers` 产出是 G 的子群** → `result: 'group'`（曾漏升级）。
+- **KaTeX 渲染后的 DOM**：`S₄` 的 `textContent` 是 `S4`（数字是独立 span）→ **节点定位统一走 `<g class="gnode" data-label="S₄">`**。
+- **`⟨⟩` 归一的边界**：`normalizeAngle` **只在顶层（括号外）**改写（`K = ⟨J⟩` → `闭包(J)`），且**实参位置一律不改写**（`normalizeExpr(s, angle=false)`）——否则 `稳定子(A, ⟨r⟩)` 里的 `⟨r⟩`（Ω 的成员记号）会被改写成 `闭包(r)`。Ω 成员标签含逗号的用**纯数字下标**寻址（`稳定子(A, 1)`）。
+- **布局的列约束不许传染**：竖直约束（`π`/`π₁`/`π₂`/`↪`/`↷`）合并用**贪心**（短跨度优先）+ **不许跨过已在同列的节点**，否则两条不同来源的竖直边把无关节点串成一列、长箭头从中间节点穿过。
+- **`toTex()` 四步有序**：上下标 → 运算符/希腊字母 → 函数名（包 `\operatorname{}`，否则 `Sub` 被排成 `S·u·b` 乘积）→ 中文（包 `\text{}`，math mode 下 CJK 渲染失败）。
+
+## 交互模型（docs/INTERACTION.md，细节看它）
+- 画布 = **交换图**（对象=节点，操作=箭头，位置由关系决定），非坐标系。
+- 视觉编码：**形状=类型**（群=**无形状只有符号+一小块常驻淡底** / 集合=圆 / 作用=淡虚线框 / 映射=箭头）· **颜色=来源**（蓝=输入 / 紫=运算）。
+- **操作 = 结果对象 + 结构伴生**（伴生的映射/作用/包含 = 箭头的真正来源，图由操作"长"出来）。
+- 边界：**映射边**（实线，一等对象，**可点选**——点箭头环绕出 ker/im）· **来源线**（淡虚线，辅助，可关）。
+- 布局：网格化（见上"核心概念 2"）。
+- **输入层三种形态**：文本定义 · **对象编辑器**（映射构建器已落地）· 搭积木（枚举块 + 属性筛块）。
+- **5 条决策（已定案）**：① 径向菜单三类两层（看/算/造）② 宏**先纯重放**，排 M1 之后复用 Proof Spec 执行器 ③ 集合描述式 = 属性谓词分面 + 字谓词两条都做，`∧∨` 组合，不开放任意表达式 ④ 拖动 = 钉住 + 吸附网格 + 一键恢复自动 + 持久化 ⑤ 固化集合**不自动升级**（命中子群时提示由用户点升级）。
+- **集合构造（§6）**：点击流与文本流 = 同一个 `FilterSpec` AST 的两个前端；「类型 × 属性」表一处定义两处消费（筛选 + 列表列定义）。
+
+## 阶段进度（详见 docs/ROADMAP.md）
+**U0 ✅** 注册表 params + `opsFor` + 集合运算 + 子群升级真群对象 · **U1 ✅** 两块输入框 + 自动命名 + 边打边校验 · **U2 ✅** 径向菜单 + 一键执行 · **U2.5 ✅** UI v3/v3.1 浮层面板 + 悬浮球 + 输入球 + 元素表格 + KaTeX · **U3 ✅** 映射构建器 + 实线箭头 + 结构伴生 · **U3.1 ✅** 映射是对象（箭头可点选） · **U4 ✅** 结论层（同构识别 / 第一同构定理）+ 真 TeX · **U5 ✅** 交换图化（节点只有符号 + 给出 φ 自动补另两条线） · **U6 进行中**（对象栈分层 ✅ · 布局网格化 ✅ · **集合展开 ⏳**） · **U7 ✅**（Sylow III 的图：`共轭作用在(G, Ω)` + Ω 升格为对象 + 作用成为一等边 + `n_p` 三条结论） · U8 工具条 + 群目录 + 查表 / U9 集合构造器 / U10 拖动 / U11 宏。
+
+## 已知缺口（体检挖出，按严重度）
+| # | 缺口 | 挡住 |
+|---|---|---|
+| G4 | **商群的子群判定失败**（两个商群的元素 id 体系不同）| 第三同构 `(G/N)/(K/N)` |
+| ~~G5~~ | ~~共轭作用在子群集上缺失~~ | ✅ 已解决（U7；core 有 `conjugateSubgroup`）|
+| G6 | 箭头形状不编码单射/满射/同构 | 短正合列、五引理 |
+| ~~G7~~ | ~~作用仍占节点、轨道/稳定子的边是虚线~~ | ✅ 已解决（U7）|
+| G8 | 不自动补 `im φ` | 第一同构的正方形版 |
+
+**体检的教训**：**"算得对"与"画得对"是两件事**。第二同构定理在修 G3 前阶全对，但图上 `H∩N` 是"集合圆"、包含箭头是虚线。既有断言全绿因为都在测"算得对不对"——**光看断言发现不了图的问题**。
+
+## 遗留给未来
+- 自定义作用编辑器（共轭/正则已可用）；伴生箭头还不是映射对象（不能对 π 做 ker/im）；陪集作用的轨道/稳定子分支；半直积 ⋊；识别类。

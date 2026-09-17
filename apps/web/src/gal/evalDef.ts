@@ -37,19 +37,55 @@ const UNICODE_ALIASES: [RegExp, string][] = [
 /**
  * `⟨S⟩` → `闭包(S)`（记号包裹 → 函数调用，注册表的 call 名）。
  *
- * 只改写**不带逗号**的形态：带逗号的 `⟨(12),(34)⟩` 是「由置换生成群」的记号，
- * 母群未定，留给 `parseGroupNotation`——别在这里抢先解释成"某个上下文群里的闭包"。
- * 要按上下文群生成，写 `闭包(G, (12), (34))`。
+ * 两条边界：
+ *   ① 只改写**不带逗号**的形态：带逗号的 `⟨(12),(34)⟩` 是「由置换生成群」的记号，
+ *      母群未定，留给 `parseGroupNotation`。要按上下文群生成就写 `闭包(G, (12), (34))`。
+ *   ② 只改写**括号外的**（depth 0）：`K = ⟨J⟩` 要变 `闭包(J)`，
+ *      但 `稳定子(A, ⟨r⟩)` 里的 `⟨r⟩` 是 Ω 上**某个点的记号**
+ *      （Sylow III 的 Ω 成员就长这样），改写掉就再也点不到那个点了。
  */
 function normalizeAngle(s: string): string {
-  return s.replace(/⟨([^⟨⟩,]+)⟩/g, (_, inner: string) => `闭包(${inner.trim()})`)
+  let out = ''
+  let depth = 0
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (c === '(') {
+      depth++
+      out += c
+      continue
+    }
+    if (c === ')') {
+      depth = Math.max(0, depth - 1)
+      out += c
+      continue
+    }
+    if (depth === 0 && c === '⟨') {
+      const end = s.indexOf('⟩', i + 1)
+      if (end > i + 1) {
+        const inner = s.slice(i + 1, end)
+        if (!/[⟨⟩,]/.test(inner)) {
+          out += `闭包(${inner.trim()})`
+          i = end
+          continue
+        }
+      }
+    }
+    out += c
+  }
+  return out
 }
 
-/** Unicode 运算符 → 规范化 ASCII 形态（`C_2 × C_3` → `C_2 x C_3`）。 */
-export function normalizeExpr(s: string): string {
+/**
+ * Unicode 运算符 → 规范化 ASCII 形态（`C_2 × C_3` → `C_2 x C_3`）。
+ *
+ * `angle: false` 时不改写 `⟨⟩` —— **实参位置上的 `⟨H⟩` 是 Ω 里那个点的记号**，
+ * 不能解释成闭包：`稳定子(A, ⟨r⟩)` 里的 `⟨r⟩` 指 Ω 的成员，
+ * 而 Sylow III 的 Ω = `Syl_p(G)` 成员正是这种写法。
+ */
+export function normalizeExpr(s: string, angle = true): string {
   let t = s.trim()
   for (const [re, to] of UNICODE_ALIASES) t = t.replace(re, to)
-  t = normalizeAngle(t)
+  if (angle) t = normalizeAngle(t)
   return t.replace(/\s+/g, ' ').trim()
 }
 
@@ -170,7 +206,8 @@ function looksLikeLiteral(s: string): boolean {
 }
 
 export function resolveArg(raw: string, objects: Map<string, GalObject>): OpArg {
-  const s = normalizeExpr(raw)
+  // 实参里不改写 ⟨⟩（见 `normalizeExpr` 的注释）
+  const s = normalizeExpr(raw, false)
   if (/^-?\d+$/.test(s)) return { kind: 'number', num: Number(s), text: s, sources: [] }
   if (objects.has(s)) return argFromResult(s, objects, evalExpr(s, objects))
   if (looksLikeLiteral(s)) return { kind: 'literal', text: s, sources: [] }
