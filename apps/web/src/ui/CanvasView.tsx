@@ -465,7 +465,10 @@ export function CanvasView({
                   : PROV
           const marker =
             e.kind === 'action' ? 'arrow-action' : e.kind === 'map' ? 'arrow-map' : 'arrow-prov'
-          const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 }
+          // 标签放在箭头的 **30% 处**（靠近起点）而不是中点：
+          // 多条箭头汇聚到同一个节点时（第二同构定理里 5 条 `↪` 都指向 D₄），
+          // 中点标签会挤成一团糊掉；靠起点放能自然散开。
+          const mid = { x: p1.x + (p2.x - p1.x) * 0.3, y: p1.y + (p2.y - p1.y) * 0.3 }
           // 箭头背后的对象（映射）→ 可点选，于是能"点箭头 → ker / im"
           const selectable = !!e.objectId
           const isSelected = selectable && e.objectId === selectedId

@@ -37,6 +37,10 @@ const SUBGROUP_RESULT_OPS = new Set([
   'normalizer',
   'commutatorGroup',
   'closure',
+  // 集合运算在结果是子群时会升级为群对象（见 ops.ts 的 setOp）——
+  // 那时它也该有 `↪` 包含箭头（第二同构定理的 `H∩N ↪ H` 靠这条）
+  'intersection',
+  'productSet',
 ])
 
 /** 群对象 → 它在画布上的节点 id（同一个群可能有多个对象，取第一个）。 */

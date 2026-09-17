@@ -259,15 +259,49 @@ function elementListHint(group: Group, cap = 24): string {
   return labels.length > cap ? `${head}, …, 共 ${labels.length} 个` : head
 }
 
+/**
+ * 元素记号的**宽容解析**（数学惯例对齐）。
+ *
+ * core 的 `resolveElement` 认 id / label / value / 循环记号 `(123)`，但 core 的 `C_n`
+ * 是加法群（生成元叫 `a`、元素是 `0..n-1`），而课本写的是**乘法循环群** `r^k`。
+ * 于是用户写 `闭包(G, r4)` 时 `r4` 解析不了——而这正是最常见的写法。
+ *
+ * 三级回退：
+ *   ① core 的 `resolveElement`（精确；循环记号走这里）
+ *   ② 生成元的幂：`r4` / `r^4` / `r^{4}`
+ *   ③ 单生成元群（循环群）里的单字母：`r` / `a` / `g` 一律视作那个生成元
+ */
+function resolveElementLoose(group: Group, text: string): GroupElement | null {
+  const t = text.trim()
+  const direct = resolveElement(group, t)
+  if (direct) return direct
+
+  const m = /^([A-Za-z][A-Za-z0-9]*?)\^?\{?(\d*)\}?$/.exec(t)
+  if (!m) return null
+  const base = m[1]
+  const exp = m[2] ? Number(m[2]) : 1
+
+  const gens = getGeneratorElements(group)
+  let gen = gens.find((x) => x.gen.name === base || x.el.label === base)?.el ?? null
+  // 循环群只有唯一生成元：`r` / `a` / `g` 这类单字母都当作它（两种记号的桥）
+  if (!gen && gens.length === 1 && base.length === 1) gen = gens[0].el
+  if (!gen) return null
+
+  let cur = group.identity
+  for (let i = 0; i < exp; i++) cur = group.multiply(cur, gen)
+  return cur
+}
+
 /** 元素参数 → 群元素：走 core `resolveElement`，接受 id / label / value / **循环记号**（`(123)`）。 */
 function elementArgOf(a: OpArg | undefined, group: Group): GroupElement | null {
   if (!a) return null
   if (a.kind === 'object') {
     const v = a.value
-    if (v.type === 'elements' && v.elements.length === 1) return resolveElement(group, v.elements[0].id)
+    if (v.type === 'elements' && v.elements.length === 1)
+      return resolveElementLoose(group, v.elements[0].id)
     return null
   }
-  return resolveElement(group, a.text)
+  return resolveElementLoose(group, a.text)
 }
 
 /** 两个集合是否来自同一个群：引用相等最快，否则看符号 + 阶（重建的 `A_4` 视作同群）。 */
@@ -365,7 +399,12 @@ function elementLabel(group: Group, id: string): string {
 function generatorOf(group: Group, text: string): { genName: string; el: GroupElement } | null {
   const gens = getGeneratorElements(group)
   const hit = gens.find((g) => g.gen.name === text || g.el.label === text || g.el.id === text)
-  return hit ? { genName: hit.gen.name, el: hit.el } : null
+  if (hit) return { genName: hit.gen.name, el: hit.el }
+  // 循环群的两种通行写法：core 叫 `a`，课本写 `r`（或反之）
+  if (gens.length === 1 && /^[A-Za-z]$/.test(text.trim())) {
+    return { genName: gens[0].gen.name, el: gens[0].el }
+  }
+  return null
 }
 
 /** 生成元的候选记号（报错提示 / 编辑器下拉都要用）。 */
@@ -379,7 +418,7 @@ export function generatorNames(group: Group): string[] {
  */
 function omegaIndexOf(A: GalAction, text: string): number {
   if (A.setLabels && A.setLabels.length > 0) return A.setLabels.indexOf(text)
-  const el = resolveElement(A.group, text)
+  const el = resolveElementLoose(A.group, text)
   if (!el) return -1
   return A.group.elements.findIndex((e) => e.id === el.id)
 }
@@ -394,6 +433,9 @@ function omegaElements(A: GalAction, indices: number[]): GroupElement[] | null {
   if (A.setLabels && A.setLabels.length > 0) return null
   return indices.map((i) => A.group.elements[i]).filter(Boolean)
 }
+
+/** 枚举类操作的规模上限（与 core 的守卫阈值同量级）*/
+const ENUM_LIMIT = 120
 
 const COSET_OMEGA_HINT = 'Ω 是陪集而非 G 的元素；陪集视图接入后再支持'
 
@@ -462,10 +504,30 @@ function setOp(a: OpArg[], kind: SetOpKind): OpOutcome {
     }
   }
 
+  const label = `${refText(a[0])} ${kind} ${refText(a[1])}`
+
+  // **「交」的结果是子群，这是定理不是猜测** —— 所以升级为真群对象：
+  // 它才能继续参与 `H/(H∩N)`、也才能在画布上画出 `H∩N ↪ H` 的包含箭头。
+  // （决策 ⑤ 的"固化集合不自动升级"针对的是**用户手工构造的集合**——
+  //  那种"是不是子群"要判断；而两个子群之交必是子群，无需判断。）
+  if (
+    (kind === '∩' || kind === '·') &&
+    els.length > 0 &&
+    els.length <= ENUM_LIMIT &&
+    isSubgroupElementSet(group, els.map((e) => e.id))
+  ) {
+    return {
+      ok: true,
+      value: { type: 'group', group: subgroupGroupOf(group, els, label) },
+      label,
+      sub: `|·| = ${els.length}${structSuffix(group, els)}`,
+    }
+  }
+
   return {
     ok: true,
     value: { type: 'elements', group, elements: els },
-    label: `${refText(a[0])} ${kind} ${refText(a[1])}`,
+    label,
     sub: `|·| = ${els.length}`,
   }
 }
@@ -531,10 +593,12 @@ export const OPS: OpDef[] = [
       }
       const Q = computeQuotientGroup(G, sub)
       if (!Q) return fail('商群构造失败')
+      // label 用**引用名**（`H / I`）而不是 core 的结构符号：
+      // core 的 symbol 是从母群拼的（`H/I` 会显示成 `C₄/N`），读起来对不上。
       return {
         ok: true,
         value: { type: 'group', group: Q },
-        label: prettySymbol(Q.symbol),
+        label: `${refText(a[0])} / ${refText(a[1])}`,
         sub: `|G/N| = ${Q.order}`,
       }
     },
@@ -580,7 +644,7 @@ export const OPS: OpDef[] = [
           )
         }
         if (seen.has(g.genName)) return fail(`生成元 ${genText} 给了两个像`)
-        const img = resolveElement(H, parts[1].trim())
+        const img = resolveElementLoose(H, parts[1].trim())
         if (!img) {
           return fail(
             `${refText(a[1])} 里没有元素 ${parts[1].trim()}`,
@@ -1226,8 +1290,12 @@ export const OPS: OpDef[] = [
       let group: Group
       let seeds: GroupElement[]
       let genTexts: string[]
-      if (G0) {
-        // ⟨G, g₁, …⟩：G 只当上下文群（用来解析后面的元素记号），种子全来自元素参数
+      // 「上下文群」形态**只在后面还有元素参数时**才成立：
+      //   `闭包(G, r2)` → G 当上下文，种子来自 r2
+      //   `闭包(J)`     → J 自己就是（子）群对象，**取它的元素当种子**
+      // 之前只判 `if (G0)`，于是 `闭包(J)` 落到"G 当上下文 + 空种子"⇒ 得到平凡群
+      // （复现定理的体检抓到的：`Z ∩ C` 阶 2，闭包后变阶 1）。
+      if (G0 && a.length > 1) {
         group = G0
         seeds = []
         genTexts = a.slice(1).map(refText)
@@ -1278,7 +1346,7 @@ export const OPS: OpDef[] = [
       const G = groupOf(a[0])
       if (!G) return fail('ord(·) 的第一个参数必须是群')
       const txt = refText(a[1])
-      const el = resolveElement(G, txt)
+      const el = resolveElementLoose(G, txt)
       if (!el) return fail(`${refText(a[0])} 中没有元素 ${txt}`, `元素：${elementListHint(G)}`)
       const o = elementOrder(G, el)
       return {
