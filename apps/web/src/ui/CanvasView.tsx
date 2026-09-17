@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
-import type { CanvasGraph, CanvasNode } from '../gal/types'
+import type { CanvasGraph, CanvasNode, GalEdge } from '../gal/types'
 import { labelTexHtml, measureTex } from './Tex'
 
 /** 基础留白（viewBox 单位） */
@@ -9,7 +9,13 @@ const VW = 900
 const VH = 620
 
 /** 同层节点最小水平间距（世界坐标） */
-const GAP_X = 30
+/**
+ * 网格化的间距（DIAGRAM_SPEC §1.1）：对象落在整数格点上，
+ * **列间距**取固定值、**列宽**取该列最宽节点——这样列与列之间才有稳定节奏。
+ */
+const COL_GAP = 64
+/** 行间距（行高取该行最高节点）*/
+const ROW_GAP = 76
 const GROUP_H = 54
 const ACTION_H = 42
 const SET_MIN_R = 32
@@ -179,27 +185,128 @@ export function CanvasView({
     const boxes = graph.nodes.map(measure)
     const pos: Pt[] = layout.positions.map((p) => ({ x: p.x, y: p.y }))
 
-    // 按层归拢：同层 y 对齐（交换图的"同一层对象对齐"），并在水平方向去重叠
-    const byLevel = new Map<number, number[]>()
-    graph.nodes.forEach((n, i) => {
-      const arr = byLevel.get(n.level)
-      if (arr) arr.push(i)
-      else byLevel.set(n.level, [i])
-    })
-    for (const arr of byLevel.values()) {
-      const avgY = arr.reduce((s, i) => s + pos[i].y, 0) / arr.length
-      for (const i of arr) pos[i].y = avgY
-      if (arr.length < 2) continue
-      arr.sort((a, b) => pos[a].x - pos[b].x)
-      const before = (pos[arr[0]].x + pos[arr[arr.length - 1]].x) / 2
-      for (let k = 1; k < arr.length; k++) {
-        const prev = arr[k - 1]
-        const cur = arr[k]
-        const minX = pos[prev].x + boxes[prev].hw + GAP_X + boxes[cur].hw
-        if (pos[cur].x < minX) pos[cur].x = minX
+    // ── 网格化：对象落在整数格点上（DIAGRAM_SPEC §1.1 / §1.2）────────
+    //
+    // 课本级交换图的**第一判据**是"水平箭头同高、垂直箭头同列"。
+    // 从前的做法只对齐了 y（同层取平均），x 是"防重叠推挤"出来的
+    // （`pos[cur].x = minX`）——于是 `G` 与 `G/ker φ` 不在同一列，
+    // 那条本该垂直的 `π` 成了斜线。改硬约束：
+    //   ① 行 = 派生层：同层 y **严格相等**，行高 = 该行最高节点
+    //   ② 列 = 并查集：凡"竖直倾向"的边，两端**强制同列**
+    //   ③ 列宽 = 该列最宽节点
+    //
+    // 为什么用硬约束而不是"尽量对齐"：软约束得到的是 *nearly-but-not-quite
+    // aligned*，看着差不多、实际差几个像素，比明显不对齐更难看。
+    const n = graph.nodes.length
+
+    /**
+     * **竖直约束**：只有"结构伴生"的边要求两端同列。
+     *
+     *   `π` / `π₁` / `π₂`（投影）与 `↪`（包含）在课本里都是竖直线；
+     *   而用户造的映射（带 `objectId`）是**水平**的、`≅` 是**对角**的、
+     *   来源线是辅助信息 —— 这三类都不该把两端拉到同一列。
+     *
+     * 第一版没做这个区分（只看"dy ≥ dx"），结果 `≅` 把 `C₆`、`C₃`、`C₆/ker φ`
+     * 传染成一列（`C₆` 与 `C₃` 直接叠在一起）。判据必须按**边的语义**来，
+     * 而不是按几何猜。
+     */
+    const isVerticalConstraint = (e: GalEdge): boolean =>
+      !e.objectId && (e.label === 'π' || e.label === 'π₁' || e.label === 'π₂' || e.label === '↪')
+
+    const uf = Array.from({ length: n }, (_, i) => i)
+    const find = (i: number): number => {
+      let r = i
+      while (uf[r] !== r) r = uf[r]
+      let c = i
+      while (uf[c] !== c) {
+        const next = uf[c]
+        uf[c] = r
+        c = next
       }
-      const after = (pos[arr[0]].x + pos[arr[arr.length - 1]].x) / 2
-      for (const i of arr) pos[i].x += before - after
+      return r
+    }
+    for (const e of graph.edges) {
+      if (!isVerticalConstraint(e)) continue
+      const i = idx.get(e.from)
+      const j = idx.get(e.to)
+      if (i === undefined || j === undefined || i === j) continue
+      const ri = find(i)
+      const rj = find(j)
+      if (ri !== rj) uf[ri] = rj
+    }
+
+    // 一行内两个节点不能占同一列（否则叠在一起）——撞了就右移到最近的空列
+    const colOf = new Array<number>(n).fill(0)
+    const used = new Map<number, Set<number>>()
+    const free = (c: number, lv: number) => !used.get(c)?.has(lv)
+    const claim = (c: number, lv: number) => {
+      const st = used.get(c)
+      if (st) st.add(lv)
+      else used.set(c, new Set([lv]))
+    }
+    const firstFree = (start: number, lv: number) => {
+      let c = start
+      while (!free(c, lv)) c++
+      return c
+    }
+
+    const grouped = new Map<number, number[]>()
+    for (let i = 0; i < n; i++) {
+      const r = find(i)
+      const arr = grouped.get(r)
+      if (arr) arr.push(i)
+      else grouped.set(r, [i])
+    }
+    // 组的左右顺序沿用初值（谁在左谁在右，lattice layout 已经想过一遍）
+    const groupList = [...grouped.values()]
+      .map((members) => ({
+        members,
+        x: members.reduce((t, i) => t + layout.positions[i].x, 0) / members.length,
+      }))
+      .sort((a, b) => a.x - b.x)
+
+    let nextCol = 0
+    for (const grp of groupList) {
+      let maxUsed = nextCol - 1
+      const byLevelInGroup = [...grp.members].sort(
+        (a, b) => graph.nodes[a].level - graph.nodes[b].level,
+      )
+      for (const i of byLevelInGroup) {
+        const c = firstFree(nextCol, graph.nodes[i].level)
+        colOf[i] = c
+        claim(c, graph.nodes[i].level)
+        if (c > maxUsed) maxUsed = c
+      }
+      nextCol = maxUsed + 1
+    }
+
+    // 列宽 = 该列最宽节点（这样列与列之间才有稳定节奏）
+    const colIds = [...new Set(colOf)].sort((a, b) => a - b)
+    const colX = new Map<number, number>()
+    let colCursor = 0
+    for (const c of colIds) {
+      const members = colOf.map((cc, i) => (cc === c ? i : -1)).filter((i) => i >= 0)
+      const w = Math.max(...members.map((i) => boxes[i].hw)) * 2
+      colCursor += w / 2
+      colX.set(c, colCursor)
+      colCursor += w / 2 + COL_GAP
+    }
+    for (let i = 0; i < n; i++) pos[i].x = colX.get(colOf[i])!
+
+    // 行：同层 y 严格相等，行高取该行最高节点
+    const byLevel = new Map<number, number[]>()
+    graph.nodes.forEach((node, i) => {
+      const arr = byLevel.get(node.level)
+      if (arr) arr.push(i)
+      else byLevel.set(node.level, [i])
+    })
+    let rowCursor = 0
+    for (const lv of [...byLevel.keys()].sort((a, b) => a - b)) {
+      const members = byLevel.get(lv)!
+      const h = Math.max(...members.map((i) => boxes[i].hh)) * 2
+      rowCursor += h / 2
+      for (const i of members) pos[i].y = rowCursor
+      rowCursor += h / 2 + ROW_GAP
     }
 
     let minX = Infinity
