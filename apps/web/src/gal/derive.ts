@@ -72,7 +72,24 @@ function setNodeId(objects: GalObject[], omega: GalSet): string | null {
 }
 
 /**
- * 结构伴生边（U3）——**操作 = 结果对象 + 结构伴生**：
+ * 映射类型 → 箭头形状（DIAGRAM_SPEC §1.6）：
+ *   满射 `↠`（双箭头）· 单射 `↪`（尾钩）· 同构（两者都要）。
+ *
+ * `isInjective` / `isSurjective` 可能为 `null`（超出可判定范围），
+ * 那时退回普通箭头——**不猜**。
+ */
+export function arrowOf(m: { isInjective: boolean | null; isSurjective: boolean | null }):
+  | 'injective'
+  | 'surjective'
+  | 'iso'
+  | undefined {
+  if (m.isInjective && m.isSurjective) return 'iso'
+  if (m.isSurjective) return 'surjective'
+  if (m.isInjective) return 'injective'
+  return undefined
+}
+
+/** 结构伴生边（U3）——**操作 = 结果对象 + 结构伴生**：
  * 一个操作在长出结果节点的同时，也长出了它和旧对象之间的那条**映射箭头**。
  *
  * | 操作 | 伴生箭头 |
@@ -120,7 +137,15 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
     if (op === 'quotient') {
       const g = parentOf(o, 'domain')
       if (g && g !== o.id) {
-        edges.push({ id: `${g}->${o.id}:pi`, kind: 'map', from: g, to: o.id, label: 'π' })
+        // 自然投影是**满射**（课本写 `π : G ↠ G/N`）
+        edges.push({
+          id: `${g}->${o.id}:pi`,
+          kind: 'map',
+          from: g,
+          to: o.id,
+          label: 'π',
+          arrow: 'surjective',
+        })
         consumed.add(o.id)
       }
       continue
@@ -129,12 +154,14 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
     if (op === 'directProduct') {
       const factors = o.sources.filter((s) => nodeIds.has(s)).slice(0, 2)
       factors.forEach((f, i) => {
+        // 积投影是**满射**（`π₁ : A × B ↠ A`）
         edges.push({
           id: `${o.id}->${f}:proj${i}`,
           kind: 'map',
           from: o.id,
           to: f,
           label: i === 0 ? 'π₁' : 'π₂',
+          arrow: 'surjective',
         })
       })
       if (factors.length > 0) consumed.add(o.id)
@@ -154,12 +181,27 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
       if (!m) continue
       const dom = groupNodeId(objects, m.domain)
       if (dom) {
-        edges.push({ id: `${dom}->${o.id}:pi`, kind: 'map', from: dom, to: o.id, label: 'π' })
+        edges.push({
+          id: `${dom}->${o.id}:pi`,
+          kind: 'map',
+          from: dom,
+          to: o.id,
+          label: 'π',
+          arrow: 'surjective',
+        })
       }
       if (m.isSurjective) {
         const cod = groupNodeId(objects, m.codomain)
         if (cod && cod !== o.id) {
-          edges.push({ id: `${o.id}->${cod}:iso`, kind: 'map', from: o.id, to: cod, label: '≅' })
+          // 第一同构的结论本身就是**同构**（双箭头 + 尾钩）
+          edges.push({
+            id: `${o.id}->${cod}:iso`,
+            kind: 'map',
+            from: o.id,
+            to: cod,
+            label: '≅',
+            arrow: 'iso',
+          })
         }
       }
       consumed.add(o.id)
@@ -170,12 +212,14 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
     if (!isSubgroupResult) continue
     const parent = parentOf(o, op === 'image' ? 'codomain' : 'domain')
     if (parent && parent !== o.id) {
+      // 包含是**单射**（`i : im φ ↪ H`）
       edges.push({
         id: `${o.id}->${parent}:incl`,
         kind: 'map',
         from: o.id,
         to: parent,
         label: '↪',
+        arrow: 'injective',
       })
       consumed.add(o.id)
     }
@@ -264,12 +308,16 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       const home = omegaHome.get(s)
       const size = o.value.type === 'set' ? o.value.set.members.length : 0
       if (home && home !== o.id) {
+        // 轨道 **等于** Ω 时标签写 `=`（传递）——那其实是"相等"，
+        // 所以画成同构箭头（既单又满）；否则是严格的子集包含 → 单射。
+        const same = size > 0 && size === src.value.action.n
         edges.push({
           id: `${o.id}->${home}:incl`,
           kind: 'map',
           from: o.id,
           to: home,
-          label: size > 0 && size === src.value.action.n ? '=' : '↪',
+          label: same ? '=' : '↪',
+          arrow: same ? 'iso' : 'injective',
         })
       }
       consumed.add(o.id)
@@ -313,7 +361,16 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
     const from = groupNodeId(objects, o.value.map.domain)
     const to = groupNodeId(objects, o.value.map.codomain)
     if (!from || !to || !ids.has(from) || !ids.has(to)) continue
-    edges.push({ id: `map:${o.id}`, kind: 'map', from, to, label: o.id, objectId: o.id })
+    edges.push({
+      id: `map:${o.id}`,
+      kind: 'map',
+      from,
+      to,
+      label: o.id,
+      objectId: o.id,
+      // 用户画的映射：箭头形状按它**实际的**单 / 满 / 同构来（DIAGRAM_SPEC §1.6）
+      arrow: arrowOf(o.value.map),
+    })
   }
 
   // 去重（同一 from→to 只留一条；结构伴生优先于来源线）

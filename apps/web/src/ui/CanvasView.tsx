@@ -38,6 +38,17 @@ const MAP_EDGE = '#2C2C2A'
 const ALONGSIDE_EDGE = '#4A6FA5'
 const PICK_STROKE = '#C2410C'
 
+/**
+ * 边的视觉族。**箭头颜色必须与线色一致**——从前的 marker 颜色写死在定义里，
+ * 于是蓝灰的伴生边配了一个深色箭头；拆成四族后各归各的。
+ */
+const EDGE_STYLES = [
+  { id: 'prov', color: PROV },
+  { id: 'action', color: ACTION_EDGE },
+  { id: 'alongside', color: ALONGSIDE_EDGE },
+  { id: 'map', color: MAP_EDGE },
+] as const
+
 interface Pt {
   x: number
   y: number
@@ -286,6 +297,46 @@ export function CanvasView({
       }))
       .sort((a, b) => a.x - b.x)
 
+    // ── 行内相邻约束：水平箭头不许从无关的对象身上穿过 ────────
+    //
+    // "对象落在格点上、箭头只是注解"有个推论：**箭头的路径上不该有别的对象**
+    // （DIAGRAM_SPEC §1.2）。竖直方向已由"不许跨过同列节点"保证；水平方向
+    // 这里补上——**同层的显式映射边**（`φ : G → H`）两端之间不许夹别的组，
+    // 夹着的组整体挪到该行末尾。
+    //
+    // 场景（真截图抓到的）：画布上同时有 `C₆ ──φ──▶ C₃` 与另一个无关的输入对象
+    // `D₄`。两者同层（都是输入），`D₄` 若排在 φ 的两端之间，箭头就从它身上穿过去。
+    const levelOfNode = (i: number) => graph.nodes[i].level
+    const horizontalPairs: [number, number][] = []
+    for (const e of graph.edges) {
+      // 只有**用户画的映射**才算水平关系：
+      // 结构伴生（π / ↪）是竖直的，作用线也是竖直的，`≅` 是对角的。
+      if (e.kind !== 'map' || !e.objectId) continue
+      const i = idx.get(e.from)
+      const j = idx.get(e.to)
+      if (i === undefined || j === undefined || i === j) continue
+      if (levelOfNode(i) !== levelOfNode(j)) continue // 同层才画得成水平
+      horizontalPairs.push([i, j])
+    }
+    for (let iter = 0; horizontalPairs.length > 0 && iter < 6; iter++) {
+      const slot = new Map<number, number>()
+      groupList.forEach((g, k) => slot.set(find(g.members[0]), k))
+      const pushOut = new Set<number>()
+      for (const [i, j] of horizontalPairs) {
+        const a0 = slot.get(find(i))
+        const b0 = slot.get(find(j))
+        if (a0 === undefined || b0 === undefined || a0 === b0) continue
+        const lo = Math.min(a0, b0)
+        const hi = Math.max(a0, b0)
+        for (let k = lo + 1; k < hi; k++) pushOut.add(k)
+      }
+      if (pushOut.size === 0) break
+      const kept = groupList.filter((_, k) => !pushOut.has(k))
+      const moved = groupList.filter((_, k) => pushOut.has(k))
+      groupList.length = 0
+      groupList.push(...kept, ...moved)
+    }
+
     let nextCol = 0
     for (const grp of groupList) {
       let maxUsed = nextCol - 1
@@ -370,6 +421,9 @@ export function CanvasView({
     // **自环**（`G ↷ G`，如共轭作用 / 正则作用）要单独画一条弧——
     // 两端重合时"从节点边界出发的直线"没有意义。
     const LOOP_H = 34
+    /** 映射标签比对象**小一号**（DIAGRAM_SPEC §1.4，`\scriptstyle` ≈ 0.7 倍）*/
+    const labelFontOf = (i: number, j: number) =>
+      Math.min(13, Math.max(10, Math.min(screenBoxes[i].font, screenBoxes[j].font) * 0.68))
     const edgePts = graph.edges.map((e) => {
       const i = idx.get(e.from) ?? -1
       const j = idx.get(e.to) ?? -1
@@ -385,16 +439,32 @@ export function CanvasView({
           p2: { x: x1, y: y0 },
           d: `M ${x0} ${y0} C ${x0 - 8} ${y0 - LOOP_H} ${x1 + 8} ${y0 - LOOP_H} ${x1} ${y0}`,
           labelPt: { x: c.x, y: y0 - LOOP_H * 0.78 },
+          labelFont: labelFontOf(i, j),
         }
       }
       const p1 = edgeAnchor(screen[i], screenBoxes[i], screen[j])
       const p2 = edgeAnchor(screen[j], screenBoxes[j], screen[i])
+      const dx = p2.x - p1.x
+      const dy = p2.y - p1.y
+      const len = Math.hypot(dx, dy) || 1
+      // ── 标签摆位只有一条规则：**沿行进方向的左侧**（tikz-cd 的 `auto`，DIAGRAM_SPEC §1.5）
+      //
+      // 屏幕坐标 y 向下，"方向 (dx,dy) 的左侧" = 法向 (dy, −dx)：
+      // 右向 → 上方 · 下向 → 右方 · 左向 → 下方 · 上向 → 左方。
+      // 不必为四个方向各记一条规则，也不必按几何猜（`π` 与 `≅` 就不会再挤在一起）。
+      const nx = dy / len
+      const ny = -dx / len
+      // 沿箭头方向走 **30%** 处再往左侧让开——多条箭头汇聚到同一节点时
+      // （第二同构定理里有五条 `↪` 都指向 D₄），中点标签会糊成一团。
+      const bx = p1.x + dx * 0.3
+      const by = p1.y + dy * 0.3
+      const LABEL_OFF = 9
       return {
         p1,
         p2,
         d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`,
-        // 标签放 **30% 处**（靠起点）：多条箭头汇聚到同一节点时中点会糊成一团
-        labelPt: { x: p1.x + (p2.x - p1.x) * 0.3, y: p1.y + (p2.y - p1.y) * 0.3 },
+        labelPt: { x: bx + nx * LABEL_OFF, y: by + ny * LABEL_OFF },
+        labelFont: labelFontOf(i, j),
       }
     })
 
@@ -461,30 +531,73 @@ export function CanvasView({
         }}
       >
         <defs>
-          {[
-            { id: 'arrow-prov', color: PROV },
-            { id: 'arrow-action', color: ACTION_EDGE },
-            { id: 'arrow-map', color: MAP_EDGE },
-          ].map((m) => (
-            <marker
-              key={m.id}
-              id={m.id}
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path
-                d="M2 1L8 5L2 9"
-                fill="none"
-                stroke={m.color}
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </marker>
+          {/*
+            箭头**形状**编码映射类型（DIAGRAM_SPEC §1.6）。课本里
+            `G ↠ G/N`、`im φ ↪ H`、`G/ker φ ≅ im φ` 一眼可分，
+            因为三种形状分别承担定理的三个断言（满 / 单 / 双）：
+              · `-head` 一般同态（V 形）
+              · `-surj` 满射：**双箭头**（两个 V 叠放）
+              · `-hook` 单射：**尾部竖钩**（挂在 markerStart 上，`↪`）
+            同构 = 双箭头 + 尾钩，两件一起用。
+          */}
+          {EDGE_STYLES.map((st) => (
+            <g key={st.id}>
+              <marker
+                id={`${st.id}-head`}
+                viewBox="0 0 10 10"
+                refX="9"
+                refY="5"
+                markerWidth="7"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path
+                  d="M2 1L8 5L2 9"
+                  fill="none"
+                  stroke={st.color}
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </marker>
+              {/* 满射：双箭头 */}
+              <marker
+                id={`${st.id}-surj`}
+                viewBox="0 0 14 10"
+                refX="11"
+                refY="5"
+                markerWidth="10"
+                markerHeight="7"
+                orient="auto-start-reverse"
+              >
+                <path
+                  d="M6 1L11 5L6 9M1 1L6 5L1 9"
+                  fill="none"
+                  stroke={st.color}
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </marker>
+              {/* 单射：尾部钩子（`orient` 取 auto-start-reverse 才能当 markerStart 用）*/}
+              <marker
+                id={`${st.id}-hook`}
+                viewBox="0 0 8 10"
+                refX="4"
+                refY="5"
+                markerWidth="8"
+                markerHeight="10"
+                orient="auto-start-reverse"
+              >
+                <path
+                  d="M4 1.5L4 8.5"
+                  fill="none"
+                  stroke={st.color}
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </marker>
+            </g>
           ))}
         </defs>
 
@@ -505,11 +618,22 @@ export function CanvasView({
                 : e.kind === 'map'
                   ? ALONGSIDE_EDGE
                   : PROV
-          const marker =
-            e.kind === 'action' ? 'arrow-action' : e.kind === 'map' ? 'arrow-map' : 'arrow-prov'
-          // 标签放在箭头的 **30% 处**（靠近起点）而不是中点：
-          // 多条箭头汇聚到同一个节点时（第二同构定理里 5 条 `↪` 都指向 D₄），
-          // 中点标签会挤成一团糊掉；靠起点放能自然散开。
+          const styleKey =
+            e.kind === 'action'
+              ? 'action'
+              : isExplicitMap
+                ? 'map'
+                : e.kind === 'map'
+                  ? 'alongside'
+                  : 'prov'
+          // 箭头**形状**编码映射类型（DIAGRAM_SPEC §1.6）：
+          // 满射 → 双箭头；单射 → 尾部钩子；同构 → 两者一起（`G/ker φ ≅ im φ`）。
+          const surj = e.arrow === 'surjective' || e.arrow === 'iso'
+          const inj = e.arrow === 'injective' || e.arrow === 'iso'
+          const endMarker = `url(#${styleKey}-${surj ? 'surj' : 'head'})`
+          const startMarker = inj ? `url(#${styleKey}-hook)` : undefined
+          // 标签位置在 `view.edgePts` 里按**沿行进方向左侧**算好（§1.5），
+          // 字号比对象小一号（§1.4）。
           const mid = pts.labelPt
           // 箭头背后的对象（映射 / 作用）→ 可点选，于是能"点箭头 → ker / im"
           const selectable = !!e.objectId
@@ -546,15 +670,16 @@ export function CanvasView({
                           : 1.7
                 }
                 strokeDasharray={e.kind === 'provenance' ? '5 4' : undefined}
-                markerEnd={`url(#${marker})`}
+                markerEnd={endMarker}
+                markerStart={startMarker}
               />
               {e.label && (
                 <text
                   x={mid.x}
-                  y={mid.y - 6}
+                  y={mid.y}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fontSize={12}
+                  fontSize={pts.labelFont}
                   fill={isSelected ? PICK_STROKE : stroke}
                   stroke="#fff"
                   strokeWidth={3.5}
