@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge } from '../gal/types'
-import { gridKey, nearestGridPoint, snapToGrid } from '../gal/grid'
+import { gridOf, gridSpec, quantize, snapToGrid, visibleGridPoints, type GridSpec } from '../gal/grid'
 import { labelTexHtml, measureTex } from './Tex'
 
 /** 基础留白（viewBox 单位） */
@@ -265,7 +265,14 @@ export function CanvasView({
   /** 这一次手势算不算"拖动"——算的话要把紧随其后的 click 吞掉（否则一拖就选中/取消选中） */
   const suppressClick = useRef(false)
   /** 当前视图（供原生 wheel 监听与指针换算读取） */
-  const viewRef = useRef<{ k: number; tx: number; ty: number; gridXs: number[]; gridYs: number[]; world: Pt[]; gridAt: string[] } | null>(null)
+  const viewRef = useRef<{
+    k: number
+    tx: number
+    ty: number
+    grid: GridSpec
+    world: Pt[]
+    gridAt: string[]
+  } | null>(null)
 
   useEffect(() => {
     const el = wrapRef.current
@@ -472,7 +479,6 @@ export function CanvasView({
       colX.set(c, colCursor)
       colCursor += w / 2 + COL_GAP
     }
-    for (let i = 0; i < n; i++) pos[i].x = colX.get(colOf[i])!
 
     // 行：同层 y 严格相等，行高取该行最高节点
     const byLevel = new Map<number, number[]>()
@@ -489,17 +495,34 @@ export function CanvasView({
       const h = Math.max(...members.map((i) => boxes[i].hh)) * 2
       rowCursor += h / 2
       rowCenterY.set(lv, rowCursor)
-      for (const i of members) pos[i].y = rowCursor
       rowCursor += h / 2 + ROW_GAP
     }
 
-    // ── 格点（DIAGRAM_SPEC §1.1）─────────────────────────────────
+    // ── 格点：把行列中心**量化到一条规则网格**上（DIAGRAM_SPEC §1.1）──────
     //
-    // 「对象落在格点上」里的**格点不是抽象约束，而是画布上真实的点**：
-    // 列中心 × 行中心的交点。画出来，用户就知道对象能停在哪；
-    // 拖动时松手就往最近的空格点吸附（见 gal/grid.ts）。
-    const gridXs = colIds.map((c) => colX.get(c)!)
-    const gridYs = rowLevels.map((lv) => rowCenterY.get(lv)!)
+    // 网格是一条**无限延伸**的规则点阵（像坐标纸）：铺满整个画布，pan / zoom 到多远都有。
+    // 自动布局算出的行列中心先**量化到网格线上**，对象才真的落在格点上；
+    // 量化顺带把不均匀的列宽差拉平成等距（DIAGRAM_SPEC §2.2 那条"节点宽度参与布局"）。
+    const spec: GridSpec = gridSpec(
+      colIds.map((c) => colX.get(c)!),
+      rowLevels.map((lv) => rowCenterY.get(lv)!),
+    )
+    quantize(
+      colIds.map((c) => colX.get(c)!),
+      spec.x0,
+      spec.stepX,
+    ).forEach((x, i) => colX.set(colIds[i], x))
+    quantize(
+      rowLevels.map((lv) => rowCenterY.get(lv)!),
+      spec.y0,
+      spec.stepY,
+    ).forEach((y, i) => rowCenterY.set(rowLevels[i], y))
+
+    for (let i = 0; i < n; i++) pos[i].x = colX.get(colOf[i])!
+    for (const lv of rowLevels) {
+      const y = rowCenterY.get(lv)!
+      for (const i of byLevel.get(lv)!) pos[i].y = y
+    }
 
     // ── 包围盒：用**自动布局**的位置算 ──────────────────────────
     //
@@ -544,7 +567,9 @@ export function CanvasView({
     const usableH = Math.max(VH - padT - padB, 160)
 
     // 自动 fit 只是视图变换的**初值**；用户一旦 pan / zoom，就听用户的。
-    const autoK = Math.min(usableW / worldW, usableH / worldH, 1)
+    // 上限 1.4（而不是 1）：只写了三五个对象的图本来会缩在画布中央一小块，
+    // 稍微放大一点才看得清符号——反正用户随时能滚轮调。
+    const autoK = Math.min(usableW / worldW, usableH / worldH, 1.4)
     const autoTx = padL + (usableW - worldW * autoK) / 2 - minX * autoK
     const autoTy = padT + (usableH - worldH * autoK) / 2 - minY * autoK
     const k = clampK(userView?.k ?? autoK)
@@ -623,13 +648,17 @@ export function CanvasView({
       autoK,
       /** 世界坐标（拖动起点与吸附都以它为准） */
       world: pos,
-      gridXs,
-      gridYs,
+      /** 规则网格：无限延伸，拖动吸附与格点渲染都按它来 */
+      grid: spec,
+      /** 当前视口对应的世界矩形（按它现算可见格点） */
+      worldBox: { x0: -tx / k, y0: -ty / k, x1: (VW - tx) / k, y1: (VH - ty) / k },
+      /** 可见范围内的格点（世界坐标；网格无限，所以按视口现算） */
+      gridPts: visibleGridPoints(
+        { x0: -tx / k, y0: -ty / k, x1: (VW - tx) / k, y1: (VH - ty) / k },
+        spec,
+      ),
       /** 每个节点落在哪个格点（`col:row`）——判"这个格点被占了"用 */
-      gridAt: pos.map((p) => {
-        const g = nearestGridPoint(p.x, p.y, gridXs, gridYs)
-        return gridKey(g.col, g.row)
-      }),
+      gridAt: pos.map((p) => gridOf(p.x, p.y, spec)),
     }
   }, [graph, pinned, drag, userView])
 
@@ -640,8 +669,7 @@ export function CanvasView({
           k: view.k,
           tx: view.tx,
           ty: view.ty,
-          gridXs: view.gridXs,
-          gridYs: view.gridYs,
+          grid: view.grid,
           world: view.world,
           gridAt: view.gridAt,
         }
@@ -786,7 +814,7 @@ export function CanvasView({
           suppressClick.current = true
           const i = graph.nodes.findIndex((nd) => nd.id === gs.id)
           const taken = view.gridAt.filter((_, t) => t !== i)
-          const hit = snapToGrid(gs.wx + d.dx, gs.wy + d.dy, view.gridXs, view.gridYs, taken)
+          const hit = snapToGrid(gs.wx + d.dx, gs.wy + d.dy, view.grid, taken)
           setPinned((prev) => ({ ...prev, [gs.id]: { x: hit.x, y: hit.y } }))
         }
         dragRef.current = null
@@ -809,7 +837,7 @@ export function CanvasView({
     const i = graph.nodes.findIndex((nd) => nd.id === drag.id)
     if (i < 0) return null
     const taken = view.gridAt.filter((_, t) => t !== i)
-    const hit = snapToGrid(gs.wx + drag.dx, gs.wy + drag.dy, view.gridXs, view.gridYs, taken)
+    const hit = snapToGrid(gs.wx + drag.dx, gs.wy + drag.dy, view.grid, taken)
     return {
       x: view.tx + hit.x * view.k,
       y: view.ty + hit.y * view.k,
@@ -819,8 +847,6 @@ export function CanvasView({
 
   const pinnedCount = Object.keys(pinned).length
   const zoomPct = Math.round((view.k / view.autoK) * 100)
-  /** 格点数量控制在可读范围（大图上不铺满屏幕） */
-  const showGrid = view.gridXs.length * view.gridYs.length <= 160
 
 
   return (
@@ -917,22 +943,20 @@ export function CanvasView({
           ))}
         </defs>
 
-        {/* 格点（DIAGRAM_SPEC §1.1）：**列中心 × 行中心的交点**。
-            「对象落在格点上」里的格点不是抽象约束，就是这些小点——
-            拖动节点时松手会吸附到离它最近的空格点上。 */}
-        {showGrid && (
+        {/* 格点（DIAGRAM_SPEC §1.1）：一条**无限延伸**的规则网格，像坐标纸一样铺满画布。
+            自动布局的行列中心量化到它上面，拖动松手也吸附到它上面——
+            所以"对象落在格点上"在两条路径上都成立。 */}
+        {view.gridPts.length > 0 && (
           <g className="grid" aria-hidden="true">
-            {view.gridYs.map((gy, r) =>
-              view.gridXs.map((gx, c) => (
-                <circle
-                  key={`${c}-${r}`}
-                  className="grid-dot"
-                  cx={view.tx + gx * view.k}
-                  cy={view.ty + gy * view.k}
-                  r={2.8}
-                />
-              )),
-            )}
+            {view.gridPts.map((p) => (
+              <circle
+                key={`${p.col}:${p.row}`}
+                className="grid-dot"
+                cx={view.tx + p.x * view.k}
+                cy={view.ty + p.y * view.k}
+                r={2.6}
+              />
+            ))}
           </g>
         )}
 
@@ -962,11 +986,20 @@ export function CanvasView({
                   ? 'alongside'
                   : 'prov'
           // 箭头**形状**编码映射类型（DIAGRAM_SPEC §1.6）：
-          // 满射 → 双箭头；单射 → 尾部钩子；同构 → 两者一起（`G/ker φ ≅ im φ`）。
-          const surj = e.arrow === 'surjective' || e.arrow === 'iso'
-          const inj = e.arrow === 'injective' || e.arrow === 'iso'
+          //   满射 → **双箭头** `↠`（两个尖都朝终点）
+          //   单射 → **尾部钩子** `↪`
+          //   同构 → **双向箭头**（双射：两端各一个尖）—— 同构必有逆，方向是对称的
+          const surj = e.arrow === 'surjective'
+          const inj = e.arrow === 'injective'
+          const iso = e.arrow === 'iso'
           const endMarker = `url(#${styleKey}-${surj ? 'surj' : 'head'})`
-          const startMarker = inj ? `url(#${styleKey}-hook)` : undefined
+          const startMarker = iso
+            ? // 起点端也用普通箭头：`orient="auto-start-reverse"` 会把它翻向外侧，
+              // 于是这条边两端都有箭头尖 = 双向
+              `url(#${styleKey}-head)`
+            : inj
+              ? `url(#${styleKey}-hook)`
+              : undefined
           // 标签位置在 `view.edgePts` 里按**沿行进方向左侧**算好（§1.5），
           // 字号比对象小一号（§1.4）。
           const mid = pts.labelPt
