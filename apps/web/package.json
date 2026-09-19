@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify": "vite build --ssr verify/run.ts --outDir .tmp-verify/vout --logLevel warn && node .tmp-verify/vout/run.js",
+    "verify:e2e": "node verify/e2e/layout-spec.mjs && node verify/e2e/first-iso-square.mjs && node verify/e2e/third-iso.mjs"
   },
   "dependencies": {
     "@groupviz/core": "^2.3.0",

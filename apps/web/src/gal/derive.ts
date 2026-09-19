@@ -1,10 +1,15 @@
 import type { Group } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from './types'
-import { canvasShape, type GalSet } from './value'
+import { canvasShape, isCanvasValue, type GalSet } from './value'
 
 /**
  * 派生深度 = 依赖链长度。输入对象为 0，其派生结果为 1，再派生为 2……
  * 布局时 level 小者在上（与子群格「大在上」的约定同向）。
+ *
+ * **不上画布的对象不占行**（映射 / 作用 / 子群集 / 数值）：它们是"关系"或"表格"，
+ * 不是顶点。若让它们也加一层，图里就会出现**空行**——第一同构定理的正方形
+ * 会摊成三行（`G`、`H` 一行 ‖ 空一行 ‖ 商群与像一行），而课本里它是两行。
+ * 所以它们的层级贡献 = 自己来源的层级（不加一），让顶点图的行距等于它的拓扑距离。
  */
 export function computeLevels(objects: GalObject[]): Map<string, number> {
   const byId = new Map(objects.map((o) => [o.id, o]))
@@ -21,7 +26,8 @@ export function computeLevels(objects: GalObject[]): Map<string, number> {
     }
     const next = new Set(stack)
     next.add(id)
-    const lv = 1 + Math.max(...o.sources.map((s) => visit(s, next)))
+    const below = Math.max(...o.sources.map((s) => visit(s, next)))
+    const lv = isCanvasValue(o.value) ? 1 + below : below
     memo.set(id, lv)
     return lv
   }
@@ -148,6 +154,22 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
         })
         consumed.add(o.id)
       }
+      // **商的第二个参数是母群的子群**——求值时就校验过（`asCoreSubgroup` 不过则报错），
+      // 所以这里照直画 `Y ↪ X`。第三同构定理的 `K/N ↪ G/N` 靠这一条：
+      // 没有它，那个梯形少一条腰（而 `KN` 自己不是子群升级来的对象，
+      // 它的 `↪` 不会由别处产生）。
+      // 重复情形（`商(G, N)` 且 N 自己是 `闭包` 等子群升级对象）会被末尾的去重收掉。
+      const second = o.sources.map((s) => byId.get(s))[1]
+      if (g && second?.value.type === 'group' && nodeIds.has(second.id)) {
+        edges.push({
+          id: `${second.id}->${g}:incl`,
+          kind: 'map',
+          from: second.id,
+          to: g,
+          label: '↪',
+          arrow: 'injective',
+        })
+      }
       continue
     }
 
@@ -169,8 +191,11 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
     }
 
     if (op === 'firstIso') {
-      // 第一同构定理的三条线：`G --φ--> H`（用户画的）+ 工具补的两条：
-      //   `G --π--> G/ker φ` 与 `G/ker φ --≅--> im φ`（满射时 im φ = H）
+      // 第一同构定理的边：`G --φ--> H`（用户画的）+ 工具补出来的：
+      //   `G --π--> G/ker φ`（满射）与 `G/ker φ --≅--> ?`
+      // 那个 `?` 取决于像占不占满靶群 —— 这正是三角形与正方形的分岔：
+      //   满射   `im φ = H`      → 直指靶群节点（三角形）
+      //   非满射 `im φ ⊊ H`      → 指工具补的 `im φ` 顶点（正方形）
       const m = (() => {
         for (const src of o.sources) {
           const hit = byId.get(src)
@@ -190,27 +215,39 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           arrow: 'surjective',
         })
       }
-      if (m.isSurjective) {
-        const cod = groupNodeId(objects, m.codomain)
-        if (cod && cod !== o.id) {
-          // 第一同构的结论本身就是**同构**（双箭头 + 尾钩）
-          edges.push({
-            id: `${o.id}->${cod}:iso`,
-            kind: 'map',
-            from: o.id,
-            to: cod,
-            label: '≅',
-            arrow: 'iso',
-          })
-        }
+      const imSize = m.image?.length ?? 0
+      const target = (() => {
+        // 满射：像 = 靶群，直接连到靶群那个顶点
+        if (imSize === 0 || imSize === m.codomain.order) return groupNodeId(objects, m.codomain)
+        // 非满射：连到工具为**同一个映射**补出来的那个 `im φ` 顶点
+        //（`firstIsoImage` 顶点的 sources 也是这个映射，所以按"共享来源"认亲）
+        return (
+          objects.find(
+            (x) => x.opId === 'firstIsoImage' && x.sources.some((s) => o.sources.includes(s)),
+          )?.id ?? null
+        )
+      })()
+      if (target && target !== o.id) {
+        // 第一同构的结论本身就是**同构**（双向箭头）
+        edges.push({
+          id: `${o.id}->${target}:iso`,
+          kind: 'map',
+          from: o.id,
+          to: target,
+          label: '≅',
+          arrow: 'iso',
+        })
       }
       consumed.add(o.id)
       continue
     }
 
-    const isSubgroupResult = SUBGROUP_RESULT_OPS.has(op) || op === 'kernel' || op === 'image'
+    // `im φ`（第一同构定理补出来的像）也是**单射进靶群**——下面的通用包含分支负责它，
+    // 只要把母群取成映射的 codomain。
+    const wantsCodomain = op === 'image' || op === 'firstIsoImage'
+    const isSubgroupResult = SUBGROUP_RESULT_OPS.has(op) || op === 'kernel' || wantsCodomain
     if (!isSubgroupResult) continue
-    const parent = parentOf(o, op === 'image' ? 'codomain' : 'domain')
+    const parent = parentOf(o, wantsCodomain ? 'codomain' : 'domain')
     if (parent && parent !== o.id) {
       // 包含是**单射**（`i : im φ ↪ H`）
       edges.push({

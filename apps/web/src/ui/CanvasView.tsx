@@ -355,31 +355,59 @@ export function CanvasView({
       }
       return r
     }
-    //
-    // 合并用**贪心**：短跨度优先，且**不许跨过**已在同一列的节点。
-    // 否则两个不同来源的竖直边会把无关节点串成一列，长箭头从中间的节点身上穿过去
-    // ——默认示范里 `Stab ↪ S₄` 就会从 `S₄/ker φ` 中间穿过（真截图里抓到的）。
+    /**
+     * 竖直约束的**优先级** —— 冲突时谁让位。
+     *
+     * `π` 系是课本站位最硬的规范（商映射只能竖直画），`↪` 是软的：
+     * 包含箭头斜着画完全正常（课本里两种都有）。所以 π 先占列，
+     * `↪` 挤不进去就自己变斜线。
+     */
+    const VERTICAL_PRIORITY: Record<string, number> = { 'π': 0, 'π₁': 0, 'π₂': 0, '=': 0, '↪': 1 }
+
     const members: number[][] = Array.from({ length: n }, (_, i) => [i])
     const lvl = (i: number) => graph.nodes[i].level
-    const verticals: { i: number; j: number; gap: number }[] = []
+    const verticals: { i: number; j: number; gap: number; prio: number }[] = []
     for (const e of graph.edges) {
       if (!isVerticalConstraint(e)) continue
       const i = idx.get(e.from)
       const j = idx.get(e.to)
       if (i === undefined || j === undefined || i === j) continue
-      verticals.push({ i, j, gap: Math.abs(lvl(i) - lvl(j)) })
+      // **同层的边不参与列合并**：同层就是要画成水平箭头的（`N ↪ K` 在
+      // 第三同构里就是矩形的上边）。把它当竖直约束没有意义，反而会把
+      // 不相干的节点拉进同一组、挤出一堆空列。
+      if (lvl(i) === lvl(j)) continue
+      verticals.push({
+        i,
+        j,
+        gap: Math.abs(lvl(i) - lvl(j)),
+        prio: VERTICAL_PRIORITY[e.label ?? ''] ?? 1,
+      })
     }
-    verticals.sort((a, b) => a.gap - b.gap)
+    verticals.sort((a, b) => a.prio - b.prio || a.gap - b.gap)
+
+    // 合并的**合法性判据**：合并之后，任何一条竖直约束边的两端之间都不许夹着
+    // 别的成员 —— 否则那条边的箭头会从中间那个对象身上穿过去。
+    //
+    // 只看"当前这一条边"不够（那是第一版的错）：`K ↪ G` 与 `G ↠ G/N` 单看各自都干净，
+    // 但把 `K` 合进 `G` 那一组之后，`G ↠ G/N` 就跨过了 `K`。判据必须是
+    // **合并后整组**的全局检查。真图（第三同构 `D₄ ⊵ ⟨r⟩ ⊵ ⟨r²⟩`）里
+    // `G ↠ G/N` 就是这么从 `⟨r²⟩` 身上穿过去的。
+    const pairs = verticals.map(({ i, j }) => [i, j] as [number, number])
     for (const { i, j } of verticals) {
       const ri = find(i)
       const rj = find(j)
       if (ri === rj) continue
-      const lo = Math.min(lvl(i), lvl(j))
-      const hi = Math.max(lvl(i), lvl(j))
-      // 中间夹着别的节点 → 这条边会穿过去，不合并（让它走自己的列）
-      if ([...members[ri], ...members[rj]].some((k) => lvl(k) > lo && lvl(k) < hi)) continue
+      const merged = [...members[ri], ...members[rj]]
+      const has = new Set(merged)
+      const blocked = pairs.some(([u, v]) => {
+        if (!has.has(u) || !has.has(v)) return false
+        const lo = Math.min(lvl(u), lvl(v))
+        const hi = Math.max(lvl(u), lvl(v))
+        return merged.some((k) => lvl(k) > lo && lvl(k) < hi)
+      })
+      if (blocked) continue
       uf[ri] = rj
-      members[rj] = [...members[ri], ...members[rj]]
+      members[rj] = merged
       members[ri] = []
     }
 

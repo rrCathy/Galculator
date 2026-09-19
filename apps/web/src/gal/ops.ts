@@ -363,6 +363,41 @@ function asCoreSubgroup(group: Group, elements: GroupElement[]): Subgroup | null
   return { ...checked, isNormal }
 }
 
+/**
+ * 元素在**语义上**的键（G4）。
+ *
+ * 群元素 id 只在**它自己的母群里**有意义——core 的商群元素 id 是
+ * `qcoset-<i>`，`i` 是它**在自己母群里的陪集序**（按陪集内最小元素 id 的字典序排）。
+ * 于是 `K/N` 的第 i 个陪集与 `G/N` 的第 i 个陪集**通常不是同一个陪集**，
+ * id 同名纯属两边各自编号的巧合。
+ *
+ * 所以跨母群比较**不能用 id**，要用陪集的**成员集合**——core 在商群元素上留了
+ * `cosetMemberLabels`，正好是这个语义。普通元素退回 id 本身。
+ */
+function elementSemanticKey(e: GroupElement): string {
+  const cl = e.cosetMemberLabels
+  if (cl && cl.length > 0) return `coset:${[...cl].sort().join(',')}`
+  return `elt:${e.id}`
+}
+
+/**
+ * 把一个元素集**翻译**到目标群里的对应元素（G4：第三同构定理 `(G/N)/(K/N)`）。
+ *
+ * 全部命中才返回——有一项对不上就 `null`。**不猜、不部分匹配**：
+ * 部分匹配出来的"子群"会让商群静静算错，比直接失败更糟。
+ */
+function alignElementSet(target: Group, els: GroupElement[]): GroupElement[] | null {
+  const byKey = new Map<string, GroupElement>()
+  for (const t of target.elements) byKey.set(elementSemanticKey(t), t)
+  const out: GroupElement[] = []
+  for (const e of els) {
+    const hit = byKey.get(elementSemanticKey(e))
+    if (!hit) return null
+    out.push(hit)
+  }
+  return out
+}
+
 /** 精确组合数（BigInt，避免 n 到 2000 量级时溢出）。 */
 function chooseExact(n: number, k: number): bigint {
   if (k < 0 || n < 0 || k > n) return 0n
@@ -754,8 +789,16 @@ export const OPS: OpDef[] = [
       if (!G) return fail('商需要第一个参数是群')
       const S = subgroupArgOf(a[1])
       if (!S) return fail('商需要第二个参数是子群', '可传元素集、恰含一个子群的子群集，或已是群对象的子群')
-      // 用 G 作母群校验：元素 id 不在 G 里 / 不封闭 / 无单位元 → null
-      const sub = asCoreSubgroup(G, S.elements)
+      // **跨商群对齐**（G4）：第二个参数是另一个商群时（`(G/N)/(K/N)`），
+      // 它的元素 id 是**那个商群母群**的编号，不能直接拿来在 G 里查——
+      // 实测直接查会"侥幸命中另一个陪集"（静默算错）或判定失败。
+      // 先在语义层（陪集成员集合）翻译成 G 的元素，再判定。
+      const aligned = alignElementSet(G, S.elements)
+      if (!aligned) {
+        return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的子群`, '要求含单位元且乘法封闭')
+      }
+      // 用 G 作母群校验：元素不在 G 里 / 不封闭 / 无单位元 → null
+      const sub = asCoreSubgroup(G, aligned)
       if (!sub) return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的子群`, '要求含单位元且乘法封闭')
       if (!sub.isNormal) {
         return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的正规子群`, '商群 G/N 要求 N ⊴ G')

@@ -48,11 +48,16 @@
 - `createGroupFromSymbol` 不吃裸符号 → 先过 `parseGroupNotation`。
 - core 的 `C_n` 是**加法群**（生成元 `a`、元素 `0..n-1`），课本写乘法 `r^k` → 本地 `resolveElementLoose` 三级回退（精确 → 生成元的幂 `r4`/`r^4` → 单生成元群单字母别名 `r`/`a`/`g` 互通）。
 - `subgroupStructureSymbol` 返回 TeX → 展示前必须过 `prettySymbol`。
+- **商群元素 id `qcoset-<i>` 的 `i` 只在自家母群里有意义**（= 陪集序，按陪集内最小元素 id 的字典序）。
+  `K/N` 的 1 号陪集在 `G/N` 里可能是 2 号 → 按 id 跨商群匹配会**静默命中另一个陪集**
+  （实测 9 组里 5 组"侥幸通过"、4 组报错——**概率性正确最危险**）。跨群比较要用
+  **`cosetMemberLabels`**（陪集成员标签）做语义键。
 - **写「core 没有 X」之前先 `grep` 一遍 `.d.ts`**（踩过：误以为共轭作用要自己实现）。
 
 ## 代码落点（apps/web/src/）
-- `gal/`：`value.ts` `ops.ts`（注册表 30 条：mechanism/primitive/recipe/impl/call/infix/params/arity/variadic/editor/result/run + `opsFor` + `paramAccepts`）`naming.ts` `compose.ts` `interaction.ts`（idle→selected→menu→pending/fill）`evalDef.ts`（五级分发）`build.ts` `derive.ts` `insights.ts` `tex.ts` `numeric.ts`
-- `ui/`：`CanvasView`（SVG 自绘 + 硬约束网格）`DockPanel` `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb` `ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex`
+- `gal/`：`value.ts` `ops.ts`（注册表 30 条：mechanism/primitive/recipe/impl/call/infix/params/arity/variadic/editor/result/run + `opsFor` + `paramAccepts`）`naming.ts` `compose.ts` `interaction.ts`（idle→selected→menu→pending/fill）`evalDef.ts`（五级分发）`build.ts`（含 `firstIsoObjects` 隐式补点）`derive.ts`（含 `arrowOf` / `alongsideEdges` / `computeLevels`）`insights.ts` `tex.ts` `numeric.ts` `grid.ts`
+- `ui/`：`CanvasView`（SVG 自绘 + 硬约束网格 + 视图变换 + 拖动吸附）`DockPanel` `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb` `ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex`
+- `verify/`：**回归线（入库）**——`suites/`（语义层，133 条断言）+ `e2e/`（真浏览器几何走查，42 条）+ `README.md`
 
 ### 项目内的坑
 - **「造」类操作不能用 `opsFor` 筛**（它要参数被填满）→ 遍历 `OPS` + `paramAccepts`。
@@ -61,7 +66,12 @@
 - 集合运算 `∩`/`·` 结果若**确是子群**则**升级**为真群对象（定理，非猜测）；∪/∖ 不升级（决策⑤针对手工造集合）。`stabilizers` 产出是 G 的子群 → `result:'group'`。
 - **KaTeX 后 DOM**：`S₄` 的 textContent 是 `S4` → 节点定位统一走 `<g class="gnode" data-label="S₄">`。
 - **`⟨⟩` 归一**只在**顶层（括号外）**改写，**实参位置一律不改**（`normalizeExpr(s, angle=false)`）；Ω 成员标签含逗号用**纯数字下标**寻址（`稳定子(A, 1)`）。
-- **布局列约束不许传染**：竖直约束（`π`/`π₁`/`π₂`/`↪`/`↷`）合并用**贪心**（短跨度优先）+ **不许跨过已在同列的节点**；判据按**边的语义**，不按几何猜。
+- **布局列约束不许传染**：竖直约束（`π`/`π₁`/`π₂`/`↪`/`=` 与 `↷`）合并用**贪心**（短跨度优先）
+  + **合并后整组**的全局穿行检查（组内**任何一条**竖直边的 level 区间里不许夹别的成员
+  ——只看当前这条边会漏：`K ↪ G` 与 `G ↠ G/N` 单看各自都干净，合完组后 `G ↠ G/N` 就跨过了 `⟨r²⟩`）。
+  **`π` 优先于 `↪`**、**同层边不参与列合并**。判据按**边的语义**，不按几何猜。
+- **不上画布的对象不占行**（`derive.ts` 的 `computeLevels`）：映射/作用/子群集/数值对自己下游顶点
+  **不加一**，否则图里留空行（第一同构正方形会摊成三行，课本是两行）。
 - **行内也要防传染**（2026-09-19）：同层的**显式映射边**两端之间不许夹列组（夹着的组挪到行末）——否则 `C₆ ──φ──▶ C₃` 中间夹个无关的 `D₄`，箭头从它身上穿过去。竖直方向有"不许跨过同列节点"，水平方向就靠这条。
 - **箭头形状 = marker**：`marker-end` 挂 `-surj`（满射双箭头）、`marker-start` 挂 `-hook`（单射尾钩，要 `orient="auto-start-reverse"`）、**同构 = 两端都挂 `-head`（双向箭头，因为同构是双射）**；marker 必须**按视觉族成套生成**（颜色写死在定义里会出现"蓝灰线配深色箭头"）。形状由 `derive.ts` 的 `arrowOf()` 从映射属性推，判不出**不猜**。
 - **竖直约束的标签集合**：`π`/`π₁`/`π₂`/`↪`/**`=`**（漏了 `=` 会让 Sylow III 的 `Orb = Ω` 横着跑、三层结构散掉）。`≅` 是对角、用户映射是水平，都不参与。
@@ -78,16 +88,23 @@
 - 集合构造（§6）：点击流与文本流 = 同一 `FilterSpec` AST 的两个前端。
 
 ## 进度（详见 docs/ROADMAP.md）
-U0–U6 ✅（注册表 / 输入框 / 径向菜单 / 浮层面板 / 映射构建器 / 结论层 / 交换图化 / 网格化 / 箭头形状）· **U7 ✅** Sylow III 的图 · **U10 ✅** 开放视图编辑（格点可见 · 缩放平移 · 拖动吸附钉住）· U8 工具条/群目录 · U9 集合构造器 · U11 宏。
-**DIAGRAM_SPEC §1 的六条硬规范已全部落地**（2026-09-19）。
+U0–U6 ✅ · **U7 ✅** Sylow III 的图 · **U10 ✅** 开放视图编辑 · **U12 ✅ 定理复现收口（2026-09-19）**
+——自动补 `im φ`（第一同构正方形）· 跨商群元素对齐（第三同构梯形）· 竖直穿行修复 · **回归线入库**。
+**七条教材定理全部完整复现** · DIAGRAM_SPEC §1 六条硬规范全部落地 · 八个缺口（G1/G3/G3b/G4/G5/G6/G7/G8）全清。
+未做：U8 工具条/群目录 · U9 集合构造器 · U11 宏 · U6 的 B/C（节点宽度解耦 / 画布分层）· 集合节点展开。
 
-## 已知缺口（体检挖出）
-| # | 缺口 | 挡住 |
-|---|---|---|
-| G4 | 商群的子群判定失败（两商群元素 id 体系不同）| 第三同构 |
-| G8 | 不自动补 `im φ` | 第一同构正方形 |
+## 验证线（回归线，2026-09-19 入库）
+- **`apps/web/verify/`**：语义层 `suites/{diagram,firstIso,thirdIso,algebra}.ts`（vite SSR 打包后 node 直跑）
+  + 几何层 `e2e/{layout-spec,first-iso-square,third-iso}.mjs`（playwright，读 DOM 坐标与 marker id）。
+  跑法 `pnpm --filter @galculator/web verify` / `verify:e2e`；坑见 `verify/README.md`。
+- 从前住在 `.tmp-verify/`（被 gitignore 忽略）→ **一次目录清理就丢了 363 条断言**。回归线是资产，不是临时物。
+- 期望值一律来自**数学**（手算的理论值），不从运行结果抄。
+- 写断言三坑：① 块注释里不能有"星号+斜杠"（`.tmp-*` 加斜杠会**提前终止注释**，报错却是
+  "Expected a semicolon" 且位置指向别处）② rolldown 对"模板串里的换行转义 + 多字节字符"与 U+2500
+  都报 `Invalid ...`（**连待在注释里也炸**）→ 验证脚本的输出装饰一律 ASCII ③ 几何判据比**轴向**
+  与**节点中心**（`.gnode-hit` 的 cx/cy），别比边端点（端点被节点尺寸裁过）。
 
 **教训：算得对 ≠ 画得对**（第二同构在修 G3 前阶全对，图上 `H∩N` 却是集合圆、包含箭头是虚线）。
 
 ## 遗留给未来
-自定义作用编辑器；伴生箭头还不是映射对象（不能对 π 做 ker/im）；陪集作用的轨道/稳定子分支；半直积 ⋊；**集合节点展开成轨道切块**（第 2 层密度）。
+自定义作用编辑器；伴生箭头还不是映射对象（不能对 π 做 ker/im）；陪集作用的轨道/稳定子分支；半直积 ⋊；**集合节点展开成轨道切块**（第 2 层密度）；**短正合列 / 五引理只清了形状障碍（G6），尚未实跑复现**；U8 工具条+群目录 · U9 集合构造器 · U11 宏。
