@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge } from '../gal/types'
+import { gridKey, nearestGridPoint, snapToGrid } from '../gal/grid'
 import { labelTexHtml, measureTex } from './Tex'
 
 /** 基础留白（viewBox 单位） */
@@ -37,6 +38,67 @@ const MAP_EDGE = '#2C2C2A'
 /** 结构伴生箭头（pi / pi1 / 包含）：蓝灰，与映射对象的深色区分开 */
 const ALONGSIDE_EDGE = '#4A6FA5'
 const PICK_STROKE = '#C2410C'
+
+/** 格点（DIAGRAM_SPEC §1.1）：对象只允许停在列中心 × 行中心的交点上 */
+const GRID_DOT = '#C9C5B8'
+/** 拖动时的吸附预览环 */
+const SNAP_STROKE = '#C2410C'
+
+/**
+ * 视图变换：**世界坐标 → viewBox 坐标**（`screen = world * k + t`）。
+ * `k` 就是缩放，`tx/ty` 是平移。自动 fit 只是它的一个初值。
+ */
+interface View {
+  k: number
+  tx: number
+  ty: number
+}
+
+/** 缩放范围（世界单位 → viewBox 单位的倍率） */
+const K_MIN = 0.15
+const K_MAX = 6
+
+/** 拖动的世界坐标偏移（拖动过程中临时叠加在布局结果上） */
+interface DragState {
+  id: string
+  dx: number
+  dy: number
+}
+
+/** 钉住的位置（世界坐标）持久化在浏览器里（决策 ④：拖动 = 钉住 + 持久化） */
+const PIN_KEY = 'galculator.pins:v1'
+
+function loadPins(): Record<string, { x: number; y: number }> {
+  try {
+    const raw = localStorage.getItem(PIN_KEY)
+    if (!raw) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return {}
+    const out: Record<string, { x: number; y: number }> = {}
+    for (const [id, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const p = v as { x?: unknown; y?: unknown }
+      if (typeof p?.x === 'number' && typeof p?.y === 'number') out[id] = { x: p.x, y: p.y }
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function savePins(pins: Record<string, { x: number; y: number }>) {
+  try {
+    if (Object.keys(pins).length === 0) localStorage.removeItem(PIN_KEY)
+    else localStorage.setItem(PIN_KEY, JSON.stringify(pins))
+  } catch {
+    /* 隐私模式等场景下写不了——拖动的即时效果不受影响 */
+  }
+}
+
+/** `?empty=1`（走查用的空画布）**不读也不写**钉住，免得走查之间互相污染 */
+const persistPins = () =>
+  typeof location === 'undefined' || !location.search.includes('empty')
+
+const clampK = (k: number) => Math.min(K_MAX, Math.max(K_MIN, k))
 
 /**
  * 边的视觉族。**箭头颜色必须与线色一致**——从前的 marker 颜色写死在定义里，
@@ -171,7 +233,39 @@ export function CanvasView({
   pickableIds?: string[] | null
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
   const [size, setSize] = useState({ w: VW, h: VH })
+  /**
+   * 用户自己调整过的视图（pan / zoom）。`null` = **跟随自动 fit**：
+   * 内容一变就重新排版并居中（这是原来的行为，也是新画布的默认状态）；
+   * 用户一旦动手，视图就归他管，加一行不会把他正在看的地方弹走。
+   */
+  const [userView, setUserView] = useState<View | null>(null)
+  /** 拖动中的世界坐标偏移（state 供渲染；ref 供 window 上的原生监听读最新值） */
+  const [drag, setDrag] = useState<DragState | null>(null)
+  const dragRef = useRef<DragState | null>(null)
+  /**
+   * 被**钉住**的节点（世界坐标）——决策 ④：拖动 = 钉住 + 吸附网格 + 一键恢复自动 + 持久化。
+   * 钉住只覆盖**最终坐标**（布局照常算，它仍占着自己原来的行列），
+   * 所以拖走一个节点不会引起其它节点重排。
+   */
+  const [pinned, setPinned] = useState<Record<string, { x: number; y: number }>>(() =>
+    persistPins() ? loadPins() : {},
+  )
+  useEffect(() => {
+    if (persistPins()) savePins(pinned)
+  }, [pinned])
+
+  /** 指针手势的起点（viewBox 坐标）。节点拖动与画布平移共用一条通路。 */
+  const gesture = useRef<
+    | { mode: 'node'; id: string; x: number; y: number; wx: number; wy: number; moved: boolean }
+    | { mode: 'pan'; x: number; y: number; view: View; moved: boolean }
+    | null
+  >(null)
+  /** 这一次手势算不算"拖动"——算的话要把紧随其后的 click 吞掉（否则一拖就选中/取消选中） */
+  const suppressClick = useRef(false)
+  /** 当前视图（供原生 wheel 监听与指针换算读取） */
+  const viewRef = useRef<{ k: number; tx: number; ty: number; gridXs: number[]; gridYs: number[]; world: Pt[]; gridAt: string[] } | null>(null)
 
   useEffect(() => {
     const el = wrapRef.current
@@ -183,6 +277,21 @@ export function CanvasView({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  /**
+   * 容器像素坐标 → viewBox 坐标。
+   * `viewBox` 是按 `preserveAspectRatio="xMidYMid meet"` 等比装进容器的，
+   * 所以这里要照着同一套居中规则反算（与锚点上报是同一个换算）。
+   */
+  const toVB = (clientX: number, clientY: number): Pt => {
+    const el = svgRef.current
+    if (!el) return { x: 0, y: 0 }
+    const r = el.getBoundingClientRect()
+    const scale = Math.min(r.width / VW, r.height / VH) || 1
+    const offX = (r.width - VW * scale) / 2
+    const offY = (r.height - VH * scale) / 2
+    return { x: (clientX - r.left - offX) / scale, y: (clientY - r.top - offY) / scale }
+  }
 
   const view = useMemo(() => {
     if (graph.nodes.length === 0) return null
@@ -213,19 +322,19 @@ export function CanvasView({
     /**
      * **竖直约束**：只有"结构伴生"的边要求两端同列。
      *
-     *   `π` / `π₁` / `π₂`（投影）与 `↪`（包含）在课本里都是竖直线；
-     *   而用户造的映射（带 `objectId`）是**水平**的、`≅` 是**对角**的、
-     *   来源线是辅助信息 —— 这三类都不该把两端拉到同一列。
+     *   `π` / `π₁` / `π₂`（投影）、`↪`（包含）与 `=`（轨道等于 Ω，即"传递"）
+     *   在课本里都是竖直线；而用户造的映射（带 `objectId`）是**水平**的、
+     *   `≅` 是**对角**的、来源线是辅助信息 —— 这几类都不该把两端拉到同一列。
      *
      * 第一版没做这个区分（只看"dy ≥ dx"），结果 `≅` 把 `C₆`、`C₃`、`C₆/ker φ`
      * 传染成一列（`C₆` 与 `C₃` 直接叠在一起）。判据必须按**边的语义**来，
      * 而不是按几何猜。
      */
+    const VERTICAL_LABELS = new Set(['π', 'π₁', 'π₂', '↪', '='])
     const isVerticalConstraint = (e: GalEdge): boolean =>
       // **作用线**也算：课本里 `G ↷ Ω` 本来就是往下画的（DIAGRAM_SPEC §5.2 的三层结构）
       e.kind === 'action' ||
-      (!e.objectId &&
-        (e.label === 'π' || e.label === 'π₁' || e.label === 'π₂' || e.label === '↪'))
+      (!e.objectId && !!e.label && VERTICAL_LABELS.has(e.label))
 
     const uf = Array.from({ length: n }, (_, i) => i)
     const find = (i: number): number => {
@@ -373,14 +482,31 @@ export function CanvasView({
       else byLevel.set(node.level, [i])
     })
     let rowCursor = 0
-    for (const lv of [...byLevel.keys()].sort((a, b) => a - b)) {
+    const rowCenterY = new Map<number, number>()
+    const rowLevels = [...byLevel.keys()].sort((a, b) => a - b)
+    for (const lv of rowLevels) {
       const members = byLevel.get(lv)!
       const h = Math.max(...members.map((i) => boxes[i].hh)) * 2
       rowCursor += h / 2
+      rowCenterY.set(lv, rowCursor)
       for (const i of members) pos[i].y = rowCursor
       rowCursor += h / 2 + ROW_GAP
     }
 
+    // ── 格点（DIAGRAM_SPEC §1.1）─────────────────────────────────
+    //
+    // 「对象落在格点上」里的**格点不是抽象约束，而是画布上真实的点**：
+    // 列中心 × 行中心的交点。画出来，用户就知道对象能停在哪；
+    // 拖动时松手就往最近的空格点吸附（见 gal/grid.ts）。
+    const gridXs = colIds.map((c) => colX.get(c)!)
+    const gridYs = rowLevels.map((lv) => rowCenterY.get(lv)!)
+
+    // ── 包围盒：用**自动布局**的位置算 ──────────────────────────
+    //
+    // 刻意**不含**被钉住 / 正在拖的节点：否则把一个节点拖走，包围盒一变，
+    // 整张图就跟着重新缩放——松手那一瞬间所有东西都跳一下，根本没法用
+    // （走查里真的抓到了：拖完 D₄ 后全图像素位置全变，落点也不是格点了）。
+    // 拖到框外的节点配合 pan 看，或者按「恢复自动布局」。
     let minX = Infinity
     let maxX = -Infinity
     let minY = Infinity
@@ -391,6 +517,20 @@ export function CanvasView({
       minY = Math.min(minY, p.y - boxes[i].hh)
       maxY = Math.max(maxY, p.y + boxes[i].hh)
     })
+
+    // ── 钉住 / 拖动：只覆盖**最终坐标** ──────────────────────────
+    //
+    // 布局照常算（被钉住的节点仍占着它原来的行列），最后一步才把坐标换成用户放的位置。
+    // 这样拖走一个节点**不会引起别的节点重排**。
+    for (let i = 0; i < n; i++) {
+      const pin = pinned[graph.nodes[i].id]
+      if (pin) pos[i] = { x: pin.x, y: pin.y }
+    }
+    if (drag) {
+      const di = graph.nodes.findIndex((nd) => nd.id === drag.id)
+      if (di >= 0) pos[di] = { x: pos[di].x + drag.dx, y: pos[di].y + drag.dy }
+    }
+
     const worldW = Math.max(maxX - minX, 1)
     const worldH = Math.max(maxY - minY, 1)
 
@@ -403,18 +543,21 @@ export function CanvasView({
     const usableW = Math.max(VW - padL - padR, 160)
     const usableH = Math.max(VH - padT - padB, 160)
 
-    // 统一缩放（含字号），避免"位置缩了、节点没缩"导致的互相压盖
-    const s = Math.min(usableW / worldW, usableH / worldH, 1)
-    const offX = padL + (usableW - worldW * s) / 2 - minX * s
-    const offY = padT + (usableH - worldH * s) / 2 - minY * s
+    // 自动 fit 只是视图变换的**初值**；用户一旦 pan / zoom，就听用户的。
+    const autoK = Math.min(usableW / worldW, usableH / worldH, 1)
+    const autoTx = padL + (usableW - worldW * autoK) / 2 - minX * autoK
+    const autoTy = padT + (usableH - worldH * autoK) / 2 - minY * autoK
+    const k = clampK(userView?.k ?? autoK)
+    const tx = userView?.tx ?? autoTx
+    const ty = userView?.ty ?? autoTy
 
-    const screen: Pt[] = pos.map((p) => ({ x: offX + p.x * s, y: offY + p.y * s }))
+    const screen: Pt[] = pos.map((p) => ({ x: tx + p.x * k, y: ty + p.y * k }))
     const screenBoxes: Box[] = boxes.map((b) => ({
-      hw: b.hw * s,
-      hh: b.hh * s,
+      hw: b.hw * k,
+      hh: b.hh * k,
       round: b.round,
-      font: b.font * s,
-      subFont: b.subFont * s,
+      font: b.font * k,
+      subFont: b.subFont * k,
     }))
 
     // 边的几何在这里算好：渲染与「箭头可点锚点」共用同一份。
@@ -468,8 +611,67 @@ export function CanvasView({
       }
     })
 
-    return { screen, boxes: screenBoxes, edgePts }
-  }, [graph])
+    return {
+      screen,
+      boxes: screenBoxes,
+      edgePts,
+      /** 视图变换（指针换算 / 格点渲染 / 吸附预览都要用） */
+      k,
+      tx,
+      ty,
+      /** 自动 fit 的缩放——工具条上的百分比以它为 100% */
+      autoK,
+      /** 世界坐标（拖动起点与吸附都以它为准） */
+      world: pos,
+      gridXs,
+      gridYs,
+      /** 每个节点落在哪个格点（`col:row`）——判"这个格点被占了"用 */
+      gridAt: pos.map((p) => {
+        const g = nearestGridPoint(p.x, p.y, gridXs, gridYs)
+        return gridKey(g.col, g.row)
+      }),
+    }
+  }, [graph, pinned, drag, userView])
+
+  /** 视图存一份到 ref：原生 wheel 监听与指针换算要读最新值，但不必每次重建监听 */
+  useEffect(() => {
+    viewRef.current = view
+      ? {
+          k: view.k,
+          tx: view.tx,
+          ty: view.ty,
+          gridXs: view.gridXs,
+          gridYs: view.gridYs,
+          world: view.world,
+          gridAt: view.gridAt,
+        }
+      : null
+  }, [view])
+
+  /**
+   * 滚轮缩放。必须用**原生非 passive** 监听 —— React 的 `onWheel` 是 passive 的，
+   * `preventDefault()` 会失效并往控制台丢警告（走查要求控制台零错误）。
+   * 缩放围绕**指针位置**：指针底下的那个世界点保持不动。
+   */
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      const v = viewRef.current
+      if (!v) return
+      e.preventDefault()
+      const p = toVB(e.clientX, e.clientY)
+      const k = clampK(v.k * Math.exp(-e.deltaY * 0.0016))
+      if (k === v.k) return
+      const wx = (p.x - v.tx) / v.k
+      const wy = (p.y - v.ty) / v.k
+      setUserView({ k, tx: p.x - wx * k, ty: p.y - wy * k })
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+    // toVB 只读 svgRef（每次实时取 rect），不必进依赖
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // viewBox → 容器像素：菜单浮层用像素坐标
   useEffect(() => {
@@ -518,15 +720,129 @@ export function CanvasView({
   const picked = new Set(pickedIds ?? [])
   const pickable = pickableIds ? new Set(pickableIds) : null
 
+  /* ── 指针手势：节点拖动 / 画布平移 ────────────────────────── */
+  //
+  // 监听挂在 **window** 上，而不是依赖 `setPointerCapture`：
+  // capture 在 React 合成事件里不可靠——实测**只收到第一次 pointermove**，
+  // 平移量因此只有应到的 1/8（真浏览器走查抓到的：拖 90px 只动了 11px）。
+  // 挂 window 之后指针移出画布 / 移到浮层上都能继续拖。
+
+  const beginGesture = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return
+    const p = toVB(e.clientX, e.clientY)
+    const g = (e.target as Element).closest?.('g.gnode') as SVGGElement | null | undefined
+    const id = g?.getAttribute('data-id') ?? null
+    if (id) {
+      const i = graph.nodes.findIndex((nd) => nd.id === id)
+      if (i < 0) return
+      gesture.current = {
+        mode: 'node',
+        id,
+        x: p.x,
+        y: p.y,
+        wx: view.world[i].x,
+        wy: view.world[i].y,
+        moved: false,
+      }
+    } else {
+      // 空白处按下 = 平移画布（pan）
+      gesture.current = {
+        mode: 'pan',
+        x: p.x,
+        y: p.y,
+        view: { k: view.k, tx: view.tx, ty: view.ty },
+        moved: false,
+      }
+    }
+
+    const move = (ev: PointerEvent) => {
+      const gs = gesture.current
+      if (!gs) return
+      const q = toVB(ev.clientX, ev.clientY)
+      // 4px 阈值：手抖不该被当成拖动（否则点选会变成微移）
+      if (!gs.moved && Math.hypot(q.x - gs.x, q.y - gs.y) < 4) return
+      gs.moved = true
+      if (gs.mode === 'node') {
+        const d = { id: gs.id, dx: (q.x - gs.x) / view.k, dy: (q.y - gs.y) / view.k }
+        dragRef.current = d
+        setDrag(d)
+      } else {
+        setUserView({ k: gs.view.k, tx: gs.view.tx + (q.x - gs.x), ty: gs.view.ty + (q.y - gs.y) })
+      }
+    }
+
+    const finish = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+      const gs = gesture.current
+      gesture.current = null
+      if (!gs) return
+      if (gs.mode === 'node') {
+        const d = dragRef.current
+        if (gs.moved && d) {
+          // 松手 → 吸附到**最近的空格点**并钉住（决策 ④）：
+          // 跳过已被别的节点占住的格点，免得两个节点叠在一起。
+          suppressClick.current = true
+          const i = graph.nodes.findIndex((nd) => nd.id === gs.id)
+          const taken = view.gridAt.filter((_, t) => t !== i)
+          const hit = snapToGrid(gs.wx + d.dx, gs.wy + d.dy, view.gridXs, view.gridYs, taken)
+          setPinned((prev) => ({ ...prev, [gs.id]: { x: hit.x, y: hit.y } }))
+        }
+        dragRef.current = null
+        setDrag(null)
+        return
+      }
+      // 拖过画布就不该再触发一次"点空白"（否则一 pan 就把选中取消了）
+      if (gs.moved) suppressClick.current = true
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+  }
+
+  /** 拖动中的**吸附预览**：松手会落在哪个格点（跟真正落点用同一份计算） */
+  const snapPreview = (() => {
+    const gs = gesture.current
+    if (!drag || gs?.mode !== 'node') return null
+    const i = graph.nodes.findIndex((nd) => nd.id === drag.id)
+    if (i < 0) return null
+    const taken = view.gridAt.filter((_, t) => t !== i)
+    const hit = snapToGrid(gs.wx + drag.dx, gs.wy + drag.dy, view.gridXs, view.gridYs, taken)
+    return {
+      x: view.tx + hit.x * view.k,
+      y: view.ty + hit.y * view.k,
+      r: Math.max(view.boxes[i].hw, view.boxes[i].hh) + 8,
+    }
+  })()
+
+  const pinnedCount = Object.keys(pinned).length
+  const zoomPct = Math.round((view.k / view.autoK) * 100)
+  /** 格点数量控制在可读范围（大图上不铺满屏幕） */
+  const showGrid = view.gridXs.length * view.gridYs.length <= 160
+
+
   return (
     <div className="canvas-wrap" ref={wrapRef}>
       <svg
-        className={`canvas${pickable ? ' picking' : ''}`}
+        ref={svgRef}
+        className={`canvas${pickable ? ' picking' : ''}${drag ? ' dragging' : ''}`}
         viewBox={`0 0 ${VW} ${VH}`}
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="交换图画布"
+        onPointerDown={beginGesture}
+        onDoubleClick={(e) => {
+          // 双击空白 = 适应窗口（把整张图重新装进视口）
+          if (e.target === e.currentTarget) setUserView(null)
+        }}
         onClick={(e) => {
+          // 刚拖过（节点或画布）→ 别把这次 click 当成点选 / 点空白
+          if (suppressClick.current) {
+            suppressClick.current = false
+            return
+          }
           if (e.target === e.currentTarget) onBackgroundClick?.()
         }}
       >
@@ -600,6 +916,25 @@ export function CanvasView({
             </g>
           ))}
         </defs>
+
+        {/* 格点（DIAGRAM_SPEC §1.1）：**列中心 × 行中心的交点**。
+            「对象落在格点上」里的格点不是抽象约束，就是这些小点——
+            拖动节点时松手会吸附到离它最近的空格点上。 */}
+        {showGrid && (
+          <g className="grid" aria-hidden="true">
+            {view.gridYs.map((gy, r) =>
+              view.gridXs.map((gx, c) => (
+                <circle
+                  key={`${c}-${r}`}
+                  className="grid-dot"
+                  cx={view.tx + gx * view.k}
+                  cy={view.ty + gy * view.k}
+                  r={2.8}
+                />
+              )),
+            )}
+          </g>
+        )}
 
         {graph.edges.map((e, k) => {
           const pts = view.edgePts[k]
@@ -741,14 +1076,20 @@ export function CanvasView({
           return (
             <g
               key={n.id}
-              className={`gnode${dimmed ? ' dim' : ''}`}
+              className={`gnode${dimmed ? ' dim' : ''}${drag?.id === n.id ? ' dragging' : ''}`}
               data-label={n.label}
+              data-id={n.id}
               onClick={(e) => {
                 e.stopPropagation()
+                // 刚把这个节点拖过 → 这次 click 是拖动的尾巴，不算点选
+                if (suppressClick.current) {
+                  suppressClick.current = false
+                  return
+                }
                 if (dimmed) return
                 onSelect(n.id)
               }}
-              style={{ cursor: dimmed ? 'not-allowed' : 'pointer' }}
+              style={{ cursor: dimmed ? 'not-allowed' : drag?.id === n.id ? 'grabbing' : 'pointer' }}
             >
               {b.round ? (
                 <circle
@@ -797,7 +1138,36 @@ export function CanvasView({
             </g>
           )
         })}
+        {/* 吸附预览：松手会落在这个格点上（与真正的落点用同一份计算） */}
+        {snapPreview && (
+          <circle className="snap-ring" cx={snapPreview.x} cy={snapPreview.y} r={snapPreview.r} />
+        )}
       </svg>
+
+      {/* 视图工具条（右下）：**看得见**的视图状态 + 一键还原 */}
+      <div className="canvas-toolbar">
+        <span className="canvas-zoom" title="滚轮缩放 · 空白处拖动平移 · 双击空白适应窗口">
+          {zoomPct}%
+        </span>
+        <button
+          className="ct-btn"
+          onClick={() => setUserView(null)}
+          title="适应窗口：把整张图重新装进视口（双击空白同效）"
+        >
+          适应窗口
+        </button>
+        <button
+          className="ct-btn"
+          onClick={() => {
+            setPinned({})
+            setDrag(null)
+          }}
+          disabled={pinnedCount === 0}
+          title="清除手动摆放的位置，回到自动排版"
+        >
+          恢复自动布局{pinnedCount > 0 ? ` · ${pinnedCount}` : ''}
+        </button>
+      </div>
     </div>
   )
 }

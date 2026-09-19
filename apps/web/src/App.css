@@ -100,6 +100,83 @@ body {
   opacity: 0.26;
 }
 
+/* ── 格点 / 吸附 / 视图工具条（U10：开放视图编辑）────────── */
+
+/* 格点 = 列中心 × 行中心的交点。对象只能停在这些点上，
+   拖动时松手就往最近的空格点吸附（见 gal/grid.ts）*/
+.grid-dot {
+  fill: #b3ac99;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* 拖动中的吸附预览环：告诉用户"松手会落在这儿"*/
+.snap-ring {
+  fill: rgba(194, 65, 12, 0.05);
+  stroke: #c2410c;
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  pointer-events: none;
+}
+
+.canvas {
+  /* 让 pointer 拖动归我们处理，别被浏览器的滚动手势抢走 */
+  touch-action: none;
+}
+
+/* 空白处可平移画布；pending 点选态仍是十字光标 */
+.canvas:not(.picking) {
+  cursor: grab;
+}
+
+.canvas.dragging {
+  cursor: grabbing;
+}
+
+.canvas-toolbar {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+}
+
+.canvas-zoom {
+  min-width: 44px;
+  text-align: center;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.ct-btn {
+  padding: 3px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ct-btn:hover:not(:disabled) {
+  border-color: #c2410c;
+  color: #c2410c;
+}
+
+.ct-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* ── 浮层抽屉 ──────────────────────────────────────────── */
 
 .dock-topleft {
