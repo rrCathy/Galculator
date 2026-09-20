@@ -56,8 +56,13 @@
 
 ## 代码落点（apps/web/src/）
 - `gal/`：`value.ts` `ops.ts`（注册表 30 条：mechanism/primitive/recipe/impl/call/infix/params/arity/variadic/editor/result/run + `opsFor` + `paramAccepts`）`naming.ts` `compose.ts` `interaction.ts`（idle→selected→menu→pending/fill）`evalDef.ts`（五级分发）`build.ts`（含 `firstIsoObjects` 隐式补点）`derive.ts`（含 `arrowOf` / `alongsideEdges` / `computeLevels`）`insights.ts` `tex.ts` `numeric.ts` `grid.ts`
-- `ui/`：`CanvasView`（SVG 自绘 + 硬约束网格 + 视图变换 + 拖动吸附）`DockPanel` `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb` `ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex`
-- `verify/`：**回归线（入库）**——`suites/`（语义层，133 条断言）+ `e2e/`（真浏览器几何走查，42 条）+ `README.md`
+- `ui/`：`CanvasView`（SVG 自绘 + 硬约束网格 + 视图变换 + 拖动吸附）`DockPanel` `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb` `ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex` `ProofDock`（右上角证明面板）
+- **`proof.ts`（M1）**：`ProofStep{kind,text,tex,line,highlight}` + `ProofTemplate{params,build()}` +
+  `proofLines(steps,cursor)` / `proofHighlight(...)`（纯函数）+ `SYLOW_I` 模板（A₄/p=2，13 步）。
+  **设计支点：每步 `line` = 一整行定义 → 交给现成的求值器**（step-through = 替用户一行行写定义，
+  零新求值机制、机器写的行可见可改）。初版 schema 的 `ComputeCall`/`ArgRef`/`ShowSpec(Scene)`
+  **没实现也不该实现**（画布是自研交换图）。模板文本里的数字由 `build()` 真算，不手写。
+- `verify/`：**回归线（入库）**——`suites/`（语义层，158 条断言）+ `e2e/`（真浏览器几何走查，62 条）+ `README.md`
 
 ### 项目内的坑
 - **「造」类操作不能用 `opsFor` 筛**（它要参数被填满）→ 遍历 `OPS` + `paramAccepts`。
@@ -86,12 +91,16 @@
 - 输入层三形态：文本定义 · 对象编辑器（映射构建器已落地）· 搭积木。
 - **5 条决策**：①径向菜单三类两层 ②宏先纯重放（排 M1 后）③集合描述式=属性谓词分面+字谓词，`∧∨` 组合，不开任意表达式 ④拖动=钉住+吸附网格+一键恢复+持久化 ⑤固化集合**不自动升级**。
 - 集合构造（§6）：点击流与文本流 = 同一 `FilterSpec` AST 的两个前端。
+- **证明面板**（右上角，M1，见 INTERACTION §12.5）：step-through = 替用户一行行写定义；
+  当前步的对象在画布上**高亮**（并入 `pickedIds`，与 pending 高亮同一套）；
+  **开始证明清空画布、结束证明保留画布**；只有带 `line` 的步骤写定义表（回退纯推理步不动画布）。
 
 ## 进度（详见 docs/ROADMAP.md）
-U0–U6 ✅ · **U7 ✅** Sylow III 的图 · **U10 ✅** 开放视图编辑 · **U12 ✅ 定理复现收口（2026-09-19）**
-——自动补 `im φ`（第一同构正方形）· 跨商群元素对齐（第三同构梯形）· 竖直穿行修复 · **回归线入库**。
-**七条教材定理全部完整复现** · DIAGRAM_SPEC §1 六条硬规范全部落地 · 八个缺口（G1/G3/G3b/G4/G5/G6/G7/G8）全清。
-未做：U8 工具条/群目录 · U9 集合构造器 · U11 宏 · U6 的 B/C（节点宽度解耦 / 画布分层）· 集合节点展开。
+U0–U6 ✅ · **U7 ✅** Sylow III 的图 · **U10 ✅** 开放视图编辑 · **U12 ✅** 定理复现收口（G4/G8 + 回归线入库）
+· **U13 = M1 ✅** Sylow I 的逐步演示（2026-09-20：`陪集作用` 新操作 · 13 步 step-through · 证明面板）。
+**七条教材定理全部完整复现** · DIAGRAM_SPEC §1 六条硬规范全部落地 · 八个缺口（G1/G3/G3b/G4/G5/G6/G7/G8）全清 ·
+**M1 达成**（Sylow I 在 A₄ 上跑通）。
+未做：M2（Sylow II / III 模板）· U8 工具条/群目录 · U9 集合构造器 · U11 宏 · U6 的 B/C · 集合节点展开。
 
 ## 验证线（回归线，2026-09-19 入库）
 - **`apps/web/verify/`**：语义层 `suites/{diagram,firstIso,thirdIso,algebra}.ts`（vite SSR 打包后 node 直跑）
@@ -107,4 +116,8 @@ U0–U6 ✅ · **U7 ✅** Sylow III 的图 · **U10 ✅** 开放视图编辑 · 
 **教训：算得对 ≠ 画得对**（第二同构在修 G3 前阶全对，图上 `H∩N` 却是集合圆、包含箭头是虚线）。
 
 ## 遗留给未来
-自定义作用编辑器；伴生箭头还不是映射对象（不能对 π 做 ker/im）；陪集作用的轨道/稳定子分支；半直积 ⋊；**集合节点展开成轨道切块**（第 2 层密度）；**短正合列 / 五引理只清了形状障碍（G6），尚未实跑复现**；U8 工具条+群目录 · U9 集合构造器 · U11 宏。
+自定义作用编辑器；伴生箭头还不是映射对象（不能对 π 做 ker/im）；**陪集作用的轨道/稳定子已打通**（M1 的 `陪集作用(G,H)`），
+但**陪集视图**（每个陪集内部展开）没做；半直积 ⋊；**集合节点展开成轨道切块**（第 2 层密度）；
+**短正合列 / 五引理只清了形状障碍（G6），尚未实跑复现**；**M2：Sylow II / III 模板**（core 的
+`sylowConjugationPerms` / `computeSylowAnalysis` 已备）；模板入参界面（现在群与 p 写死 A₄/2）；
+U8 工具条+群目录 · U9 集合构造器 · U11 宏。

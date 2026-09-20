@@ -51,18 +51,66 @@ interface ProofSpec {
 }
 ```
 
-## 3. 执行语义
+## 2.5 落地形态（2026-09-20，M1）
 
-- **依赖解析**：`compute.args` 引用前步 `out` 变量，按拓扑序执行。
-- **逐步执行**：step-through（前进 / 后退 / 跳转）。
-- **local / backend 分发**：local 走 `@groupviz/core`，backend 走 GAP 端点。
-- **展示**：每步按 `ShowSpec` 渲染（符号 / 图 / 表），可高亮。
-- **产出**：每步同时向画布投放节点 / 边（见 [INTERACTION.md](INTERACTION.md) 的"画布图"一节）。
+§2 的第一版 schema 是按"通用引擎"设计的（`ComputeCall` + `ArgRef` 引用前步 `out`，
+`ShowSpec.diagram` 映射到 `@groupviz/react` 的 10 个 Scene）。**实际实现收窄成了下面这样**，
+理由是"演示性证明"的模板本来就由作者为具体群手写、且画布已换成自研交换图：
+
+```ts
+interface ProofStep {
+  kind: 'claim' | 'compute' | 'conclude'
+  text: string          // 面板里的中文陈述（**纯文本**，不能塞 TeX）
+  tex?: string          // 同一句的 TeX（面板用 KaTeX 渲染）
+  line?: string         // compute 步：要写进定义表的一整行（`P = 闭包(G, …)`）
+  highlight?: string[]  // 这一步在画布上高亮哪些对象
+}
+
+interface ProofTemplate {
+  id: string
+  title: string
+  theorem: string        // TeX 定理陈述
+  blurb: string          // 一句话说明这条证明的"魂"
+  params: { group: string; p: number }
+  build(): ProofStep[]   // 模板 × 具体群 = 逐步演示（参数在 build 里实例化）
+}
+```
+
+三条取舍：
+
+1. **用"一整行定义"替代 `ComputeCall` + `ArgRef`。** 每一步直接把 `名字 = 表达式` 交给
+   **现成的求值器**（`evalDef` → `ops.ts` 注册表）。于是：
+   - **零新求值机制** —— 不会出现"证明引擎算出一个答案、画布算出另一个"；
+   - step-through = **替用户一行行写定义**，机器写的东西**可见、可改**
+     （与 U2 的"点出来的操作编回文本"同一条哲学）；
+   - 走完一遍，画布上就是完整的证明图。
+2. **`ShowSpec` 换成 `line` + `highlight`。** 画布是自研的交换图（不是 10 个 Scene 之一），
+   所以"展示"就是两件事：这一步**投放**哪个对象、**高亮**谁。`SceneName` 那套留给
+   未来的"教育模式联动 GroupViz GVL"。
+3. **`ArgRef` 的 local/backend 分发没了。** 模板里全部是 local（走 core）；backend 仍未接入。
+   代价是模板换群要作者改 `build()` —— 对演示性证明可接受（正确性本来就由作者负责）。
+
+## 3. 执行语义（实际）
+
+- **`proofLines(steps, cursor)`**：走到第 `cursor` 步为止该写下的定义行（纯函数）。
+  App 里 `lines` **直接由它重建**（而不是增删一行）——幂等，跳步、回退、重来结果都一致。
+- **`proofHighlight(steps, cursor)`**：这一步该高亮的对象；没写 `highlight` 就退回
+  "这一步写出来的那个对象"（定义行等号左边的名字就是对象 id）。
+- **高亮落地**：并入画布的 `pickedIds` → 当前步的对象用选中态高亮。
+- **数字从哪来**：模板 `text` 里的每个数字都由 `build()` **真算**（同一批 core 函数、同一份输入），
+  不手写。`verify/suites/proof.ts` 再回过头把"文本里的数字"与"图上对象的阶"钉在一起。
+
+> 初版 §2 的那套（依赖拓扑序解析 / `ShowSpec` 三模态 / local-backend 分发）**没有实现**，
+> 原因见上；`ArgRef` 式的"前步输出引用"也不需要了——定义行里直接写对象名，
+> 名字的作用域由求值器统一管（只能引用前面已定义的名字）。
 
 ## 4. op 对齐表（↔ `@groupviz/core` v2.3.0）
 
 > 本表是 [ARCHITECTURE.md](ARCHITECTURE.md) §3.4「原语 → core 落点」在证明场景下的**收窄版**——只列 Sylow 三步证明实际用到的。
-> `compute` 的 `op` 引用的是**操作注册表**里的 id（见 ARCHITECTURE §8），不是裸 core 函数名；下表是二者的对应关系。
+> 实际模板（`apps/web/src/gal/proof.ts`）写的是**操作注册表的调用名**，不是裸 core 函数名：
+> 阶分解 `分解(12)` · 组合数模 `Cmod(12, 4, 2)` · 闭包 `闭包(G, (12)(34), (13)(24))` ·
+> **陪集作用 `陪集作用(G, P)`**（本轮为 Sylow I 新增的操作）· 轨道 `轨道(A, 1)` · 稳定子 `稳定子(A, 1)`。
+> 下表是它们各自落到的 core 导出。
 
 | op | 状态 | core 导出 / 签名 | 用途 |
 |---|---|---|---|
@@ -143,11 +191,16 @@ interface ProofSpec {
 
 ## 7. 模板路线图
 
-- 已定：Sylow I（M1）、Sylow II / III（M2）。
-- 候选：Cayley 定理、第一同构定理（`HomomorphismScene` 有 `theoremMode` 动画）、orbit–stabilizer 定理、Burnside 引理。
+- **Sylow I（Wielandt）✅ 已落地（2026-09-20，M1）**：`gal/proof.ts` 的 `SYLOW_I`，
+  A₄ / p = 2，13 步；UI 是右上角的**证明面板**（`ui/ProofDock.tsx`），
+  前进 / 后退 / 跳步 / 重来，当前步在画布上高亮。
+  验证：断言 `verify/suites/proof.ts` · 走查 `verify/e2e/proof-step.mjs`。
+- 接着：Sylow II / III（M2）——`sylowConjugationPerms` 给传递性、`computeSylowAnalysis` 给 `n_p`。
+- 候选：Cayley 定理、第一同构定理、orbit–stabilizer 定理、Burnside 引理。
 
 ## 8. 待补细节
 
-- `CoreOp` 收紧为类型安全的字面量联合（与 §4 表格一一对应）。
 - backend 端点清单（Sylow 以外的大群场景）。
-- 执行器的错误模型（某个 op 失败时如何降级 / 提示）。
+- 模板的**入参界面**：现在群与 p 写死在 `params` 里（A₄/2）；要做成可切换（下拉选群 / 选 p），
+  需要把"实例数据"（如 V₄ 的生成元）与模板骨架分开。
+- 多个模板同时可走（现在一次只能走一条：`lines` 归证明独占，开始时会清空画布）。

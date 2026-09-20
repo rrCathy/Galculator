@@ -13,11 +13,13 @@ import { run as diagram } from './suites/diagram'
 import { run as firstIso } from './suites/firstIso'
 import { run as thirdIso } from './suites/thirdIso'
 import { run as algebra } from './suites/algebra'
+import { run as proof } from './suites/proof'
 
 diagram()
 firstIso()
 thirdIso()
 algebra()
+proof()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1

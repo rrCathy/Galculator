@@ -18,11 +18,13 @@ import {
 } from './gal/interaction'
 import { computedNumbers, type NumericEntry } from './gal/numeric'
 import { nextAutoName } from './gal/naming'
+import { proofHighlight, proofLines, type ProofTemplate } from './gal/proof'
 import { CanvasView, type NodeAnchor } from './ui/CanvasView'
 import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
 import { MultiOrb } from './ui/MultiOrb'
 import { ComposerOrb } from './ui/ComposerOrb'
 import { MapBuilder } from './ui/MapBuilder'
+import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
 import { OpDock } from './ui/OpDock'
 import { InfoDock, type InfoTab } from './ui/InfoDock'
@@ -75,6 +77,17 @@ export default function App() {
   const [infoTab, setInfoTab] = useState<InfoTab>('basic')
   const [dragged, setDragged] = useState<NumericEntry[]>([])
   const [composerOpen, setComposerOpen] = useState(false)
+
+  /* ── 证明（M1）：step-through = 替用户一行行写定义 ─────────
+   *
+   * 证明的每一步携带一整行定义；「下一步」= 把它写进 `lines`。
+   * 于是走完一遍，画布上就长出了完整的证明图——**走的是同一个求值器**，
+   * 与手打、与点出来的操作完全等价（设计说明见 `gal/proof.ts` 顶部）。
+   */
+  const [proofOpen, setProofOpen] = useState(true)
+  const [proofTpl, setProofTpl] = useState<ProofTemplate | null>(null)
+  const [proofCursor, setProofCursor] = useState(-1)
+  const proofSteps = useMemo(() => proofTpl?.build() ?? [], [proofTpl])
 
   const { lineStates, objects } = useMemo(() => buildLines(lines), [lines])
   const graph = useMemo(() => deriveCanvas(objects), [objects])
@@ -173,6 +186,47 @@ export default function App() {
     setOrbStage('closed')
     setOpenInfo(true)
     setNotice(null)
+  }, [])
+
+  /* ── 证明：走一步 = 写一行 ────────────────────────────── */
+
+  /**
+   * 走到第 `i` 步：`lines` **直接由 `proofLines(steps, i)` 重建**。
+   *
+   * 用"重建"而不是"增删一行"，是因为它幂等 —— 用户（或走查）中途删了几行、
+   * 或者跳着点，结果都一致。代价是证明运行期间 `lines` 归证明独占
+   *（面板上也写明了"开始时清空画布"）。
+   */
+  const proofGoto = useCallback(
+    (i: number) => {
+      if (!proofTpl || proofSteps.length === 0) return
+      const at = Math.max(0, Math.min(i, proofSteps.length - 1))
+      setProofCursor(at)
+      setLines(proofLines(proofSteps, at))
+      setInter(IDLE)
+      setOrbStage('closed')
+      setMultiOpen(false)
+      setNotice(null)
+    },
+    [proofTpl, proofSteps],
+  )
+
+  const proofStart = useCallback((t: ProofTemplate) => {
+    const steps = t.build()
+    setProofTpl(t)
+    setProofCursor(0)
+    setLines(proofLines(steps, 0))
+    setProofOpen(true)
+    setInter(IDLE)
+    setOrbStage('closed')
+    setNotice(null)
+  }, [])
+
+  /** 退出证明：**画布保留**（走完的图可以继续手动玩）。 */
+  const proofExit = useCallback(() => {
+    setProofTpl(null)
+    setProofCursor(-1)
+    setInter(IDLE)
   }, [])
 
   /**
@@ -439,6 +493,16 @@ export default function App() {
   const busy =
     inter.kind === 'pending' || inter.kind === 'fill' || inter.kind === 'editor'
 
+  /**
+   * 画布上的"标记"（高亮）：pending 已选的对象 + **证明当前步要看重的对象**。
+   * 后者让 step-through 的"每步高亮对应对象"落地 —— 用户不用自己找刚才那步说的是谁。
+   */
+  const markedIds = (() => {
+    const base = pickedIds(inter)
+    if (!proofTpl || proofCursor < 0) return base
+    return [...new Set([...base, ...proofHighlight(proofSteps, proofCursor)])]
+  })()
+
   /** 编辑器（映射构建器）：两端必须都落在画布节点上 */
   const editorNodes = (() => {
     if (inter.kind !== 'editor') return null
@@ -459,7 +523,7 @@ export default function App() {
           if (inter.kind !== 'editor') reset()
         }}
         onAnchors={onAnchors}
-        pickedIds={pickedIds(inter)}
+        pickedIds={markedIds}
         pickableIds={pickableIds}
       />
 
@@ -515,6 +579,20 @@ export default function App() {
         onPick={startMultiOp}
         minLeft={barriers.top}
       />
+
+      <div className="dock-topright">
+        <ProofDock
+          open={proofOpen}
+          onToggle={() => setProofOpen((v) => !v)}
+          template={proofTpl}
+          steps={proofSteps}
+          cursor={proofCursor}
+          onStart={proofStart}
+          onGoto={proofGoto}
+          onRestart={() => proofGoto(0)}
+          onExit={proofExit}
+        />
+      </div>
 
       <ComposerOrb
         open={composerOpen}

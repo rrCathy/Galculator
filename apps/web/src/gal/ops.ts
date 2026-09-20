@@ -4,6 +4,7 @@ import {
   closeUnderMultiply,
   commutatorClosure,
   computeConjugationPerms,
+  computeCosetActionPerms,
   computeFixedPoints,
   computeImageFromMapping,
   computeKernelFromMapping,
@@ -1056,6 +1057,57 @@ export const OPS: OpDef[] = [
     },
   },
   {
+    id: 'cosetAction',
+    notation: '陪集作用(G, H)',
+    mechanism: 'atomic',
+    primitive: true,
+    doc: 'G 左乘作用在 H 的左陪集上（共 [G:H] 个点）—— Sylow I 的舞台',
+    impl: 'computeCosetActionPerms',
+    call: ['陪集作用', 'cosetAction', 'coset'],
+    params: [
+      { name: 'G', type: 'group' },
+      { name: 'H', type: 'subset' },
+    ],
+    arity: 2,
+    result: 'action',
+    run: (a) => {
+      const G = groupOf(a[0])
+      if (!G) return fail('陪集作用(·) 的第一个参数必须是群', '如 陪集作用(G, P)')
+      const S = subgroupArgOf(a[1])
+      if (!S) return fail('陪集作用(·) 的第二个参数必须是子群')
+      // 与 `商` 同一条对齐规则：跨商群拿来的元素要按陪集语义翻译（G4）
+      const aligned = alignElementSet(G, S.elements)
+      const sub = aligned ? asCoreSubgroup(G, aligned) : null
+      if (!sub) return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的子群`, '要求含单位元且乘法封闭')
+      if (G.order > ENUM_LIMIT) {
+        return fail(`${prettySymbol(G.symbol)} 太大（阶 ${G.order}），陪集置换算不动`, `上限 ${ENUM_LIMIT}`)
+      }
+
+      const { perms, n, setLabels } = computeCosetActionPerms(G, sub.elements)
+      const action: GalAction = {
+        group: G,
+        kind: 'coset',
+        n,
+        perms,
+        // Ω 的点是**陪集**（代表元的记号），不是 G 的元素 —— 这正是 Ω 需要
+        // `set` 值类型的原因（成员不一定是群元素，见 value.ts 的 SetMember）。
+        setLabels,
+        omega: {
+          group: G,
+          label: `陪集(${refText(a[0])}/${refText(a[1])})`,
+          members: setLabels.map((l) => ({ label: l })),
+        },
+        omegaBase: 'object',
+      }
+      return {
+        ok: true,
+        value: { type: 'action', action },
+        label: `陪集作用(${refText(a[0])}, ${refText(a[1])})`,
+        sub: `|Ω| = ${n} = [G : H]`,
+      }
+    },
+  },
+  {
     id: 'automorphismGroup',
     notation: 'Aut(G)',
     mechanism: 'atomic',
@@ -1911,6 +1963,7 @@ const TEMPLATES: Record<string, string> = {
   quotient: 'G / N',
   conjugationAction: '共轭作用(G)',
   leftTranslationAction: '正则作用(G)',
+  cosetAction: '陪集作用(G, P)',
   automorphismGroup: 'Aut(G)',
   intersection: 'A ∩ B',
   union: 'A ∪ B',

@@ -65,6 +65,14 @@ pnpm dev          # → http://127.0.0.1:5273
 
 **多对象操作**（`G×H` `G/N` `A∩B` `C_G`…）不在节点上——它们不依赖"你选中了谁"，所以挂在**显示区正上方那颗球**里。
 
+**右上角的「证明」面板是 step-through**（M1）：点开一条模板就进入逐步演示——
+「下一步」把这一步的定义**真的写进定义表**，于是画布上**一步步长出证明图**；
+当前步在列表里醒目（未到的步骤变淡）、在画布上**高亮**，「上一步 / 重来 / 点任意一步跳转」都在。
+
+Sylow I（Wielandt 的计数证明）在 `A₄` 上 13 步走完，落到 `Stab(P) = P`（阶 4 = pᵏ）：
+关键是**不搜索、不枚举**——只数一个模 2 不为 0 的集合（`C(12,4) = 495 ≡ 1 (mod 2)`），
+再用群作用在陪集上把那个子群"逼"出来。
+
 点出来的操作会被**编回一行文本**再交给同一个求值器——所以「操作」抽屉里会真的多出一行（可读可改），
 且"点出来的"与"打出来的"行为必然一致。**数字可以拖**：元素表里的「阶」「中心化子」等格子直接拖进左下数值区。
 
@@ -120,6 +128,7 @@ apps/web/            Vite + React 19 + TS 前端
     build.ts         定义行 → 对象表（纯函数）
     derive.ts        对象表 → 画布图
     grid.ts          格点与吸附（列中心 × 行中心；拖动吸附是纯函数，可单测）
+    proof.ts         **Proof Spec 执行侧（M1）**：ProofStep / ProofTemplate / Sylow I 模板
   verify/            **回归线（入库）**
     run.ts           语义层入口（vite SSR 打包后 node 直跑）
     suites/          分组断言：diagram / firstIso / thirdIso / algebra
@@ -135,6 +144,7 @@ apps/web/            Vite + React 19 + TS 前端
     NumericDock.tsx  左下：数值（上拉 + 拖放目标）
     ElementsTable.tsx 元素表格（行 = 元素、列 = 属性，数字格可拖）
     MapBuilder.tsx   映射构建器（生成元填像 + 实时校验 + 自动填充）
+    ProofDock.tsx    **证明面板**（M1）：模板列表 / 13 步 step-through / 当前步高亮
     ObjectOrb.tsx    节点左上角的深色悬浮球 + 环绕 4 按钮
     MultiOrb.tsx     显示区正上方的多对象操作球
     ObjectRow.tsx    对象行（对象区 / 操作区共用）
@@ -237,7 +247,14 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器几何走查（读 DOM �
   `pnpm --filter @galculator/web verify` / `verify:e2e` 一键跑。
   验证：`tsc` 零错误 · 断言 **133/133**（第三同构 9 组 `(G,N,K)` 的 `|(G/N)/(K/N)| = |G/K|`
   全按手算理论值核对）· 走查 **42/42** · 三张截图。
-- 更后面：**U8** 工具条（雏形已随 U10 落地）+ 群目录 + 查表（「零门槛入口」）。
+- **U13 / M1 已完成（Sylow I 的逐步演示，2026-09-20）**：右上角**证明面板** + **13 步 step-through**。
+  新的设计支点是 **`ProofStep.line`**——每一步携带**一整行定义**，「下一步」就把它写进定义表，
+  于是画布上一步步长出证明图，而**求值走的还是同一个求值器**（零新机制，
+  与「点出来的操作编回文本」同一条哲学：机器写的东西必须可见、可改）。
+  为 Sylow I 新增操作 **`陪集作用(G, H)`**（G 左乘作用在 H 的左陪集上）。
+  模板里的数字全部由 `build()` **真算**（不手写），断言再把"面板文本里的数字"与"图上对象的阶"钉在一起。
+  验证：断言 **158/158**（新增 25 条）· 走查 **62/62**（新增 `proof-step` 22 条）· 截图 `docs/assets/u13-proof-sylow1.png`。
+- 更后面：**U8** 工具条（雏形已随 U10 落地）+ 群目录 + 查表（「零门槛入口」）；**M2** Sylow II / III 模板。
 
 ![对象悬浮球：节点左上角的深色球 → 环绕 4 个按钮](docs/assets/u3-ring.png)
 
@@ -300,6 +317,13 @@ _（U12：只写了 `G = D₄` → `N = 闭包(G, r2)` → `K = 闭包(G, r)` �
 _（U12：非满射的 `φ : C₆ → C₆, a ↦ 2`。工具自动补出 `im φ` 顶点——于是图是**正方形**而不是三角形：
 `π` 满射向下、`↪` 单射向上、`≅` 同构在底边**双向**、`φ` 是普通箭头（非满射）。用户一行没多写）_
 
+![Sylow I 的逐步演示：13 步 step-through](docs/assets/u13-proof-sylow1.png)
+
+_（U13 / M1：右上角「证明」面板走完 Wielandt 的 Sylow I。每一步都写进定义表，
+所以左上「对象 1 / 操作 4」里正是 `G = A₄` 与 `P`、`A`、`O`、`S` 五行，
+左下数值区攒出了 `12 = 2²·3` 与 `495 mod 2 = 1`。画布上 `Orb(1) = Ω`（那条 `=` 就是"传递"）、
+`Stab(1) ↪ A₄`（橙色 = 当前步高亮），全部 13 步的落点是 `|Stab| = 4 = pᵏ`）_
+
 ![网格化布局：第一同构定理排成了课本的样子](docs/assets/u6-grid.png)
 
 _（U6：只写了 `φ = 映射(C₆, C₃, a→1)`。布局是**硬约束网格**——`C₆` 与 `C₆/ker φ` 同列
@@ -337,6 +361,6 @@ _（`G / Z` 带 `G →(π) Q`、`Z(G)` 带 `Z ↪ G`；实线 = 映射，淡虚�
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 内核架构：值类型 / 10 原语 / 60+ 操作清单 / 引擎依赖 / 契约索引 |
 | [docs/INTERACTION.md](docs/INTERACTION.md) | **UI 规范 v2**：操作入口（`opsFor` + 径向菜单）/ 输入层 / 集合构造器 / 画布图 / 布局 |
 | [docs/DIAGRAM_SPEC.md](docs/DIAGRAM_SPEC.md) | **交换图规范**：课本级排版的六条硬规范 / 现状诊断 / **什么对象适合上画布** |
-| [docs/PROOF_SPEC.md](docs/PROOF_SPEC.md) | Proof Spec 规范（证明模板 schema + Sylow I 实例）|
+| [docs/PROOF_SPEC.md](docs/PROOF_SPEC.md) | Proof Spec 规范（模板 schema + Sylow I 实例）· **§2.5 落地形态（M1 已实现）** |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 规划：UI 重构线 U0–U12 + 里程碑 M0–M4 |
 | [docs/archive/](docs/archive/) | 已完成使命的历史文档（交接 prompt / 早期规划稿）|
