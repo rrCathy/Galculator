@@ -307,6 +307,26 @@ function elementArgOf(a: OpArg | undefined, group: Group): GroupElement | null {
   return resolveElementLoose(group, a.text)
 }
 
+/**
+ * `subset` 参数的**元素记号回退**。
+ *
+ * 教材里 `C_G(σ)` 比 `C_G({σ})` 常见得多，而 `subset` 参数原本只收**对象**
+ *（元素集 / 群），于是 `C_G(S_4, (12)(34))` 会被拒（实测清单里就是这么发现的）。
+ * 这条回退把"读不出对象"的那串文本当**元素记号**解析成单元素集。
+ *
+ * 于是 `C_G(S_4, (12)(34))`、`C_G(S_4, H)`、`C_G(S_4, S)` 三种写法都成立。
+ */
+function elementSetArgOf(
+  a: OpArg | undefined,
+  G: Group,
+): { group: Group; elements: GroupElement[] } | null {
+  const asObj = elementsOf(a)
+  if (asObj) return asObj
+  if (!a || a.kind === 'object') return null
+  const el = resolveElementLoose(G, a.text)
+  return el ? { group: G, elements: [el] } : null
+}
+
 /** 两个集合是否来自同一个群：引用相等最快，否则看符号 + 阶（重建的 `A_4` 视作同群）。 */
 function sameGroup(a: Group, b: Group): boolean {
   if (a === b) return true
@@ -1294,8 +1314,13 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('C_G(·) 的第一个参数必须是群')
-      const S = elementsOf(a[1])
-      if (!S) return fail('C_G(·) 的第二个参数必须是元素集或群')
+      const S = elementSetArgOf(a[1], G)
+      if (!S) {
+        return fail(
+          `C_G(·) 的第二个参数必须是元素集、群，或一个元素记号`,
+          `如 C_G(G, H) 或 C_G(G, (12)(34))`,
+        )
+      }
       const els = getCentralizer(G, S.elements)
       return {
         ok: true,
@@ -1323,8 +1348,8 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('N_G(·) 的第一个参数必须是群')
-      const S = subgroupArgOf(a[1])
-      if (!S) return fail('N_G(·) 的第二个参数必须是子群')
+      const S = subgroupArgOf(a[1]) ?? elementSetArgOf(a[1], G)
+      if (!S) return fail('N_G(·) 的第二个参数必须是子群（或一个元素记号）')
       const els = getNormalizer(G, S.elements)
       return {
         ok: true,

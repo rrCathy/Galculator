@@ -80,6 +80,21 @@ export function run(): void {
     eq('Z(Z(D₄)) 合法且为群', b.byId('Z2')?.value.type, 'group')
   }
 
+  // ── `subset` 参数的**元素记号回退**：教材里 `C_G(σ)` 比 `C_G({σ})` 常见 ──
+  //    S₄ 里 (12)(34) 的共轭类大小 3 ⇒ |C| = 24/3 = 8（手算的理论值）
+  {
+    const b = build([
+      'G = S_4',
+      'C1 = C_G(G, (12)(34))',
+      'H = 闭包(G, (12)(34))',
+      'C2 = C_G(G, H)',
+      'N1 = N_G(G, (12)(34))',
+    ])
+    eq('C_G(S₄, (12)(34)) = 8 阶', b.orderOf('C1'), 8)
+    eq('两种写法（元素记号 / 子群对象）结果一致', b.orderOf('C2'), b.orderOf('C1'))
+    eq('单个元素的正规化子 = 中心化子', b.orderOf('N1'), b.orderOf('C1'))
+  }
+
   // ── 闭包的三形态（G1 / G3b 的回归防线）──
   {
     const b = build(['G = C_12', 'A = 闭包(G, r4)', 'B = 闭包(G, r6, r4)', 'C = 闭包(A)'])

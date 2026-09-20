@@ -102,8 +102,14 @@ U0–U6 ✅ · **U7 ✅** Sylow III 的图 · **U10 ✅** 开放视图编辑 · 
 **M1 达成**（Sylow I 在 A₄ 上跑通）。
 未做：M2（Sylow II / III 模板）· U8 工具条/群目录 · U9 集合构造器 · U11 宏 · U6 的 B/C · 集合节点展开。
 
-## 验证线（回归线，2026-09-19 入库）
-- **`apps/web/verify/`**：语义层 `suites/{diagram,firstIso,thirdIso,algebra}.ts`（vite SSR 打包后 node 直跑）
+## 对外清单（docs/TASKS.md，2026-09-20）
+- **群论常见计算/证明清单**：七类（构造·元素·子群·商群同态·作用·计数·判定）+ 定理演示。
+  口径：**每行都给"粘进去就能跑"的输入 + 我实测的结果**（否则用户没法核）。
+  实测脚本 `.tmp-verify/probe-tasks.ts`（一次跑完 66 条）；首测 58 通过 / 8 未支持，
+  缺口表在文档末尾（Burnside · Inn · 极大子群 · gcd/φ · 合成列 · Hall · ⋊ · 子群格图）。
+  依据 = GAP capabilities + 四份真实教材习题/考试题。
+
+## 验证线（回归线，2026-09-19 入库）- **`apps/web/verify/`**：语义层 `suites/{diagram,firstIso,thirdIso,algebra}.ts`（vite SSR 打包后 node 直跑）
   + 几何层 `e2e/{layout-spec,first-iso-square,third-iso}.mjs`（playwright，读 DOM 坐标与 marker id）。
   跑法 `pnpm --filter @galculator/web verify` / `verify:e2e`；坑见 `verify/README.md`。
 - 从前住在 `.tmp-verify/`（被 gitignore 忽略）→ **一次目录清理就丢了 363 条断言**。回归线是资产，不是临时物。
