@@ -1,6 +1,8 @@
 import { useMemo, type DragEvent } from 'react'
 import type { Group } from '@groupviz/core'
 import { buildElementTable } from '../gal/summary'
+import { elementNotation } from '../gal/ops'
+import { prettySymbol } from '../gal/pretty'
 import { TexOrText } from './Tex'
 import { DND_NUMBER } from '../gal/numeric'
 
@@ -39,7 +41,7 @@ export function ElementsTable({ group }: { group: Group }) {
             {table.facts.map((f, i) => (
               <tr key={f.element.id}>
                 <th className="etable-rowhead">
-                  <TexOrText text={f.element.label} />
+                  <TexOrText text={elementNotation(group, f.element)} />
                 </th>
                 {table.rows.map((row) => {
                   const v = row.values[i]
@@ -49,11 +51,16 @@ export function ElementsTable({ group }: { group: Group }) {
                       key={row.key}
                       className={`etable-cell${canDrag ? ' can-drag' : ''}`}
                       draggable={canDrag}
-                      onDragStart={
-                        canDrag
-                          ? (e) => writeNumberPayload(e, `${row.label}(${f.element.label})`, Number(v))
-                          : undefined
-                      }
+                  onDragStart={
+                    canDrag
+                      ? (e) =>
+                          writeNumberPayload(
+                            e,
+                            `${row.label}(${prettySymbol(elementNotation(group, f.element))})`,
+                            Number(v),
+                          )
+                      : undefined
+                  }
                       title={canDrag ? '拖到左下角数值区' : undefined}
                     >
                       {v}

@@ -1422,20 +1422,18 @@ body {
 .proof-item {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
+  align-items: stretch;
+  gap: 4px;
   padding: 8px 9px;
   border: 1px solid var(--border);
   border-radius: 9px;
   background: var(--surface);
   color: var(--text);
   text-align: left;
-  cursor: pointer;
 }
 
-.proof-item:hover {
-  border-color: var(--purple);
-  background: var(--purple-fill);
+.proof-item.blocked {
+  background: var(--panel);
 }
 
 .proof-item-title {
@@ -1451,6 +1449,133 @@ body {
 .proof-item-blurb {
   color: var(--text-dim);
   font-size: 11.5px;
+}
+
+/* ── 入参（U15）：群一个 + 每张卡自己挑 p ──────────────── */
+
+.proof-params {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+.proof-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.proof-param-name {
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.proof-group input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.proof-group input:focus {
+  outline: none;
+  border-color: var(--purple);
+}
+
+.proof-order {
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.proof-order.bad {
+  color: var(--danger);
+}
+
+.proof-primes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.proof-prime {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.proof-prime:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.proof-prime.on {
+  border-color: var(--purple);
+  background: var(--purple-fill);
+  color: var(--purple-text);
+}
+
+.proof-prime-p {
+  font-weight: 500;
+}
+
+.proof-prime-n {
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+
+.proof-bad {
+  color: var(--danger);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.proof-start {
+  align-self: flex-start;
+  padding: 4px 12px;
+  border: 1px solid var(--purple);
+  border-radius: 7px;
+  background: var(--purple-fill);
+  color: var(--purple-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.proof-start:hover:not(:disabled) {
+  background: var(--purple);
+  color: #fff;
+}
+
+.proof-start:disabled {
+  border-color: var(--border);
+  background: var(--panel);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.proof-instance {
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.proof-instance b {
+  color: var(--text);
+  font-weight: 500;
 }
 
 .proof-warn {

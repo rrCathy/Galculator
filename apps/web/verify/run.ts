@@ -13,12 +13,14 @@ import { run as diagram } from './suites/diagram'
 import { run as firstIso } from './suites/firstIso'
 import { run as thirdIso } from './suites/thirdIso'
 import { run as algebra } from './suites/algebra'
+import { run as notation } from './suites/notation'
 import { run as proof } from './suites/proof'
 
 diagram()
 firstIso()
 thirdIso()
 algebra()
+notation()
 proof()
 
 const failed = summary()

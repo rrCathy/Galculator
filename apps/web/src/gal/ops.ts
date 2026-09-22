@@ -255,9 +255,16 @@ function checkPrime(p: number, notation: string): string | null {
   return null
 }
 
-/** 元素记号 hint：列出群里的元素，解析不到时给用户看。 */
+/**
+ * 元素记号 hint：列出群里的元素，解析不到时给用户看。
+ *
+ * **必须过 `prettySymbol`**：这条串是给用户**照着抄**的，而 core 的自同构群元素
+ * 叫 `\alpha_{2}`——原样贴出来就成了一屏反斜杠（实测：`A = Aut(S₄)` 后
+ * `ord(A, )` 的提示里 `\mathrm{id}, \alpha_1, …, \alpha_{23}` 糊成一片）。
+ * 展示成 `id, α₁, …, α₂₃` 之后，用户敲回来也能解析（见 `resolveElementLoose` ⓪ 层）。
+ */
 function elementListHint(group: Group, cap = 24): string {
-  const labels = group.elements.map((e) => e.label)
+  const labels = group.elements.map((e) => prettySymbol(elementNotation(group, e)))
   const head = labels.slice(0, cap).join(', ')
   return labels.length > cap ? `${head}, …, 共 ${labels.length} 个` : head
 }
@@ -269,15 +276,30 @@ function elementListHint(group: Group, cap = 24): string {
  * 是加法群（生成元叫 `a`、元素是 `0..n-1`），而课本写的是**乘法循环群** `r^k`。
  * 于是用户写 `闭包(G, r4)` 时 `r4` 解析不了——而这正是最常见的写法。
  *
- * 三级回退：
+ * 四级回退：
+ *   ⓪ **展示形态回认**：`prettySymbol(label)` 的唯一命中（`α₂` → `\alpha_2`，
+ *      `id` → `\mathrm{id}`）——让"照着面板上的记号敲"成立
  *   ① core 的 `resolveElement`（精确；循环记号走这里）
  *   ② 生成元的幂：`r4` / `r^4` / `r^{4}`
  *   ③ 单生成元群（循环群）里的单字母：`r` / `a` / `g` 一律视作那个生成元
  */
-function resolveElementLoose(group: Group, text: string): GroupElement | null {
+export function resolveElementLoose(group: Group, text: string): GroupElement | null {
   const t = text.trim()
   const direct = resolveElement(group, t)
   if (direct) return direct
+
+  /**
+   * ⓪ **展示形态回认**：面板与提示里给用户看的是 `prettySymbol(label)`——
+   * `α₂` / `id` / `⟨r₂, s⟩`。用户照着敲回来必须认得出，否则"看得见却打不出来"。
+   * 于是 `\alpha_{2}` / `\alpha_2` / `α₂` 三种写法殊途同归。
+   *
+   * **只在唯一命中时接受**：pretty 是**多对一**的（`\alpha_{2}` 与 `\alpha_2`
+   * 折叠成同一个 `α₂`），一旦有歧义就落到下面几级或干脆报错——
+   * 概率性正确比明确失败更危险。
+   */
+  const tp = prettySymbol(t)
+  const prettyHits = group.elements.filter((e) => prettySymbol(e.label) === tp)
+  if (prettyHits.length === 1) return prettyHits[0]
 
   const m = /^([A-Za-z][A-Za-z0-9]*?)\^?\{?(\d*)\}?$/.exec(t)
   if (!m) return null
@@ -295,9 +317,27 @@ function resolveElementLoose(group: Group, text: string): GroupElement | null {
   return cur
 }
 
+/**
+ * 元素的**课本记号**（展示与"写进定义行"都用它）。
+ *
+ * core 的元素 `label` 在置换群上有个不一致：**单循环不带括号**——
+ * S₄ 的 3-轮换标签是 `234`、对换是 `12`，而双对换却写着 `(12)(34)`。
+ * 照着 core 的写法显示，画布上就长出 `⟨234⟩` / `⟨12⟩` 这种**看着像整数**的标签
+ * （U15 把 S₄ / S₃ 变成推荐实例之后，这个毛病变得很显眼）。
+ *
+ * 升格成 `(234)` 之前必须过**回认**这一关（`resolveElementLoose` 命中同一个元素）：
+ * 循环群 C₁₂ 里真有元素标签 `10` / `11`，但 `(10)` 解析不了——
+ * 判据一放，它就自动留在 `10` 不动。**展示成什么样，就得能照着敲回去。**
+ */
+export function elementNotation(group: Group, e: GroupElement): string {
+  if (!/^[0-9]{2,}$/.test(e.label)) return e.label
+  const wrapped = `(${e.label})`
+  const hit = resolveElementLoose(group, wrapped)
+  return hit && hit.id === e.id ? wrapped : e.label
+}
+
 /** 元素参数 → 群元素：走 core `resolveElement`，接受 id / label / value / **循环记号**（`(123)`）。 */
-function elementArgOf(a: OpArg | undefined, group: Group): GroupElement | null {
-  if (!a) return null
+function elementArgOf(a: OpArg | undefined, group: Group): GroupElement | null {  if (!a) return null
   if (a.kind === 'object') {
     const v = a.value
     if (v.type === 'elements' && v.elements.length === 1)
@@ -441,7 +481,8 @@ function mapArgOf(a: OpArg | undefined): GalMap | null {
 
 /** 元素 id → 展示记号（core 的报错结构里给的是 id，展示前要翻一遍）。 */
 function elementLabel(group: Group, id: string): string {
-  return group.elements.find((e) => e.id === id)?.label ?? id
+  const e = group.elements.find((x) => x.id === id)
+  return e ? prettySymbol(e.label) : id
 }
 
 /**
@@ -585,6 +626,11 @@ function omegaArgOf(a: OpArg | undefined): OmegaArg | null {
 /**
  * G 通过共轭作用在一族**子群**上 → 每个 g 在点集上的置换。
  *
+ * `acting` 是**真正在动的那些元素**。多数时候它就是 `G` 的全部元素；
+ * 但 Sylow III 的第一条（`n_p ≡ 1 mod p`）要的是 **P ↷ Syl_p(G)**——
+ * 作用群是子群 P、Ω 的成员却是**母群 G** 的子群。于是共轭在母群 `G` 里做
+ * （子群对象沿用母群的元素 id），置换只对 `acting` 取。
+ *
  * 用 core 的 `conjugateSubgroup` 算 `gHg⁻¹`。要验证每个 g 都把点集**映到自身**：
  * 不封闭说明这族子群不是共轭闭的（比如只挑了一部分 Sylow 子群）——
  * 这时给的是定向报错而不是静默算错。
@@ -592,6 +638,7 @@ function omegaArgOf(a: OpArg | undefined): OmegaArg | null {
 function conjugationPermsOnSubgroups(
   G: Group,
   points: GroupElement[][],
+  acting: readonly GroupElement[],
 ): { perms: Map<string, number[]> } | { error: string; hint?: string } {
   const keys = points.map(subgroupKeyOf)
   const index = new Map<string, number>()
@@ -602,7 +649,7 @@ function conjugationPermsOnSubgroups(
     return { error: 'Ω 里有重复的点', hint: '同一个子群在 Ω 里出现了两次' }
   }
   const perms = new Map<string, number[]>()
-  for (const g of G.elements) {
+  for (const g of acting) {
     const perm: number[] = []
     for (const H of points) {
       const j = index.get(subgroupKeyOf(conjugateSubgroup(G, H, g)))
@@ -626,6 +673,7 @@ function conjugationPermsOnSubgroups(
 function conjugationPermsOnElements(
   G: Group,
   O: OmegaArg,
+  acting: readonly GroupElement[],
 ): { perms: Map<string, number[]>; omega?: undefined } | { error: string; hint?: string } {
   const full = computeConjugationPerms(G)
   const posInG = (label: string) => G.elements.findIndex((e) => e.label === label)
@@ -638,7 +686,7 @@ function conjugationPermsOnElements(
     if (!posInO.has(m.label)) posInO.set(m.label, i)
   })
   const perms = new Map<string, number[]>()
-  for (const g of G.elements) {
+  for (const g of acting) {
     const p = full.get(g.id)
     if (!p) return { error: 'core 没有给出该共轭置换' }
     const perm: number[] = []
@@ -1038,19 +1086,38 @@ export const OPS: OpDef[] = [
           '如 Ω = 底集(Syl_p(G))：先把子群集取底集成集合，再让 G 作用上去',
         )
       }
-      if (!sameGroup(G, O.group)) {
-        return fail(
-          'G 与 Ω 来自不同的群',
-          `${prettySymbol(G.symbol)} 与 ${prettySymbol(O.group.symbol)}`,
-        )
-      }
       if (G.order > ENUM_LIMIT) {
         return fail(`${prettySymbol(G.symbol)} 太大（阶 ${G.order}），共轭置换算不动`, `上限 ${ENUM_LIMIT}`)
       }
 
+      /**
+       * 作用群不必是 Ω 的**母群本身**——它的**子群**也可以。
+       *
+       * Sylow III 的第一条（`n_p ≡ 1 mod p`）就是让 `P ↷ Syl_p(G)`：
+       * 作用群是子群 P，而 Ω 的成员是**母群 G** 的子群（不是 P 的子群），
+       * 于是从前这条一律被"来自不同的群"挡掉。共轭本来就在母群里做，
+       * 子群对象又沿用母群的元素 id，所以这里只要判"P 是不是 G 的子群"。
+       */
+      const ambient = O.group
+      const sameAs = sameGroup(G, ambient)
+      const asSub =
+        !sameAs &&
+        G.order <= ambient.order &&
+        isSubgroupElementSet(
+          ambient,
+          G.elements.map((e) => e.id),
+        )
+      if (!sameAs && !asSub) {
+        return fail(
+          'G 与 Ω 来自不同的群',
+          `${prettySymbol(G.symbol)} 与 ${prettySymbol(ambient.symbol)}`,
+        )
+      }
+      const acting = asSub ? G.elements : ambient.elements
+
       const r = O.points
-        ? conjugationPermsOnSubgroups(G, O.points)
-        : conjugationPermsOnElements(G, O)
+        ? conjugationPermsOnSubgroups(ambient, O.points, acting)
+        : conjugationPermsOnElements(ambient, O, acting)
       if ('error' in r) return fail(r.error, r.hint)
 
       const action: GalAction = {
@@ -1377,6 +1444,9 @@ export const OPS: OpDef[] = [
       const A = actionOf(a[0])
       if (!A) return fail('轨道(·) 的第一个参数必须是作用', '先用 共轭作用(G) / 正则作用(G) 造一个')
       const x = refText(a[1])
+      // 标签带上**作用的名字**：Sylow III 的图上同时有 `G ↷ Ω` 与 `P ↷ Ω`，
+      // 两个轨道若都叫 `Orb(1)`，画布上就出现两个同名节点（真截图抓到的）。
+      const act = refText(a[0])
       const idx = omegaIndexOf(A, x)
       if (idx < 0) return fail(`Ω 中没有点 ${x}`, omegaHint(A))
       const { orbits, orbitOf } = computeOrbits(A.perms, A.n)
@@ -1390,9 +1460,9 @@ export const OPS: OpDef[] = [
           ok: true,
           value: {
             type: 'set',
-            set: { group: A.group, label: `轨道(${x})`, members: picked },
+            set: { group: A.group, label: `轨道_${act}(${x})`, members: picked },
           },
-          label: `Orb(${x})`,
+          label: `Orb_${act}(${x})`,
           sub: `|Orb| = ${members.length}${members.length === A.n ? ' · 传递（就是整个 Ω）' : ''}`,
         }
       }
@@ -1402,7 +1472,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'elements', group: A.group, elements: els },
-        label: `Orb(${x})`,
+        label: `Orb_${act}(${x})`,
         sub: `|Orb| = ${members.length}`,
       }
     },
@@ -1428,6 +1498,9 @@ export const OPS: OpDef[] = [
       const A = actionOf(a[0])
       if (!A) return fail('稳定子(·) 的第一个参数必须是作用')
       const x = refText(a[1])
+      // 标签带上**作用的名字**：Sylow III 的图上同时有 `G ↷ Ω` 与 `P ↷ Ω`，
+      // 两个轨道若都叫 `Orb(1)`，画布上就出现两个同名节点（真截图抓到的）。
+      const act = refText(a[0])
       const idx = omegaIndexOf(A, x)
       if (idx < 0) return fail(`Ω 中没有点 ${x}`, omegaHint(A))
       const stabs = computeStabilizers(A.group, A.perms, A.n)
@@ -1435,8 +1508,8 @@ export const OPS: OpDef[] = [
       const els = A.group.elements.filter((e) => ids.has(e.id))
       return {
         ok: true,
-        value: { type: 'group', group: subgroupGroupOf(A.group, els, `Stab(${x})`) },
-        label: `Stab(${x})`,
+        value: { type: 'group', group: subgroupGroupOf(A.group, els, `Stab_${refText(a[0])}(${x})`) },
+        label: `Stab_${refText(a[0])}(${x})`,
         sub: `|Stab| = ${els.length}${structSuffix(A.group, els)}`,
       }
     },
@@ -1457,15 +1530,17 @@ export const OPS: OpDef[] = [
       const A = actionOf(a[0])
       if (!A) return fail('不动点(·) 需要作用')
       const pts = computeFixedPoints(A.perms, A.n)
+      // 标签用**作用自己的名字**：从前写死成 `Fix(A)`，于是 `不动点(B)` 也标成 `Fix(A)`
+      const act = refText(a[0])
       if (A.omega && A.omegaBase === 'object') {
         const picked = pts.map((i) => A.omega?.members[i]).filter((m): m is SetMember => !!m)
         return {
           ok: true,
           value: {
             type: 'set',
-            set: { group: A.group, label: '不动点(A)', members: picked },
+            set: { group: A.group, label: `不动点_${act}`, members: picked },
           },
-          label: 'Fix(A)',
+          label: `Fix_${act}`,
           sub: `|Fix| = ${pts.length}`,
         }
       }
@@ -1474,7 +1549,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'elements', group: A.group, elements: els },
-        label: `Fix(A)`,
+        label: `Fix_${act}`,
         sub: `|Fix| = ${pts.length}`,
       }
     },
@@ -1714,7 +1789,10 @@ export const OPS: OpDef[] = [
       for (let i = 1; i < a.length; i++) {
         const el = elementArgOf(a[i], group)
         if (!el) {
-          return fail(`${group.symbol} 中没有元素 ${textOf(a[i])}`, `元素：${elementListHint(group)}`)
+          return fail(
+            `${prettySymbol(group.symbol)} 中没有元素 ${textOf(a[i])}`,
+            `元素：${elementListHint(group)}`,
+          )
         }
         seeds.push(el)
       }

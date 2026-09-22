@@ -56,8 +56,8 @@ ok('列出至少一条模板', (await page.locator('.proof-item').count()) >= 1)
 const theoremTex = await page.locator('.proof-item-theorem').first().innerText()
 ok('模板显示了定理（TeX 已渲染，且不是字面反斜杠）', /p|G|H/.test(theoremTex) && !theoremTex.includes('\\'), theoremTex)
 
-// ── 开始 ──
-await page.click('.proof-item')
+// ── 开始（U15 起：卡片上的「开始证明」按钮；点卡片本身不再等于起跑）──
+await page.click('.proof-item[data-tpl="sylow-1-wielandt"] .proof-start')
 await page.waitForTimeout(500)
 const total = await page.locator('.proof-step').count()
 ok('13 步（Wielandt 的 Sylow I）', total === 13, `got=${total}`)

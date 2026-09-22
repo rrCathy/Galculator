@@ -337,8 +337,12 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
   // 轨道的边：`Orb ↪ Ω`（DIAGRAM_SPEC §5.2 的下层）。
   // 轨道长度**等于 Ω 时写 `=`** —— 那就是「作用传递」，
   // 也正是 Sylow II 的结论（G 在 Syl_p(G) 上只有一个轨道）。
+  //
+  // **不动点走同一条**：`Fix ⊆ Ω` 也是"作用的下层产物"。漏掉它会怎样？
+  // 它落到来源线那一支，而它的来源是一个**作用**（作用不是节点）→ 一条边都生不出来，
+  // 画布上留下一个孤零零飘着的圆（Sylow III 的截图抓到的）。
   for (const o of objects) {
-    if (o.opId !== 'orbits' || !ids.has(o.id)) continue
+    if ((o.opId !== 'orbits' && o.opId !== 'fixedPoints') || !ids.has(o.id)) continue
     for (const s of o.sources) {
       const src = objects.find((x) => x.id === s)
       if (src?.value.type !== 'action') continue

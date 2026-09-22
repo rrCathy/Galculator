@@ -99,3 +99,31 @@ export function TexOrText({ text, className }: { text: string; className?: strin
   if (html === null) return <span className={className}>{text}</span>
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 }
+
+/**
+ * 一串记号的列表（`\alpha_2, \alpha_8` / `e 34 23`）。
+ *
+ * **逐项渲染而不是 join 完再渲染**：join 出来的串里可能有 `#`（Ω 的点的编号）、
+ * 中文括号等，整串丢进 math mode 会被 KaTeX 判成非法字符画成红字。
+ * 分隔符走纯文本，每一项自己过一遍 `toTex`。
+ */
+export function TexList({
+  items,
+  sep = ', ',
+  className,
+}: {
+  items: string[]
+  sep?: string
+  className?: string
+}) {
+  return (
+    <span className={className}>
+      {items.map((t, i) => (
+        <span key={i}>
+          {i > 0 && sep}
+          <TexOrText text={t} />
+        </span>
+      ))}
+    </span>
+  )
+}

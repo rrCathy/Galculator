@@ -10,7 +10,7 @@ import {
 } from '@groupviz/core'
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type NormalizedSubgroup } from '../gal/value'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
-import { Tex, TexOrText } from './Tex'
+import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
 import type { GalObject } from '../gal/types'
@@ -78,7 +78,7 @@ export function InfoDock({
               <TexOrText text={node.label} />
             </strong>
             <span className="info-def">
-              {node.id} = {node.def}
+              {node.id} = <TexOrText text={node.def} />
             </span>
           </div>
 
@@ -141,7 +141,13 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
         <span>|G| = {group.order}</span>
       </Row>
       <Row k="生成元">
-        <span>{group.generators.map((g) => g.symbol).join(', ') || '—'}</span>
+        {group.generators.length > 0 ? (
+          // core 的生成元符号是 **TeX**（`\sigma_{12}` / `\alpha_{2}`），
+          // 原样贴出来就是反斜杠；必须过一遍 KaTeX
+          <TexList items={group.generators.map((g) => g.symbol)} />
+        ) : (
+          <span>—</span>
+        )}
       </Row>
       <Row k="交换">
         <span>{group.isAbelian ? '是' : '否'}</span>
@@ -228,7 +234,7 @@ function OtherTab({
           <Row k="基数">
             <span>{v.elements.length}</span>
           </Row>
-          <div className="insp-elems">{v.elements.map((e) => e.label).join(' ')}</div>
+          <TexList className="insp-elems" items={v.elements.map((e) => e.label)} sep=" " />
         </>
       )
     case 'subgroups':
@@ -242,7 +248,7 @@ function OtherTab({
               title={`阶 ${s.order} · 指数 ${s.index ?? '—'} · 点击取出为对象`}
               onClick={() => onExtract?.(s)}
             >
-              {s.label}
+              <TexOrText text={s.label} />
               <em>|H|={s.order}</em>
               {s.isNormal && <b>⊴</b>}
               {s.isSylow && <b className="syl">Syl</b>}
@@ -263,7 +269,7 @@ function OtherTab({
           <div className="insp-tags">
             {v.set.members.slice(0, 40).map((m, i) => (
               <span key={i} className="sub-tag">
-                {m.label}
+                <TexOrText text={m.label} />
               </span>
             ))}
           </div>
@@ -293,11 +299,14 @@ function OtherTab({
           </Row>
           {members.length > 0 && (
             <Row k="点">
+              {/* `#` 在 math mode 里是非法字符 → 编号留在纯文本，只有记号自己进 KaTeX */}
               <span className="insp-elems">
-                {members
-                  .slice(0, 16)
-                  .map((m, i) => `#${i + 1} ${m.label}`)
-                  .join(' · ')}
+                {members.slice(0, 16).map((m, i) => (
+                  <span key={i}>
+                    {i > 0 && ' · '}
+                    #{i + 1} <TexOrText text={m.label} />
+                  </span>
+                ))}
                 {members.length > 16 ? ` …共 ${members.length} 个` : ''}
               </span>
             </Row>
@@ -343,7 +352,12 @@ function OtherTab({
           {v.map.genImages.length > 0 && (
             <Row k="生成元">
               <span className="insp-elems">
-                {v.map.genImages.map((g) => `${g.generator} ↦ ${g.image.label}`).join('，')}
+                {v.map.genImages.map((g, i) => (
+                  <span key={i}>
+                    {i > 0 && '，'}
+                    <TexOrText text={g.generator} /> ↦ <TexOrText text={g.image.label} />
+                  </span>
+                ))}
               </span>
             </Row>
           )}

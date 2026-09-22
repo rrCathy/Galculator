@@ -18,7 +18,7 @@ import {
 } from './gal/interaction'
 import { computedNumbers, type NumericEntry } from './gal/numeric'
 import { nextAutoName } from './gal/naming'
-import { proofHighlight, proofLines, type ProofTemplate } from './gal/proof'
+import { proofHighlight, proofLines, type ProofParams, type ProofTemplate } from './gal/proof'
 import { CanvasView, type NodeAnchor } from './ui/CanvasView'
 import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
 import { MultiOrb } from './ui/MultiOrb'
@@ -85,9 +85,14 @@ export default function App() {
    * 与手打、与点出来的操作完全等价（设计说明见 `gal/proof.ts` 顶部）。
    */
   const [proofOpen, setProofOpen] = useState(true)
-  const [proofTpl, setProofTpl] = useState<ProofTemplate | null>(null)
+  /** 正在跑的「模板 × 实例」；`null` = 还没开始 */
+  const [proofRun, setProofRun] = useState<{ tpl: ProofTemplate; params: ProofParams } | null>(null)
   const [proofCursor, setProofCursor] = useState(-1)
-  const proofSteps = useMemo(() => proofTpl?.build() ?? [], [proofTpl])
+  const proofTpl = proofRun?.tpl ?? null
+  const proofSteps = useMemo(
+    () => (proofRun ? proofRun.tpl.build(proofRun.params.group, proofRun.params.p) : []),
+    [proofRun],
+  )
 
   const { lineStates, objects } = useMemo(() => buildLines(lines), [lines])
   const graph = useMemo(() => deriveCanvas(objects), [objects])
@@ -211,9 +216,9 @@ export default function App() {
     [proofTpl, proofSteps],
   )
 
-  const proofStart = useCallback((t: ProofTemplate) => {
-    const steps = t.build()
-    setProofTpl(t)
+  const proofStart = useCallback((t: ProofTemplate, params: ProofParams) => {
+    const steps = t.build(params.group, params.p)
+    setProofRun({ tpl: t, params })
     setProofCursor(0)
     setLines(proofLines(steps, 0))
     setProofOpen(true)
@@ -224,7 +229,7 @@ export default function App() {
 
   /** 退出证明：**画布保留**（走完的图可以继续手动玩）。 */
   const proofExit = useCallback(() => {
-    setProofTpl(null)
+    setProofRun(null)
     setProofCursor(-1)
     setInter(IDLE)
   }, [])
@@ -585,6 +590,7 @@ export default function App() {
           open={proofOpen}
           onToggle={() => setProofOpen((v) => !v)}
           template={proofTpl}
+          params={proofRun?.params ?? null}
           steps={proofSteps}
           cursor={proofCursor}
           onStart={proofStart}

@@ -83,8 +83,12 @@ export function MapBuilder({
     const res = verifyHomomorphism(G, H, full)
     if (!res.isHomomorphism) {
       const v = res.violation
-      const label = (group: Group, id: string) =>
-        group.elements.find((e) => e.id === id)?.label ?? id
+      // 违反关系报的是**元素 id** → 展示前翻 label 并转成展示形态
+      // （core 给自同构群的元素起的名字是 `\alpha_{2}`，原样贴出来是一屏反斜杠）
+      const label = (group: Group, id: string) => {
+        const e = group.elements.find((x) => x.id === id)
+        return e ? prettySymbol(e.label) : id
+      }
       return {
         state: 'bad',
         error: v
@@ -158,16 +162,17 @@ export function MapBuilder({
       <div className="mb-rows">
         {gens.map((g) => (
           <label key={g.gen.name} className="mb-row">
-            <span className="mb-gen">{g.gen.name}</span>
+            <span className="mb-gen">{prettySymbol(g.gen.name)}</span>
             <span className="mb-to">↦</span>
             <select
               value={images[g.gen.name] ?? ''}
               onChange={(e) => setImages((p) => ({ ...p, [g.gen.name]: e.target.value }))}
             >
               <option value="">—</option>
+              {/* 原生 `<option>` 里只能放纯文本（塞不进 KaTeX）→ 用展示形态 */}
               {H.elements.map((el) => (
                 <option key={el.id} value={el.id}>
-                  {el.label}
+                  {prettySymbol(el.label)}
                 </option>
               ))}
             </select>

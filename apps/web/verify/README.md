@@ -27,8 +27,15 @@ node node_modules/vite/bin/vite.js . --port 5273 --host 127.0.0.1   # 后台
 node verify/e2e/layout-spec.mjs       # 布局硬规范体检（三张图 + 截图）
 node verify/e2e/first-iso-square.mjs  # 第一同构正方形（G8）
 node verify/e2e/third-iso.mjs         # 第三同构骨架（G4）
+node verify/e2e/tex-render.mjs        # 面板 TeX 渲染与记号回认（U14）
+node verify/e2e/proof-step.mjs        # 证明面板的 step-through（M1）
+node verify/e2e/proof-sylow3.mjs      # Sylow III 的 14 步与孤点判据（M2）
+node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
+
+- **走查脚本要起跑的模板，点的是卡片上的 `.proof-start`**，不是卡片本身
+  （U15 起卡片带参数控件，点卡片不再等于起跑；卡片上有 `data-tpl="<模板 id>"` 可定位）。
 
 - 走查用 **GroupViz 项目里已装的 playwright**（`file:///C:/newproject/GroupViz/node_modules/playwright/index.mjs`），
   启动必须带 `args: ['--no-proxy-server']`，且命令前清代理变量（`env -u HTTP_PROXY -u HTTPS_PROXY …`），
@@ -46,3 +53,6 @@ node verify/e2e/third-iso.mjs         # 第三同构骨架（G4）
 5. **几何断言别写"端点重合"**：边的端点被节点尺寸裁过，两条边共用同一个对象时端点并不相等。要比的是**轴向**（水平边两端 y 相等）与**节点中心**（从 `.gnode-hit` 的 cx/cy 读）。
 6. **别写恒真断言**（`ok('...', true)`）——那是装饰不是测试。写不出判据就说明这条不该断言。
 7. **回归失败先判"bug 还是期望值写错"**：本次首轮 12 条 FAIL 全是期望值算错（`|D₄/⟨r²⟩|`、`⟨r⟩ ∩ ⟨s⟩`、`n₂(D₄)`、Ω 的 1-based 下标）。改断言前先重算一遍数学。
+8. **`|G| ≤ 144` 之外别建 Sylow**：`findSylowSubgroups` 到那个量级就不给算了。参数体检（`proof.stageInfo`）先拦，别让断言卡在枚举里。
+9. **core 元素 `label` 在置换群上单循环不带括号**（S₄ 的 `234` / `12`，而双对换却是 `(12)(34)`）。要显示或写进定义行时过 `ops.elementNotation`——它带**回认判据**，所以 C₁₂ 里标签为 `10` 的元素会被正确留在原样（`(10)` 解析不了）。
+10. **`n_p` 与 `m` 是 Sylow III 里最容易抄反的一对**：`m = |G| / pᵏ`（不是 `|G| / n_p`）。本次 5 条 FAIL 全出自这里。

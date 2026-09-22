@@ -15,6 +15,28 @@ function mapChars(s: string, table: Record<string, string>): string {
   return [...s].map((c) => table[c] ?? c).join('')
 }
 
+/**
+ * 引擎 TeX 里的希腊字母 → Unicode。
+ *
+ * **不能漏**：core 给自同构群的元素起的名字就是 `\alpha_{2}`——不认希腊字母的话
+ * 会掉进末尾的"去反斜杠"兜底，展示成 `alpha₂` 这种半截货
+ * （实测：`Aut(S₄)` 的生成元在信息面板里显示成 `alpha₂, alpha₅`）。
+ *
+ * 变体（`\varepsilon` / `\varphi` 这类）与 tex.ts 的 `toTex` 方向保持一致，
+ * 否则"展示 → 反推 TeX → 渲染"会来回变形。
+ */
+const GREEK: Record<string, string> = {
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ',
+  epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
+  theta: 'θ', vartheta: 'θ', iota: 'ι', kappa: 'κ',
+  lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ',
+  pi: 'π', varpi: 'π', rho: 'ρ', varrho: 'ρ',
+  sigma: 'σ', varsigma: 'ς', tau: 'τ', upsilon: 'υ',
+  phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π',
+  Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+}
+
 /** 整数 → 上标形态（`2` → `²`，`12` → `¹²`）。用于阶分解这类展示。 */
 export function superscript(n: number): string {
   return mapChars(String(n), SUP)
@@ -33,9 +55,15 @@ export function subscript(s: string): string {
 export function prettySymbol(raw: string): string {
   let s = raw.replace(/\s+/g, '').replace(/\\left|\\right/g, '')
 
-  // 常见宏先展开
-  s = s.replace(/\\mathbb\{Z\}/g, 'Z').replace(/\\mathbb\{C\}/g, 'C')
-  s = s.replace(/\\operatorname\{([^{}]*)\}/g, '$1')
+  /**
+   * 包裹类宏先展开成裸记号。
+   *
+   * `\mathrm` / `\mathbf` 这条**不能漏**：core 给**自同构群**的元素起的名字就是
+   * `\mathrm{id}` / `\alpha_{2}`（`createAutomorphismGroup`），漏了 `\mathrm`
+   * 会掉进末尾的"去反斜杠"兜底，变成 `mathrmid` 这种谁都认不出的东西。
+   */
+  s = s.replace(/\\mathbb\{([^{}]*)\}/g, '$1')
+  s = s.replace(/\\(?:mathrm|mathbf|mathit|mathsf|mathtt|operatorname|text)\{([^{}]*)\}/g, '$1')
 
   // 多字符上下标 → Unicode
   s = s.replace(/_\{([^{}]*)\}/g, (_, x: string) => mapChars(x, SUB))
@@ -48,6 +76,9 @@ export function prettySymbol(raw: string): string {
   // 运算符
   s = s.replace(/\\rtimes/g, '⋊').replace(/\\times/g, '×').replace(/\\cdot/g, '·')
   s = s.replace(/\\oplus/g, '⊕').replace(/\\cong/g, '≅').replace(/\\le/g, '≤')
+
+  // 希腊字母（必须排在运算符之后：`\rtimes` 这类先被吃掉了，才不会误认成希腊字母）
+  s = s.replace(/\\([A-Za-z]+)/g, (m, name: string) => GREEK[name] ?? m)
 
   // 兜底：去掉残余花括号与反斜杠
   s = s.replace(/\{([^{}]*)\}/g, '$1').replace(/\\/g, '')
