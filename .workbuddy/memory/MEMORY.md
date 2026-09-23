@@ -10,7 +10,7 @@
 - 交换图简约风；web 优先。MVP = 用群作用证明 Sylow 定理（演示性、非形式化）。
 
 ## 仓库与协作
-- git `main`；远端 `git@github.com:rrCathy/Galculator.git`。**push 要 `dangerouslyDisableSandbox`**；推完 `curl api.github.com/repos/rrCathy/Galculator/commits/main` 核 HEAD。
+- git `main`；远端 `git@github.com:rrCathy/Galculator.git`。**push 要 `dangerouslyDisableSandbox`**（会被提示授权；被拒就别重试）；推完核 HEAD：`curl -sS --noproxy '*' -H 'Cache-Control: no-cache' https://api.github.com/repos/rrCathy/Galculator/commits/main`（**不带 no-cache 会吃到 CDN 缓存、返回上一个 sha，看着像推送失败**），或直接 `git status -sb` 看有无 ahead。
 - `.gitattributes` = `* text=auto eol=lf`；忽略 `node_modules/ dist/ .tmp-*`。
 - 活文档：README · docs/{ARCHITECTURE,INTERACTION,DIAGRAM_SPEC,ROADMAP,PROOF_SPEC,TASKS}.md；`docs/archive/` 只移动不删。
 - **期望值一律来自数学（手算理论值），不从运行结果抄**。临时脚本放 `.tmp-*/`，验证线进 `verify/`。
