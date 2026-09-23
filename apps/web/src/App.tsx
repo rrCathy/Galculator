@@ -553,20 +553,27 @@ export default function App() {
       )}
 
       <div className="dock-topleft" ref={dockTopRef}>
-        <ObjectDock
-          open={openObjects}
-          onToggle={() => setOpenObjects((v) => !v)}
-          lineStates={lineStates}
-          onRemove={removeLine}
-          onSelect={selectFromDock}
-        />
-        <OpDock
-          open={openOps}
-          onToggle={() => setOpenOps((v) => !v)}
-          lineStates={lineStates}
-          onRemove={removeLine}
-          onSelect={selectFromDock}
-        />
+        {/*
+         * 「对象」与「操作」是**同一件事的两半**（输入的定义 / 运算的产物），
+         * 用户来回复查的就是这两栏 —— 所以它们叠成一列（`dock-col`），
+         * 「信息」另占一列（它是"看"的那一栏，跟上面两栏不是一类活）。
+         */}
+        <div className="dock-col">
+          <ObjectDock
+            open={openObjects}
+            onToggle={() => setOpenObjects((v) => !v)}
+            lineStates={lineStates}
+            onRemove={removeLine}
+            onSelect={selectFromDock}
+          />
+          <OpDock
+            open={openOps}
+            onToggle={() => setOpenOps((v) => !v)}
+            lineStates={lineStates}
+            onRemove={removeLine}
+            onSelect={selectFromDock}
+          />
+        </div>
         <InfoDock
           open={openInfo}
           onToggle={() => setOpenInfo((v) => !v)}

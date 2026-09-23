@@ -191,6 +191,38 @@ body {
   max-width: calc(100% - 24px);
 }
 
+/*
+ * 「对象」+「操作」叠在同一列（U16）。
+ *
+ * 这两栏是**同一件事的两半**：一栏是用户手写的定义，一栏是运算产出的对象；
+ * 用户来回复查的就是它们 —— 并排两列会让视线来回横跳，「信息」才是另一类活（"看"）。
+ *
+ * 叠起来就多出一个问题：**两栏都展开时总高会越过视口**。所以这一列自己封顶，
+ * 让展开的两栏**按内容比例让出高度**（body 本来就带 `overflow-y: auto`，
+ * 缩下去自然变成可滚动的）。封顶留出 64px，避开左下角的「数值」抽屉
+ *（它常驻在 `bottom: 12px`，收起来约 30px 高）。
+ * 注：「数值」被展开、同时上面两栏也都展开时仍可能相叠 —— 与 v3.1
+ * 「抽屉收展不移动画布」的取舍一致，由用户收起其中一个解决。
+ */
+.dock-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 0;
+  max-height: calc(100vh - 64px);
+}
+
+.dock-col .dock {
+  min-height: 0;
+}
+
+/* 让 body 参与"分高度"：外层封顶时它缩、且缩下去就是滚动而不是裁掉 */
+.dock-col .dock-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .dock-bottomleft {
   position: absolute;
   bottom: 12px;

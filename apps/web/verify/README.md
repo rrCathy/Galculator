@@ -24,6 +24,7 @@ node .tmp-verify/vout/run.js          # 有 FAIL 时退出码非 0
 
 # ② 几何层：先起 dev server，再跑走查
 node node_modules/vite/bin/vite.js . --port 5273 --host 127.0.0.1   # 后台
+node verify/e2e/dock-layout.mjs       # 左上抽屉分列 + 两栏都展开时的封顶（U16）
 node verify/e2e/layout-spec.mjs       # 布局硬规范体检（三张图 + 截图）
 node verify/e2e/first-iso-square.mjs  # 第一同构正方形（G8）
 node verify/e2e/third-iso.mjs         # 第三同构骨架（G4）
@@ -36,6 +37,10 @@ node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
 
 - **走查脚本要起跑的模板，点的是卡片上的 `.proof-start`**，不是卡片本身
   （U15 起卡片带参数控件，点卡片不再等于起跑；卡片上有 `data-tpl="<模板 id>"` 可定位）。
+- **抽屉的类名不看顺序看标题**：左上一列里 `.dock` 有多个（对象 / 操作 / 信息），
+  定位用 `.dock:has(.dock-title:text-is("操作"))` 或 `.dock-title` 文本，别用 `.nth(i)`
+  （U16 把对象与操作叠进同一个 `.dock-col` 之后，DOM 顺序与"视觉顺序"仍然一致，
+  但**列分组**变了，`.nth()` 断言的语义会跟着变）。
 
 - 走查用 **GroupViz 项目里已装的 playwright**（`file:///C:/newproject/GroupViz/node_modules/playwright/index.mjs`），
   启动必须带 `args: ['--no-proxy-server']`，且命令前清代理变量（`env -u HTTP_PROXY -u HTTPS_PROXY …`），
