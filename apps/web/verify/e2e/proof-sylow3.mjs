@@ -50,11 +50,12 @@ const snapshot = () =>
     }
   })
 
-// ── 面板：三条模板 ──
-ok('列出 3 条模板（Sylow I / II / III）', (await page.locator('.proof-item').count()) === 3)
+// ── 面板：模板列表（M3 之后是五条，Sylow 三条仍在最前）──
+ok('列出 5 条模板（Sylow 三条 + 轨道–稳定子 + 第一同构）', (await page.locator('.proof-item').count()) === 5)
 const titles = await page.evaluate(() =>
   [...document.querySelectorAll('.proof-item')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()),
 )
+ok('第 1 条是 Sylow I', /Sylow I/.test(titles[0] ?? ''), titles.join(' | '))
 ok('第 3 条是 Sylow III', /Sylow III/.test(titles[2] ?? ''), titles.join(' | '))
 
 await page.locator('.proof-item[data-tpl="sylow-3-congruence"] .proof-start').click()

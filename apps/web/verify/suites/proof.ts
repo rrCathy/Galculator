@@ -12,10 +12,15 @@
 import { buildLines } from '../../src/gal/build'
 import { deriveCanvas } from '../../src/gal/derive'
 import {
+  FIRST_ISO,
+  instanceLabel,
+  ORBIT_STABILIZER,
   proofHighlight,
   proofLines,
   PROOF_TEMPLATES,
   stageInfo,
+  suggestImages,
+  suggestPoint,
   SYLOW_I,
   SYLOW_II,
   SYLOW_III,
@@ -43,6 +48,17 @@ function walkAll(steps: ProofStep[], label: string) {
 const setSize = (b: ReturnType<typeof build>, id: string) => {
   const o = b.byId(id)
   return o?.value.type === 'set' ? o.value.set.members.length : -1
+}
+
+/**
+ * 「一个点的轨道有多大」——轨道在 Ω = G 自身时是 `elements`（成员是群元素）、
+ * 在 Ω 是集合时是 `set`（成员是子群），两种都要能读，所以单独一个口子。
+ */
+const orbSize = (b: ReturnType<typeof build>, id: string) => {
+  const o = b.byId(id)
+  if (o?.value.type === 'elements') return o.value.elements.length
+  if (o?.value.type === 'set') return o.value.set.members.length
+  return -1
 }
 
 export function run(): void {
@@ -137,7 +153,7 @@ export function run(): void {
 
   suite('proof · Sylow II / III 模板（M2）')
 
-  eq('三条模板都注册了', PROOF_TEMPLATES.length, 3)
+  eq('五条模板都注册了（Sylow 三条 + M3 两条）', PROOF_TEMPLATES.length, 5)
   eq(
     '模板 id 互不相同',
     new Set(PROOF_TEMPLATES.map((t) => t.id)).size,
@@ -438,5 +454,316 @@ export function run(): void {
       last.includes(`≡ 1 (mod ${c.p})`) && last.includes('| m'),
       last,
     )
+  }
+
+  /* ══ M3：轨道–稳定子 ═════════════════════════════════════ */
+
+  suite('proof · 轨道–稳定子（M3）')
+  {
+    const t = ORBIT_STABILIZER
+    eq('模板注册了', PROOF_TEMPLATES.some((x) => x.id === 'orbit-stabilizer'), true)
+    eq('默认实例是 S₄（非交换群，共轭作用才有内容）', t.defaults.group, 'S_4')
+    eq('参数槽只有一个「点」', t.slots.length, 1)
+    eq('那个槽是 element', t.slots[0].kind, 'element')
+    ok('没有 p 槽（这条定理与素数无关）', !t.slots.some((s) => s.kind === 'prime'))
+
+    // ── 建议值：共轭类最大的那个元素 ──
+    eq('S₄ 的建议点是 3-轮换 (234)', suggestPoint('S_4'), '(234)')
+    eq('S₃ 的建议点是对换 (23)', suggestPoint('S_3'), '(23)')
+    eq('D₄ 的建议点是旋转 r', suggestPoint('D_4'), 'r')
+    eq('Q₈ 的建议点是 i', suggestPoint('Q_8'), 'i')
+    ok('建议点跳过单位元（S₄）', suggestPoint('S_4') !== 'e', suggestPoint('S_4'))
+    ok('交换群上也跳过单位元（C₆）', suggestPoint('C_6') !== '0', suggestPoint('C_6'))
+    eq('认不出的群给不出建议', suggestPoint('这不是群'), '')
+
+    /**
+     * 手算理论值（共轭类表，不是跑出来的）：
+     *   |共轭类 x^G| × |中心化子 C_G(x)| = |G|。
+     * 这里同时钉三件事：图上 O 的成员数、图上 S 的阶、以及两者的乘积。
+     */
+    const CASES: { g: string; x: string; orbit: number; stab: number; order: number }[] = [
+      { g: 'S_4', x: '(234)', orbit: 8, stab: 3, order: 24 },
+      { g: 'S_4', x: '(12)', orbit: 6, stab: 4, order: 24 },
+      { g: 'S_4', x: '(12)(34)', orbit: 3, stab: 8, order: 24 },
+      // A₄ 里 3-轮换分成两个共轭类、各 4 个（在 A₄ 里共轭，不在 S₄ 里）——最容易抄错的一格
+      { g: 'A_4', x: '(123)', orbit: 4, stab: 3, order: 12 },
+      { g: 'S_3', x: '(12)', orbit: 3, stab: 2, order: 6 },
+      { g: 'D_4', x: 's', orbit: 2, stab: 4, order: 8 },
+      { g: 'Q_8', x: 'i', orbit: 2, stab: 4, order: 8 },
+      // 交换群：每个共轭类都是单点（退化，但定理照样成立）
+      { g: 'C_6', x: '1', orbit: 1, stab: 6, order: 6 },
+    ]
+
+    for (const c of CASES) {
+      const steps = t.build(c.g, undefined, { x: c.x })
+      const b = walkAll(steps, `OST ${c.g} · x = ${c.x}`)
+
+      eq(`OST ${c.g}/${c.x}：|G| = ${c.order}`, b.orderOf('G'), c.order)
+      eq(`OST ${c.g}/${c.x}：|O| = ${c.orbit}`, orbSize(b, 'O'), c.orbit)
+      eq(`OST ${c.g}/${c.x}：|Stab| = ${c.stab}`, b.orderOf('S'), c.stab)
+      ok(
+        `OST ${c.g}/${c.x}：|O|·|Stab| = ${c.orbit}×${c.stab} = |G|`,
+        c.orbit * c.stab === c.order,
+        `${c.orbit * c.stab} vs ${c.order}`,
+      )
+
+      // ── 文本里的数字 = 图上对象的数 ──
+      const txt = (line: string) => steps.find((s) => s.line === line)?.text ?? ''
+      const orbText = txt(`O = 轨道(A, ${c.x})`)
+      const stabText = txt(`S = 稳定子(A, ${c.x})`)
+      ok(`OST ${c.g}/${c.x}：轨道那步写的 |O| 与图上一致`, orbText.includes(`|O| = ${c.orbit}`), orbText)
+      ok(
+        `OST ${c.g}/${c.x}：稳定子那步写的 |Stab| 与图上一致`,
+        stabText.includes(`|Stab| = ${c.stab}`),
+        stabText,
+      )
+      ok(
+        `OST ${c.g}/${c.x}：结论那步的乘积等于图上算的数`,
+        steps[steps.length - 1].text.includes(`${c.orbit} × ${c.stab} = ${c.orbit * c.stab}`),
+        steps[steps.length - 1].text,
+      )
+      // 稳定子 = 中心化子：两条不同的 core 路径给同一个数（这里只要求文本里说清了）
+      ok(
+        `OST ${c.g}/${c.x}：文本点明「稳定子 = 中心化子」`,
+        stabText.includes('中心化子'),
+        stabText,
+      )
+
+      // ── 画布：G 上的自环 + O/S 挂在 G 上，没有孤点 ──
+      const g = deriveCanvas(b.objects)
+      ok(
+        `OST ${c.g}/${c.x}：画布上有 G ↷ G 的自环`,
+        g.edges.some((e) => e.kind === 'action' && e.from === 'G' && e.to === 'G'),
+        g.edges.map((e) => `${e.from}-${e.label}->${e.to}`).join(' '),
+      )
+      ok(
+        `OST ${c.g}/${c.x}：每个上画布的节点都有边（没有孤点）`,
+        g.nodes.every((n) =>
+          g.edges.some((e) => e.from === n.id || e.to === n.id),
+        ),
+        g.nodes
+          .filter((n) => !g.edges.some((e) => e.from === n.id || e.to === n.id))
+          .map((n) => n.id)
+          .join(','),
+      )
+      ok(
+        `OST ${c.g}/${c.x}：O 与 S 都在 G 这一张图上`,
+        g.nodes.some((n) => n.id === 'O') && g.nodes.some((n) => n.id === 'S'),
+        g.nodes.map((n) => n.id).join(','),
+      )
+    }
+
+    // 退化情形必须**当场说出来**，而不是让用户看着 |O| = 1 发呆
+    {
+      const steps = t.build('C_6', undefined, { x: '1' })
+      ok(
+        '交换群上，轨道那步明说「退化成 |G| = 1·|G|」',
+        steps.some((s) => s.text.includes('退化')),
+        steps.map((s) => s.text).join(' | '),
+      )
+    }
+
+    // ── 「开始」按钮的判据 ──
+    ok('点写对了就放行', templateReady(t, 'S_4', 2, { x: '(12)' }) === null)
+    ok('点不在群里被拦', !!templateReady(t, 'S_4', 2, { x: '不存在' }))
+    ok('没填点被拦', !!templateReady(t, 'S_4', 2, {}))
+    ok('认不出的群被拦', !!templateReady(t, '这不是群', 2, { x: 'e' }))
+    // 这条定理没有 p 这一档 —— 即使 p 不整除 |G| 也不该拦
+    ok(
+      'p 与这条定理无关（p = 5 不整除 12 也放行）',
+      templateReady(t, 'A_4', 5, { x: '(123)' }) === null,
+    )
+
+    // ── 实例标签 ──
+    eq(
+      '运行头写的是「S_4 · x = (12)」',
+      instanceLabel(t, { group: 'S_4' }, { x: '(12)' }),
+      'S_4 · x = (12)',
+    )
+  }
+
+  /* ══ M3：第一同构定理 ═══════════════════════════════════ */
+
+  suite('proof · 第一同构定理（M3）')
+  {
+    const t = FIRST_ISO
+    eq('模板注册了', PROOF_TEMPLATES.some((x) => x.id === 'first-isomorphism'), true)
+    eq('默认实例是 C₆', t.defaults.group, 'C_6')
+    eq('两个参数槽', t.slots.length, 2)
+    eq('槽 1 是靶群', t.slots[0].kind, 'group')
+    eq('槽 2 是生成元的像', t.slots[1].kind, 'gens')
+
+    // ── 建议的像：挑「像真落在靶群内部」的那一个（图上才是正方形）──
+    eq('C₆ → C₆ 建议 a→2', suggestImages('C_6', 'C_6'), 'a→2')
+    // C₁₂：候选 y 里 ⟨y⟩ 最大又不满的是 6 阶（y = 2 或 10），取元素表里靠前的
+    eq('C₁₂ → C₁₂ 建议 a→2', suggestImages('C_12', 'C_12'), 'a→2')
+    // C₆ → C₃ 只有满射（三角形），兜底给满射而不是空手
+    eq('C₆ → C₃ 兜底给满射 a→1', suggestImages('C_6', 'C_3'), 'a→1')
+    // 非循环源 + 靶群 = 源群 → 恒等映射（核平凡，图是三角形）；换靶群就给不出了
+    ok('非循环源 + 同靶群：给恒等映射', /→/.test(suggestImages('S_4', 'S_4')), suggestImages('S_4', 'S_4'))
+    eq('非循环源 + 别的靶群：给不出建议（交给用户手填）', suggestImages('S_4', 'C_2'), '')
+    eq('认不出的源给不出建议', suggestImages('不是群', 'C_6'), '')
+    // 面板的默认群是 A₄ —— 第一同构卡不能一进来就是红的
+    ok(
+      '面板默认群 A₄ 上第一同构卡可直接起跑（恒等映射兜底）',
+      templateReady(t, 'A_4', 2, { target: 'A_4', images: suggestImages('A_4', 'A_4') }) === null,
+      String(templateReady(t, 'A_4', 2, { target: 'A_4', images: suggestImages('A_4', 'A_4') })),
+    )
+
+    /**
+     * 手算理论值：|ker φ| 与 |im φ|，`|G/ker φ|` 由图上那个自动补出来的商群顶点给。
+     * 每一条都配一个满射 / 非满射，覆盖三角形与正方形两种图。
+     */
+    const ISO: {
+      g: string
+      h: string
+      images: string
+      ker: number
+      im: number
+      quotient: number
+      surj: boolean
+    }[] = [
+      { g: 'C_6', h: 'C_6', images: 'a→2', ker: 2, im: 3, quotient: 3, surj: false },
+      { g: 'C_12', h: 'C_12', images: 'a→3', ker: 3, im: 4, quotient: 4, surj: false },
+      { g: 'C_6', h: 'C_3', images: 'a→1', ker: 2, im: 3, quotient: 3, surj: true },
+      { g: 'S_3', h: 'C_2', images: 's12→a, s23→a', ker: 3, im: 2, quotient: 2, surj: true },
+    ]
+
+    for (const c of ISO) {
+      const label = `${c.g} → ${c.h}（${c.images}）`
+      const steps = t.build(c.g, undefined, { target: c.h, images: c.images })
+      const b = walkAll(steps, `FirstIso ${label}`)
+
+      // 商群顶点：**工具自动补出来的**（用户只写了三行）
+      const ker = b.byId('φ/ker')
+      eq(
+        `FirstIso ${label}：自动补出的商群阶 = ${c.quotient}`,
+        ker?.value.type === 'group' ? ker.value.group.order : -1,
+        c.quotient,
+      )
+
+      // 像顶点：非满射时才补（满射时 im φ = H，靶群顶点已在画布上）
+      const im = b.byId('φ/im')
+      eq(`FirstIso ${label}：像顶点${c.surj ? '不该' : '该'}补出来`, !!im, !c.surj)
+      if (im?.value.type === 'group') {
+        eq(`FirstIso ${label}：|im φ| = ${c.im}`, im.value.group.order, c.im)
+      }
+
+      // ── 文本里的数字 = 真值 ──
+      const txt = (needle: string) => steps.find((s) => s.text.includes(needle))?.text ?? ''
+      ok(
+        `FirstIso ${label}：核那步写的 |ker| 与真算一致`,
+        txt('是 G 的正规子群').includes(`|ker φ| = ${c.ker}`),
+        txt('是 G 的正规子群'),
+      )
+      ok(
+        `FirstIso ${label}：像那步写的 |im| 与真算一致`,
+        txt('它的阶是 |im φ|').includes(`|im φ| = ${c.im}`),
+        txt('它的阶是 |im φ|'),
+      )
+      ok(
+        `FirstIso ${label}：商群那步写的阶与图上顶点一致`,
+        txt('自动补出').includes(`= ${c.quotient} 个元素`),
+        txt('自动补出'),
+      )
+      ok(
+        `FirstIso ${label}：结论用阶核对两个数相等`,
+        steps[steps.length - 1].text.includes(`${c.quotient} = |im φ| = ${c.im}`),
+        steps[steps.length - 1].text,
+      )
+
+      // ── 画布：π / ≅ 自动补出来，非满射还多一条 ↪（正方形） ──
+      const g = deriveCanvas(b.objects)
+      const labels = g.edges.map((e) => e.label).join(',')
+      ok(`FirstIso ${label}：画布上有 π 与 ≅ 两条自动补的边`, !!labels.match(/π/) && !!labels.match(/≅/), labels)
+      eq(
+        `FirstIso ${label}：非满射才有 ↪（正方形）`,
+        g.edges.some((e) => e.label === '↪'),
+        !c.surj,
+      )
+      ok(
+        `FirstIso ${label}：每个顶点都有边（没有孤点）`,
+        g.nodes.every((n) => g.edges.some((e) => e.from === n.id || e.to === n.id)),
+        g.nodes
+          .filter((n) => !g.edges.some((e) => e.from === n.id || e.to === n.id))
+          .map((n) => n.id)
+          .join(','),
+      )
+      // 第一同构的正方形：G/ker 与 im 同高、G 与 H 同高（几何由 e2e 管，这里只要"四个顶点齐"）
+      ok(
+        `FirstIso ${label}：顶点数 = ${c.surj ? 3 : 4}`,
+        g.nodes.length === (c.surj ? 3 : 4),
+        g.nodes.map((n) => n.id).join(','),
+      )
+    }
+
+    // ── 模板**绝不**产出 ker / im 的定义行 ──
+    //
+    // 一旦写出来，`build.ts` 的 firstIsoObjects 就把"自动补点"交还给用户 ——
+    // 那份演示恰恰被自己写没了。这条断言守着它。
+    {
+      const steps = t.build('C_6', undefined, { target: 'C_6', images: 'a→2' })
+      const lines = proofLines(steps, steps.length - 1)
+      ok(
+        '产出的定义行只有 3 行（两群 + 一条 φ）',
+        lines.length === 3,
+        lines.join(' | '),
+      )
+      ok(
+        '不产出 ker / im 的定义行',
+        !lines.some((l) => /ker|im/.test(l)),
+        lines.join(' | '),
+      )
+      eq('φ 那一行原样可回认', lines[2], 'φ = 映射(G, H, a→2)')
+    }
+
+    // ── 「开始」按钮的判据 ──
+    ok('正常参数放行', templateReady(t, 'C_6', 2, { target: 'C_6', images: 'a→2' }) === null)
+    ok('没给像被拦', !!templateReady(t, 'C_6', 2, { target: 'C_6' }))
+    ok('像写成不存在的生成元被拦', !!templateReady(t, 'C_6', 2, { target: 'C_6', images: 'b→2' }))
+    // 注意别拿 `a→x` 当反例：循环群里**单字母一律视作那个生成元**
+    //（`resolveElementLoose` 的第 ③ 级），`x` 等价于 `a`
+    ok('像不在靶群里被拦', !!templateReady(t, 'C_6', 2, { target: 'C_6', images: 'a→9' }))
+    // 核 = G ⟺ 像平凡：整张图会退化成一条线，必须明说
+    ok('平凡映射（a→0）被拦', !!templateReady(t, 'C_6', 2, { target: 'C_6', images: 'a→0' }))
+    ok('靶群认不出被拦', !!templateReady(t, 'C_6', 2, { target: '不是群', images: 'a→2' }))
+    // 这条也没有 p 这一档
+    ok('p 与这条定理无关', templateReady(t, 'C_6', 5, { target: 'C_6', images: 'a→2' }) === null)
+
+    // ── 实例标签 ──
+    eq(
+      '运行头写的是「C_6 · H = C_6 · a→2」',
+      instanceLabel(t, { group: 'C_6' }, { target: 'C_6', images: 'a→2' }),
+      'C_6 · H = C_6 · a→2',
+    )
+  }
+
+  /* ══ M3：参数槽与旧模板的兼容 ═══════════════════════════ */
+
+  suite('proof · 参数槽（M3）')
+  {
+    for (const t of PROOF_TEMPLATES) {
+      ok(`${t.id}：模板 id 唯一且非空`, !!t.id)
+      ok(`${t.id}：每个槽都有 key 与非空 label`, t.slots.every((s) => !!s.key && (s.kind === 'prime' || !!s.label)))
+    }
+    // Sylow 三条仍是「一个 p 槽」，一字未改 —— 旧的面板口径（p 按钮上带 n_p）继续成立
+    for (const t of [SYLOW_I, SYLOW_II, SYLOW_III]) {
+      eq(`${t.id}：只有一个 p 槽`, t.slots.length, 1)
+      eq(`${t.id}：那个槽是 prime`, t.slots[0].kind, 'prime')
+    }
+    eq(
+      '模板 id 互不相同',
+      new Set(PROOF_TEMPLATES.map((t) => t.id)).size,
+      PROOF_TEMPLATES.length,
+    )
+    // 旧的调用口径（只看群与 p）必须继续能跑：不加 extra 也不炸
+    ok('Sylow I 不给 extra 照样 build 得出来', SYLOW_I.build('S_4', 3).length > 1)
+    ok(
+      'Sylow I 的 templateReady 不因缺 extra 而拦',
+      templateReady(SYLOW_I, 'S_4', 3) === null,
+    )
+    // 新模板缺 extra 时**给得出理由**，而不是抛
+    eq('轨道–稳定子缺 x：只给一步说明', ORBIT_STABILIZER.build('S_4', 2).length, 1)
+    eq('第一同构缺像：只给一步说明', FIRST_ISO.build('C_6', 2).length, 1)
   }
 }

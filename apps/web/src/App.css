@@ -1532,6 +1532,48 @@ body {
   color: var(--danger);
 }
 
+/* ── 模板自有的参数槽（M3）：点 x / 靶群 / 生成元的像 ────── */
+
+.proof-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.proof-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.proof-field-name {
+  flex: none;
+  min-width: 64px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.proof-field input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.proof-field input::placeholder {
+  color: var(--text-faint);
+}
+
+.proof-field input:focus {
+  outline: none;
+  border-color: var(--purple);
+}
+
 .proof-primes {
   display: flex;
   flex-wrap: wrap;
@@ -1573,6 +1615,13 @@ body {
 
 .proof-bad {
   color: var(--danger);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+/* 「还没填」的引导（灰）——与「填错了」（红）分开，否则看着像工具坏了 */
+.proof-hint {
+  color: var(--text-dim);
   font-size: 11.5px;
   line-height: 1.35;
 }

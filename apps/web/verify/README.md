@@ -32,6 +32,7 @@ node verify/e2e/tex-render.mjs        # 面板 TeX 渲染与记号回认（U14�
 node verify/e2e/proof-step.mjs        # 证明面板的 step-through（M1）
 node verify/e2e/proof-sylow3.mjs      # Sylow III 的 14 步与孤点判据（M2）
 node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
+node verify/e2e/proof-m3.mjs          # 轨道–稳定子 / 第一同构的参数槽与正方形（M3）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -54,10 +55,14 @@ node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
 1. **块注释里不能出现"星号 + 斜杠"**——哪怕是在行内代码里写通配路径（`.tmp-*` 加斜杠）。它会提前终止注释，后面整段中文变成代码，报的错却是"Expected a semicolon"，位置还指向另一行。第一版 `harness.ts` 就栽在这上面。
 2. **rolldown 1.2.8 的 transform 很脆**：模板串里"换行转义 + 多字节字符"、以及 U+2500（制表横线）都会报 `Invalid ...` 而构建失败，**连写在注释里也炸**（它先做 transform）。所以 `harness.ts` 的输出装饰一律 ASCII。
 3. **`JSON.stringify` 不了域对象**：`Group.generators[].inverse` 指回生成元，是循环引用。断言里只比扁平字段（`ok`/`error`/`label`/`order`）。
-4. **Ω 上的点用 1 起的数字下标寻址**（`轨道(A, 1)`）——Ω 的成员是子群，标签里含逗号，不能用标签寻址。
+4. **Ω 上的点怎么寻址，看 Ω 是什么**（判据在 `ops.omegaIndexOf`）：Ω 是**集合**（成员是子群，如 `Syl_p(G)`、陪集）时按 **1 起的数字下标**（`轨道(B, 1)`——标签里含逗号，没法用标签寻址）；Ω 是 **G 自身**（共轭作用 / 正则作用）时按**元素记号**（`轨道(A, (123))`）。M3 首轮就栽在这条：`轨道(A, 1)` 在 S₄ 上被拒（没有叫 `1` 的元素），在 C₆ 上却侥幸成功。
 5. **几何断言别写"端点重合"**：边的端点被节点尺寸裁过，两条边共用同一个对象时端点并不相等。要比的是**轴向**（水平边两端 y 相等）与**节点中心**（从 `.gnode-hit` 的 cx/cy 读）。
 6. **别写恒真断言**（`ok('...', true)`）——那是装饰不是测试。写不出判据就说明这条不该断言。
 7. **回归失败先判"bug 还是期望值写错"**：本次首轮 12 条 FAIL 全是期望值算错（`|D₄/⟨r²⟩|`、`⟨r⟩ ∩ ⟨s⟩`、`n₂(D₄)`、Ω 的 1-based 下标）。改断言前先重算一遍数学。
 8. **`|G| ≤ 144` 之外别建 Sylow**：`findSylowSubgroups` 到那个量级就不给算了。参数体检（`proof.stageInfo`）先拦，别让断言卡在枚举里。
 9. **core 元素 `label` 在置换群上单循环不带括号**（S₄ 的 `234` / `12`，而双对换却是 `(12)(34)`）。要显示或写进定义行时过 `ops.elementNotation`——它带**回认判据**，所以 C₁₂ 里标签为 `10` 的元素会被正确留在原样（`(10)` 解析不了）。
 10. **`n_p` 与 `m` 是 Sylow III 里最容易抄反的一对**：`m = |G| / pᵏ`（不是 `|G| / n_p`）。本次 5 条 FAIL 全出自这里。
+11. **面板把 `step.text` 当纯文本渲染**（只有 `tex` 走 KaTeX）：模板文本里写 `**强调**` 会原样显示成两颗星（M3 首轮截图里就露出来了）。断言里加了"文案不含 `**`"的哨兵；要强调请用「」。
+12. **循环群里的单字母一律视作那个生成元**（`resolveElementLoose` 的第 ③ 级）：`映射(G, H, a→x)` 在 C₆ 上**是合法的**（`x` 等价于 `a`），别拿它当"元素不存在"的反例——要用 `a→9`。
+13. **轨道的值类型随 Ω 变**：Ω = G 自身时是 `elements`，Ω 是集合时是 `set`。读"轨道多大"得认两种（`suites/proof.ts` 的 `orbSize`），只按 `set` 读会得到 `-1` 而看不出为什么。
+14. **dev server 的 host**：`vite.config.ts` 里已写死 `127.0.0.1`——默认的 `localhost` 在 Node 18+ 会解析成 `::1`（只监听 IPv6），而走查脚本一律连 `http://127.0.0.1:5273`，会报 `ERR_CONNECTION_REFUSED`，看着像"服务没起"。

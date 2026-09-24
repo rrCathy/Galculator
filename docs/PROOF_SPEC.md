@@ -189,14 +189,69 @@ interface ProofTemplate {
 - **Sylow II**（共轭性）：用 `sylowConjugationPerms(group, subgroups)` 得 G 作用在全体 Sylow p-子群上的置换，`computeOrbits` 证传递（单轨道），稳定子 = 正规化子 N_G(P)。
 - **Sylow III**（n_p ≡ 1 mod p 且 n_p | m）：`computeSylowAnalysis` 已给出 `np` / `congruentModP` / `dividesM`；模板负责把这两个结论"演"出来（轨道–稳定子 + 正规化子夹逼）。
 
+## 2.6 参数槽（M3，2026-09-24）
+
+U15 把"群与 p"变成入参时，三条 Sylow 模板的参数**恰好是同一个元组**，于是面板可以把
+"群输入框 + p 按钮组"写死。M3 的两条定理参数不一样，写死就不成立了：
+
+| 模板 | 群（共用）| p | 点 x | 靶群 H | 生成元的像 |
+|---|---|---|---|---|---|
+| Sylow I / II / III | ✓ | ✓ | | | |
+| 轨道–稳定子 | ✓ | | ✓ | | |
+| 第一同构定理 | ✓ | | | ✓ | ✓ |
+
+于是 `ProofTemplate` 上多一个 `slots`，由模板自己声明要什么控件：
+
+```ts
+type ParamSlot =
+  | { kind: 'prime';   key: 'p' }                     // |G| 的素因子按钮组（按钮上带 n_p）
+  | { kind: 'element'; key: string; label: string }   // Ω 上的一个点（元素记号）
+  | { kind: 'group';   key: string; label: string }   // 另一个群（靶群）
+  | { kind: 'gens';    key: string; label: string }   // 生成元的像（`a→2`）
+
+interface ProofTemplate {
+  slots: ParamSlot[]
+  /** 换群 / 换靶群时重算的建议值（面板预填；用户可改） */
+  suggest?(group: string, p: number, current: Record<string, string>): Record<string, string>
+  build(group?: string, p?: number, extra?: Record<string, string>): ProofStep[]
+}
+```
+
+三条口径：
+
+1. **群仍然所有卡共用**（比较几条定理本来就该在同一个群上做），所以槽里不放群。
+2. **槽值是文本**（`extra: Record<string, string>`）——与定义行同一种"文本"哲学：
+   机器写的东西**看得见、能改**。点 x 会被写进定义行（`O = 轨道(A, (123))`），
+   所以它必须是**能敲回求值器**的记号（走 `elemText` 的回认）。
+3. **`templateReady` 与 `build` 共用同一批纯函数**（`conjStage` / `mapStage`）——
+   两处各写一遍判据迟早会分叉，那时再点出一个"按钮亮着却跑不动"的卡就没人信了。
+
+面板还有一个区分：**槽空着 = 引导（灰字）**，**填了却不成立 = 错误（红字）**。
+非循环源群上工具给不出"生成元的像"的建议（`autoBuildMapping` 实测只在循环群之间给得出），
+那时红字会让人以为工具坏了——所以那句是灰的，并且**列出源群的生成元**。
+
 ## 7. 模板路线图
 
 - **Sylow I（Wielandt）✅ 已落地（2026-09-20，M1）**：`gal/proof.ts` 的 `SYLOW_I`，
   A₄ / p = 2，13 步；UI 是右上角的**证明面板**（`ui/ProofDock.tsx`），
   前进 / 后退 / 跳步 / 重来，当前步在画布上高亮。
   验证：断言 `verify/suites/proof.ts` · 走查 `verify/e2e/proof-step.mjs`。
-- 接着：Sylow II / III（M2）——`sylowConjugationPerms` 给传递性、`computeSylowAnalysis` 给 `n_p`。
-- 候选：Cayley 定理、第一同构定理、orbit–stabilizer 定理、Burnside 引理。
+- **Sylow II / III ✅ 已落地（2026-09-21，M2）**：`sylowConjugationPerms` 给传递性、
+  `computeSylowAnalysis` 给 `n_p`；两条模板**换任意群任意 p 都能点着走完**（U15 的入参界面）。
+- **轨道–稳定子 ✅ / 第一同构定理 ✅ 已落地（2026-09-24，M3 / U17）**：
+  - **轨道–稳定子**（`ORBIT_STABILIZER`，8 步）：舞台是**共轭作用在自身上** ——
+    轨道 = 共轭类、稳定子 = 中心化子，`|G| = |O|·|Stab|`。稳定子与 `C_G(x)`
+    **各算一遍做交叉核对**。默认点挑"共轭类最大"的那个元素（跳过单位元）；
+    交换群上共轭作用退化，模板**当场说清**。
+  - **第一同构定理**（`FIRST_ISO`，11 步 / 满射 10 步）：只写三行
+    （`G = …` / `H = …` / `φ = 映射(G, H, …)`），两个顶点与三条边全部自动补
+    （`build.ts` 的 `firstIsoObjects` + `derive.ts`）。**模板绝不产出 `ker` / `im` 的定义行**——
+    写出来就等于把自动补点交还给用户，那份演示恰恰被自己写没了。
+- **Cayley 定理 ⏳（候选）**：舞台现成（`正则作用(G)`，G 左乘作用在自身），
+  但"G 同构于 S_n 的一个子群"这一步**在图上没有落点**：要造 `Sym(Ω)` 那样的置换群对象，
+  而 S₆ 已 720 阶、S₂₄ 根本建不出来。可行的方向是把"**作用的核**"变成一等对象
+  （核 = {e} ⟺ 忠实 ⟺ 嵌入），而不是把 S_n 画出来。
+- 其它候选：Burnside 引理（core 有 `computeBurnsideCount`）、第二 / 第三同构定理。
 
 ## 8. 待补细节
 

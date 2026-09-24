@@ -85,12 +85,24 @@ export default function App() {
    * 与手打、与点出来的操作完全等价（设计说明见 `gal/proof.ts` 顶部）。
    */
   const [proofOpen, setProofOpen] = useState(true)
-  /** 正在跑的「模板 × 实例」；`null` = 还没开始 */
-  const [proofRun, setProofRun] = useState<{ tpl: ProofTemplate; params: ProofParams } | null>(null)
+  /**
+   * 正在跑的「模板 × 实例」；`null` = 还没开始。
+   *
+   * `extra` 是**参数槽**的值（M3：点 x / 靶群 / 生成元的像）——群与 p 之外，
+   * 各条定理自己要的那点东西（见 `gal/proof.ts` 的 `ParamSlot`）。
+   */
+  const [proofRun, setProofRun] = useState<{
+    tpl: ProofTemplate
+    params: ProofParams
+    extra: Record<string, string>
+  } | null>(null)
   const [proofCursor, setProofCursor] = useState(-1)
   const proofTpl = proofRun?.tpl ?? null
   const proofSteps = useMemo(
-    () => (proofRun ? proofRun.tpl.build(proofRun.params.group, proofRun.params.p) : []),
+    () =>
+      proofRun
+        ? proofRun.tpl.build(proofRun.params.group, proofRun.params.p, proofRun.extra)
+        : [],
     [proofRun],
   )
 
@@ -216,16 +228,19 @@ export default function App() {
     [proofTpl, proofSteps],
   )
 
-  const proofStart = useCallback((t: ProofTemplate, params: ProofParams) => {
-    const steps = t.build(params.group, params.p)
-    setProofRun({ tpl: t, params })
-    setProofCursor(0)
-    setLines(proofLines(steps, 0))
-    setProofOpen(true)
-    setInter(IDLE)
-    setOrbStage('closed')
-    setNotice(null)
-  }, [])
+  const proofStart = useCallback(
+    (t: ProofTemplate, params: ProofParams, extra: Record<string, string>) => {
+      const steps = t.build(params.group, params.p, extra)
+      setProofRun({ tpl: t, params, extra })
+      setProofCursor(0)
+      setLines(proofLines(steps, 0))
+      setProofOpen(true)
+      setInter(IDLE)
+      setOrbStage('closed')
+      setNotice(null)
+    },
+    [],
+  )
 
   /** 退出证明：**画布保留**（走完的图可以继续手动玩）。 */
   const proofExit = useCallback(() => {
@@ -598,6 +613,7 @@ export default function App() {
           onToggle={() => setProofOpen((v) => !v)}
           template={proofTpl}
           params={proofRun?.params ?? null}
+          extra={proofRun?.extra ?? null}
           steps={proofSteps}
           cursor={proofCursor}
           onStart={proofStart}

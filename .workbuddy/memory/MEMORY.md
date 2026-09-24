@@ -38,7 +38,7 @@
 - 记号 `parseGroupNotation`（统一入口）· 布局 `computeLatticeLayout`/`mergeLatticeByConjugacy`
 - Sylow `factorizeOrder` `binomialMod` `findSylowSubgroups` `computeSylowAnalysis` · 共轭 `conjugateSubgroup`（返回**排序**后的元素数组）`sylowConjugationPerms`
 - 作用 `computeCosetActionPerms` `computeOrbits` `computeStabilizers` `verifyOrbitStabilizer` `computeConjugationPerms` `computeLeftTranslationPerms` `computeFixedPoints`
-- 子群 `buildSubgroupGroup(parent, elements, symbol, gens?)`（元素 id 沿用母群）· `subgroupStructureSymbol`（**返回 TeX**）· `subgroupSetKey(elementIds: string[])`（**收 id 不 收元素**）· `isSubgroupElementSet` · `listCosetStripSubgroups` · `closeUnderMultiply`
+- 子群 `buildSubgroupGroup(parent, elements, symbol, gens?)`（元素 id 沿用母群）· `subgroupStructureSymbol`（**返回 TeX**）· `subgroupSetKey(elementIds: string[])`（**收 id 不 收元素**）· `isSubgroupElementSet` · `listCosetStripSubgroups` · `closeUnderMultiply` · `getCentralizer`/`getNormalizer`/`getGroupCenter`/`getConjugacyClasses`
 - 元素 `resolveElement`（认 id/label/value/循环记号）· `resolveElementRefs`
 - 映射 `Homomorphism`（**不要另立结构**）· `getGeneratorElements` `extendFromGenerators` `verifyHomomorphism`（violation 全是**元素 id**）`computeKernelFromMapping` `computeImageFromMapping` `getHomomorphismProperties` `autoBuildMapping` `extractGeneratorMapping`
 - 伴生 `naturalProjectionMapping` `subgroupInclusionMapping` `directProductProjectionMapping` `trivialMapping`
@@ -56,9 +56,11 @@
 ## 代码落点（apps/web/src/）
 - `gal/`：`value.ts`(7 值类型 + `sortOf`) `ops.ts`(注册表 32 条：mechanism/primitive/recipe/impl/call/infix/params/arity/variadic/editor/result/run + `opsFor` + `paramAccepts`) `naming.ts` `compose.ts` `interaction.ts`(idle→selected→menu→pending/fill) `evalDef.ts`(五级分发) `build.ts`(`firstIsoObjects` 隐式补点) `derive.ts`(`arrowOf`/`alongsideEdges`/`computeLevels`) `insights.ts` `tex.ts`(`toTex`/`shouldTex`) `pretty.ts` `numeric.ts` `grid.ts` `proof.ts`
 - `ui/`：`CanvasView` `DockPanel`（**收起时 body 整个不渲染**）`ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb`（**类名 `.orb-center` 与 MultiOrb 撞车**，选择器要区分）`ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex`(`Tex`/`TexOrText`/`TexList`/`measureTex`) `ProofDock`
-- `gal/proof.ts`：`ProofStep{kind,text,tex,line,highlight}` + `ProofTemplate{params,build()}` + `proofLines`/`proofHighlight`（纯函数）+ `SYLOW_I`/`SYLOW_II`/`SYLOW_III`。
+- `gal/proof.ts`：`ProofStep{kind,text,tex,line,highlight}` + `ProofTemplate{slots,defaults,suggest?,build(group?,p?,extra?)}` + `proofLines`/`proofHighlight`/`templateReady`/`instanceLabel`（纯函数）+ **5 条模板** `SYLOW_I`/`SYLOW_II`/`SYLOW_III`/`ORBIT_STABILIZER`/`FIRST_ISO`。
   **设计支点：每步 `line` = 一整行定义 → 交给现成的求值器**（零新求值机制、机器写的行可见可改）。模板文本里的数字由 `build()` 真算。
   `SYLOW_III` 的关键是**换主角**：`G ↷ Ω` 只给 `n_p | m`，`n_p ≡ 1 (mod p)` 要 `P ↷ Ω`。
+  **`ParamSlot`（M3）**：`prime`(|G| 素因子按钮组，带 n_p) / `element`(点 x) / `group`(靶群) / `gens`(生成元的像)——参数不再只有 `(群, p)`，**控件由模板自己声明**，`extra: Record<string,string>` 装槽值（全是文本）。`templateReady` 与 `build` 共用同一批纯函数（`conjStage`/`mapStage`）。
+  **OST** = 共轭作用在自身上（轨道 = 共轭类、稳定子 = 中心化子，两路交叉核对）；**FirstIso** = 只写 3 行，`φ/ker` 与 `φ/im` 靠 `build.ts` 自动补 —— **模板绝不产出 `ker`/`im` 的定义行**（写了就把自动补点交还给用户，演示被自己写没）。
 - `verify/`：**回归线（入库，资产不是临时物）**——`suites/`（语义层）+ `e2e/`（真浏览器几何）+ `README.md`。跑法 `pnpm --filter @galculator/web verify` / `verify:e2e`。
 
 ### 项目内的坑
@@ -67,7 +69,8 @@
 - `闭包` 的上下文群形态是 `if (G0 && a.length > 1)`——单个群参数走"取它的元素当种子"，否则返回平凡群。
 - 集合运算 `∩`/`·` 结果若确是子群则**升级**为真群对象；∪/∖ 不升级。`stabilizers` 产出是 G 的子群 → `result:'group'`。
 - **KaTeX 后 DOM**：`S₄` 的 textContent 是 `S4`、`α₁` 是 `α1` → 节点定位走 `<g class="gnode" data-label="S₄">`；断言别写展示形态。
-- **`⟨⟩` 归一**只在**顶层（括号外）**改写（`normalizeExpr(s, angle=false)`）；Ω 成员标签含逗号 → 用**纯数字下标**寻址（`稳定子(A, 1)`）。
+- **`⟨⟩` 归一**只在**顶层（括号外）**改写（`normalizeExpr(s, angle=false)`）。
+- **Ω 上的点怎么寻址，看 Ω 是什么**（`ops.omegaIndexOf`）：Ω 是**集合**（成员是子群 / 陪集，标签含逗号）→ **1 起的数字下标**（`轨道(B, 1)`）；Ω = **G 自身**（共轭 / 正则作用）→ **元素记号**（`轨道(A, (123))`）。**C₆ 上 `轨道(A, 1)` 会侥幸成功**（真有元素 `1`），S₄ 上才暴露——概率性正确。
 - **布局列约束不许传染**：竖直约束（`π`/`π₁`/`π₂`/`↪`/`=`）合并用**贪心**（短跨度优先）+ **合并后整组**全局穿行检查。**`π` 优先于 `↪`**、同层边不参与列合并。判据按**边的语义**，不按几何猜。
 - **不上画布的对象不占行**（`computeLevels`），否则图里留空行；**行内也防传染**（同层显式映射边两端之间不许夹列组）。
 - **箭头形状 = marker**：`marker-end` 挂 `-surj`（满射双箭头）、`marker-start` 挂 `-hook`（单射尾钩，要 `orient="auto-start-reverse"`）、**同构两端都挂 `-head`**；marker 必须**按视觉族成套生成**。形状由 `arrowOf()` 推，判不出**不猜**。
@@ -77,6 +80,10 @@
 - `toTex()` 四步有序：上下标 → 运算符/希腊 → 函数名(`\operatorname{}`) → 中文(`\text{}`)。**`prettySymbol` 不认的宏会掉进"去反斜杠"兜底** → 希腊字母表 + `\mathrm/\mathbb/\operatorname` 展开必须齐。
 - **上画布的节点不许是孤点**：来源若是一条**边**（作用/映射）而不是节点，来源线那支整条跳过 → 画布上飘一个没边的圆（`不动点` 就这样）。判据：`nodes.every(n => 有边)`。
 - **图上同名节点 = 看不清**：标签要带**来源的名字**（`Orb_A(1)` / `Fix_B`）。
+- **证明面板把 `step.text` 当纯文本渲染**（只有 `tex` 走 KaTeX）：模板文本里写 `**强调**` 会**原样显示两颗星**（M3 截图抓到的）。要强调用「」。
+- **循环群里的单字母一律视作那个生成元**（`resolveElementLoose` 第 ③ 级）：`映射(G, H, a→x)` 在 C₆ 上合法（`x` ≡ `a`），别拿它当"元素不存在"的反例。
+- **轨道的值类型随 Ω 变**：Ω = G 自身 → `elements`；Ω 是集合 → `set`。读"轨道多大"要认两种。
+- **dev server 的 host**：`localhost` 在 Node 18+ 解析成 `::1`（只监听 IPv6）→ 走查连 `127.0.0.1` 会 `ERR_CONNECTION_REFUSED`，看着像"服务没起"。`vite.config.ts` 已写死 `server.host = '127.0.0.1'`。
 
 ## 交互模型（细看 docs/INTERACTION.md）
 - 画布 = 交换图（对象 = 节点、操作 = 箭头），非坐标系。**形状 = 类型**（群 = 无形状 + 一小块常驻淡底 / 集合 = 圆 / 映射 = 箭头）；**颜色 = 来源**（蓝 = 输入 / 紫 = 运算）。
@@ -91,5 +98,7 @@
 - **教训：算得对 != 画得对**（第二同构在修 G3 前阶全对，图上 `H∩N` 却是集合圆、包含箭头是虚线）。
 
 ## 遗留（详单在 ROADMAP）
+**定理库 5 条 ✅（M3/U17）**；还差 **Cayley 定理**——舞台现成（`正则作用(G)`），但"G ↪ Sym(Ω)"在图上**没有落点**（S₆ 已 720 阶、S₂₄ 建不出来）；方向是把「**作用的核**」变成一等对象（核 = {e} ⟺ 忠实 ⟺ 嵌入），而不是把 S_n 画出来。
+**OST 的图是两条斜线**（`Orb` 与 `Stab` 同层，但与 `G` 不同列）——布局算法缺"一个顶点带多个下层产物"的规范。
 自定义作用编辑器 · 伴生箭头还不是映射对象（不能对 π 做 ker/im）· **陪集视图** · 半直积 ⋊ · **集合节点展开**（第 2 层密度）· 短正合列/五引理（只清了形状障碍，未实跑）· U6 的 B/C（节点宽度解耦 / 画布分层）· U8 工具条+群目录 · U9 集合构造器 · U11 宏。
 **Sylow III 图的布局**：`G`、`Ω` 都在第 1 列，`Stab ↪ G` 与 `Orb ↪ Ω` 两条竖直约束撞同列 → 全局穿行检查拒绝合并 → 长对角线横穿。正解是**让每个竖直约束组各占一列**（而非合并），风险在 13+24+5 条几何断言。

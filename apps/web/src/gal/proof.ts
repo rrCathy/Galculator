@@ -1,17 +1,27 @@
 import {
   binomialMod,
   closeUnderMultiply,
+  computeConjugationPerms,
   computeCosetActionPerms,
+  computeImageFromMapping,
+  computeKernelFromMapping,
   computeOrbits,
   computeStabilizers,
   conjugateSubgroup,
   createGroupFromSymbol,
+  extendFromGenerators,
   factorizeOrder,
   findSylowSubgroups,
+  getCentralizer,
+  getGeneratorElements,
+  getHomomorphismProperties,
+  indexById,
   parseGroupNotation,
   subgroupSetKey,
+  verifyHomomorphism,
   type Group,
   type GroupElement,
+  type HomomorphismMap,
 } from '@groupviz/core'
 import { elementNotation, resolveElementLoose } from './ops'
 import { prettySymbol, subscript, superscript } from './pretty'
@@ -49,6 +59,16 @@ import { prettySymbol, subscript, superscript } from './pretty'
  * Sylow I 的模板只算 `C(n, pᵏ) mod p`，**不枚举**那些 pᵏ 元子集（A₄ 上是 495 个，
  * 大群上直接爆掉）。这本身是教学点：**证明靠计数，不靠枚举**。第 6 步给出的 P
  * 是把"存在"具象化的**实例**，不是前提——存在性由第 5 步的反证独立成立。
+ *
+ * ## 参数槽：模板自己声明要什么参数（M3）
+ *
+ * U15 把"群与 p"变成入参时，所有模板恰好都是同一个元组，于是面板可以把
+ * "群输入框 + p 按钮组"写死。M3 的两条新定理参数不一样——**轨道–稳定子**要多一个
+ * **点 x**，**第一同构**要多一个**靶群**和一组**生成元的像**——写死就不成立了。
+ *
+ * `ParamSlot` 把"这个模板要什么参数"变成模板自己的声明；`build` 的第三个参数
+ * （`extra`）装那些槽的值（**都是文本**——与定义行同一种"文本"哲学，能看见、能改）。
+ * 群仍是所有卡共用的那一个（比较几条定理本来就该在同一个群上做），所以槽里不放群。
  */
 
 export type ProofStepKind = 'claim' | 'compute' | 'conclude'
@@ -65,11 +85,35 @@ export interface ProofStep {
   highlight?: string[]
 }
 
-/** 模板绑定的**默认实例**（面板预填；用户可改）。 */
+/**
+ * 模板绑定的**默认实例**（面板预填；用户可改）。
+ *
+ * `p` 可选：Sylow 系列才要素数，轨道–稳定子 / 第一同构都没有 p 可言。
+ */
 export interface ProofParams {
   group: string
-  p: number
+  p?: number
 }
+
+/**
+ * 参数槽（M3）——面板据此在卡片上渲染控件。
+ *
+ * 为什么要有这一层：M2 之前所有模板的参数都是同一个元组 `(群, p)`，
+ * 面板于是把"群输入框 + p 按钮组"写死。M3 的两条新定理参数不一样，
+ * 写死就不成立了。槽把"模板要什么参数"交还给模板自己声明。
+ *
+ * 群仍然**三张卡共用**（比较几条定理本来就该在同一个群上做），
+ * 所以槽里不放群——放的是各卡自己的东西。
+ */
+export type ParamSlot =
+  /** |G| 的素因子按钮组（按钮上带 n_p）—— Sylow 系列 */
+  | { kind: 'prime'; key: 'p' }
+  /** Ω 上的一个点（元素记号，如 `(123)`）—— 轨道–稳定子 */
+  | { kind: 'element'; key: string; label: string; hint?: string }
+  /** 另一个群（靶群）—— 第一同构 */
+  | { kind: 'group'; key: string; label: string }
+  /** 生成元的像（`a→2`，多对就用逗号隔开）—— 第一同构 */
+  | { kind: 'gens'; key: string; label: string }
 
 export interface ProofTemplate {
   id: string
@@ -82,11 +126,23 @@ export interface ProofTemplate {
   defaults: ProofParams
   /** 面板下拉里给的建议群（都实测过模板跑得通） */
   groupChoices: string[]
+  /** 这张卡要多哪些控件（p 按钮组 / 点 / 靶群 / 像） */
+  slots: ParamSlot[]
   /**
-   * 把"模板 × 具体群 × 素数"实例化成步骤序列。
-   * 不传参数就用 `defaults`（于是 `SYLOW_I.build()` 仍是 A₄ / p = 2）。
+   * 参数槽的**建议值**（面板预填；用户可改）。
+   *
+   * 面板在**换群**与**换靶群**两个时刻调它——`current` 是当时手上已有的槽值，
+   * 于是"源群变了 → 重挑点 / 重算靶群与像"这种连带更新写在模板自己家里
+   * （而不是面板里堆一串 if）。
    */
-  build(group?: string, p?: number): ProofStep[]
+  suggest?(group: string, p: number, current: Record<string, string>): Record<string, string>
+  /**
+   * 把"模板 × 具体群（× p × 额外参数）"实例化成步骤序列。
+   *
+   * 不传参数就用 `defaults`（于是 `SYLOW_I.build()` 仍是 A₄ / p = 2）。
+   * `extra` 是**参数槽**的值（文本），键见 `slots`。
+   */
+  build(group?: string, p?: number, extra?: Record<string, string>): ProofStep[]
 }
 
 /* ── 执行器（纯函数） ───────────────────────────────────── */
@@ -248,6 +304,17 @@ function checkParams(info: StageInfo, p: number): string | null {
   return null
 }
 
+/** 由体检过的记号建出群（只在 `stageInfo(...).ok` 之后用）。 */
+function groupOf(info: StageInfo): Group | null {
+  const notation = parseGroupNotation(info.raw.trim())
+  if (!notation.symbol) return null
+  try {
+    return createGroupFromSymbol(notation.symbol)
+  } catch {
+    return null
+  }
+}
+
 /* ── 舞台：Sylow 子群一族（真算） ───────────────────────── */
 
 /** 子群的**语义键**（元素 id 升序）—— Ω 上的点靠它比对。 */
@@ -260,11 +327,11 @@ function subKey(els: GroupElement[]): string {
  * 升格成 `(234)`），但只有在它真能敲回求值器时才用；否则退回 core 的 `label`，
  * 再不行退回 `id`（core 一定认）。
  *
- * 这条是整个 U15 的地基：模板把生成元**写成文本**塞进定义行
- *（`P = 闭包(G, …)`），文本一旦解不开，后面整条链就断在求值器里——
- * 而且断得很晚（tsc 与"数字都对"都拦不住）。
+ * 这条是整个 U15 的地基，M3 的「点 x」也吃它：模板把元素**写成文本**塞进定义行
+ *（`P = 闭包(G, …)` / `O = 轨道(A, (123))`），文本一旦解不开，后面整条链就断在
+ * 求值器里——而且断得很晚（tsc 与"数字都对"都拦不住）。
  */
-function genText(g: Group, e: GroupElement): string {
+function elemText(g: Group, e: GroupElement): string {
   const nice = elementNotation(g, e)
   const hit = resolveElementLoose(g, nice)
   if (hit && hit.id === e.id) return nice
@@ -290,7 +357,7 @@ function gensOfSubgroup(g: Group, els: GroupElement[], cap = 3): string[] | null
     closed = closeUnderMultiply(g, gens)
   }
   if (gens.length === 0 || closed.length !== els.length) return null
-  return gens.map((e) => genText(g, e))
+  return gens.map((e) => elemText(g, e))
 }
 
 interface SylowStage {
@@ -322,8 +389,7 @@ interface SylowStage {
  * 就没有"另外找一个 P"的必要；从前手写 `(123)` 再回查下标，反而多一层会错的活。
  */
 function sylowStage(info: StageInfo, p: number): SylowStage | string {
-  const notation = parseGroupNotation(info.raw.trim())
-  const g = notation.symbol ? createGroupFromSymbol(notation.symbol) : null
+  const g = groupOf(info)
   if (!g) return `认不出群记号「${info.raw}」`
 
   const f = info.factors.find((x) => x.prime === p)
@@ -401,6 +467,9 @@ const BINOM_DIGITS_SHOWN = 20
 
 export const PROOF_GROUP_CHOICES = ['A_4', 'S_4', 'S_3', 'D_6', 'D_4', 'C_6', 'C_12', 'Q_8']
 
+/** Sylow 系列要的那个槽：|G| 的素因子按钮组（按钮上带 n_p）。 */
+const PRIME_SLOT: ParamSlot = { kind: 'prime', key: 'p' }
+
 /* ── Sylow I（Wielandt）─────────────────────────────────── */
 
 const SYLOW_I_DEFAULTS: ProofParams = { group: 'A_4', p: 2 }
@@ -416,10 +485,11 @@ export const SYLOW_I: ProofTemplate = {
   blurb: '不搜索、不枚举：只数一个模 p 不为 0 的集合',
   defaults: SYLOW_I_DEFAULTS,
   groupChoices: PROOF_GROUP_CHOICES,
+  slots: [PRIME_SLOT],
 
   build(group?: string, p?: number): ProofStep[] {
     const info = stageInfo(group ?? SYLOW_I_DEFAULTS.group)
-    const pp = p ?? SYLOW_I_DEFAULTS.p
+    const pp = p ?? SYLOW_I_DEFAULTS.p ?? 2
     const bad = checkParams(info, pp)
     if (bad) return bail(bad)
 
@@ -553,10 +623,11 @@ export const SYLOW_II: ProofTemplate = {
   blurb: '一次作用：G 共轭作用在 Syl_p(G) 上，且只有一个轨道',
   defaults: SYLOW_II_DEFAULTS,
   groupChoices: PROOF_GROUP_CHOICES,
+  slots: [PRIME_SLOT],
 
   build(group?: string, p?: number): ProofStep[] {
     const info = stageInfo(group ?? SYLOW_II_DEFAULTS.group)
-    const pp = p ?? SYLOW_II_DEFAULTS.p
+    const pp = p ?? SYLOW_II_DEFAULTS.p ?? 3
     const bad = checkParams(info, pp)
     if (bad) return bail(bad)
 
@@ -660,10 +731,11 @@ export const SYLOW_III: ProofTemplate = {
   blurb: '换主角：让 P 自己作用在 Syl_p(G) 上，轨道长全是 p 的幂',
   defaults: SYLOW_III_DEFAULTS,
   groupChoices: PROOF_GROUP_CHOICES,
+  slots: [PRIME_SLOT],
 
   build(group?: string, p?: number): ProofStep[] {
     const info = stageInfo(group ?? SYLOW_III_DEFAULTS.group)
-    const pp = p ?? SYLOW_III_DEFAULTS.p
+    const pp = p ?? SYLOW_III_DEFAULTS.p ?? 3
     const bad = checkParams(info, pp)
     if (bad) return bail(bad)
 
@@ -785,22 +857,542 @@ export const SYLOW_III: ProofTemplate = {
   },
 }
 
-/** 全部模板（M1 的 Sylow I + M2 的 Sylow II / III）。 */
-export const PROOF_TEMPLATES: ProofTemplate[] = [SYLOW_I, SYLOW_II, SYLOW_III]
+/* ── 轨道–稳定子（M3）──────────────────────────────────── */
+
+const OST_DEFAULTS: ProofParams = { group: 'S_4' }
+
+/** 「点 x」该填什么（面板的占位提示与报错共用一句话）。 */
+const X_HINT = 'Ω = G 自身，填一个元素记号，如 (123)'
+
+interface ConjStage {
+  g: Group
+  /** 用户填的**原文**（写进定义行——它是求值器的输入，不是展示） */
+  xLine: string
+  /** 展示形态（课本括号），文本里用它 */
+  xNice: string
+  orbit: number
+  stab: number
+  /** 中心化子的阶：与稳定子**另算一遍**做交叉核对 */
+  centralizer: number
+  order: number
+}
+
+/**
+ * 共轭作用在自身上的舞台（**真算**）。
+ *
+ * 走的是与 `共轭作用(G)` + `轨道(A, x)` + `稳定子(A, x)` 完全相同的 core 函数
+ * （`computeConjugationPerms` / `computeOrbits` / `computeStabilizers`），
+ * 所以模板文本里的数不会与画布上的对象分家。
+ */
+function conjStage(info: StageInfo, xRaw: string): ConjStage | string {
+  const g = groupOf(info)
+  if (!g) return `认不出群记号「${info.raw}」`
+
+  const xLine = (xRaw ?? '').trim()
+  if (!xLine) return `还没填点 x（${X_HINT}）`
+  const x = resolveElementLoose(g, xLine)
+  if (!x) return `Ω = G = ${info.sym} 里没有元素「${xLine}」`
+
+  const perms = computeConjugationPerms(g)
+  const { orbits, orbitOf } = computeOrbits(perms, g.order)
+  const i = indexById(g).get(x.id)
+  if (i === undefined) return `元素「${xLine}」不在 ${info.sym} 的元素表里`
+
+  return {
+    g,
+    xLine,
+    xNice: elemText(g, x),
+    orbit: orbits[orbitOf[i]]?.elements.length ?? 0,
+    stab: (computeStabilizers(g, perms, g.order).get(i) ?? []).length,
+    centralizer: getCentralizer(g, [x]).length,
+    order: g.order,
+  }
+}
+
+/**
+ * 面板「点 x」的建议值：**挑共轭类最大的那个元素**。
+ *
+ * 为什么不随便挑一个：共轭类最小的恰好是单位元（轨道 1、稳定子 = G）——
+ * 那是 orbit–stabilizer 最没看头的一档（两个因数一个退化到 1、一个退化到 |G|）。
+ * 挑最大的共轭类，两个因数都远离退化。并列时取元素表里靠前的那个（core 的顺序确定）。
+ *
+ * **单位元直接跳过**：它的共轭类恒为 `{e}`，是"最大共轭类"的最后一个候选。
+ * 交换群上所有共轭类都是单点（挑谁都一样），跳过单位元至少让 x 是个非平凡元素。
+ */
+export function suggestPoint(group: string): string {
+  const info = stageInfo(group)
+  if (!info.ok) return ''
+  const g = groupOf(info)
+  if (!g) return ''
+  const perms = computeConjugationPerms(g)
+  const { orbits, orbitOf } = computeOrbits(perms, g.order)
+  const idx = indexById(g)
+  let bestEl: GroupElement | null = null
+  let bestSize = -1
+  for (const e of g.elements) {
+    if (e.id === g.identity.id) continue
+    const i = idx.get(e.id)
+    if (i === undefined) continue
+    const size = orbits[orbitOf[i]]?.elements.length ?? 0
+    if (size > bestSize) {
+      bestSize = size
+      bestEl = e
+    }
+  }
+  if (!bestEl) bestEl = g.identity // 平凡群只有单位元
+  return elemText(g, bestEl)
+}
+
+/**
+ * 轨道–稳定子定理（M3）。
+ *
+ * 挑**共轭作用在自身上**当舞台，因为课本里这条定理最常见的落点就是它：
+ * 轨道 = 共轭类、稳定子 = 中心化子，于是 |G| = |共轭类| · |C_G(x)| ——
+ * 共轭类方程的雏形。舞台还只要一个参数（群 + 点 x），不必再挑子群。
+ */
+export const ORBIT_STABILIZER: ProofTemplate = {
+  id: 'orbit-stabilizer',
+  title: '轨道–稳定子定理 · |O| · |Stab| = |G|',
+  theorem:
+    '|O_{x}| = [G : \\operatorname{Stab}(x)],\\qquad |G| = |O_{x}|\\cdot|\\operatorname{Stab}(x)|',
+  blurb: '一条作用两个数：轨道多大、稳定子多大，乘起来就是群',
+  defaults: OST_DEFAULTS,
+  groupChoices: PROOF_GROUP_CHOICES,
+  slots: [{ kind: 'element', key: 'x', label: '点 x', hint: X_HINT }],
+  suggest: (group) => ({ x: suggestPoint(group) }),
+
+  build(group, _p, extra): ProofStep[] {
+    const info = stageInfo(group ?? OST_DEFAULTS.group)
+    if (!info.ok) return bail(info.error ?? '参数不合法')
+
+    const st = conjStage(info, extra?.x ?? '')
+    if (typeof st === 'string') return bail(st)
+    const { orbit, stab, centralizer, order, xNice, xLine } = st
+    const sym = info.sym
+    const exact = orbit * stab === order
+    const cMatch = centralizer === stab
+
+    return [
+      {
+        kind: 'claim',
+        text: `设 G = ${sym}，|G| = ${order}。取一个具体的点 x = ${xNice} —— 作用的对象就是 G 自身。`,
+        tex: `x = ${xNice} \\in G,\\qquad |G| = ${order}`,
+        line: `G = ${info.raw.trim()}`,
+        highlight: ['G'],
+      },
+      {
+        kind: 'compute',
+        text: `让 G 通过共轭 g·x = gxg⁻¹ 作用在自身：Ω = G，|Ω| = ${order}。`,
+        tex: `G \\curvearrowright G,\\qquad g\\cdot x = gxg^{-1}`,
+        line: 'A = 共轭作用(G)',
+        highlight: ['A'],
+      },
+      {
+        kind: 'compute',
+        // 面板把 `text` 当**纯文本**渲染（只有 `tex` 走 KaTeX）—— 一个星号都不会被吃掉
+        text: `x 的轨道就是它的共轭类 x^G = {gxg⁻¹ : g ∈ G}：|O| = ${orbit}。${
+          orbit === 1
+            ? '← x 落在中心里（它的共轭类只有它自己），这条定理在它身上退化成 |G| = 1·|G|；想看真轨道就挑一个非中心的 x，或换一个非交换群。'
+            : ''
+        }`,
+        tex: `O_{x} = x^{G},\\qquad |O_{x}| = ${orbit}`,
+        line: `O = 轨道(A, ${xLine})`,
+        highlight: ['O'],
+      },
+      {
+        kind: 'compute',
+        text: `x 的稳定子是中心化子 C_G(x)（与 x 交换的元素全体）：|Stab| = ${stab}${
+          cMatch
+            ? `（C_G(x) 从另一条路单独算一遍也是 ${centralizer} ✓）`
+            : ` —— 但中心化子单独算是 ${centralizer}，两者对不上，要查`
+        }。`,
+        tex: `\\operatorname{Stab}_{G}(x) = C_{G}(x),\\qquad |C_{G}(x)| = ${stab}`,
+        line: `S = 稳定子(A, ${xLine})`,
+        highlight: ['S'],
+      },
+      {
+        kind: 'claim',
+        text: 'g·x = h·x ⟺ h⁻¹g ∈ Stab(x) ⟺ gStab(x) = hStab(x)。于是 gStab(x) ↦ g·x 是 G/Stab(x) → O_x 的一一对应。',
+        tex: 'g\\cdot x = h\\cdot x \\iff h^{-1}g \\in \\operatorname{Stab}(x) \\iff g\\operatorname{Stab}(x) = h\\operatorname{Stab}(x)',
+      },
+      {
+        kind: 'claim',
+        text: `两边取元素个数：|O| = [G : Stab(x)] = ${order}/${stab} = ${orbit} ✓`,
+        tex: `|O_{x}| = [G : \\operatorname{Stab}(x)] = ${order}/${stab} = ${orbit}`,
+      },
+      {
+        kind: 'claim',
+        text: `换成中心化子说：共轭类大小 = [G : C_G(x)]，所以每个共轭类的大小都整除 |G|（${orbit} | ${order} ✓）。`,
+        tex: `|x^{G}| = [G : C_{G}(x)] \\mid |G|`,
+      },
+      {
+        kind: 'conclude',
+        text: `|G| = |O| · |Stab| = ${orbit} × ${stab} = ${orbit * stab}${exact ? ' ✓' : ' ✗'} —— 即 |O_x| = [G : Stab(x)] ∎`,
+        tex: `|G| = |O_{x}|\\cdot|\\operatorname{Stab}(x)| = ${orbit} \\times ${stab} = ${orbit * stab} \\;\\qed`,
+        highlight: ['S'],
+      },
+    ]
+  },
+}
+
+/* ── 第一同构定理（M3）─────────────────────────────────── */
+
+const FIRST_ISO_DEFAULTS: ProofParams = { group: 'C_6' }
+
+/** 第一同构模板里映射对象的名字（定义行、highlight 都靠它）。 */
+const ISO_MAP_ID = 'φ'
+
+interface MapStage {
+  g: Group
+  h: Group
+  hSym: string
+  /** 归一的像对文本（`a→2`） */
+  images: string
+  kerOrder: number
+  imOrder: number
+  /** |G/ker φ| */
+  quotient: number
+  isSurjective: boolean
+}
+
+/**
+ * 由"源群 + 靶群 + 生成元的像"把同态造出来（**真算**，与 `映射(G, H, …)`
+ * 走同一批 core 函数：`extendFromGenerators` → `verifyHomomorphism`）。
+ *
+ * 注意 `extendFromGenerators` 收的 Map 键是**生成元元素的 id**（不是名字）——
+ * 传 `gen.name` 会静默得到 `null`，这条坑在 ops.ts 里已经踩过一次。
+ */
+function mapStage(info: StageInfo, targetRaw: string, imagesRaw: string): MapStage | string {
+  const g = groupOf(info)
+  if (!g) return `认不出群记号「${info.raw}」`
+
+  const targetText = (targetRaw ?? '').trim() || info.raw.trim()
+  const tInfo = stageInfo(targetText)
+  if (!tInfo.ok) return `靶群：${tInfo.error ?? `认不出群记号「${targetText}」`}`
+  const h = groupOf(tInfo)
+  if (!h) return `靶群「${targetText}」建不出群对象`
+
+  const gens = getGeneratorElements(g)
+  if (gens.length === 0) return `${info.sym} 没有生成元，无法由生成元的像定义映射`
+
+  const images = (imagesRaw ?? '').trim()
+  if (!images) {
+    return `还没给生成元的像（形如 a→2）。${info.sym} 的生成元是 ${gens
+      .map((x) => x.gen.name)
+      .join(', ')} —— 每一对写成「生成元→靶群里的元素」`
+  }
+
+  const genMapping = new Map<string, string>()
+  const pairs: { gen: string; image: string }[] = []
+  for (const raw of images.split(',')) {
+    const text = raw.trim()
+    if (!text) continue
+    const parts = text.split(/→|->|=>/)
+    if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
+      return `像对的写法不对：${text}（应形如 a→2）`
+    }
+    const genName = parts[0].trim()
+    const hit = gens.find((x) => x.gen.name === genName)
+    if (!hit) {
+      return `${info.sym} 里没有生成元 ${genName}（有：${gens.map((x) => x.gen.name).join(', ')}）`
+    }
+    const img = resolveElementLoose(h, parts[1].trim())
+    if (!img) return `靶群 ${tInfo.sym} 里没有元素 ${parts[1].trim()}`
+    genMapping.set(hit.el.id, img.id)
+    pairs.push({ gen: genName, image: elemText(h, img) })
+  }
+  if (genMapping.size === 0) return '至少要给一个生成元的像'
+
+  const full: HomomorphismMap | null = extendFromGenerators(g, h, genMapping)
+  if (!full) return '这组像无法唯一延拓成映射（生成元之间的乘法关系没被保持）'
+  const res = verifyHomomorphism(g, h, full)
+  if (!res.isHomomorphism) return '这组像不是同态 —— 换一组像，或换一个靶群'
+
+  const props = getHomomorphismProperties(g, h, res)
+  const ker = computeKernelFromMapping(g, full, h.identity.id)
+  const im = computeImageFromMapping(full)
+
+  return {
+    g,
+    h,
+    hSym: tInfo.sym,
+    images: pairs.map((p) => `${p.gen}→${p.image}`).join(', '),
+    kerOrder: ker.length,
+    imOrder: im.length,
+    quotient: g.order / Math.max(1, ker.length),
+    isSurjective: !!props.isSurjective,
+  }
+}
+
+/**
+ * 面板「生成元的像」的建议值。
+ *
+ * 目标不是"随便给一个同态"，而是**画得出正方形、数学上不退化**的那一个：
+ *   - 源是**循环群**（恰一个生成元 a）：在靶群里挑 y，要求 ⟨y⟩ **真落在靶群内部**
+ *     （满了成三角形、平凡成一个点，都不是第一同构该看的东西），
+ *     在合格的 y 里取**像最大**的那个（并列取元素表里靠前的）。C₆ → C₆ 于是得到 `a→2`。
+ *   - 源不是循环群：core 的 `autoBuildMapping` 实测只在循环群之间给得出，
+ *     给不出就返回空串 —— 面板据此提示用户手填，而不是塞一个跑不通的默认值。
+ */
+export function suggestImages(source: string, target: string): string {
+  const sInfo = stageInfo(source)
+  const tInfo = stageInfo(target.trim() || source)
+  if (!sInfo.ok || !tInfo.ok) return ''
+  const g = groupOf(sInfo)
+  const h = groupOf(tInfo)
+  if (!g || !h) return ''
+
+  const gens = getGeneratorElements(g)
+  if (gens.length === 0) return ''
+
+  /* ── ① 循环源（恰一个生成元 a）：在靶群里挑一个「像真落在内部」的 y ── */
+  if (gens.length === 1) {
+    const genName = gens[0].gen.name
+    /** a 的阶：a 的像 y 必须满足 y 的阶 | a 的阶，否则延拓不出同态 */
+    const genOrder = closeUnderMultiply(g, [gens[0].el]).length
+
+    let bestImage: GroupElement | null = null
+    let bestSize = 0
+    /** 满射（三角形）——"像真落在内部"的找不到时才用它兜底，总比不给建议强 */
+    let surjective: GroupElement | null = null
+    for (const y of h.elements) {
+      const size = closeUnderMultiply(h, [y]).length
+      if (size <= 1) continue
+      if (genOrder % size !== 0) continue
+      if (size >= h.order) {
+        if (!surjective) surjective = y
+        continue
+      }
+      if (size > bestSize) {
+        bestSize = size
+        bestImage = y
+      }
+    }
+    const pick = bestImage ?? surjective
+    if (pick) return `${genName}→${elemText(h, pick)}`
+  }
+
+  /* ── ② 源与靶群是同一个群：给**恒等映射**（生成元 ↦ 它自己）──
+   *
+   * 核平凡 ⇒ 商群 `G/{e} ≅ G`，这是第一同构最平凡、但完全合法的一档（图是三角形）。
+   * 有它垫底，"换一个群"之后卡片不会是红的；想看真东西的用户自己把像改掉。
+   */
+  if (g.symbol === h.symbol && g.order === h.order) {
+    const pairs = gens.map((x) => ({ gen: x.gen.name, image: elemText(g, x.el) }))
+    const mapping = new Map<string, string>()
+    for (let i = 0; i < gens.length; i++) {
+      const img = resolveElementLoose(h, pairs[i].image)
+      if (!img) return ''
+      mapping.set(gens[i].el.id, img.id)
+    }
+    const full = extendFromGenerators(g, h, mapping)
+    if (full && verifyHomomorphism(g, h, full).isHomomorphism) {
+      return pairs.map((p) => `${p.gen}→${p.image}`).join(', ')
+    }
+  }
+
+  return ''
+}
+
+/**
+ * 第一同构定理（M3）。
+ *
+ * 这条的**交互**与别条不一样：用户只写三行（两个群 + 一条 φ），
+ * 剩下两个顶点（`G/ker φ`、`im φ`）与三条边（π / ≅ / ↪）由
+ * `build.ts` 的 `firstIsoObjects` + `derive.ts` 自动补出来 ——
+ * 用户的原话就是**"当我们给出 phi 这条线后，剩下两条能立马生成。"**
+ *
+ * 因此模板**绝不产出** `K = ker(φ)` / `I = im(φ)` 这类定义行：
+ * 一旦用户手上有 ker / im 对象，`firstIsoObjects` 就把整条故事线交还给他、
+ * 不再自动补点 —— 那份"自动补全"的演示恰恰被自己写没了。
+ * 核与像的阶只在**文本**里说，数字由 `mapStage` 真算。
+ */
+export const FIRST_ISO: ProofTemplate = {
+  id: 'first-isomorphism',
+  title: '第一同构定理 · G/ker φ ≅ im φ',
+  theorem: 'G / \\ker \\varphi \\;\\cong\\; \\operatorname{im}\\varphi',
+  blurb: '画出 φ 这一条线，剩下两条由工具补出来',
+  defaults: FIRST_ISO_DEFAULTS,
+  groupChoices: PROOF_GROUP_CHOICES,
+  slots: [
+    { kind: 'group', key: 'target', label: '靶群 H' },
+    { kind: 'gens', key: 'images', label: '生成元的像' },
+  ],
+  suggest: (group, _p, current) => {
+    const target = (current.target ?? '').trim() || group
+    return { target, images: suggestImages(group, target) }
+  },
+
+  build(group, _p, extra): ProofStep[] {
+    const info = stageInfo(group ?? FIRST_ISO_DEFAULTS.group)
+    if (!info.ok) return bail(info.error ?? '参数不合法')
+
+    const st = mapStage(info, extra?.target ?? '', extra?.images ?? '')
+    if (typeof st === 'string') return bail(st)
+    const { imOrder, kerOrder, quotient, isSurjective, hSym } = st
+    const sym = info.sym
+    const order = info.order
+
+    if (kerOrder >= order || imOrder <= 1) {
+      return bail(
+        `核 = G（像平凡）：这个映射把整个 ${sym} 都打到单位元上，商群平凡、图形退化成一条线。换一组像 —— 让像真落在靶群里。`,
+      )
+    }
+
+    const steps: ProofStep[] = [
+      {
+        kind: 'claim',
+        text: `设 φ : G → H 是一个群同态。取 G = ${sym}（|G| = ${order}），靶群待定。`,
+        tex: `\\varphi : ${sym} \\longrightarrow H`,
+        line: `G = ${info.raw.trim()}`,
+        highlight: ['G'],
+      },
+      {
+        kind: 'compute',
+        text: `靶群 H = ${hSym}。`,
+        tex: `H = ${hSym}`,
+        line: `H = ${(extra?.target ?? '').trim() || info.raw.trim()}`,
+        highlight: ['H'],
+      },
+      {
+        kind: 'compute',
+        text: `由生成元的像定出 φ：${st.images}（同态由生成元的像唯一决定）。`,
+        tex: `\\varphi :\\; ${st.images.replace(/→/g, ' \\mapsto ')}`,
+        line: `${ISO_MAP_ID} = 映射(G, H, ${st.images})`,
+        highlight: [ISO_MAP_ID],
+      },
+      {
+        kind: 'claim',
+        text: `核 ker φ = {g ∈ G : φ(g) = e} 是 G 的正规子群，它的阶是 |ker φ| = ${kerOrder}。`,
+        tex: `\\ker\\varphi \\trianglelefteq G,\\qquad |\\ker\\varphi| = ${kerOrder}`,
+      },
+      {
+        kind: 'claim',
+        text: `像 im φ = {φ(g) : g ∈ G} ≤ H，它的阶是 |im φ| = ${imOrder}${
+          isSurjective ? '（φ 是满射，im φ = H —— 靶群顶点已经在画布上了）' : ''
+        }。`,
+        tex: `\\operatorname{im}\\varphi \\le H,\\qquad |\\operatorname{im}\\varphi| = ${imOrder}`,
+      },
+      {
+        kind: 'compute',
+        text: `商群 G/ker φ 有 |G|/|ker φ| = ${order}/${kerOrder} = ${quotient} 个元素 —— 工具自动补出这个顶点。`,
+        tex: `|G/\\ker\\varphi| = ${quotient}`,
+        highlight: [`${ISO_MAP_ID}/ker`],
+      },
+    ]
+
+    if (!isSurjective) {
+      steps.push({
+        kind: 'compute',
+        text: 'φ 不是满射，像真落在 H 内部，于是它也是一个独立顶点（补出来 —— 不补的话右下角是空的）。',
+        tex: `\\operatorname{im}\\varphi \\subsetneq ${hSym}`,
+        highlight: [`${ISO_MAP_ID}/im`],
+      })
+    }
+
+    steps.push(
+      {
+        kind: 'claim',
+        text: '定义 Φ : G/ker φ → im φ，gKer φ ↦ φ(g)。良定义：gKer = hKer ⟺ h⁻¹g ∈ ker φ ⟹ φ(g) = φ(h)。',
+        tex: '\\Phi(g\\ker\\varphi) = \\varphi(g)',
+      },
+      {
+        kind: 'claim',
+        text: 'Φ 单射：Φ(gKer) = e ⟹ φ(g) = e ⟹ g ∈ ker φ ⟹ gKer = ker φ（只有一个陪集打到单位元）。',
+        tex: '\\Phi(g\\ker\\varphi) = e \\;\\Longrightarrow\\; g\\ker\\varphi = \\ker\\varphi',
+      },
+      {
+        kind: 'claim',
+        text: 'Φ 满射：任取 y ∈ im φ，有 y = φ(g)，于是 y = Φ(gKer φ)。',
+        tex: '\\forall y \\in \\operatorname{im}\\varphi\\;\\; \\exists g : y = \\Phi(g\\ker\\varphi)',
+      },
+      {
+        kind: 'conclude',
+        text: `Φ 既单又满，是同构：G/ker φ ≅ im φ。核对阶：|G/ker φ| = ${quotient} = |im φ| = ${imOrder} ✓ ∎`,
+        tex: `G/\\ker\\varphi \\;\\cong\\; \\operatorname{im}\\varphi \\qquad (${quotient} = ${imOrder}) \\;\\qed`,
+        highlight: [`${ISO_MAP_ID}/im`],
+      },
+    )
+
+    return steps
+  },
+}
+
+/** 全部模板（M1/M2 的 Sylow 三条 + M3 的轨道–稳定子、第一同构）。 */
+export const PROOF_TEMPLATES: ProofTemplate[] = [
+  SYLOW_I,
+  SYLOW_II,
+  SYLOW_III,
+  ORBIT_STABILIZER,
+  FIRST_ISO,
+]
+
+/**
+ * 运行头显示的「实例」串（面板与断言共用一份，免得两处各拼一遍）。
+ *
+ * 结构跟着 `slots` 走：Sylow 系列是 `A₄ · p = 3`，轨道–稳定子是 `S₄ · x = (123)`，
+ * 第一同构是 `C₆ · H = C₆ · a→2`（像对本身已经自带 `→`，就不再套一层"生成元的像 ="）。
+ */
+export function instanceLabel(
+  t: ProofTemplate,
+  params: ProofParams,
+  extra?: Record<string, string>,
+): string {
+  const parts: string[] = [params.group]
+  if (params.p !== undefined && t.slots.some((s) => s.kind === 'prime')) {
+    parts.push(`p = ${params.p}`)
+  }
+  for (const s of t.slots) {
+    if (s.kind === 'prime') continue
+    const v = (extra?.[s.key] ?? '').trim()
+    if (!v) continue
+    parts.push(s.kind === 'gens' ? v : `${s.kind === 'group' ? 'H' : s.key} = ${v}`)
+  }
+  return parts.join(' · ')
+}
 
 /**
  * 某个模板在某组参数下**能不能跑**——面板的「开始」按钮与模板的 `build()`
  * 共用同一份判据，所以按钮亮着就一定能跑。
  *
- * 只拦"结构性跑不了"的情形（记号认不出 / p 不整除 |G| / n_p = 1 撑不起 Sylow III）；
- * 生成元超过 3 个这类要看具体群的，交给 `build()` 的 `bail`——面板会显示理由。
+ * 判据用的材料与 `build()` 是**同一批纯函数**（`conjStage` / `mapStage`）：
+ * 两处各写一遍逻辑迟早会分叉，那里再点出一个"按钮亮着却跑不动"的卡就没人信了。
+ *
+ * 只拦"结构性跑不了"的情形（记号认不出 / p 不整除 |G| / n_p = 1 撑不起 Sylow III /
+ * 点不在 Ω 里 / 像对写不成同态）；生成元超过 3 个这类要看具体群的，交给
+ * `build()` 的 `bail`——面板会显示理由。
  */
-export function templateReady(t: ProofTemplate, group: string, p: number): string | null {
+export function templateReady(
+  t: ProofTemplate,
+  group: string,
+  p: number,
+  extra?: Record<string, string>,
+): string | null {
   const info = stageInfo(group)
-  const bad = checkParams(info, p)
-  if (bad) return bad
-  if (t.id === 'sylow-3-congruence' && info.counts[p] < 2) {
-    return `${nUni(p)} = 1：只有唯一一个 Sylow ${p}-子群，Sylow III 的「其余轨道」不存在。换一个 p（或换一个群）。`
+  if (!info.ok) return info.error ?? '参数不合法'
+
+  // 只有声明了 p 槽的模板才查 p（轨道–稳定子、第一同构都没有 p 可言）
+  if (t.slots.some((s) => s.kind === 'prime')) {
+    const bad = checkParams(info, p)
+    if (bad) return bad
+    if (t.id === 'sylow-3-congruence' && info.counts[p] < 2) {
+      return `${nUni(p)} = 1：只有唯一一个 Sylow ${p}-子群，Sylow III 的「其余轨道」不存在。换一个 p（或换一个群）。`
+    }
   }
+
+  if (t.id === 'orbit-stabilizer') {
+    const st = conjStage(info, extra?.x ?? '')
+    return typeof st === 'string' ? st : null
+  }
+
+  if (t.id === 'first-isomorphism') {
+    const st = mapStage(info, extra?.target ?? '', extra?.images ?? '')
+    if (typeof st === 'string') return st
+    if (st.kerOrder >= st.g.order || st.imOrder <= 1) {
+      return `核 = G（像平凡）：这个映射把整个 ${info.sym} 都打到单位元上，商群平凡、图形退化。换一组像。`
+    }
+    return null
+  }
+
   return null
 }
