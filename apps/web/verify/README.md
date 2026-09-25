@@ -34,6 +34,7 @@ node verify/e2e/proof-sylow3.mjs      # Sylow III 的 14 步与孤点判据（M2
 node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
 node verify/e2e/proof-m3.mjs          # 轨道–稳定子 / 第一同构的参数槽与正方形（M3）
 node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报错分清（U18）
+node verify/e2e/relations.mjs         # 关系层：用户的 S₄↠S₃ 剧本（U19）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -69,3 +70,7 @@ node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报�
 14. **dev server 的 host**：`vite.config.ts` 里已写死 `127.0.0.1`——默认的 `localhost` 在 Node 18+ 会解析成 `::1`（只监听 IPv6），而走查脚本一律连 `http://127.0.0.1:5273`，会报 `ERR_CONNECTION_REFUSED`，看着像"服务没起"。
 15. **左上「对象」与「操作」是**两个**抽屉**：前者列 `origin === 'input'`（手写声明）、后者列 `derived`（运算产物，映射 / 核 / 像都在这里）。而 `DockPanel` **收起时 body 整个不渲染** —— 不先展开「操作」抽屉就去读 `.row-click`，会**只读到一半对象**（U18 走查栽过：映射建出来了却"查不到"）。
 16. **点左栏的行要按 `.row-name` 里的 id 匹配，不要按文本包含**：行里渲染的是**原始定义**（`S = S_4`），而 `S₄` 是 `prettySymbol` 之后的展示形态。拿展示形态匹配永远匹不上，而信息面板会**停在上一个被选中的对象**上 —— 于是失败原因看起来像"说明没渲染"（U18 走查的真实误判）。
+17. **`subgroupFromElementIds` 对认不得的元素引用是静默的**：`subgroupFromElementIds(D_4, ['e','a','b','c'])` **不报错**，它把不认识的引用一丢了之、返回**平凡子群**。于是"id 子集 + core 校验"的朴素包含判定会得出 `V₄ ≤ D₄`（V₄ 的 id 是 `e a b c`，D₄ 的是 `r0…s3`）。判包含必须**另加两道关**：id 全覆盖 + 校验出的子群阶 = `|H|`（见 `gal/relations.ts` 的 `containment()`）。
+18. **判包含不能只看 id 前缀**：`C₂` 的 id 是 `e0 e1`、`C₄` 的是 `e0 e1 e2 e3` —— **真子集**，第 ① 关会通过。挡住它的是"乘法封闭"（`e1 + e1 = e2 ∉ {e0,e1}`）。凡是按 id 判结构关系的地方，都要拿**群运算**兜一次。
+19. **KaTeX 渲染后的文本要抹零宽字符再比**：`.rel-body` 里是 KaTeX（`K ≤ A` 会带上 `\u200b` 之类），断言前先 `replace(/[\u200b\u2061\u2062]/g,'').replace(/\s+/g,'')` 再 `includes`（`e2e/relations.mjs` 的 `relState`）。**附注那行是纯文本**（`.rel-detail`），比它更稳——优先断言它。
+20. **PowerShell 里跑中文输出的回归会变乱码**：`node … | Out-File -Encoding utf8` 会先按控制台代码页（GBK）解码 node 的 UTF-8 输出。跑前先设 `$OutputEncoding = [Text.Encoding]::UTF8; [Console]::OutputEncoding = [Text.Encoding]::UTF8`。更稳的写法是让探针自己用 `fs.writeFileSync(..., 'utf8')` 落盘（`.tmp-probe/*.ts` 都这么做）。

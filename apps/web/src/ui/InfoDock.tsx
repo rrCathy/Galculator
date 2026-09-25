@@ -9,6 +9,7 @@ import {
 } from '@groupviz/core'
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type NormalizedSubgroup } from '../gal/value'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
+import { RELATION_LABEL, relationsFor, type Relation } from '../gal/relations'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
@@ -34,6 +35,7 @@ export function InfoDock({
   tab,
   onTab,
   node,
+  table,
   onExtract,
 }: {
   open: boolean
@@ -42,6 +44,8 @@ export function InfoDock({
   onTab: (t: InfoTab) => void
   /** 焦点**对象**——不限于节点：映射只画箭头，但同样有信息可看 */
   node: GalObject | null
+  /** 当前对象表（关系层要在里面找"谁包含我 / 我包含谁"）*/
+  table: GalObject[]
   /**
    * 「取出为对象」：把列表里的一个成员变成一行定义。
    *
@@ -63,6 +67,9 @@ export function InfoDock({
     if (v.type === 'action') return actionInsights(v.action)
     return []
   }, [node])
+
+  // 关系层：它落在哪个群里 / 它包含谁 / 它对谁正规 / 谁由它而来
+  const relations = useMemo<Relation[]>(() => (node ? relationsFor(node, table) : []), [node, table])
 
   return (
     <DockPanel title="信息" open={open} onToggle={onToggle} bodyWidth={298}>
@@ -93,6 +100,32 @@ export function InfoDock({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {relations.length > 0 && (
+            <div className="relations">
+              <div className="rel-head">关系</div>
+              {relations.map((r, i) => (
+                <div key={i} className={`rel rel-${r.kind}`}>
+                  <span className="rel-tag">{RELATION_LABEL[r.kind]}</span>
+                  <div className="rel-body">
+                    {r.tex ? <Tex tex={r.tex} /> : <span className="rel-text">{r.text}</span>}
+                    {r.detail && <div className="rel-detail">{r.detail}</div>}
+                  </div>
+                </div>
+              ))}
+              {/*
+                这句话是 U18 那条教训的延伸：子群列表只列**共轭类代表**会被读成"全部"，
+                关系层只列**表里已经建出来的对象**同样会被读成"全部关系"。
+                边界写清楚，比多列两行更有用。
+              */}
+              {relations.some((r) => r.kind === 'subgroup' || r.kind === 'contains' || r.kind === 'equal') && (
+                <div className="rel-note">
+                  只列「已经建出来」的对象之间能确定的关系；要看全部子群 / 正规子群，用「子群」tab 或
+                  Sub(G) / 正规子群(G)。
+                </div>
+              )}
             </div>
           )}
 

@@ -595,6 +595,7 @@ export default function App() {
           tab={infoTab}
           onTab={setInfoTab}
           node={busy ? null : focusedObj}
+          table={objects}
           onExtract={extractSubgroup}
         />
       </div>

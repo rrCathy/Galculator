@@ -10,6 +10,7 @@
 import { buildLines } from '../../src/gal/build'
 import { groupInsights } from '../../src/gal/insights'
 import { checkName, normalizeName } from '../../src/gal/naming'
+import { relationsFor } from '../../src/gal/relations'
 import { build, eq, ok, suite } from '../harness'
 
 /** 跑一行定义，拿最后一行的行状态（报错文案就在这里）。 */
@@ -149,5 +150,99 @@ export function run(): void {
     eq('`正规子群(G)` 给 4 个（含平凡与自身）', normals, 4)
     // 两个操作的定义域不同：这正是"列表会骗人"的根源
     ok('两个操作的定义域确实不同（29 vs 4）', total !== normals)
+  }
+
+  /* ══ ④ 关系层（U19）══════════════════════════════════════ */
+
+  /**
+   * 用户的原话："我想拉个箭头表示 A₄ 和 K 的包含关系，但做不到"。
+   *
+   * 那件事的**数据**其实一直在手上（`isNormal` / 元素 id 空间 / 指数），
+   * 只是没有任何地方往外说。这一套钉住关系层的两条来源与一条纪律：
+   *   - 来源决定的（`ker f` 的核必是定义域的正规子群）
+   *   - 元素集包含（两个**独立建出来**的群之间也能发现）
+   *   - **假阳性必须为 0**（这是最要紧的：朴素写法会让 `V₄ ≤ D₄` 成立）
+   */
+  suite('usability · 关系层：它落在哪儿、它对谁正规（缺口 ②）')
+  {
+    const LINES = [
+      'G = S_4',
+      'H = S_3',
+      'f = 映射(G, H, s12→23, c→13)',
+      'K = ker(f)',
+      'A = A_4',
+      'B = 闭包(G, (12)(34), (13)(24))',
+      'Q = 商(G, K)',
+    ]
+    const { objects } = buildLines(LINES)
+    const rel = (id: string) => relationsFor(objects.find((o) => o.id === id)!, objects)
+    const find = (id: string, kind: string, other: string) =>
+      rel(id).find((r) => r.kind === kind && r.other === other)
+
+    // ── 舞台本身要先站得住（这几个数是手算的） ──
+    eq('|S₄| = 24', (objects.find((o) => o.id === 'G')!.value as { group: { order: number } }).group.order, 24)
+    const kv = objects.find((o) => o.id === 'K')!.value
+    eq('K = ker f 的阶 = 4（V₄）', kv.type === 'group' ? kv.group.order : -1, 4)
+
+    // ── ① 来源决定：核必是定义域的正规子群，指数 = 24/4 = 6 ──
+    const ker = find('K', 'kernel', 'f')
+    ok('K 有一条「核」关系（K = ker f）', !!ker, JSON.stringify(rel('K').map((r) => r.kind)))
+    ok('那条说了 ⊴ 定义域', (ker?.detail ?? '').includes('⊴ S₄'), ker?.detail ?? '')
+    ok('指数手算对上了：24 / 4 = 6', (ker?.detail ?? '').includes('24 / 4 = 6'), ker?.detail ?? '')
+
+    // ── ② 元素集包含：A₄ 与 K 都是**独立建出来**的，没有任何来源牵连 ──
+    const kInA = find('K', 'subgroup', 'A')
+    ok('K ≤ A₄ 被发现了（V₄ ≤ A₄，两者互不是对方的来源）', !!kInA, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
+    ok('指数手算对上了：12 / 4 = 3', (kInA?.detail ?? '').includes('12 / 4 = 3'), kInA?.detail ?? '')
+    ok('并且判出 ⊴ 正规（V₄ ⊴ A₄）', (kInA?.detail ?? '').includes('⊴ 正规'), kInA?.detail ?? '')
+
+    const aInG = find('A', 'subgroup', 'G')
+    ok('A₄ ≤ S₄ 被发现了（用户手打的两行独立定义）', !!aInG, JSON.stringify(rel('A').map((r) => `${r.kind}:${r.other}`)))
+    ok('指数手算对上了：24 / 12 = 2', (aInG?.detail ?? '').includes('24 / 12 = 2'), aInG?.detail ?? '')
+    ok('A₄ ⊴ S₄（指数 2 的子群必正规）', (aInG?.detail ?? '').includes('⊴ 正规'), aInG?.detail ?? '')
+
+    // 反向：G 的信息面板里"我包含谁"
+    const gHoldsA = find('G', 'contains', 'A')
+    ok('S₄ 的面板里列出"包含 A₄"', !!gHoldsA, JSON.stringify(rel('G').map((r) => `${r.kind}:${r.other}`)))
+
+    // ── 指数 1 = 同一个群：`ker f` 与 `闭包(G, …)` 都是 V₄，元素 id 一模一样 ──
+    const eq1 = find('K', 'equal', 'B')
+    ok('K 与 B（都是 V₄）被认成「同一个群」', !!eq1, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
+    ok('那句话说的是"元素完全相同"', (eq1?.detail ?? '').includes('元素完全相同'), eq1?.detail ?? '')
+    ok('并且没有反过来再报一条 `B ≤ K · 指数 1`', !find('K', 'contains', 'B'))
+
+    // ── 商：Q = G/K 是定义式，且商群良定义（K ⊴ G） ──
+    const quo = find('Q', 'quotient', 'G')
+    ok('商群有「商」关系 Q = G / K', !!quo, JSON.stringify(rel('Q').map((r) => `${r.kind}:${r.other}`)))
+    ok('并给出 |Q| = 24 / 4 = 6', (quo?.detail ?? '').includes('24 / 4 = 6'), quo?.detail ?? '')
+
+    // ── 派生：点箭头 f 能看到它长出了核 ──
+    const derived = find('f', 'derived', 'K')
+    ok('映射 f 的面板里列出派生出的 K', !!derived, JSON.stringify(rel('f').map((r) => `${r.kind}:${r.other}`)))
+
+    // ── 纪律：假阳性必须为 0 ──
+    //  V₄ 的 id 是 `e a b c`、D₄ 的 id 是 `r0…s3`，两者本无关系。
+    //  朴素的"id 子集 + core 校验"写法在 D₄ 上会返回**平凡子群**（core 静默丢掉认不得的引用），
+    //  于是得出 `V₄ ≤ D₄`——这条断言就是钉死它的。
+    const falsePos = buildLines(['V = V_4', 'D = D_4']).objects
+    const bogus = relationsFor(falsePos.find((o) => o.id === 'V')!, falsePos).filter(
+      (r) => r.kind === 'subgroup' || r.kind === 'contains' || r.kind === 'equal',
+    )
+    eq('V₄ 与 D₄ 之间不该有任何包含关系（假阳性）', bogus.length, 0)
+
+    //  两个各自声明的 `C_6`：元素是同一批 `e0…e5` → 判成"同一个群"是**对的**；
+    //  错的是把它说成包含（"互相包含"读起来像两个东西）
+    const same = buildLines(['X = C_6', 'Y = C_6']).objects
+    const sameRel = relationsFor(same.find((o) => o.id === 'X')!, same)
+    ok('两个 `C_6` 判成「同一个群」而不是包含', !sameRel.some((r) => r.kind === 'subgroup' || r.kind === 'contains'), JSON.stringify(sameRel.map((r) => r.kind)))
+    ok('那条写着"元素完全相同"', sameRel.some((r) => r.kind === 'equal' && (r.detail ?? '').includes('元素完全相同')), JSON.stringify(sameRel))
+
+    //  C₂ 与 C₄ 的 id 都是 `e0 e1 …`（真子集！），但 C₂ 在 C₄ 里的"嵌入"不封闭 →
+    //  core 校验必须挡住它。这比上面的 V₄/D₄ 更阴险：id 真的全部命中。
+    const cyc = buildLines(['A = C_2', 'B = C_4']).objects
+    const cycRel = relationsFor(cyc.find((o) => o.id === 'A')!, cyc).filter(
+      (r) => r.kind === 'subgroup' || r.kind === 'equal',
+    )
+    eq('C₂ 不因 id 恰好是 C₄ 的前缀而被判成子群', cycRel.length, 0)
   }
 }

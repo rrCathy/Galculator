@@ -54,7 +54,7 @@
 - **`Syl_p(G,p)` 与 `findSylowSubgroups` 逐项同序**（模板写 `轨道(B, k)` 这种按序号寻址靠这条）。**A₄ 的 n₂ = 1（V₄ 正规），n₃ = 4** —— 演示 Sylow II/III 要用 p = 3。
 
 ## 代码落点（apps/web/src/）
-- `gal/`：`value.ts`(7 值类型 + `sortOf`) `ops.ts`(注册表 32 条：mechanism/primitive/recipe/impl/call/infix/params/arity/variadic/editor/result/run + `opsFor` + `paramAccepts`) `naming.ts` `compose.ts` `interaction.ts`(idle→selected→menu→pending/fill) `evalDef.ts`(五级分发) `build.ts`(`firstIsoObjects` 隐式补点) `derive.ts`(`arrowOf`/`alongsideEdges`/`computeLevels`) `insights.ts` `tex.ts`(`toTex`/`shouldTex`) `pretty.ts` `numeric.ts` `grid.ts` `proof.ts`
+- `gal/`：`value.ts`(7 值类型 + `sortOf`) `ops.ts`(注册表 32 条：mechanism/primitive/recipe/impl/call/infix/params/arity/variadic/editor/result/run + `opsFor` + `paramAccepts`) `naming.ts` `compose.ts` `interaction.ts`(idle→selected→menu→pending/fill) `evalDef.ts`(五级分发) `build.ts`(`firstIsoObjects` 隐式补点) `derive.ts`(`arrowOf`/`alongsideEdges`/`computeLevels`) `insights.ts` `relations.ts` `tex.ts`(`toTex`/`shouldTex`) `pretty.ts` `numeric.ts` `grid.ts` `proof.ts`
 - `ui/`：`CanvasView` `DockPanel`（**收起时 body 整个不渲染**）`ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb`（**类名 `.orb-center` 与 MultiOrb 撞车**，选择器要区分）`ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex`(`Tex`/`TexOrText`/`TexList`/`measureTex`) `ProofDock`
 - `gal/proof.ts`：`ProofStep{kind,text,tex,line,highlight}` + `ProofTemplate{slots,defaults,suggest?,build(group?,p?,extra?)}` + `proofLines`/`proofHighlight`/`templateReady`/`instanceLabel`（纯函数）+ **5 条模板** `SYLOW_I`/`SYLOW_II`/`SYLOW_III`/`ORBIT_STABILIZER`/`FIRST_ISO`。
   **设计支点：每步 `line` = 一整行定义 → 交给现成的求值器**（零新求值机制、机器写的行可见可改）。模板文本里的数字由 `build()` 真算。
@@ -62,6 +62,12 @@
   **`ParamSlot`（M3）**：`prime`(|G| 素因子按钮组，带 n_p) / `element`(点 x) / `group`(靶群) / `gens`(生成元的像)——参数不再只有 `(群, p)`，**控件由模板自己声明**，`extra: Record<string,string>` 装槽值（全是文本）。`templateReady` 与 `build` 共用同一批纯函数（`conjStage`/`mapStage`）。
   **OST** = 共轭作用在自身上（轨道 = 共轭类、稳定子 = 中心化子，两路交叉核对）；**FirstIso** = 只写 3 行，`φ/ker` 与 `φ/im` 靠 `build.ts` 自动补 —— **模板绝不产出 `ker`/`im` 的定义行**（写了就把自动补点交还给用户，演示被自己写没）。
 - `verify/`：**回归线（入库，资产不是临时物）**——`suites/`（语义层）+ `e2e/`（真浏览器几何）+ `README.md`。跑法 `pnpm --filter @galculator/web verify` / `verify:e2e`。
+- `gal/relations.ts`（U19）：**关系层**。`relationsFor(node, table)` → `Relation[]{kind,other,tex,text,detail}`，kind = `kernel`|`image`|`quotient`|`equal`|`subgroup`|`contains`|`derived`（`RELATION_LABEL` 给中文标签，`KIND_ORDER` 定序，`CAPS` 每类上限）。
+  两条来源：**① `node.sources` + `node.opId`**（`ker`/`im`/`Z(G)`/`N_G(H)`/`⟨S⟩`/`A∩B`/`商`）；
+  **② `containment(H, G)`** —— 三道关：id 全覆盖 → `subgroupFromElementIds` → **阶相等**，再 `findAllNormalSubgroups` + `subgroupSetKey` 判 ⊴。
+  **`containment` 的两道额外关不是装饰**：`subgroupFromElementIds(D_4, ['e','a','b','c'])` **不报错**（静默丢认不得的引用 → 返回平凡子群），只用它会得出 `V₄ ≤ D₄`；`C₂` 的 id `e0 e1` 是 `C₄` 的 `e0…e3` 的**真前缀**，靠"乘法封闭"才挡得住。
+  **指数 1 单列成 `equal`**（元素完全相同 = 同一个群，别写成一对"互为指数 1 的子群"）。
+  面板落点：`InfoDock` 在**结论层与 tab 之间**插一节「关系」，`App` 传 `table={objects}`。
 
 ### 项目内的坑
 - **「造」类操作不能用 `opsFor` 筛**（它要参数被填满）→ 遍历 `OPS` + `paramAccepts`。
@@ -84,6 +90,10 @@
 - **循环群里的单字母一律视作那个生成元**（`resolveElementLoose` 第 ③ 级）：`映射(G, H, a→x)` 在 C₆ 上合法（`x` ≡ `a`），别拿它当"元素不存在"的反例。
 - **轨道的值类型随 Ω 变**：Ω = G 自身 → `elements`；Ω 是集合 → `set`。读"轨道多大"要认两种。
 - **dev server 的 host**：`localhost` 在 Node 18+ 解析成 `::1`（只监听 IPv6）→ 走查连 `127.0.0.1` 会 `ERR_CONNECTION_REFUSED`，看着像"服务没起"。`vite.config.ts` 已写死 `server.host = '127.0.0.1'`。
+- **跑中文输出的回归要防 PowerShell 乱码**——`node … | Out-File -Encoding utf8` 会先按控制台代码页（GBK）解码 UTF-8；先设 `[Console]::OutputEncoding = [Text.Encoding]::UTF8`，或让探针自己 `fs.writeFileSync(path, text, 'utf8')` 落盘（`.tmp-probe/*.ts` 都这么做）。
+- **S₄ 的生成元是 `s12`（σ₁₂）与 `c`（σ₁₂₃₄）**。要一个 S₄ ↠ S₃ 的满同态：
+  `映射(G, S_3, s12→23, c→13)`（两个像**必须是对换且不同**）。`c` 是 4-循环 → 像的阶只能整除 4
+  → S₃ 里就是对换，所以"`c ↦ 3-循环`"永远报不是同态；两个像相同则退化成符号映射（ker = A₄）。
 
 ## 交互模型（细看 docs/INTERACTION.md）
 - 画布 = 交换图（对象 = 节点、操作 = 箭头），非坐标系。**形状 = 类型**（群 = 无形状 + 一小块常驻淡底 / 集合 = 圆 / 映射 = 箭头）；**颜色 = 来源**（蓝 = 输入 / 紫 = 运算）。
