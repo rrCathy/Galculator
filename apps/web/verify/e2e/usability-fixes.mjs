@@ -1,0 +1,227 @@
+/**
+ * 走查：**可用性修复第一批**（U18）在真浏览器里的样子。
+ *
+ * 覆盖 `docs/USABILITY.md` 的四条缺口：
+ *   ① 结论区对"构造出来的群"不再沉默（K 的信息里有「识别」+ SmallGroup）
+ *   ③ 子群 tab 标清"这是共轭类代表"，正规的标 ⊴ 正规
+ *   ⑤ 名字能敲 LaTeX 希腊字母（`\phi` → φ）
+ *   ⑨ 报错分清"没这功能"与"打错了"
+ *
+ * 跑法（先起 dev server 5273）：`node verify/e2e/usability-fixes.mjs`
+ */
+const PW = 'file:///C:/newproject/GroupViz/node_modules/playwright/index.mjs'
+const BASE = process.env.GAL_BASE ?? 'http://127.0.0.1:5273'
+
+let pass = 0
+let fail = 0
+const ok = (name, cond, detail = '') => {
+  if (cond) {
+    pass++
+    console.log(`  PASS  ${name}`)
+  } else {
+    fail++
+    console.log(`  FAIL  ${name}${detail ? `  — ${detail}` : ''}`)
+  }
+}
+
+const { chromium } = await import(PW)
+const browser = await chromium.launch({ args: ['--no-proxy-server'] })
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+const logs = []
+page.on('console', (m) => m.type() === 'error' && logs.push(m.text()))
+page.on('pageerror', (e) => logs.push('pageerror: ' + e.message))
+
+await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
+await page.waitForTimeout(1200)
+
+/* ── 输入辅助 ─────────────────────────────────────────── */
+
+const ensureCard = async () => {
+  if ((await page.locator('.composer-card').count()) === 0) {
+    await page.click('.composer-orb .orb-center')
+    await page.waitForTimeout(220)
+  }
+}
+
+/** 填一行并提交（名字可为空 → 走自动命名）。提交不了就把状态行打出来。 */
+const addLine = async (name, expr) => {
+  await ensureCard()
+  await page.fill('.composer-name', name)
+  await page.fill('.composer-expr', expr)
+  await page.waitForTimeout(200)
+  const btn = page.locator('.composer-orb .composer-row button')
+  if (await btn.isDisabled()) {
+    const st = await status()
+    console.log(`    [blocked] name=${JSON.stringify(name)} status=${JSON.stringify(st.text)}`)
+    return false
+  }
+  await btn.click()
+  await page.waitForTimeout(320)
+  return true
+}
+
+/** 只填表达式、**不**提交（用来看状态行的报错）。 */
+const typeExpr = async (expr) => {
+  await ensureCard()
+  await page.fill('.composer-name', '')
+  await page.fill('.composer-expr', expr)
+  await page.waitForTimeout(260)
+}
+
+/**
+ * 展开「操作」抽屉。
+ *
+ * 左上一列里是**两个**抽屉：「对象」放手写声明的（`origin === 'input'`）、
+ * 「操作」放运算产出的（`derived`）——映射、核、像这些**都在后者**。
+ * 而 `DockPanel` **收起时 body 整个不渲染**，所以不展开就读不到那些行。
+ */
+const ensureOpsDock = async () => {
+  const body = '.dock:has(.dock-title:text-is("操作")) .dock-body'
+  if ((await page.locator(body).count()) === 0) {
+    await page.locator('.dock-toggle:has-text("操作")').first().click()
+    await page.waitForTimeout(260)
+  }
+}
+
+/**
+ * 左栏点一行 —— **按 `.row-name` 里的对象 id 匹配**，不按文本包含。
+ *
+ * 踩过：行里渲染的是**原始定义**（`S = S_4`），而 `S₄` 是 `prettySymbol` 之后的展示形态，
+ * 拿 `S₄` 去匹配永远匹配不上（而信息面板会停在"上一个被选中的对象"上，
+ * 断言看到的是别的对象的子群列表 —— 于是失败原因看起来像"说明没渲染"）。
+ */
+const clickRow = async (id) => {
+  await ensureOpsDock()
+  return page.evaluate((want) => {
+    const rows = [...document.querySelectorAll('.dock-topleft .row-click')]
+    const hit = rows.find((r) => r.querySelector('.row-name')?.textContent?.trim() === want)
+    if (!hit) return false
+    hit.click()
+    return true
+  }, id)
+}
+
+const infoState = () =>
+  page.evaluate(() => ({
+    labels: [...document.querySelectorAll('.insight-label')].map((e) => e.textContent.trim()),
+    texts: [...document.querySelectorAll('.insight-body')].map((e) => e.textContent.trim()),
+    notes: [...document.querySelectorAll('.insp-note')].map((e) => e.textContent.trim()),
+    normals: [...document.querySelectorAll('.insp-normal')].map((e) => e.textContent.trim()),
+    subs: [...document.querySelectorAll('.insp-sub-meta')].map((e) => e.textContent.replace(/\s+/g, ' ').trim()),
+  }))
+
+const status = () =>
+  page.evaluate(() => {
+    const el = document.querySelector('.composer-status')
+    return { cls: el?.className ?? '', text: el?.textContent.trim() ?? '' }
+  })
+
+/** 左上两个抽屉里的全部对象行（展开「操作」抽屉之后再读）。 */
+const objIds = async () => {
+  await ensureOpsDock()
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.dock-topleft .row-click')].map((r) => (r.textContent ?? '').trim()),
+  )
+}
+
+/* ══ ⑤ 名字能敲 LaTeX 希腊字母 ═════════════════════════════ */
+
+await addLine('G', 'C_6')
+await addLine('H', 'C_6')
+await addLine('\\phi', '映射(G, H, a→2)')
+await page.waitForTimeout(300)
+
+const ids = await objIds()
+ok('`\\phi` 被接受，对象表里出现 φ', ids.some((x) => x.startsWith('φ')), JSON.stringify(ids))
+ok('没有求值失败的行（φ 是合法名字）', (await page.locator('.row-err').count()) === 0)
+
+/* ══ ⑨ 报错分清「没这功能」与「打错了」 ═══════════════════ */
+
+await typeExpr('极大子群(G)')
+const s1 = await status()
+ok('`极大子群(G)` 报「没有名为…的操作」', s1.text.includes('没有名为'), `${s1.cls} :: ${s1.text}`)
+ok('并给了相近操作（Sub(G)）', s1.text.includes('Sub(G)'), s1.text)
+ok('不再说"可用的群记号"', !s1.text.includes('群记号'), s1.text)
+
+// 关系行是在**输入框**里打的 → 走 evalExpr（不是 buildLines），所以这里验的是 preview 那句话
+await typeExpr('H ⊆ G')
+const s2 = await status()
+ok('`H ⊆ G` 报「写的是一个关系」', s2.text.includes('关系'), `${s2.cls} :: ${s2.text}`)
+ok('并点明声明关系还没有操作', s2.text.includes('没有对应操作'), s2.text)
+ok('不再甩"无法识别的群记号"', !s2.text.includes('群记号'), s2.text)
+
+// 真·打错字：保持"无法识别"
+await typeExpr('G S_4')
+const s3 = await status()
+ok('乱写仍是「无法识别」', s3.text.includes('无法识别'), s3.text)
+
+// 收起输入卡，免得挡住画布
+await page.keyboard.press('Escape')
+await page.waitForTimeout(250)
+
+/* ══ ① K 的信息：结论区不再沉默 ═══════════════════════════ */
+
+await addLine('K', 'ker(φ)')
+await page.waitForTimeout(300)
+ok('K 建出来了', (await page.locator('.row-err').count()) === 0)
+
+ok('点得中 K 那一行', await clickRow('K'))
+await page.waitForTimeout(350)
+const kInfo = await infoState()
+ok('K 的结论区里有「识别」条', kInfo.labels.includes('识别'), kInfo.labels.join(','))
+ok(
+  '「识别」条给出了 SmallGroup 坐标',
+  kInfo.texts.some((t) => t.includes('SmallGroup')),
+  kInfo.texts.join(' | '),
+)
+ok('不再只有"阶"一条', kInfo.labels.length >= 2, kInfo.labels.join(','))
+
+/* ══ ③ 子群 tab：标清"共轭类代表" + ⊴ 正规 ═══════════════ */
+
+// 换一个子群丰富点的群，看得更清楚
+await ensureCard()
+await page.fill('.composer-name', 'S')
+await page.fill('.composer-expr', 'S_4')
+await page.click('.composer-orb .composer-row button')
+await page.waitForTimeout(350)
+await page.keyboard.press('Escape')
+await page.waitForTimeout(250)
+
+ok('点得中 S₄ 那一行', await clickRow('S'))
+await page.waitForTimeout(300)
+await page.click('.info-tab:has-text("子群")')
+await page.waitForTimeout(350)
+const subInfo = await infoState()
+ok(
+  '子群 tab 顶部写了「共轭类代表」',
+  subInfo.notes.some((n) => n.includes('共轭类代表')),
+  subInfo.notes.join(' | '),
+)
+ok(
+  '说明里点出「平凡群与 G 自身不在此列」',
+  subInfo.notes.some((n) => n.includes('不在此列')),
+  subInfo.notes.join(' | '),
+)
+ok(
+  '正规子群有显眼的「⊴ 正规」标记',
+  subInfo.normals.length > 0 && subInfo.normals.every((x) => x.includes('正规')),
+  JSON.stringify(subInfo.normals),
+)
+ok(
+  'S₄ 的子群列表里有 2 个正规代表（A₄ 与 V₄）',
+  subInfo.normals.length === 2,
+  JSON.stringify(subInfo.normals),
+)
+ok(
+  '底部提示指向 正规子群(G)',
+  subInfo.notes.some((n) => n.includes('正规子群(G)')),
+  subInfo.notes.join(' | '),
+)
+
+await page.screenshot({ path: '../../docs/assets/u18-info-fixes.png' })
+
+ok('控制台零错误', logs.length === 0, logs.join(' | '))
+console.log('')
+console.log(`${pass} PASS / ${fail} FAIL`)
+await browser.close()
+if (fail > 0 || logs.length > 0) process.exitCode = 1

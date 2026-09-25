@@ -25,7 +25,7 @@ function mapChars(s: string, table: Record<string, string>): string {
  * 变体（`\varepsilon` / `\varphi` 这类）与 tex.ts 的 `toTex` 方向保持一致，
  * 否则"展示 → 反推 TeX → 渲染"会来回变形。
  */
-const GREEK: Record<string, string> = {
+export const GREEK: Record<string, string> = {
   alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ',
   epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
   theta: 'θ', vartheta: 'θ', iota: 'ι', kappa: 'κ',

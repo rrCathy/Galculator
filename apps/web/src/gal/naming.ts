@@ -1,5 +1,5 @@
 import { OPS } from './ops'
-import { subscript } from './pretty'
+import { GREEK, subscript } from './pretty'
 
 /**
  * 自动命名与"名字体检"（交互模型 §3.2）。
@@ -39,6 +39,24 @@ export function isReservedName(name: string): boolean {
  */
 const NAME_RE = /^[A-Za-z0-9_\u4e00-\u9fff\u0370-\u03ff\u1f00-\u1fff]+$/
 
+/**
+ * **LaTeX 写法的希腊字母 → 真字符**（`\phi` → `φ`、`\varphi` → `φ`）。
+ *
+ * 为什么必须有这一条：整个项目到处用 LaTeX（core 的符号本身就是 TeX），
+ * 证明模板的定义行里写着 `φ = 映射(G, H, a→2)`——而**普通键盘敲不出 φ**。
+ * 于是"展示成什么样，就得能照着敲回去"这条契约就反着破了：
+ * 系统生成一个用户输不进来的记号。
+ *
+ * 这里只做**单个**希腊字母（`\phi` / `\alpha` / `\Gamma`），不做全套 LaTeX——
+ * 名字是标识符，不是排版内容。变体按 `prettySymbol` 的同一张表归一
+ * （`\varepsilon` 与 `\epsilon` 都成 `ε`），否则"显示 → 再敲回去"会来回变形。
+ */
+export function normalizeName(raw: string): string {
+  const t = raw.trim()
+  const m = /^\\([A-Za-z]+)$/.exec(t)
+  return m && GREEK[m[1]] ? GREEK[m[1]] : t
+}
+
 /** 是否像一个名字（用于"整行粘贴"的拆分判断）。 */
 export function isNameLike(s: string): boolean {
   return NAME_RE.test(s.trim())
@@ -50,6 +68,8 @@ export interface NameCheck {
   error?: string
   /** 不阻塞的提醒（如命中操作名） */
   warn?: string
+  /** 出错时给出的写法提示（如希腊字母的 LaTeX 写法） */
+  hint?: string
 }
 
 /**
@@ -59,10 +79,15 @@ export interface NameCheck {
  * 但得让他知道自动命名会跳过这个名字。
  */
 export function checkName(raw: string, used: Iterable<string>): NameCheck {
-  const name = raw.trim()
+  // 先过 LaTeX 别名（`\phi` → `φ`）——用户敲不出 φ，但敲得出 `\phi`
+  const name = normalizeName(raw)
   if (!name) return { ok: true }
   if (!NAME_RE.test(name)) {
-    return { ok: false, error: '名字只能用字母（含希腊字母）/ 数字 / 下划线 / 中文' }
+    return {
+      ok: false,
+      error: '名字只能用字母（含希腊字母）/ 数字 / 下划线 / 中文',
+      hint: '希腊字母可以写成 LaTeX：\\phi · \\varphi · \\alpha · \\sigma …',
+    }
   }
   const lower = name.toLowerCase()
   for (const u of used) {

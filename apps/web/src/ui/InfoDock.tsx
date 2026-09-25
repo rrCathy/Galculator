@@ -1,6 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
 import {
-  getSmallGroupBySymbol,
   isGroupCyclic,
   isNilpotent,
   isSimpleGroup,
@@ -57,7 +56,8 @@ export function InfoDock({
   const insights = useMemo<Insight[]>(() => {
     const v = node?.value
     if (!v) return []
-    if (v.type === 'group') return groupInsights(v.group)
+    // 传 node：结论层要看**这个对象是怎么来的**（手写记号 / 由操作构造）
+    if (v.type === 'group') return groupInsights(v.group, node ?? undefined)
     if (v.type === 'map') return mapInsights(v.map)
     // 作用：轨道分解 + （Sylow III）n_p 的三条等式 —— MVP 的落点
     if (v.type === 'action') return actionInsights(v.action)
@@ -122,16 +122,23 @@ export function InfoDock({
   )
 }
 
+/**
+ * 「基本」tab：**属性清单**。
+ *
+ * 这里**不再**放"识别"行。原来那一行读的是 `group.isoSymbol`，而那个字段只有
+ * **从小群库建出来的群**才有 —— `createGroupFromSymbol` / `buildSubgroupGroup` 造的
+ * 实测一律 `undefined`，所以那一行**基本是死代码**（只有库群才亮）。
+ * 识别结果现在统一由上面的结论层说（`groupInsights`，带 SmallGroup 编号与惯用名），
+ * 这里不重复。
+ */
 function BasicTab({ group, node }: { group: Group; node: GalObject }) {
   const info = useMemo(() => {
     const small = group.order <= ENUM_CAP
-    const inLibrary = group.isoSymbol ? getSmallGroupBySymbol(group.isoSymbol) : null
     return {
       cyclic: isGroupCyclic(group),
       simple: small ? isSimpleGroup(group) : null,
       solvable: small ? isSolvable(group) : null,
       nilpotent: small ? isNilpotent(group) : null,
-      inLibrary,
     }
   }, [group])
 
@@ -170,14 +177,6 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
           <span>{info.nilpotent ? '是' : '否'}</span>
         </Row>
       )}
-      {info.inLibrary && (
-        <Row k="识别">
-          <span>
-            SmallGroup({info.inLibrary.order}, {info.inLibrary.index}) ·{' '}
-            <Tex tex={info.inLibrary.group.symbol} />
-          </span>
-        </Row>
-      )}
       {node.sources.length > 0 && (
         <Row k="来源">
           <span>{node.sources.join(' , ')}</span>
@@ -201,20 +200,36 @@ function SubgroupsTab({ group }: { group: Group }) {
   if (!subs) return <div className="insp-line dim">|G| &gt; {ENUM_CAP}，子群未枚举（守卫）</div>
   if (subs.length === 0) return <div className="insp-line dim">没有非平凡真子群</div>
 
+  const normalCount = subs.filter((s) => s.isNormal).length
+
   return (
     <div className="insp-subs">
+      {/*
+        这个列表是**共轭类代表**（core 的 `listCosetStripSubgroups`），**不是全部子群**。
+        不写清会被读成"G 只有这么几个子群"——S₄ 只列 9 条，实际有 30 个非平凡真子群。
+      */}
+      <div className="insp-note">
+        共轭类代表：同一行里的子群彼此共轭，「×n」是这一类有几个。
+        平凡群与 G 自身不在此列。
+      </div>
+
       {subs.map((s) => (
         <div key={s.key} className="insp-sub">
           <span className="insp-sub-name">
             {s.structure ? <Tex tex={s.structure} /> : `阶 ${s.order}`}
           </span>
           <span className="insp-sub-meta">
+            {s.isNormal ? <b className="insp-normal">⊴ 正规</b> : null}
             |H|={s.order} · [G:H]={s.index}
-            {s.isNormal ? ' · ⊴' : ''}
             {s.orbitSize > 1 ? ` · ×${s.orbitSize}` : ''}
           </span>
         </div>
       ))}
+
+      <div className="insp-note dim">
+        这一屏里有 {normalCount} 个正规。要看全部子群 / 全部正规子群：
+        用「操作」抽屉里的 Sub(G) 与 正规子群(G)（正规子群会把平凡群与 G 自身也算进来）。
+      </div>
     </div>
   )
 }

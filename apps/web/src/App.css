@@ -733,6 +733,28 @@ body {
   font-size: 11.5px;
 }
 
+/* 列表的语义说明（如"这是共轭类代表，不是全部子群"）——不写清就会被读错 */
+.insp-note {
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.insp-note.dim {
+  background: none;
+  color: var(--text-faint);
+}
+
+/* 正规子群的标记——从尾巴上的小字提到前面，并写出「正规」两个字 */
+.insp-normal {
+  margin-right: 4px;
+  color: var(--purple-text);
+  font-weight: 500;
+}
+
 /* ── 元素表格（行 = 元素、列 = 属性）────────────────────── */
 
 .etable-wrap {

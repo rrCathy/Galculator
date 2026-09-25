@@ -33,6 +33,7 @@ node verify/e2e/proof-step.mjs        # 证明面板的 step-through（M1）
 node verify/e2e/proof-sylow3.mjs      # Sylow III 的 14 步与孤点判据（M2）
 node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
 node verify/e2e/proof-m3.mjs          # 轨道–稳定子 / 第一同构的参数槽与正方形（M3）
+node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报错分清（U18）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -66,3 +67,5 @@ node verify/e2e/proof-m3.mjs          # 轨道–稳定子 / 第一同构的参�
 12. **循环群里的单字母一律视作那个生成元**（`resolveElementLoose` 的第 ③ 级）：`映射(G, H, a→x)` 在 C₆ 上**是合法的**（`x` 等价于 `a`），别拿它当"元素不存在"的反例——要用 `a→9`。
 13. **轨道的值类型随 Ω 变**：Ω = G 自身时是 `elements`，Ω 是集合时是 `set`。读"轨道多大"得认两种（`suites/proof.ts` 的 `orbSize`），只按 `set` 读会得到 `-1` 而看不出为什么。
 14. **dev server 的 host**：`vite.config.ts` 里已写死 `127.0.0.1`——默认的 `localhost` 在 Node 18+ 会解析成 `::1`（只监听 IPv6），而走查脚本一律连 `http://127.0.0.1:5273`，会报 `ERR_CONNECTION_REFUSED`，看着像"服务没起"。
+15. **左上「对象」与「操作」是**两个**抽屉**：前者列 `origin === 'input'`（手写声明）、后者列 `derived`（运算产物，映射 / 核 / 像都在这里）。而 `DockPanel` **收起时 body 整个不渲染** —— 不先展开「操作」抽屉就去读 `.row-click`，会**只读到一半对象**（U18 走查栽过：映射建出来了却"查不到"）。
+16. **点左栏的行要按 `.row-name` 里的 id 匹配，不要按文本包含**：行里渲染的是**原始定义**（`S = S_4`），而 `S₄` 是 `prettySymbol` 之后的展示形态。拿展示形态匹配永远匹不上，而信息面板会**停在上一个被选中的对象**上 —— 于是失败原因看起来像"说明没渲染"（U18 走查的真实误判）。

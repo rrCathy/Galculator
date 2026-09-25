@@ -5,7 +5,7 @@ import {
   type Group,
   type Subgroup,
 } from '@groupviz/core'
-import { evalExpr } from './evalDef'
+import { evalExpr, looksLikeRelation } from './evalDef'
 import { prettySymbol } from './pretty'
 import type { GalObject } from './types'
 
@@ -36,7 +36,23 @@ export function buildLines(lines: string[]): {
   lines.forEach((raw, index) => {
     const eq = raw.indexOf('=')
     if (eq < 0) {
-      lineStates.push({ index, raw, name: '', ok: false, error: '缺少「=」' })
+      /**
+       * 这行**写的是一个关系**（`H ⊆ G` / `N ⊴ G` / `A ≅ B`）而不是定义。
+       *
+       * 光说"缺少「=」"会让人以为自己漏了符号；而真正的情况是——
+       * **声明关系这件事还没有对应的操作**。两者必须分开说。
+       */
+      const rel = looksLikeRelation(raw)
+      lineStates.push({
+        index,
+        raw,
+        name: '',
+        ok: false,
+        error: rel ? '这行写的是一个关系，不是定义' : '缺少「=」',
+        hint: rel
+          ? '声明关系（A ⊆ B / H ⊴ G）目前还没有对应操作；要建对象就写成「名字 = 表达式」'
+          : undefined,
+      })
       return
     }
     const name = raw.slice(0, eq).trim()

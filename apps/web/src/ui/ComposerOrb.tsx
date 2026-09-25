@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { evalExpr, type EvalResult } from '../gal/evalDef'
-import { checkName, isNameLike, nextAutoName, RESERVED_CALL_NAMES } from '../gal/naming'
+import { checkName, isNameLike, nextAutoName, normalizeName, RESERVED_CALL_NAMES } from '../gal/naming'
 import { VALUE_TYPE_LABEL } from '../gal/value'
 import type { GalObject } from '../gal/types'
 
@@ -58,7 +58,9 @@ export function ComposerOrb({
   const canSubmit = !!inline.rhs && !!preview?.ok && !nameCheck.error
   const submit = () => {
     if (!canSubmit) return
-    onAdd(`${nameDraft.trim() || inline.name || autoName} = ${inline.rhs}`)
+    // 名字过一遍 LaTeX 别名：用户敲 `\phi`，存进去的是 φ（敲回去也认得）
+    const typed = nameDraft.trim() || inline.name
+    onAdd(`${typed ? normalizeName(typed) : autoName} = ${inline.rhs}`)
     setNameDraft('')
     setExprDraft('')
   }
@@ -136,12 +138,19 @@ function ComposerStatus({
   expr,
   preview,
 }: {
-  nameCheck: { ok: boolean; error?: string; warn?: string }
+  nameCheck: { ok: boolean; error?: string; warn?: string; hint?: string }
   autoName: string
   expr: string
   preview: EvalResult | null
 }) {
-  if (nameCheck.error) return <div className="composer-status bad">{nameCheck.error}</div>
+  if (nameCheck.error) {
+    return (
+      <div className="composer-status bad">
+        {nameCheck.error}
+        {nameCheck.hint ? <span className="status-meta"> · {nameCheck.hint}</span> : null}
+      </div>
+    )
+  }
 
   const warn = nameCheck.warn ? <div className="composer-status warn">{nameCheck.warn}</div> : null
 

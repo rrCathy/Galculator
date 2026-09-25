@@ -1,5 +1,5 @@
 import { createGroupFromSymbol, parseGroupNotation } from '@groupviz/core'
-import { INFIX_SYMBOLS, INFIX_TABLE, opByCall, type OpArg, type OpDef } from './ops'
+import { INFIX_SYMBOLS, INFIX_TABLE, OPS, opByCall, type OpArg, type OpDef } from './ops'
 import { prettySymbol } from './pretty'
 import type { GalValue } from './value'
 import type { GalObject } from './types'
@@ -245,6 +245,69 @@ function runOp(op: OpDef, args: OpArg[]): EvalResult {
 }
 
 /**
+ * 这行看起来是个**关系**（`H ⊆ G` / `N ⊴ G` / `A ≅ B`）而不是定义。
+ *
+ * 用户把关系当定义行写是很自然的——课本上就是这么写的。但系统没有"声明关系"这类操作
+ *（`docs/USABILITY.md` 缺口 ④）。所以必须**明确说出来**，
+ * 别让人以为是自己漏了符号或者群记号写错了。
+ */
+export function looksLikeRelation(s: string): boolean {
+  return /[⊆⊇⊂⊃⊴⊵≅≃∈∉≤≥]/.test(s)
+}
+
+/**
+ * 找不到操作时，猜几个"用户可能想用的"。
+ *
+ * 判据只有一条：别名与输入**互相包含**（`极大子群` 含 `子群`）。只给 3 个——
+ * 这是**引导**不是补全，给多了反而像在瞎猜。
+ */
+function similarOps(name: string): string[] {
+  const t = name.trim().toLowerCase()
+  if (!t) return []
+  const hits: string[] = []
+  for (const op of OPS) {
+    for (const alias of op.call ?? []) {
+      const a = alias.toLowerCase()
+      // 长度 ≥ 2 才参与：注册表里有 `c`（组合数）这种单字母别名，
+      // 它会是 `gcd` 的子串 —— 于是"是不是想用 C(n,k)"这种驴唇不对马嘴的提示就冒出来了
+      if (a === t || a.length < 2) continue
+      if (a.includes(t) || t.includes(a)) {
+        hits.push(op.notation)
+        break
+      }
+    }
+    if (hits.length >= 3) break
+  }
+  return [...new Set(hits)]
+}
+
+/**
+ * "长得像操作调用，但注册表里没这个名字"的报错。
+ *
+ * 从前这一路会掉进**记号建群**的最后一级，于是 `极大子群(G)` 被当成**群记号**去解析，
+ * 回一句"无法识别的群记号 …… 可用写法：C₁₂ · S₃ · D₄ ……"——**完全误导**：
+ * 用户会以为是自己群记号写错了。未支持的功能与打错字必须能分开。
+ */
+function unknownOpError(name: string, objects: Map<string, GalObject>): EvalResult {
+  // `f(K)`：`f` 是个**已定义的对象** —— 说清楚，别让用户以为自己打错了名字
+  if (objects.has(name)) {
+    return {
+      ok: false,
+      error: `「${name}」是一个已定义的对象，不能当函数调用`,
+      hint: '形如 f(H) 的「把子群送进映射」目前还没有对应操作',
+    }
+  }
+  const near = similarOps(name)
+  return {
+    ok: false,
+    error: `没有名为「${name}」的操作`,
+    hint: near.length
+      ? `是不是想用：${near.join(' · ')}`
+      : '选中对象后点节点旁的 ⋯ 球，或点左侧「操作」抽屉看全部操作',
+  }
+}
+
+/**
  * 求一条定义（等号右侧）。
  *
  * 四级分发，全部查注册表：
@@ -273,12 +336,15 @@ export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResu
 
   // ② 函数式调用
   const call = splitCall(t)
+  /** 长得像调用、但注册表里没有这个名字 —— 报错时说"没有这个操作"，不要说"群记号认不出" */
+  let unknownOp: string | null = null
   if (call) {
     const op = opByCall(call.name)
     if (op) {
       const args = call.args.map((a) => resolveArg(a, objects))
       return runOp(op, args)
     }
+    unknownOp = call.name
   }
 
   // ③ 顶层中缀
@@ -300,7 +366,19 @@ export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResu
 
   // ④ 记号建群
   const n = parseGroupNotation(toNotationForm(t))
-  if (!n.ok) return { ok: false, error: `无法识别：${t}`, hint: n.hint }
+  if (!n.ok) {
+    // 打的是个"操作调用"却找不到 → 那是**没有这个操作**，不是群记号写错了
+    if (unknownOp) return unknownOpError(unknownOp, objects)
+    // 写的是个关系（`H ⊆ G`）→ 说清"没有声明关系这回事"，别甩一句"群记号认不出"
+    if (looksLikeRelation(t)) {
+      return {
+        ok: false,
+        error: '这行写的是一个关系，不是定义',
+        hint: '声明关系（A ⊆ B / H ⊴ G）目前还没有对应操作；要建对象就写成「名字 = 表达式」',
+      }
+    }
+    return { ok: false, error: `无法识别：${t}`, hint: n.hint }
+  }
   if (!n.symbol) {
     return {
       ok: false,

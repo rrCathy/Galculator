@@ -271,6 +271,16 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器几何走查（读 DOM �
   验证：断言 **703/703**（新增 205 条，含 8 组共轭类与 4 组 `(G, H, φ)` 的核 / 像手算表）·
   走查 **211/211**（新增 `proof-m3` 60 条，含第一同构正方形的几何硬规范）·
   截图 `docs/assets/u-m3-first-iso-square.png`。
+- **U18 已完成（可用性审计 + 第一批修复，2026-09-25）**：用户实测第二同构定理时连撞五个"做不到"
+  → 换成**动作视角**重新审一遍（不问"能不能算"，问"用户会怎么做、那条路通不通"），
+  落成 [docs/USABILITY.md](docs/USABILITY.md)。三条实测结论：**①三个操作入口其实是同一个模式**
+  （都是"先选操作再点参数"，缺"把两个对象凑一起"那条路）；**②不上画布的中间产物选不中**
+  （`Syl_p(G) → Ω = 底集(S)` 中间必须打字）；**③结论区的沉默有规律**（结构记号恰是构造物的常态，
+  于是核 / 像 / 闭包一律沉默）。第一批修掉：结论区改判据（`ker f` 现在会说
+  `≅ C₂×C₂ · SmallGroup(4,2) · 也写作 V₄`）+ 删一行死代码 · 子群 tab 标清"这是共轭类代表" ·
+  **φ 能敲进来了**（`\phi` / `\varphi` 归一成真字符）· 报错分清"没这功能"与"打错了" ·
+  关系行（`H ⊆ G`）不再报"缺少「=」"。验证：断言 **747/747** · 走查 **232/232** ·
+  截图 `docs/assets/u18-info-fixes.png`。
 - 更后面：**Cayley 定理**（舞台现成 `正则作用(G)`，缺"G ↪ Sym(Ω)"在画布上的落点）·
   **U8** 工具条（雏形已随 U10 落地）+ 群目录 + 查表（「零门槛入口」）· 交换图画布打磨。
 
@@ -379,7 +389,8 @@ _（`G / Z` 带 `G →(π) Q`、`Z(G)` 带 `Z ↪ G`；实线 = 映射，淡虚�
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 内核架构：值类型 / 10 原语 / 60+ 操作清单 / 引擎依赖 / 契约索引 |
 | [docs/INTERACTION.md](docs/INTERACTION.md) | **UI 规范 v2**：操作入口（`opsFor` + 径向菜单）/ 输入层 / 集合构造器 / 画布图 / 布局 |
 | [docs/DIAGRAM_SPEC.md](docs/DIAGRAM_SPEC.md) | **交换图规范**：课本级排版的六条硬规范 / 现状诊断 / **什么对象适合上画布** |
-| [docs/TASKS.md](docs/TASKS.md) | **群论常见计算 / 证明清单**——每行给可粘贴的输入 + 实测结果（66 条里 58 条通过），照着就能逐条核 |
+| [docs/TASKS.md](docs/TASKS.md) | **群论常见计算 / 证明清单**——每行给可粘贴的输入 + 实测结果，照着就能逐条核（输入视角）|
+| [docs/USABILITY.md](docs/USABILITY.md) | **可用性审计**（动作视角）：用户想做某件事时**最可能的动作**是什么、那条路通不通 + 可点性地图 + 11 条缺口 |
 | [docs/PROOF_SPEC.md](docs/PROOF_SPEC.md) | Proof Spec 规范（模板 schema + Sylow I 实例）· **§2.5 落地形态（M1 已实现）** |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | 规划：UI 重构线 U0–U12 + 里程碑 M0–M4 |
 | [docs/archive/](docs/archive/) | 已完成使命的历史文档（交接 prompt / 早期规划稿）|

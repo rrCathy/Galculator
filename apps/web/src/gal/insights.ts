@@ -4,12 +4,15 @@ import {
   computeStabilizers,
   detectIsomorphicGroup,
   factorizeOrder,
+  getAllSmallGroups,
+  getSmallGroupBySymbol,
   type Group,
   type GroupElement,
   type Subgroup,
 } from '@groupviz/core'
 import { prettySymbol, superscript } from './pretty'
 import type { GalAction, GalMap } from './value'
+import type { GalObject } from './types'
 
 /**
  * 结论层（U4）—— **"计算器"该说的话**。
@@ -39,6 +42,56 @@ const ISO_ALIAS: Record<string, string> = {
 
 function normalizeSymbol(s: string): string {
   return s.replace(/\s+/g, '')
+}
+
+/**
+ * **记号归一**：把同一个群的两种写法认成一个。
+ *
+ * 实测：`createGroupFromSymbol('C_2 x C_2')` 的符号是 `C_{2}^{2}`（幂写法），
+ * 而 `detectIsomorphicGroup` 回的是 `C_{2}\times C_{2}`（乘法写法）——
+ * 不归一的话会对一个群说"它同构于自己"。
+ */
+function canonSymbol(s: string): string {
+  const t = normalizeSymbol(s)
+  const m = /^(.+?)\^\{?(\d+)\}?$/.exec(t)
+  if (m) return Array.from({ length: Number(m[2]) }, () => m[1]).join('\\times')
+  return t
+}
+
+/**
+ * 结构记号的**惯用名**——用户嘴里说的是这个。
+ *
+ * `K = ker(f)` 的符号本来就是 `C_{2}\times C_{2}`，但人想问的是"这是不是 V₄"。
+ */
+const ISO_COMMON_NAME: Record<string, string> = {
+  'C_{2}\\times C_{2}': '也写作 V₄（Klein 四元群）',
+  'C_{2}\\times C_{2}\\times C_{2}': '初等交换 2-群（每元阶 ≤ 2）',
+  'S_{3}': '最小的非交换群（也是 D₃）',
+}
+
+/** 小群库里的条目（`SmallGroup(阶, 编号)`）——识别结果的"坐标"。 */
+const smallCache = new Map<string, { order: number; index: number } | null>()
+
+function smallGroupEntry(order: number, iso: string): { order: number; index: number } | null {
+  const key = `${order}#${iso}`
+  const hit = smallCache.get(key)
+  if (hit !== undefined) return hit
+  let out: { order: number; index: number } | null = null
+  const direct = getSmallGroupBySymbol(iso)
+  if (direct) out = { order: direct.order, index: direct.index }
+  else {
+    // 库里未必用同一个记号（实测 `C_{2}\times C_{2}` 直接查是 null）→ 按阶 + 归一符号找
+    const want = canonSymbol(iso)
+    for (const e of getAllSmallGroups()) {
+      if (e.order !== order) continue
+      if (canonSymbol(e.group.symbol) === want) {
+        out = { order: e.order, index: e.index }
+        break
+      }
+    }
+  }
+  smallCache.set(key, out)
+  return out
 }
 
 /**
@@ -83,21 +136,47 @@ export interface Insight {
   tone: 'key' | 'note'
 }
 
-/** 群对象的结论：同构识别 + 阶的分解。 */
-export function groupInsights(group: Group): Insight[] {
+/**
+ * 群对象的结论：同构识别 + 阶的分解。
+ *
+ * ## "要不要说同构"的判据（2026-09-25 修正）
+ *
+ * 旧判据是"识别结果 ≠ 自身符号才说"——那是为**用户手写的群**设计的
+ * （`G = S₄` 说"同构于 S₄"确实是废话）。但**由操作构造出来的**群符号本身就是
+ * 结构记号（`ker f` 的符号是 `C_{2}\times C_{2}`、`闭包(G,r)` 的是 `C_{4}`），
+ * 于是自己跟自己比**永远相等** → 永远沉默。
+ *
+ * 实测：`K = ker(f)` 的信息面板里只剩一条"阶"，用户问"K 是什么"**没有任何地方能回答**。
+ *
+ * 新判据看**这个对象是怎么来的**（`node.opId`）：
+ *   - 手写的群记号（无 `opId`）→ 符号即答案，不重复说
+ *   - **由操作构造的**（`ker` / `im` / `商` / `闭包` / 子群…）→ **一律说**，
+ *     连 SmallGroup 编号与惯用名一起给（那是"它在分类里的位置"）
+ */
+export function groupInsights(group: Group, node?: GalObject): Insight[] {
   const out: Insight[] = []
 
-  // ① 同构于什么——**只在识别结果与它自己的符号不同时**说
-  //（`G = S_4` 说"同构于 S₄"是废话；`S₄/V₄` 说"同构于 S₃"才是结论）
+  // ① 同构于什么 / 它在分类里的位置
   const iso = identifyGroup(group)
-  if (iso && normalizeSymbol(iso) !== normalizeSymbol(group.symbol)) {
-    out.push({
-      label: '同构',
-      tone: 'key',
-      tex: `${group.symbol} \\;\\cong\\; ${iso}`,
-      text: `${prettySymbol(group.symbol)} ≅ ${prettySymbol(iso)}`,
-      detail: '结构与它完全一样——只是产生方式不同',
-    })
+  if (iso) {
+    const same = canonSymbol(iso) === canonSymbol(group.symbol)
+    // 归一后相同 → 只有"构造出来的"才值得说（否则是重复符号）
+    if (!same || !!node?.opId) {
+      const entry = smallGroupEntry(group.order, iso)
+      const parts = [
+        entry ? `SmallGroup(${entry.order}, ${entry.index})` : null,
+        ISO_COMMON_NAME[iso] ?? null,
+      ].filter((x): x is string => !!x)
+      out.push({
+        label: same ? '识别' : '同构',
+        tone: same ? 'note' : 'key',
+        tex: `${group.symbol} \\;\\cong\\; ${iso}`,
+        text: `${prettySymbol(group.symbol)} ≅ ${prettySymbol(iso)}`,
+        detail: parts.length
+          ? parts.join(' · ')
+          : '结构与它完全一样——只是产生方式不同',
+      })
+    }
   }
 
   // ② 阶的分解：计算器该顺手给出的数论信息

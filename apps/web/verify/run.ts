@@ -15,6 +15,7 @@ import { run as thirdIso } from './suites/thirdIso'
 import { run as algebra } from './suites/algebra'
 import { run as notation } from './suites/notation'
 import { run as proof } from './suites/proof'
+import { run as usability } from './suites/usability'
 
 diagram()
 firstIso()
@@ -22,6 +23,7 @@ thirdIso()
 algebra()
 notation()
 proof()
+usability()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1
