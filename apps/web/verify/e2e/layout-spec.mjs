@@ -91,6 +91,27 @@ async function inspect(lines, shot) {
   }
   ok(`${shot}: 竖直箭头不从对象身上穿过`, crossing.length === 0, crossing.join(', '))
 
+  /**
+   * ③ 水平边不许穿过对象（DIAGRAM_SPEC §1.2 的另一半）。
+   *
+   * 2026-09-25 补：**声明包含**（U20）让"两条水平边共用一个端点"变成常见形状 ——
+   * `A ⊆ G` 与 `G → S₃` 共享 `G`。老的列序规则是"把夹在中间的组挪到行尾"，
+   * 它在共享端点时会自相打架（满足一条就把另一条弄坏），实测 `psi: B→G`
+   * 从 `H` 身上横穿过去。这条判据就是给那次修复配的哨兵。
+   */
+  const hCross = []
+  for (const e of d.edges) {
+    if (!Number.isFinite(e.y1) || Math.abs(e.y1 - e.y2) > 2) continue // 只判水平边
+    const lo = Math.min(e.x1, e.x2)
+    const hi = Math.max(e.x1, e.x2)
+    if (hi - lo < 12) continue // 两端几乎贴在一起，没什么可穿的
+    for (const n of d.nodes) {
+      if (Math.abs(n.y - e.y1) > 6) continue // 不同行
+      if (n.x > lo + 4 && n.x < hi - 4) hCross.push(`${e.label || '∅'}→${n.id}`)
+    }
+  }
+  ok(`${shot}: 水平箭头不从对象身上穿过`, hCross.length === 0, hCross.join(', '))
+
   await page.screenshot({ path: `../../docs/assets/${shot}.png`, clip: (await page.locator('svg.canvas').boundingBox()) ?? undefined })
   await page.close()
   return d
@@ -107,6 +128,26 @@ await inspect(
 
 // 第一同构正方形
 await inspect(['G = C_6', 'H = C_6', 'φ = 映射(G, H, a→2)'], 'u11-first-iso-square')
+
+// 两条用户映射共用一个端点（`G`）—— 链式列序：H ← G ← B
+await inspect(
+  ['G = C_6', 'H = C_3', 'phi = 映射(G, H, a→1)', 'B = C_6', 'psi = 映射(B, G, a→3)'],
+  'u20-shared-endpoint',
+)
+
+// 声明的包含（U20）+ 一条用户映射共享端点：`A₄ --⊴--> S₄ --f--> S₃`
+await inspect(
+  [
+    'G = S_4',
+    'H = S_3',
+    'f = 映射(G, H, s12→23, c→13)',
+    'K = ker(f)',
+    'A = A_4',
+    'FA = 像(f, A)',
+    'R = A ⊆ G',
+  ],
+  'u20-relation-chain',
+)
 
 console.log('')
 console.log(`${pass} PASS / ${fail} FAIL`)

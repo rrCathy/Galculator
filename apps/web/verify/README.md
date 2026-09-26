@@ -35,6 +35,7 @@ node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
 node verify/e2e/proof-m3.mjs          # 轨道–稳定子 / 第一同构的参数槽与正方形（M3）
 node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报错分清（U18）
 node verify/e2e/relations.mjs         # 关系层：用户的 S₄↠S₃ 剧本（U19）
+node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G（U20）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -74,3 +75,7 @@ node verify/e2e/relations.mjs         # 关系层：用户的 S₄↠S₃ 剧本
 18. **判包含不能只看 id 前缀**：`C₂` 的 id 是 `e0 e1`、`C₄` 的是 `e0 e1 e2 e3` —— **真子集**，第 ① 关会通过。挡住它的是"乘法封闭"（`e1 + e1 = e2 ∉ {e0,e1}`）。凡是按 id 判结构关系的地方，都要拿**群运算**兜一次。
 19. **KaTeX 渲染后的文本要抹零宽字符再比**：`.rel-body` 里是 KaTeX（`K ≤ A` 会带上 `\u200b` 之类），断言前先 `replace(/[\u200b\u2061\u2062]/g,'').replace(/\s+/g,'')` 再 `includes`（`e2e/relations.mjs` 的 `relState`）。**附注那行是纯文本**（`.rel-detail`），比它更稳——优先断言它。
 20. **PowerShell 里跑中文输出的回归会变乱码**：`node … | Out-File -Encoding utf8` 会先按控制台代码页（GBK）解码 node 的 UTF-8 输出。跑前先设 `$OutputEncoding = [Text.Encoding]::UTF8; [Console]::OutputEncoding = [Text.Encoding]::UTF8`。更稳的写法是让探针自己用 `fs.writeFileSync(..., 'utf8')` 落盘（`.tmp-probe/*.ts` 都这么做）。
+21. **走查里点画布上的边/节点要派发事件，不能用 `page.click`**：`.gedge-hit` / `.gnode-hit` 的 `stroke`/`fill` 是 `transparent`，Playwright 的动作性检查判它 "not visible"（截图里它确实什么都不画），会白等 30s 再 `TimeoutError`。改用 `el.dispatchEvent(new MouseEvent('click', { bubbles: true }))`（React 18 的监听挂在根容器上，冒泡能到）。`e2e/relation-ops.mjs` 的 `clickSvg` 就是这个。
+22. **断言"值"时不要 `JSON.stringify(值)`**：`Group` 里有 `generators[].inverse` 指回生成元自己（环），一 stringify 就抛 `Converting circular structure to JSON`，**而且是在整份回归跑到那一行时崩掉**（不是只失败一条）。写个 `describeValue()` 只摘 `symbol/order/index/isNormal` 那几项（`suites/usability.ts` 顶部）。
+23. **布局的"水平穿行"是另一半硬规范**：老走查只判了竖直箭头不穿对象，水平那半没判 —— 于是"两条水平边共用一个端点"时列序自相打架（`psi: B→G` 从 `H` 身上横穿）**一直没被发现**。`e2e/layout-spec.mjs` 现在两条都判。判据：水平的边（Δy ≤ 2）两端之间有别的节点的中心（同 y ±6）即失败。
+24. **`⊆` 这类"绝不会出现在群记号里"的中缀要进 `UNICODE_ALIASES`**：`findTopLevelInfix` 只认"两侧都不是标识符字符"的中缀，`H⊆G`（不补空格）会被当成一个整词。`∩`/`∪`/`·` 早就这么处理了，`⊆` 是 U20 补的。另外可以趁这个符号的"独占性"做一件直积的 `x` 不能做的事：`R = A ⊆ K9`（某一侧打错）**直接报"是哪一侧算不出来"**，而不是掉进记号解析、最后答非所问地说"这行写的是一个关系"。

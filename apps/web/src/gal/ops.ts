@@ -39,6 +39,9 @@ import {
   type Subgroup,
 } from '@groupviz/core'
 import { prettySymbol, subscript, superscript } from './pretty'
+// 包含判据与信息面板的「关系」层（U19）**共用同一份** —— `包含(H, G)` 声明出来的
+// 关系，与面板里"算出来"的关系永远一致，不会出现两种说法
+import { containment } from './relations'
 import {
   normalizeSubgroups,
   type GalAction,
@@ -1582,20 +1585,75 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'image',
-    notation: 'im f',
+    notation: '像(f, H)',
     mechanism: 'action',
     primitive: false,
-    doc: '像：f 的取值全体（⊆ 靶群）',
-    recipe: '轨道( 诱导作用(f), e )',
-    impl: 'computeImageFromMapping → buildSubgroupGroup',
+    doc: '像：只给 f → 整个像 im f；再给一个子群 H（H ≤ 定义域）→ f(H)，靶群里的子群（第二同构定理的 H′）',
+    recipe: '把 H 的每个元素过一遍映射表 → 靶群的子群',
+    impl: 'computeImageFromMapping（整体）/ 逐元素取像 + buildSubgroupGroup（子群）',
     call: ['im', '像', 'image'],
-    params: [{ name: 'f', type: 'map' }],
+    params: [
+      { name: 'f', type: 'map' },
+      // **可选第二参**：`像(f)` 是整个像（U14 就有），`像(f, H)` 是子群的像（U20 补）。
+      // 用同一个 op 而不是新开一个：用户嘴里都叫"像"，且 `像` 这个别名只该指向一条路。
+      { name: 'H', type: 'group', optional: true },
+    ],
     arity: 1,
+    optional: 1,
     result: 'group',
     run: (a) => {
       const M = mapArgOf(a[0])
-      if (!M) return fail('im(·) 需要一个映射对象', '映射由对象编辑器产出（U3）')
+      if (!M) return fail('像(·) 需要一个映射对象', '映射由对象编辑器产出（U3）')
       if (!M.mapping) return fail('该映射没有完整映射表', '生成元的像不足以定像，需编辑器补全（U3）')
+
+      // ── 两参形态：`像(f, H) = f(H)`（U20）──
+      const S = groupOf(a[1])
+      if (S) {
+        const dom = M.domain
+        // 三关：阶不能超 → id 全覆盖 → 真的封闭（前两关只是快速筛，判据交给 core）
+        if (S.order > dom.order) {
+          return fail(
+            `「${refText(a[1])}」比定义域还大，不可能是它的子群`,
+            `子群像要求 H ≤ ${prettySymbol(dom.symbol)}`,
+          )
+        }
+        const domIds = new Set(dom.elements.map((e) => e.id))
+        if (!S.elements.every((e) => domIds.has(e.id))) {
+          return fail(
+            `「${refText(a[1])}」的元素不在 ${prettySymbol(dom.symbol)} 里`,
+            `子群像要求 H ≤ 定义域 ${prettySymbol(dom.symbol)}（元素得是同一批）`,
+          )
+        }
+        const checked = subgroupFromElementIds(dom, S.elements.map((e) => e.id))
+        if (!checked || checked.order !== S.order) {
+          return fail(
+            `「${refText(a[1])}」不是 ${prettySymbol(dom.symbol)} 的子群`,
+            '子集还不够——得对乘法封闭',
+          )
+        }
+        // 逐元素取像（映射表可能对 S 里的元素没有词条 → 那是映射不完整，直接报出来）
+        const imgIds = new Set<string>()
+        for (const e of S.elements) {
+          const y = M.mapping.get(e.id)
+          if (!y) {
+            return fail(
+              `映射表里没有 ${prettySymbol(dom.symbol)} 的元素「${e.label}」的像`,
+              '该映射不完整，无法取子群的像（用对象编辑器补全映射）',
+            )
+          }
+          imgIds.add(y)
+        }
+        const els = M.codomain.elements.filter((e) => imgIds.has(e.id))
+        const name = `${refText(a[0])}(${refText(a[1])})`
+        return {
+          ok: true,
+          value: { type: 'group', group: subgroupGroupOf(M.codomain, els, name) },
+          label: name,
+          sub: `|f(H)| = ${els.length}`,
+          note: `H 在 ${prettySymbol(M.codomain.symbol)} 里的像`,
+        }
+      }
+
       const ids = new Set(computeImageFromMapping(M.mapping))
       const els = M.codomain.elements.filter((e) => ids.has(e.id))
       return {
@@ -1603,6 +1661,77 @@ export const OPS: OpDef[] = [
         value: { type: 'group', group: subgroupGroupOf(M.codomain, els, `im(${refText(a[0])})`) },
         label: `im(${refText(a[0])})`,
         sub: `|im| = ${els.length}`,
+      }
+    },
+  },
+
+  /* ══ 关系（U20）═══════════════════════════════════════ */
+  {
+    id: 'contains',
+    notation: '包含(H, G) / H ⊆ G',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '声明 H 是 G 的子群——画布上长出一条包含箭头（正规性由工具现场判定）',
+    recipe: '子群判定（单位元 + 乘法封闭）→ 一条关系边',
+    impl: 'relations.containment（与信息面板的「关系」层同一判据）',
+    call: ['包含', 'include', 'subset'],
+    infix: ['⊆'],
+    params: [
+      { name: 'H', type: 'group' },
+      { name: 'G', type: 'group' },
+    ],
+    arity: 2,
+    result: 'relation',
+    run: (a) => {
+      const H = groupOf(a[0])
+      const G = groupOf(a[1])
+      if (!H || !G) return fail('包含(·, ·) 需要两个群对象', '形如 H ⊆ G')
+      const hn = refText(a[0])
+      const gn = refText(a[1])
+      if (H === G) return fail('两边是同一个对象', '包含要求两个不同的群')
+      if (H.order > G.order) {
+        return fail(
+          `|${hn}| = ${H.order} > |${gn}| = ${G.order}，不可能是它的子群`,
+          '子群判定第一关就是阶整除',
+        )
+      }
+      // 判据复用 U19 的 `containment()`（信息面板「关系」层用的是同一份）——
+      // 于是"声明出来的关系"和"算出来的关系"永远一致，不会出现两种说法
+      const c = containment(H, G)
+      if (!c) {
+        return fail(
+          `「${hn}」不是「${gn}」的子群`,
+          `${prettySymbol(H.symbol)} 的元素不是 ${prettySymbol(G.symbol)} 的子集，或对乘法不封闭`,
+        )
+      }
+      // 指数 1 = 元素完全相同 = 同一个群（U19 的关系层把这一档单列成「同一」）。
+      // 包含是**严格**的：`H ⊆ H` 不是一条关系，是同一句话说了两遍。
+      if (c.index === 1) {
+        return fail(
+          `「${hn}」与「${gn}」的元素完全相同，就是同一个群`,
+          '包含是严格小于；要说明"它们相等"不属于包含关系',
+        )
+      }
+      return {
+        ok: true,
+        value: {
+          type: 'relation',
+          relation: {
+            from: H,
+            to: G,
+            index: c.index,
+            isNormal: c.normal === true,
+            normalUnknown: c.normal === null,
+          },
+        },
+        label: `${hn} ${c.normal === true ? '⊴' : '⊆'} ${gn}`,
+        sub: `|H| = ${H.order} · [G:H] = ${c.index}`,
+        note:
+          c.normal === true
+            ? '正规子群（判出来的，不是声明的）'
+            : c.normal === null
+              ? '正规性超出可判定范围（群太大，未枚举）'
+              : '非正规子群',
       }
     },
   },

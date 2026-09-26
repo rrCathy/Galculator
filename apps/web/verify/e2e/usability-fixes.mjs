@@ -143,17 +143,24 @@ ok('`极大子群(G)` 报「没有名为…的操作」', s1.text.includes('没�
 ok('并给了相近操作（Sub(G)）', s1.text.includes('Sub(G)'), s1.text)
 ok('不再说"可用的群记号"', !s1.text.includes('群记号'), s1.text)
 
-// 关系行是在**输入框**里打的 → 走 evalExpr（不是 buildLines），所以这里验的是 preview 那句话
+// 关系行是在**输入框**里打的 → 走 evalExpr（不是 buildLines），所以这里验的是 preview 那句话。
+// 注意 U20 之后 `⊆` 已经是**真操作**了：这里不再甩"写的是一个关系"，
+// 而是真的去算，算不通就报"为什么算不通"——这才是提示该有的样子。
 await typeExpr('H ⊆ G')
 const s2 = await status()
-ok('`H ⊆ G` 报「写的是一个关系」', s2.text.includes('关系'), `${s2.cls} :: ${s2.text}`)
-ok('并点明声明关系还没有操作', s2.text.includes('没有对应操作'), s2.text)
-ok('不再甩"无法识别的群记号"', !s2.text.includes('群记号'), s2.text)
+ok('`H ⊆ G`（两个 C₆，元素相同）报「同一个」', s2.text.includes('同一个'), `${s2.cls} :: ${s2.text}`)
+ok('不再说"这行写的是一个关系"', !s2.text.includes('这行写的是一个关系'), s2.text)
+ok('也不甩"无法识别的群记号"', !s2.text.includes('群记号'), s2.text)
+
+// 某一侧根本不存在 → 直接点出是哪一侧，而不是答非所问
+await typeExpr('A ⊆ K9')
+const s3 = await status()
+ok('`A ⊆ K9` 报「算不出来」（指出是哪一侧）', s3.text.includes('算不出来'), s3.text)
 
 // 真·打错字：保持"无法识别"
 await typeExpr('G S_4')
-const s3 = await status()
-ok('乱写仍是「无法识别」', s3.text.includes('无法识别'), s3.text)
+const s4 = await status()
+ok('乱写仍是「无法识别」', s4.text.includes('无法识别'), s4.text)
 
 // 收起输入卡，免得挡住画布
 await page.keyboard.press('Escape')

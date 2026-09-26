@@ -337,10 +337,13 @@ export function CanvasView({
      * 传染成一列（`C₆` 与 `C₃` 直接叠在一起）。判据必须按**边的语义**来，
      * 而不是按几何猜。
      */
-    const VERTICAL_LABELS = new Set(['π', 'π₁', 'π₂', '↪', '='])
+    const VERTICAL_LABELS = new Set(['π', 'π₁', 'π₂', '↪', '=', '⊴'])
     const isVerticalConstraint = (e: GalEdge): boolean =>
       // **作用线**也算：课本里 `G ↷ Ω` 本来就是往下画的（DIAGRAM_SPEC §5.2 的三层结构）
       e.kind === 'action' ||
+      // **声明的包含**（U20）也算：自动生成的 `↪` 是竖直的，用户声明的那条
+      // 若画成斜线，同一张图上两种包含就会长得不一样。
+      e.kind === 'relation' ||
       (!e.objectId && !!e.label && VERTICAL_LABELS.has(e.label))
 
     const uf = Array.from({ length: n }, (_, i) => i)
@@ -453,32 +456,143 @@ export function CanvasView({
     const levelOfNode = (i: number) => graph.nodes[i].level
     const horizontalPairs: [number, number][] = []
     for (const e of graph.edges) {
-      // 只有**用户画的映射**才算水平关系：
+      // 只有**用户画的**箭头才算水平关系：
       // 结构伴生（π / ↪）是竖直的，作用线也是竖直的，`≅` 是对角的。
-      if (e.kind !== 'map' || !e.objectId) continue
+      // 声明的包含（U20）与显式映射同档：同层时画水平，跨层时由竖直约束接管。
+      const userDrawn = (e.kind === 'map' || e.kind === 'relation') && !!e.objectId
+      if (!userDrawn) continue
       const i = idx.get(e.from)
       const j = idx.get(e.to)
       if (i === undefined || j === undefined || i === j) continue
       if (levelOfNode(i) !== levelOfNode(j)) continue // 同层才画得成水平
       horizontalPairs.push([i, j])
     }
-    for (let iter = 0; horizontalPairs.length > 0 && iter < 6; iter++) {
-      const slot = new Map<number, number>()
-      groupList.forEach((g, k) => slot.set(find(g.members[0]), k))
-      const pushOut = new Set<number>()
-      for (const [i, j] of horizontalPairs) {
-        const a0 = slot.get(find(i))
-        const b0 = slot.get(find(j))
-        if (a0 === undefined || b0 === undefined || a0 === b0) continue
-        const lo = Math.min(a0, b0)
-        const hi = Math.max(a0, b0)
-        for (let k = lo + 1; k < hi; k++) pushOut.add(k)
+
+    /**
+     * 列序：把"水平边"当约束图，**分量内穷举**，取"被别的组夹住的边最少"的那个列序。
+     *
+     * ## 为什么换掉老的"挪到末尾"
+     *
+     * 老法是"夹在中间的组整体挪到该行末尾"，迭代 ≤ 6 轮。它在
+     * **两条水平边共用一个端点**时会自相打架 —— 满足 `A→G` 要把中间的 H 挪走，
+     * 满足 `G→H` 又要把中间的 A 挪走，于是震荡回原样。
+     *
+     * 实测（U20 之前就有，不是新功能引入的）：`psi: B→G` 与 `phi: G→H` 并存时，
+     * `psi` 的线从 `H` 身上横穿过去 —— 而 DIAGRAM_SPEC §1.2 说"箭头的路径上不该有别的对象"。
+     * 正解其实一直都在（`H·G·B` 排成一列链），只是"挪到末尾"表达不出"把度 2 的节点放中间"。
+     *
+     * ## 为什么是穷举而不是更聪明的贪心
+     *
+     * 约束小到可以数清：分量通常只有 2–3 个组。并列时**只接受严格更优**，
+     * 于是先枚举到的（更接近初始顺序的）胜出 —— 布局要稳，不能因为多一条边就整张图重排。
+     * 分量超过 `PERM_CAP` 就保持原序**不猜**（真实图里到不了）。
+     */
+    const PERM_CAP = 7
+    const groupPairs: [number, number][] = []
+    for (const [i, j] of horizontalPairs) {
+      const a = find(i)
+      const b = find(j)
+      // 同组的边两端在同一列，本来就不是水平关系
+      if (a !== b) groupPairs.push([a, b])
+    }
+    if (groupPairs.length > 0) {
+      // ① 约束图的连通分量（只看有约束的点）
+      const adj = new Map<number, Set<number>>()
+      const link = (a: number, b: number) => {
+        const s = adj.get(a)
+        if (s) s.add(b)
+        else adj.set(a, new Set([b]))
       }
-      if (pushOut.size === 0) break
-      const kept = groupList.filter((_, k) => !pushOut.has(k))
-      const moved = groupList.filter((_, k) => pushOut.has(k))
+      for (const [a, b] of groupPairs) {
+        link(a, b)
+        link(b, a)
+      }
+      const comps: number[][] = []
+      const visited = new Set<number>()
+      for (const start of adj.keys()) {
+        if (visited.has(start)) continue
+        const comp: number[] = []
+        const stack = [start]
+        visited.add(start)
+        while (stack.length > 0) {
+          const cur = stack.pop() as number
+          comp.push(cur)
+          for (const nx of adj.get(cur) ?? []) {
+            if (!visited.has(nx)) {
+              visited.add(nx)
+              stack.push(nx)
+            }
+          }
+        }
+        comps.push(comp)
+      }
+
+      /** 某个列序里"两端之间夹着别的组"的边数（越少越好）。 */
+      const violations = (order: number[]): number => {
+        const pos = new Map(order.map((r, k) => [r, k]))
+        let bad = 0
+        for (const [a, b] of groupPairs) {
+          const pa = pos.get(a)
+          const pb = pos.get(b)
+          if (pa === undefined || pb === undefined) continue
+          if (Math.abs(pa - pb) > 1) bad++
+        }
+        return bad
+      }
+      /** 分量内穷举；只接受**严格更优**，所以并列时保留原来的先后。 */
+      const permute = (arr: number[]): number[] => {
+        let best = [...arr]
+        let bestBad = violations(best)
+        if (bestBad === 0) return best // 原序已经全满足 → 一个字都不动
+        const out: number[] = []
+        const used = new Array<boolean>(arr.length).fill(false)
+        const walk = () => {
+          if (out.length === arr.length) {
+            const bad = violations(out)
+            if (bad < bestBad) {
+              bestBad = bad
+              best = [...out]
+            }
+            return
+          }
+          for (let k = 0; k < arr.length; k++) {
+            if (used[k]) continue
+            used[k] = true
+            out.push(arr[k])
+            walk()
+            out.pop()
+            used[k] = false
+          }
+        }
+        walk()
+        return best
+      }
+
+      const order = [...groupList]
+      for (const comp of comps) {
+        if (comp.length > PERM_CAP) continue // 太大就不猜，保持原序
+        const inComp = new Set(comp)
+        const slots: number[] = []
+        const picked: typeof order = []
+        order.forEach((g, k) => {
+          if (inComp.has(find(g.members[0]))) {
+            slots.push(k)
+            picked.push(g)
+          }
+        })
+        if (picked.length < 2) continue
+        // 以**全局顺序**为基准做排列 → 并列时的稳定性正是我们想要的
+        const rootsInOrder = picked.map((g) => find(g.members[0]))
+        const fixed = permute(rootsInOrder)
+        if (fixed.every((r, t) => r === rootsInOrder[t])) continue
+        const byRoot = new Map(picked.map((g) => [find(g.members[0]), g]))
+        slots.forEach((slot, t) => {
+          const g = byRoot.get(fixed[t])
+          if (g) order[slot] = g
+        })
+      }
       groupList.length = 0
-      groupList.push(...kept, ...moved)
+      groupList.push(...order)
     }
 
     let nextCol = 0
@@ -996,7 +1110,8 @@ export function CanvasView({
           //   · 显式映射对象（带 objectId）→ 深色粗线（数学主角）
           //   · 结构伴生（pi / pi1 / hook）→ 蓝灰细线（派生出来的结构关系）
           //   · 来源线 → 淡虚线
-          const isExplicitMap = e.kind === 'map' && !!e.objectId
+          // 声明的包含（U20）与**显式映射同档**：它是用户画的、一等的、可点选的。
+          const isExplicitMap = (e.kind === 'map' || e.kind === 'relation') && !!e.objectId
           const stroke =
             e.kind === 'action'
               ? ACTION_EDGE

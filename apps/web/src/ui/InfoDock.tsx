@@ -411,6 +411,42 @@ function OtherTab({
           )}
         </>
       )
+    case 'relation': {
+      const R = v.relation
+      return (
+        <>
+          <Row k="类型">
+            <span>
+              {R.isNormal ? '正规包含' : '包含'}
+              {R.normalUnknown ? '（正规性未判定）' : ''}
+            </span>
+          </Row>
+          <Row k="记号">
+            <span>
+              <Tex tex={R.from.symbol} /> {R.isNormal ? '⊴' : '⊆'} <Tex tex={R.to.symbol} />
+            </span>
+          </Row>
+          <Row k="子群">
+            <span>
+              <Tex tex={R.from.symbol} />（|H| = {R.from.order}）
+            </span>
+          </Row>
+          <Row k="母群">
+            <span>
+              <Tex tex={R.to.symbol} />（|G| = {R.to.order}）
+            </span>
+          </Row>
+          <Row k="指数">
+            <span>
+              [G:H] = {R.to.order} / {R.from.order} = {R.index}
+            </span>
+          </Row>
+          <Row k="正规">
+            <span>{R.normalUnknown ? '未判定（群太大，未枚举）' : R.isNormal ? '是' : '否'}</span>
+          </Row>
+        </>
+      )
+    }
     case 'number':
       return (
         <Row k="值">

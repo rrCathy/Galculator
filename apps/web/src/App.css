@@ -449,6 +449,12 @@ body {
   color: #5a5850;
 }
 
+/* 关系（U20）：与映射同属"边"，但用蓝底区分它是**声明的结构关系** */
+.chip-relation {
+  background: #e8eef7;
+  color: #3f5b82;
+}
+
 .chip-number {
   background: #f1efe8;
   color: #77756d;

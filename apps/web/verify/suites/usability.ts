@@ -8,9 +8,11 @@
  * 对应的审计见 `docs/USABILITY.md`（缺口 ① / ③ / ⑥ / ⑨）。
  */
 import { buildLines } from '../../src/gal/build'
+import { deriveCanvas } from '../../src/gal/derive'
 import { groupInsights } from '../../src/gal/insights'
 import { checkName, normalizeName } from '../../src/gal/naming'
-import { relationsFor } from '../../src/gal/relations'
+import { containment, relationsFor } from '../../src/gal/relations'
+import { contextGroup, sortOf } from '../../src/gal/value'
 import { build, eq, ok, suite } from '../harness'
 
 /** 跑一行定义，拿最后一行的行状态（报错文案就在这里）。 */
@@ -26,6 +28,27 @@ function groupInsOf(lines: string[]) {
   if (last?.value.type !== 'group') return { labels: [] as string[], node: last, insights: [] as ReturnType<typeof groupInsights> }
   const ins = groupInsights(last.value.group, last)
   return { labels: ins.map((i) => i.label), node: last, insights: ins }
+}
+
+/**
+ * 值的一句话描述 —— **不许 `JSON.stringify(值)`**。
+ *
+ * `Group` 里有 `generators[].inverse` 指回生成元自己，是个环；
+ * 直接 stringify 会抛 `Converting circular structure to JSON`，
+ * 而且是在断言**失败**时才求值（第三参惰性？不——它总是求值），所以整份回归会崩在这里。
+ * （verify/README 第 6 条记的就是这个坑。）
+ */
+const describeValue = (v: { type: string } | undefined): string => {
+  if (!v) return 'undefined'
+  if (v.type === 'group') {
+    const g = (v as { group: { symbol: string; order: number } }).group
+    return `group ${g.symbol} order=${g.order}`
+  }
+  if (v.type === 'relation') {
+    const r = (v as { relation: { from: { order: number }; to: { order: number }; index: number; isNormal: boolean } }).relation
+    return `relation index=${r.index} normal=${r.isNormal}`
+  }
+  return v.type
 }
 
 export function run(): void {
@@ -123,7 +146,9 @@ export function run(): void {
     for (const rel of ['H ⊆ G', 'N ⊴ G', 'A ≅ B']) {
       const s = lastLine(['G = S_4', 'H = 闭包(G, r)', 'N = 正规子群(G)', 'A = C_6', 'B = C_6', rel])
       ok(`「${rel}」报「这是一个关系，不是定义」`, (s.error ?? '').includes('关系'), s.error)
-      ok(`「${rel}」点明声明关系还没有操作`, (s.hint ?? '').includes('还没有对应操作'), s.hint ?? '')
+      // 提示**必须跟着功能走**：U20 之后 `⊆` 已经能写了，老话"还没有对应操作"就成了假话
+      ok(`「${rel}」的提示里说清哪条能写`, (s.hint ?? '').includes('⊆'), s.hint ?? '')
+      ok(`「${rel}」不再说"还没有对应操作"`, !(s.hint ?? '').includes('没有对应操作'), s.hint ?? '')
     }
     // 真的只是漏了等号 → 保持原话
     const noEq = lastLine(['G = S_4', 'G S_4'])
@@ -244,5 +269,154 @@ export function run(): void {
       (r) => r.kind === 'subgroup' || r.kind === 'equal',
     )
     eq('C₂ 不因 id 恰好是 C₄ 的前缀而被判成子群', cycRel.length, 0)
+  }
+
+  /* ══ ⑤ 第三批：子群像 + 声明包含（U20）═══════════════════ */
+
+  /**
+   * 用户原始投诉的 ③ 与 ④：
+   *   "我想拉个箭头表示 A₄ 和 K 的包含关系，但做不到，没这个功能"
+   *   "f(A₄) 怎么创建？直接拖到 f 上？没这个功能"
+   *
+   * 这一套钉住两个新操作，以及一条**判据同源**纪律：
+   * `包含(H, G)` 用的一定是 U19 那份 `containment()` —— 声明的和算出来的不许有两种说法。
+   */
+  suite('usability · 子群像 f(H) 与声明包含 H ⊆ G（缺口 ③④）')
+  {
+    const STAGE = ['G = S_4', 'H = S_3', 'f = 映射(G, H, s12→23, c→13)', 'K = ker(f)', 'A = A_4']
+
+    /* ── ① 子群像 ── */
+
+    // f: S₄ ↠ S₃（ker = V₄），A₄ ⊆ S₄。A₄ 的像 = S₃ 里唯一的 3 阶子群 = C₃
+    //（课本说法：A₄/V₄ ≅ C₃ —— 而 A₄ 的像就是 A₄V₄/V₄ = S₃ 的那个 C₃）
+    const fa = build([...STAGE, 'FA = 像(f, A)'])
+    const faV = fa.byId('FA')?.value
+    ok('`像(f, A₄)` 建出来了', faV?.type === 'group', faV?.type)
+    eq('f(A₄) 的阶 = 3（手算：A₄ 的像 ≅ C₃）', faV?.type === 'group' ? faV.group.order : -1, 3)
+    eq('f(A₄) 的符号是 C₃', faV?.type === 'group' ? faV.group.symbol : '', 'C_{3}')
+    eq('来源记了 (f, A₄) 两个', fa.byId('FA')?.sources.join(','), 'f,A')
+    eq('命中 op 是 image', fa.byId('FA')?.opId, 'image')
+
+    // 单参形态没被破坏（U14 就有：`im f` 是整个像）
+    const whole = build([...STAGE, 'I = 像(f)'])
+    const iv = whole.byId('I')?.value
+    eq('`像(f)` 仍是整个像（S₄↠S₃ 满射 → 6 阶）', iv?.type === 'group' ? iv.group.order : -1, 6)
+
+    // 两种像的**叙述**不能混：`f(A)` 不是 `im f`
+    {
+      const two = relationsFor(fa.byId('FA')!, fa.objects).find((r) => r.kind === 'image')
+      ok('两参形态叙述成「f(A)」，不叫 im f', (two?.text ?? '').includes('f(A)'), two?.text)
+      ok('并且点出是 A 的像', (two?.detail ?? '').includes('A 在 f 下的像'), two?.detail)
+
+      const one = relationsFor(whole.byId('I')!, whole.objects).find((r) => r.kind === 'image')
+      ok('单参形态仍叙述成「im f」', (one?.text ?? '').includes('im f'), one?.text)
+    }
+
+    // 不是定义域的子群 → 拦住
+    const notSub = build([...STAGE, 'H2 = 像(f, H)'])
+    ok(
+      '`像(f, S₃)` 被拦（S₃ 不是 S₄ 的子群）',
+      notSub.byId('H2') === undefined,
+      describeValue(notSub.byId('H2')?.value),
+    )
+    const tooBig = build([...STAGE, 'C = C_24', 'X = 像(f, C)'])
+    ok(
+      '`像(f, C₂₄)`（比定义域还大）被拦',
+      tooBig.byId('X') === undefined,
+      describeValue(tooBig.byId('X')?.value),
+    )
+
+    /* ── ② 声明包含：三种写法等价 ── */
+
+    const forms = ['R = A ⊆ G', 'R = A⊆G', 'R = 包含(A, G)']
+    for (const line of forms) {
+      const b = build([...STAGE, line])
+      const r = b.byId('R')?.value
+      ok(`「${line}」建出关系`, r?.type === 'relation', describeValue(r))
+      eq(`「${line}」指数 = 24/12 = 2`, r?.type === 'relation' ? r.relation.index : -1, 2)
+      eq(`「${line}」判出正规（A₄ ⊴ S₄）`, r?.type === 'relation' ? r.relation.isNormal : null, true)
+      eq(`「${line}」来源 = (A₄, S₄)`, b.byId('R')?.sources.join(','), 'A,G')
+    }
+
+    /* ── ③ 判据同源：操作的结果与关系层的判定必须一致 ── */
+
+    {
+      const b = build([...STAGE, 'R = A ⊆ G'])
+      const r = b.byId('R')?.value
+      const av = b.byId('A')?.value
+      const gv = b.byId('G')?.value
+      if (r?.type === 'relation' && av?.type === 'group' && gv?.type === 'group') {
+        const c = containment(av.group, gv.group)
+        eq('关系里的指数 = containment() 的指数', r.relation.index, c?.index ?? -1)
+        eq('关系里的正规 = containment() 的正规', r.relation.isNormal, c?.normal === true)
+      } else {
+        ok('关系 / 两个群都在', false)
+      }
+    }
+
+    /* ── ④ 假声明全被拦（每一条都给了可读的理由） ── */
+
+    const bad: [string, string[]][] = [
+      ['D₄ 不是 S₄ 的子群（id 空间不同）', [...STAGE, 'D = D_4', 'R = D ⊆ G']],
+      ['C₂ 不是 C₄ 的子群（id 是真前缀，但乘法不封闭）', ['X = C_2', 'Y = C_4', 'R = X ⊆ Y']],
+      ['阶更大的不能当子群', ['X = C_4', 'Y = C_2', 'R = X ⊆ Y']],
+      ['同一个对象', ['G = S_4', 'R = G ⊆ G']],
+      ['元素完全相同（两个 C₆）', ['X = C_6', 'Y = C_6', 'R = X ⊆ Y']],
+    ]
+    for (const [name, lines] of bad) {
+      const b = build(lines)
+      const last = b.lineStates[b.lineStates.length - 1]
+      ok(`${name} → 报错`, !last.ok && b.byId('R') === undefined, JSON.stringify(last.error))
+      ok(`${name} → 报错里说清了理由`, (last.error ?? '').length > 6, last.error)
+    }
+
+    /* ── ⑤ 正规性由工具判定：非正规的画 `↪` 而不是 `⊴` ── */
+
+    {
+      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P ⊆ G'])
+      const r = b.byId('R')?.value
+      eq('S₃ 里 2 阶子群判为非正规', r?.type === 'relation' ? r.relation.isNormal : null, false)
+      eq('指数 = 6/2 = 3', r?.type === 'relation' ? r.relation.index : -1, 3)
+      const g = deriveCanvas(b.objects)
+      const e = g.edges.find((x) => x.kind === 'relation')
+      ok('画布上有关系边', !!e, JSON.stringify(g.edges.map((x) => x.kind)))
+      eq('非正规 → 标签是 ↪', e?.label, '↪')
+      ok('关系边可点选（带 objectId）', e?.objectId === 'R', e?.objectId)
+    }
+
+    /* ── ⑥ 声明的包含压过自动生成的同向 ↪（不叠两条箭头） ── */
+
+    {
+      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P ⊆ G'])
+      const g = deriveCanvas(b.objects)
+      const between = g.edges.filter((e) => e.from === 'P' && e.to === 'G')
+      eq('P→G 上只剩一条边', between.length, 1)
+      eq('留下的是声明的那条', between[0]?.kind, 'relation')
+    }
+
+    /* ── ⑦ 关系不上画布：它是边不是顶点 ── */
+
+    {
+      const b = build([...STAGE, 'R = A ⊆ G'])
+      const g = deriveCanvas(b.objects)
+      ok('关系不占节点', !g.nodes.some((n) => n.id === 'R'), JSON.stringify(g.nodes.map((n) => n.id)))
+      const r = b.byId('R')?.value
+      ok('存在层级是 edge', r ? sortOf(r) === 'edge' : false, r ? sortOf(r) : 'n/a')
+      ok('上下文群取母群', r?.type === 'relation' ? contextGroup(r)?.symbol === 'S_{4}' : false)
+    }
+
+    /* ── ⑧ 报错与提示跟着更新（老文案会说"还没有对应操作"） ── */
+
+    {
+      // 无等号的关系行（定义表那条路）
+      const s = lastLine(['G = S_4', 'H = S_3', 'H ⊆ G'])
+      ok('`H ⊆ G` 仍是「写的是一个关系」', (s.error ?? '').includes('关系'), s.error)
+      ok('但提示改口了：说清 ⊆ 能写', (s.hint ?? '').includes('⊆'), s.hint ?? '')
+      ok('不再说"还没有对应操作"', !(s.hint ?? '').includes('没有对应操作'), s.hint ?? '')
+
+      // `R = A ⊆ K`（K 打错）→ 报"是谁算不出来"，而不是答非所问的关系提示
+      const t = lastLine([...STAGE, 'R = A ⊆ K9'])
+      ok('`A ⊆ K9` 报「K9」算不出来', (t.error ?? '').includes('K9'), t.error)
+    }
   }
 }

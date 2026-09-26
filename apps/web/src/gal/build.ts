@@ -39,8 +39,9 @@ export function buildLines(lines: string[]): {
       /**
        * 这行**写的是一个关系**（`H ⊆ G` / `N ⊴ G` / `A ≅ B`）而不是定义。
        *
-       * 光说"缺少「=」"会让人以为自己漏了符号；而真正的情况是——
-       * **声明关系这件事还没有对应的操作**。两者必须分开说。
+       * 光说"缺少「=」"会让人以为自己漏了符号。两者必须分开说。
+       * 提示里要**说清哪几条关系现在能写**（`⊆` 从 U20 起可以），
+       * 否则跟"没有对应操作"这句老话一样，把已经做出来的东西也说没了。
        */
       const rel = looksLikeRelation(raw)
       lineStates.push({
@@ -49,9 +50,7 @@ export function buildLines(lines: string[]): {
         name: '',
         ok: false,
         error: rel ? '这行写的是一个关系，不是定义' : '缺少「=」',
-        hint: rel
-          ? '声明关系（A ⊆ B / H ⊴ G）目前还没有对应操作；要建对象就写成「名字 = 表达式」'
-          : undefined,
+        hint: rel ? '包含可以声明：写成 `R = A ⊆ B`；要建对象就写成「名字 = 表达式」' : undefined,
       })
       return
     }

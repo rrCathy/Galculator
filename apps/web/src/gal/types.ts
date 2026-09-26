@@ -42,11 +42,12 @@ export interface CanvasNode extends GalObject {
  * 画布上的一条边。
  *   - map         实线箭头：数学里的映射，一等对象
  *   - action      作用线：`G ↷ Ω`，特殊样式
+ *   - relation    关系线：`H ⊆ G` / `H ⊴ G`（用户**声明**的包含，U20）
  *   - provenance  淡虚线：仅表示"这个节点由那个操作算出"，辅助信息
  */
 export interface GalEdge {
   id: string
-  kind: 'map' | 'action' | 'provenance'
+  kind: 'map' | 'action' | 'relation' | 'provenance'
   from: string
   to: string
   label?: string

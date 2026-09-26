@@ -32,6 +32,9 @@ const UNICODE_ALIASES: [RegExp, string][] = [
   [/∖/g, ' \\ '],
   [/·/g, ' · '],
   [/\\cdot\b/g, ' · '],
+  // `⊆` 进表的原因与 `∩` 一样：`findTopLevelInfix` 只认"两侧都不是标识符字符"的
+  // 中缀，`H⊆G` 不补空格会被当成一个整词。有了这条，`H⊆G` 与 `H ⊆ G` 等价。
+  [/⊆/g, ' ⊆ '],
 ]
 
 /**
@@ -361,6 +364,24 @@ export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResu
       if (a.ok && b.ok) {
         return runOp(entry.op, [argFromResult(left, objects, a), argFromResult(right, objects, b)])
       }
+      /**
+       * `⊆` 绝不会出现在任何群记号里 —— 所以它这一支**可以放心报"是谁算不出来"**。
+       *
+       * 不特判的话，`R = A ⊆ K`（K 打错）会一路掉到记号解析、最后报
+       * "这行写的是一个关系，不是定义" —— 用户明明写了等号，提示却答非所问。
+       * 直积的 `x` 就不能这么干：`C_2 x C_2` 的某一侧"不成立"是常态，得安静地
+       * 交给记号解析。
+       */
+      if (hit.sym === '⊆') {
+        const bad = !a.ok ? { side: left, err: a } : { side: right, err: b }
+        if (!bad.err.ok) {
+          return {
+            ok: false,
+            error: `「${bad.side}」算不出来：${bad.err.error}`,
+            hint: '包含要写成 `R = A ⊆ B`，两侧都得是已定义的对象',
+          }
+        }
+      }
     }
   }
 
@@ -369,12 +390,15 @@ export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResu
   if (!n.ok) {
     // 打的是个"操作调用"却找不到 → 那是**没有这个操作**，不是群记号写错了
     if (unknownOp) return unknownOpError(unknownOp, objects)
-    // 写的是个关系（`H ⊆ G`）→ 说清"没有声明关系这回事"，别甩一句"群记号认不出"
+    // 写的是个关系（`H ⊆ G`）→ 说清"哪几条能用"，别甩一句"群记号认不出"
     if (looksLikeRelation(t)) {
       return {
         ok: false,
         error: '这行写的是一个关系，不是定义',
-        hint: '声明关系（A ⊆ B / H ⊴ G）目前还没有对应操作；要建对象就写成「名字 = 表达式」',
+        hint:
+          '包含可以声明：写成 `R = A ⊆ B`。' +
+          '「⊴」不用声明——正规性是工具算出来的（声明了包含，面板会告诉你正不正规）；' +
+          '「≅」这类还没对应操作。',
       }
     }
     return { ok: false, error: `无法识别：${t}`, hint: n.hint }

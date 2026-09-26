@@ -6,7 +6,15 @@ import type { Group, GroupElement, HomomorphismMap } from '@groupviz/core'
  * 操作产出的**一切**都是这七类之一。
  * **「去哪」不在这里决定**——由下面的 `ValueSort`（存在层级）决定。
  */
-export type ValueType = 'group' | 'elements' | 'set' | 'subgroups' | 'map' | 'action' | 'number'
+export type ValueType =
+  | 'group'
+  | 'elements'
+  | 'set'
+  | 'subgroups'
+  | 'map'
+  | 'action'
+  | 'relation'
+  | 'number'
 
 export const VALUE_TYPE_LABEL: Record<ValueType, string> = {
   group: '群',
@@ -15,6 +23,7 @@ export const VALUE_TYPE_LABEL: Record<ValueType, string> = {
   subgroups: '子群集',
   map: '映射',
   action: '作用',
+  relation: '关系',
   number: '数值',
 }
 
@@ -50,8 +59,10 @@ export function sortOf(v: GalValue): ValueSort {
       return 'vertex'
     case 'map':
     case 'action':
-      // 作用不是 `G → H`（是 `G×Ω → Ω`），但它在图里扮演的是"关系"的角色，
-      // 所以与映射同属 edge 档；两者的**视觉**由 `kind` 区分（实线 vs 作用线）。
+    case 'relation':
+      // 作用不是 `G → H`（是 `G×Ω → Ω`）、关系不是映射（是"声明一条包含"），
+      // 但它们在图里扮演的都是"关系"的角色，所以同属 edge 档；
+      // 各自的**视觉**由 `kind` 区分（实线 / 作用线 / 关系线）。
       return 'edge'
     case 'subgroups':
       return 'list'
@@ -189,8 +200,37 @@ export interface GalAction {
   omegaBase?: 'self' | 'object'
 }
 
-/* ── 集合（Ω 的载体）───────────────────────────────────────── */
+/* ── 关系（用户声明的一条包含）─────────────────────────────── */
 
+/**
+ * 关系（U20）—— 用户**声明**的一条关系，目前只有"包含"一种。
+ *
+ * ## 为什么它得是一等值（而不是个手势）
+ *
+ * 用户原话："我想拉个箭头表示 A₄ 和 K 的包含关系，但做不到"。而画布上的边
+ * **一律由对象派生**（`derive.ts`）——手势画出来的线没有对象，就不可撤销、
+ * 不可编辑、进不了证明模板、也上不了 `opsFor` 那张表。
+ * 做成值类型之后，它自动获得三个入口（左栏 / 悬浮球 / 拖拽）与全部对象待遇。
+ *
+ * ## 正规性是**算出来的**，不是声明的
+ *
+ * 用户只说"H ⊆ G"；`⊴` 由 `containment()` 现场判定（U19 那套三道关）。
+ * 所以那句"声明正规子群"是多余的，也无从撒谎。
+ */
+export interface GalRelation {
+  /** 小的那个（子群方） */
+  from: Group
+  /** 大的那个（母群方） */
+  to: Group
+  /** 指数 [G:H] = |G| / |H| */
+  index: number
+  /** H ⊴ G？（判不出来时为 false，附注里会说明） */
+  isNormal: boolean
+  /** `containment()` 判不出来正规性（超枚举守卫）——面板要据此换措辞 */
+  normalUnknown?: boolean
+}
+
+/* ── 集合（Ω 的载体）───────────────────────────────────────── */
 /**
  * 集合的成员。
  *
@@ -230,6 +270,7 @@ export type GalValue =
   | { type: 'subgroups'; group: Group; subgroups: NormalizedSubgroup[] }
   | { type: 'map'; map: GalMap }
   | { type: 'action'; action: GalAction }
+  | { type: 'relation'; relation: GalRelation }
   | { type: 'number'; label: string; value: number }
 
 /** 取该值所属的上下文群（数值没有）。详情面板与后续计算都要它。 */
@@ -247,6 +288,9 @@ export function contextGroup(v: GalValue): Group | null {
       return v.action.group
     case 'map':
       return v.map.domain
+    case 'relation':
+      // 上下文的"主场"是母群（子群是它的内部结构）
+      return v.relation.to
     case 'number':
       return null
   }

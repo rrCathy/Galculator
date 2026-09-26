@@ -230,14 +230,25 @@ export function relationsFor(node: GalObject, table: GalObject[]): Relation[] {
         const H = sv.map.codomain
         superseded.add(`${H.symbol}#${H.order}`)
         const c = containment(K, H)
+        /**
+         * `像` 现在有**两个形态**（U20）：`像(f)` 是整个像、`像(f, H)` 是子群的像。
+         * 从前这里一律写 `= im f`，于是 `f(A₄)` 的面板会自称 `FA = im f` —— 名称对不上。
+         * 判据：来源里有没有**群对象**（`像(f, H)` 的第二参）。
+         */
+        const hArg = node.sources.map((s) => byId.get(s)).find((o) => o?.value.type === 'group')
         push({
           kind: 'image',
           other: src.id,
-          tex: `${toTex(node.id)} = \\operatorname{im} ${toTex(src.id)}`,
-          text: `${node.id} = im ${src.id}`,
-          detail: c
-            ? `像落在靶群里 · ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}`
-            : `像落在靶群 ${prettySymbol(H.symbol)} 里`,
+          tex: hArg
+            ? `${toTex(node.id)} = ${toTex(src.id)}(${toTex(hArg.id)})`
+            : `${toTex(node.id)} = \\operatorname{im} ${toTex(src.id)}`,
+          text: hArg ? `${node.id} = ${src.id}(${hArg.id})` : `${node.id} = im ${src.id}`,
+          detail: hArg
+            ? `${hArg.id} 在 ${src.id} 下的像，落在靶群 ${prettySymbol(H.symbol)} 里` +
+              (c ? ` · ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}` : '')
+            : c
+              ? `像落在靶群里 · ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}`
+              : `像落在靶群 ${prettySymbol(H.symbol)} 里`,
         })
         continue
       }

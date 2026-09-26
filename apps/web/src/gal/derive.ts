@@ -414,9 +414,48 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
     })
   }
 
+  // ⑤ **用户声明的包含**（U20）：`R = A ⊆ B` → 画布上一条 `A ↪ B`（正规则 `⊴`）
+  //
+  // 与 ④ 同一待遇：带 `objectId` ⇒ **可点选**（点这条箭头就能看这条关系的信息），
+  // 且**不画来源线**（关系自己就是那条线，再叠一条淡虚线是画蛇添足）。
+  for (const o of objects) {
+    if (o.value.type !== 'relation') continue
+    const R = o.value.relation
+    const from = groupNodeId(objects, R.from)
+    const to = groupNodeId(objects, R.to)
+    if (!from || !to || from === to || !ids.has(from) || !ids.has(to)) continue
+    edges.push({
+      id: `rel:${o.id}`,
+      kind: 'relation',
+      from,
+      to,
+      // 正规是**算出来**的：`⊴` 与 `↪` 的区别一眼可见
+      label: R.isNormal ? '⊴' : '↪',
+      objectId: o.id,
+      arrow: 'injective',
+    })
+  }
+
   // 去重（同一 from→to 只留一条；结构伴生优先于来源线）
+  //
+  // 先让**声明的包含**压过**自动生成的**同向包含箭头：`P = 闭包(G, (12))` 会自动
+  // 长一条 `P ↪ G`，用户再声明 `R = P ⊆ G` 就叠成两条同向箭头。留声明那条 ——
+  // 它可点选、可删、正规时还是 `⊴`，信息严格更多。
+  const declaredPairs = new Set(
+    edges.filter((e) => e.kind === 'relation').map((e) => `${e.from}->${e.to}`),
+  )
+  const trimmed = edges.filter(
+    (e) =>
+      !(
+        e.kind === 'map' &&
+        !e.objectId &&
+        e.label === '↪' &&
+        declaredPairs.has(`${e.from}->${e.to}`)
+      ),
+  )
+
   const seen = new Set<string>()
-  const deduped = edges.filter((e) => {
+  const deduped = trimmed.filter((e) => {
     // 键带 `objectId`：共轭作用与正则作用都是 G 上的自环，
     // 不带的话后一条会被前一条吃掉。
     const key = `${e.from}->${e.to}:${e.kind}:${e.objectId ?? ''}`
