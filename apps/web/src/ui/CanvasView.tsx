@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
-import type { CanvasGraph, CanvasNode, GalEdge } from '../gal/types'
+import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from '../gal/types'
 import { gridOf, gridSpec, quantize, snapToGrid, visibleGridPoints, type GridSpec } from '../gal/grid'
+import { pairOps } from '../gal/interaction'
+import type { GalValue } from '../gal/value'
 import { labelTexHtml, measureTex } from './Tex'
 
 /** 基础留白（viewBox 单位） */
@@ -213,14 +215,21 @@ function edgeAnchor(p: Pt, b: Box, target: Pt): Pt {
 
 export function CanvasView({
   graph,
+  objects = [],
   selectedId,
   onSelect,
   onBackgroundClick,
   onAnchors,
   pickedIds,
   pickableIds,
+  onConnect,
 }: {
   graph: CanvasGraph
+  /**
+   * 全量对象表。**连线手势要它**——映射 / 关系**不占节点只画边**，
+   * 它们的值只能从这里拿（`graph.nodes` 里没有）。
+   */
+  objects?: GalObject[]
   selectedId: string | null
   onSelect: (id: string) => void
   /** 点空白处（含边）——用于取消 pending / 收起菜单 */
@@ -231,6 +240,11 @@ export function CanvasView({
   pickedIds?: string[]
   /** 当前允许点的节点；`null` = 不限制（非 pending 态） */
   pickableIds?: string[] | null
+  /**
+   * **拖拽连线**（第四批）：从 A 拖到 B 松手。
+   * `at` 是**容器像素坐标**（弹出的菜单按它定位）。
+   */
+  onConnect?: (from: string, to: string, at: { x: number; y: number }) => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -256,14 +270,31 @@ export function CanvasView({
     if (persistPins()) savePins(pinned)
   }, [pinned])
 
-  /** 指针手势的起点（viewBox 坐标）。节点拖动与画布平移共用一条通路。 */
+  /**
+   * 指针手势的起点（viewBox 坐标）。节点拖动 / 画布平移 / **连线**共用一条通路。
+   *
+   * `connect`（第四批）是"把两个对象凑一起"那条路：从 A 拖到 B 松手，
+   * 弹出这两个能做的事。它与"拖动节点"共用一个起点（都在节点上按下），
+   * 所以必须**显式区分**——判据是"连线模式开着"或"按着 Shift"，
+   * 于是 U10 的拖动/钉住行为一个像素都不动。
+   */
   const gesture = useRef<
     | { mode: 'node'; id: string; x: number; y: number; wx: number; wy: number; moved: boolean }
     | { mode: 'pan'; x: number; y: number; view: View; moved: boolean }
+    | { mode: 'connect'; from: string; x: number; y: number; moved: boolean }
     | null
   >(null)
   /** 这一次手势算不算"拖动"——算的话要把紧随其后的 click 吞掉（否则一拖就选中/取消选中） */
   const suppressClick = useRef(false)
+  /**
+   * **连线模式**（第四批）：底栏那个开关。开着时在节点上按下 = 拉线而不是拖动；
+   * 按住 Shift 也随时算（开关是给它做门面的 —— 修饰键没人猜得到）。
+   */
+  const [connectMode, setConnectMode] = useState(false)
+  /** 正在拉的那根线：起点、指针位置（viewBox 坐标）、当前悬停的目标 */
+  const [connect, setConnect] = useState<{ from: string; at: Pt; hover: string | null } | null>(null)
+  /** 悬停目标另存一份 ref：`pointercancel` 时要拿它兜底（state 在闭包里是旧的） */
+  const connectHover = useRef<string | null>(null)
   /** 当前视图（供原生 wheel 监听与指针换算读取） */
   const viewRef = useRef<{
     k: number
@@ -272,6 +303,11 @@ export function CanvasView({
     grid: GridSpec
     world: Pt[]
     gridAt: string[]
+    /** 渲染位置（viewBox 坐标）与盒子——连线手势要在原生监听里做命中测试 */
+    screen: Pt[]
+    boxes: Box[]
+    /** 每条边的几何（下标与 `graph.edges` 平行）——连线也要能**落到边上**（映射不占节点） */
+    edgePts: { labelPt: Pt | null }[]
   } | null>(null)
 
   useEffect(() => {
@@ -814,6 +850,9 @@ export function CanvasView({
           grid: view.grid,
           world: view.world,
           gridAt: view.gridAt,
+          screen: view.screen,
+          boxes: view.boxes,
+          edgePts: view.edgePts.map((p) => ({ labelPt: p?.labelPt ?? null })),
         }
       : null
   }, [view])
@@ -876,6 +915,30 @@ export function CanvasView({
     onAnchors(anchors, size)
   }, [view, size, graph.nodes, graph.edges, onAnchors])
 
+  /**
+   * 连线时的**合法目标** = 与起点凑得出至少一个操作的对象。
+   *
+   * 候选由 `gal/interaction.ts#pairOps` 算 —— 与左栏表 / 悬浮球 / 拖拽三个入口
+   * **同一份匹配规则**，所以"拖得出来的"与"菜单里列出来的"永远一致。
+   *
+   * 目标可以是**节点**（群 / 集合），也可以是**边背后的对象**（映射 / 关系）——
+   * 后者是用户的原始诉求："拖 H 到 f 上做 f(H)"，而 `f` 是条箭头不是节点。
+   */
+  const connectOk = useMemo(() => {
+    if (!connect) return null
+    const objectsById = new Map(objects.map((o) => [o.id, o.value]))
+    for (const n of graph.nodes) if (!objectsById.has(n.id)) objectsById.set(n.id, n.value)
+    const fromVal = objectsById.get(connect.from)
+    if (!fromVal) return null
+    const ok = new Set<string>()
+    for (const [id, v] of objectsById) {
+      if (id === connect.from) continue
+      if (pairOps(fromVal, v).length > 0) ok.add(id)
+    }
+    return ok
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connect, graph.nodes, objects])
+
   if (!view) {
     return (
       <div className="canvas-wrap" ref={wrapRef}>
@@ -902,7 +965,71 @@ export function CanvasView({
     const p = toVB(e.clientX, e.clientY)
     const g = (e.target as Element).closest?.('g.gnode') as SVGGElement | null | undefined
     const id = g?.getAttribute('data-id') ?? null
-    if (id) {
+    /**
+     * 连线模式：**底栏那个开关**打开，或者按下时按着 Shift。
+     *
+     * 为什么要显式区分（而不是"拖到别的节点上就算连线"）：拖动节点本来是
+     * "钉住 + 吸附格点"，落点由 `snapToGrid` 决定——用户瞄准 B 的中心时，
+     * 吸附会把他推到 B 旁边的空格点上。于是"想连线"与"想摆在这儿"在几何上
+     * 分不开，只能靠一个明确的信号。Shift 是零成本的快捷方式，开关是给它做门面。
+     */
+    /** 对象表里的值（节点与**边背后的对象**都用它）。 */
+    const valueOf = (id: string): GalValue | null =>
+      objects.find((o) => o.id === id)?.value ?? graph.nodes.find((n) => n.id === id)?.value ?? null
+
+    /**
+     * 连线手势的命中测试：先看**节点**（它们大），再看**边**（映射 / 关系不占节点，
+     * 只能按标签位置认）。返回能作为连线下一个端点的**对象 id**。
+     */
+    const hitAt = (q: Pt): string | null => {
+      const v = viewRef.current
+      if (!v) return null
+      const from = gesture.current?.mode === 'connect' ? gesture.current.from : null
+      let best: string | null = null
+      let bestD = Infinity
+      graph.nodes.forEach((nd, i) => {
+        if (nd.id === from) return
+        const b = v.boxes[i]
+        const c = v.screen[i]
+        if (!b || !c) return
+        const d = Math.hypot(q.x - c.x, q.y - c.y)
+        // 外扩一点：节点小的时候不必"像素级对准"
+        if (d <= Math.max(b.hw, b.hh) + 26 && d < bestD) {
+          bestD = d
+          best = nd.id
+        }
+      })
+      // 边：半径小得多（它是线不是块），且只认**背后有对象**的那些（映射 / 关系）
+      const EDGE_HIT_R = 20
+      graph.edges.forEach((e, k) => {
+        const oid = e.objectId
+        if (!oid || oid === from) return
+        const pt = v.edgePts[k]?.labelPt
+        if (!pt) return
+        const d = Math.hypot(q.x - pt.x, q.y - pt.y)
+        if (d <= EDGE_HIT_R && d < bestD) {
+          bestD = d
+          best = oid
+        }
+      })
+      return best
+    }
+
+    /** 起点：按在**节点**上取它的 id；按在**边**上取边背后的对象 id（映射 / 关系）。 */
+    const edgeStartId = (e: React.PointerEvent<SVGSVGElement>): string | null => {
+      const el = (e.target as Element).closest?.('g.gedge') as SVGGElement | null
+      const eid = el?.getAttribute('data-edge-id')
+      if (!eid) return null
+      return graph.edges.find((x) => x.id === eid)?.objectId ?? null
+    }
+
+    const wantsConnect = connectMode || e.shiftKey
+    const startId = id ?? (wantsConnect ? edgeStartId(e) : null)
+    if (startId && wantsConnect) {
+      gesture.current = { mode: 'connect', from: startId, x: p.x, y: p.y, moved: false }
+      connectHover.current = null
+      setConnect({ from: startId, at: p, hover: null })
+    } else if (id) {
       const i = graph.nodes.findIndex((nd) => nd.id === id)
       if (i < 0) return
       gesture.current = {
@@ -936,18 +1063,45 @@ export function CanvasView({
         const d = { id: gs.id, dx: (q.x - gs.x) / view.k, dy: (q.y - gs.y) / view.k }
         dragRef.current = d
         setDrag(d)
+      } else if (gs.mode === 'connect') {
+        const over = hitAt(q)
+        connectHover.current = over
+        setConnect({ from: gs.from, at: q, hover: over })
       } else {
         setUserView({ k: gs.view.k, tx: gs.view.tx + (q.x - gs.x), ty: gs.view.ty + (q.y - gs.y) })
       }
     }
 
-    const finish = () => {
+    const finish = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', finish)
       window.removeEventListener('pointercancel', finish)
       const gs = gesture.current
       gesture.current = null
       if (!gs) return
+      if (gs.mode === 'connect') {
+        const q = toVB(ev.clientX, ev.clientY)
+        /**
+         * 先按松手位置命中；**`pointercancel` 兜底**——浏览器偶尔会把拖动抢去
+         * 当"选文本"（节点标签是 KaTeX 的 HTML），此时派发的是 `pointercancel`，
+         * 位置信息可能已失真。那就用拖动过程中**最后一次悬停**到的目标顶上：
+         * 用户明明已经指到它了，不该因为浏览器的插手白拖一次。
+         * （根因另有一道防线：`.canvas { user-select: none }`。）
+         */
+        const to = (gs.moved ? hitAt(q) : null) ?? (gs.moved ? connectHover.current : null)
+        // 连线手势**永远吞掉 click**：它从来不是"点选"
+        suppressClick.current = true
+        connectHover.current = null
+        setConnect(null)
+        if (to) {
+          const wrap = wrapRef.current?.getBoundingClientRect()
+          onConnect?.(gs.from, to, {
+            x: ev.clientX - (wrap?.left ?? 0),
+            y: ev.clientY - (wrap?.top ?? 0),
+          })
+        }
+        return
+      }
       if (gs.mode === 'node') {
         const d = dragRef.current
         if (gs.moved && d) {
@@ -995,7 +1149,7 @@ export function CanvasView({
     <div className="canvas-wrap" ref={wrapRef}>
       <svg
         ref={svgRef}
-        className={`canvas${pickable ? ' picking' : ''}${drag ? ' dragging' : ''}`}
+        className={`canvas${pickable ? ' picking' : ''}${drag ? ' dragging' : ''}${connectMode ? ' linking' : ''}`}
         viewBox={`0 0 ${VW} ${VH}`}
         preserveAspectRatio="xMidYMid meet"
         role="img"
@@ -1034,8 +1188,7 @@ export function CanvasView({
                 markerWidth="7"
                 markerHeight="7"
                 orient="auto-start-reverse"
-              >
-                <path
+              >                <path
                   d="M2 1L8 5L2 9"
                   fill="none"
                   stroke={st.color}
@@ -1106,6 +1259,13 @@ export function CanvasView({
           const pts = view.edgePts[k]
           if (!pts) return null
           const { p1, p2 } = pts
+          /**
+           * 连线手势下，**边**也参与"能不能落上去"：映射 / 关系不占节点，
+           * 但正是用户要拖过去的那种目标（`拖 H 到 f 上`）。
+           * 只有"背后有对象"的边才有这个资格——结构伴生（π / ↪）不是对象。
+           */
+          const isConnTargetEdge = !!connect && !!e.objectId && !!connectOk?.has(e.objectId)
+          const edgeDim = !!connect && !!e.objectId && !isConnTargetEdge && e.objectId !== connect.from
           // 三种 map 边要能一眼分开：
           //   · 显式映射对象（带 objectId）→ 深色粗线（数学主角）
           //   · 结构伴生（pi / pi1 / hook）→ 蓝灰细线（派生出来的结构关系）
@@ -1151,7 +1311,14 @@ export function CanvasView({
           const isSelected = selectable && e.objectId === selectedId
           const line = pts.d
           return (
-            <g key={e.id} className={`gedge gedge-${e.kind}${isSelected ? ' on' : ''}`}>
+            <g
+              key={e.id}
+              className={`gedge gedge-${e.kind}${isSelected ? ' on' : ''}${edgeDim ? ' dim' : ''}${
+                isConnTargetEdge ? ' conn-target' : ''
+              }`}
+              data-edge-id={e.id}
+              data-object-id={e.objectId ?? ''}
+            >
               {selectable && (
                 <path
                   className="gedge-hit"
@@ -1204,12 +1371,46 @@ export function CanvasView({
           )
         })}
 
+        {/* 拖拽连线的**橡皮筋**：从起点到指针（吸到悬停目标就改成吸到它的中心）。
+            起点可能是**节点**（群/集合）也可能是**边**（映射/关系）——
+            后者没有 `screen` 坐标，取它的标签位置。
+            画在边之上、节点之下；`pointerEvents="none"`，不干扰命中测试。 */}
+        {connect &&
+          (() => {
+            const ni = graph.nodes.findIndex((n) => n.id === connect.from)
+            const ei = ni < 0 ? graph.edges.findIndex((e) => e.objectId === connect.from) : -1
+            const a = ni >= 0 ? view.screen[ni] : ei >= 0 ? view.edgePts[ei]?.labelPt : null
+            if (!a) return null
+            const hi = connect.hover ? graph.nodes.findIndex((n) => n.id === connect.hover) : -1
+            const he =
+              hi < 0 && connect.hover
+                ? graph.edges.findIndex((e) => e.objectId === connect.hover)
+                : -1
+            const t = hi >= 0 ? view.screen[hi] : he >= 0 ? view.edgePts[he]?.labelPt : null
+            const b = hi >= 0 ? view.boxes[hi] : null
+            const end = t ?? connect.at
+            return (
+              <g className="connect-band">
+                <line x1={a.x} y1={a.y} x2={end.x} y2={end.y} markerEnd="url(#map-head)" />
+                {t && <circle className="connect-ring" cx={t.x} cy={t.y} r={(b ? Math.max(b.hw, b.hh) : 16) + 12} />}
+              </g>
+            )
+          })()}
+
         {graph.nodes.map((n, i) => {
           const p = view.screen[i]
           const b = view.boxes[i]
           const isPicked = picked.has(n.id)
           const selected = n.id === selectedId || isPicked
-          const dimmed = pickable ? !pickable.has(n.id) : false
+          const isConnFrom = connect?.from === n.id
+          const isConnOver = connect?.hover === n.id
+          const isConnTarget = !!connectOk?.has(n.id)
+          // 拉线时压暗"没得可做"的节点：合法目标一眼可见（复用 pending 的"不可点就变暗"规则）
+          const dimmed = pickable
+            ? !pickable.has(n.id)
+            : connect
+              ? !(isConnTarget || isConnFrom)
+              : false
           const stroke =
             n.shape === 'action'
               ? ACTION_STROKE
@@ -1252,7 +1453,9 @@ export function CanvasView({
           return (
             <g
               key={n.id}
-              className={`gnode${dimmed ? ' dim' : ''}${drag?.id === n.id ? ' dragging' : ''}`}
+              className={`gnode${dimmed ? ' dim' : ''}${drag?.id === n.id ? ' dragging' : ''}${
+                isConnOver ? ' conn-over' : isConnTarget ? ' conn-target' : ''
+              }`}
               data-label={n.label}
               data-id={n.id}
               onClick={(e) => {
@@ -1325,6 +1528,16 @@ export function CanvasView({
         <span className="canvas-zoom" title="滚轮缩放 · 空白处拖动平移 · 双击空白适应窗口">
           {zoomPct}%
         </span>
+        <button
+          className={`ct-btn${connectMode ? ' on' : ''}`}
+          onClick={() => {
+            setConnectMode((v) => !v)
+            setConnect(null)
+          }}
+          title="连线模式：在对象上按下、拖到另一个对象上松手 —— 这两个能做的事会列出来（按住 Shift 拖也是连线，不必开这个开关）"
+        >
+          连线{connectMode ? ' ✓' : ''}
+        </button>
         <button
           className="ct-btn"
           onClick={() => setUserView(null)}

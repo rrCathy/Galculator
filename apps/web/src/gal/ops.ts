@@ -94,7 +94,9 @@ export const MECHANISM_ORDER: Mechanism[] = [
  * | 类型 | 画布上能填 | 说明 |
  * |---|---|---|
  * | `group` | 群节点 | |
- * | `subset` | 圆节点（元素集 / 子群集）| 也接受**群节点**——但限于"它是本操作前面某个参数的子群"（故需前缀上下文）|
+ * | `subset` | 圆节点（元素集）/ 群节点 | **单个**数集（`∩ ∪ ∖ ·`、`商`、`C_G`、`N_G`、`闭包` 都是它）：元素集 / 集合 / 群（当集合读，且须是前缀里某个群的子群）；`subgroups` 只在**恰好一个成员**时收（那等于一个子群，与 `subgroupArgOf` 一致）|
+ * | `setlike` | 圆节点 / 群节点 | **把子群集列表整体当集合读**——**只有 `底集` 用它**（Sylow 链的 `底集(Syl_p(G))` 靠这条；`∩ ∪ ∖ ·` 走的是 `subgroupArgOf`，只收单个数集）|
+ * | `omega` | 集合 / 元素集节点 / 群节点 | 作用的作用对象 Ω —— 恰好是 `omegaArgOf` 收的那几种 |
  * | `action` | 作用节点 | |
  * | `map` | — | 映射不占节点，只画边（U3 对象编辑器接入后由它提供）|
  * | `element` | ✗ | **标量**：元素记号（id / label / 循环记号 `(123)`），由操作自行 `resolveElement` |
@@ -104,10 +106,20 @@ export const MECHANISM_ORDER: Mechanism[] = [
  * 约定：**标量参数只能排在参数表末尾**。`opsFor` 依赖这条做前缀匹配
  * ——前缀填不上的对象参数意味着"还得多选一个节点"，而末尾的标量参数
  * 可以由用户后续在输入框里补。
+ *
+ * ## 为什么把 `subset` 拆成三个（U21）
+ *
+ * 从前只有 `subset` 一个，语义是"看起来像集合"，于是它对**一切**数集都回 true。
+ * 但多数 op 其实吃不下一个**子群集列表**（Ω 走 `omegaArgOf`、H 走子群判定）。
+ * 后果在拖拽连线里最刺眼：**菜单会列出点了必然报错的候选**
+ * （把 `G` 拖到 `Syl_p(G)` 上，列着「共轭作用在」——它只收 `set`/`elements`）。
+ * 拆开之后，"菜单里列的"与"真能跑的"才是一回事。
  */
 export type ParamType =
   | 'group'
   | 'subset'
+  | 'setlike'
+  | 'omega'
   | 'action'
   | 'map'
   | 'element'
@@ -1075,7 +1087,7 @@ export const OPS: OpDef[] = [
     call: ['共轭作用在', 'conjOn', 'conjugationOn'],
     params: [
       { name: 'G', type: 'group' },
-      { name: 'Ω', type: 'subset' },
+      { name: 'Ω', type: 'omega' },
     ],
     arity: 2,
     result: 'action',
@@ -1300,7 +1312,7 @@ export const OPS: OpDef[] = [
     recipe: '原子构造（取底集 / 忘记结构）',
     impl: '本地（NormalizedSubgroup / GroupElement → SetMember）',
     call: ['底集', 'asSet', 'underlying'],
-    params: [{ name: 'S', type: 'subset' }],
+    params: [{ name: 'S', type: 'setlike' }],
     arity: 1,
     result: 'set',
     run: (a) => {
@@ -2100,6 +2112,15 @@ export function opByCall(name: string): OpDef | undefined {
  * 除 `opsFor` 外，U2 的 pending 也用它——点第二个参数时要知道"这个节点能不能当这一位"。
  */
 export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): boolean {
+  /** 群对象当集合读的共用判据（见 `subset` 的分支注释）。 */
+  const groupAsSet = (g: Group): boolean => {
+    const groups = earlier.filter((e) => e.type === 'group')
+    if (groups.length === 0) return true
+    return groups.some(
+      (e) => e.type === 'group' && isSubgroupElementSet(e.group, g.elements.map((x) => x.id)),
+    )
+  }
+
   switch (t) {
     case 'group':
       return v.type === 'group'
@@ -2107,24 +2128,27 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
       return v.type === 'action'
     case 'map':
       return v.type === 'map'
-    case 'subset': {
-      // `set` 也是集合（Ω）——`底集(Syl_p(G))` 的产物，共轭作用要它
+    case 'setlike': {
+      // **集合代数**（`∩ ∪ ∖ ·` 与 `底集`）：子群集列表**整体**当集合读
       if (v.type === 'elements' || v.type === 'subgroups' || v.type === 'set') return true
       if (v.type !== 'group') return false
-      // 群对象当集合读。两种情形：
-      //   · 本操作前面**没有**群参数（`∩` `∪` `\` `·`）——群总是可以当集合读；
-      //   · 前面有群参数（`G/N`、`C_G(G,S)`）——要求它是其中某个的子群，
-      //     否则 `A × B` 的 B 也会被当成集合，选中两个群就会冒出多余的候选。
-      const groups = earlier.filter((e) => e.type === 'group')
-      if (groups.length === 0) return true
-      return groups.some(
-        (e) =>
-          e.type === 'group' &&
-          isSubgroupElementSet(
-            e.group,
-            v.group.elements.map((x) => x.id),
-          ),
-      )
+      return groupAsSet(v.group)
+    }
+    case 'omega': {
+      // Ω：恰好是 `omegaArgOf` 收的那几种（**不收 subgroups 列表**，哪怕是单元素）
+      if (v.type === 'set' || v.type === 'elements') return true
+      if (v.type !== 'group') return false
+      return groupAsSet(v.group)
+    }
+    case 'subset': {
+      // **单个**数集。`subgroups` 只在恰好一个成员时收——那时它等于一个子群
+      //（`闭包(S)` / `商(G, N)` 这类就是这么用的）。
+      if (v.type === 'elements' || v.type === 'set') return true
+      if (v.type === 'subgroups') return v.subgroups.length === 1
+      if (v.type !== 'group') return false
+      // 群对象当集合读，且前面有群参数时要求它是其中某个的子群
+      //（否则 `A × B` 的 B 也会被当成集合，选中两个群就冒出多余的候选）
+      return groupAsSet(v.group)
     }
     case 'element':
     case 'prime':

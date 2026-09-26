@@ -9,7 +9,11 @@
  */
 import { buildLines } from '../../src/gal/build'
 import { deriveCanvas } from '../../src/gal/derive'
+import { evalExpr } from '../../src/gal/evalDef'
 import { groupInsights } from '../../src/gal/insights'
+import { isScalarParam, paramAccepts } from '../../src/gal/ops'
+import { composeCall } from '../../src/gal/compose'
+import { pairOps, singleOpsFor } from '../../src/gal/interaction'
 import { checkName, normalizeName } from '../../src/gal/naming'
 import { containment, relationsFor } from '../../src/gal/relations'
 import { contextGroup, sortOf } from '../../src/gal/value'
@@ -417,6 +421,157 @@ export function run(): void {
       // `R = A ⊆ K`（K 打错）→ 报"是谁算不出来"，而不是答非所问的关系提示
       const t = lastLine([...STAGE, 'R = A ⊆ K9'])
       ok('`A ⊆ K9` 报「K9」算不出来', (t.error ?? '').includes('K9'), t.error)
+    }
+  }
+
+  /* ══ ⑥ 第四批：拖拽连线的候选 + 面板「可做」（缺口 ⑩⑤）═════ */
+
+  /**
+   * 拖拽连线的**候选**（`pairOps`）是这一批的核心：它是"这两个能凑出什么"的唯一判据。
+   *
+   * 最要紧的一条纪律：**菜单不撒谎** —— 列出来的候选点下去必须真的能跑
+   * （或至少是"要弹编辑器 / 补参条"），不许出现点了必然报错的项。
+   * 这条纪律逼出了 `ParamType` 的一次拆分（U21）：从前 `subset` 一型两用，
+   * 对**子群集列表**一律回 true，而多数 op 其实吃不下它。
+   */
+  suite('usability · 拖拽连线的候选与「可做」（缺口 ⑩⑤）')
+  {
+    const STAGE = [
+      'G = S_4',
+      'H = S_3',
+      'f = 映射(G, H, s12→23, c→13)',
+      'K = ker(f)',
+      'A = A_4',
+      'Syl = Syl_p(G, 3)',
+    ]
+    const bs = buildLines(STAGE)
+    const objects = bs.objects
+    const obj = (id: string) => objects.find((o) => o.id === id)!
+    const table = new Map(objects.map((o) => [o.id, o]))
+    const pair = (x: string, y: string) => pairOps(obj(x).value, obj(y).value)
+
+    /* ── ① 用户的剧本：拖 A₄ 到 f 上 → **唯一候选**（于是直接执行，不弹菜单） ── */
+
+    const fa = pair('A', 'f')
+    eq('拖 A₄ 到 f 上：只有 1 个候选', fa.length, 1)
+    eq('那个候选是「像」', fa[0]?.op.id, 'image')
+    // 拖拽不表达顺序：从 A₄ 起拖，而 `像(f, H)` 的 f 必须在前面 →
+    // 候选要自己标出"参数得反过来摆"，否则会拼出 `像(A₄, f)` 而报错
+    eq('标了 swapped（参数要反过来摆）', fa[0]?.swapped, true)
+    eq('从 f 起拖就不用反（同一个 op，两个方向都认）', pair('f', 'A')[0]?.swapped, false)
+
+    /* ── ② 单对象操作不许混进来 ── */
+
+    ok(
+      '拖 A₄ 到 f 上不会冒出「核」（它只用 f 一个对象）',
+      !fa.some((c) => c.op.id === 'kernel'),
+      fa.map((c) => c.op.id).join(','),
+    )
+
+    /* ── ③ 排序：声明包含在最前 ── */
+
+    const ag = pair('A', 'G')
+    eq('拖 A₄ 到 S₄ 上：第一条是「包含」', ag[0]?.op.id, 'contains')
+    // 反着拖也列「包含」——**方向由判据定**（A₄ 才是子群），所以标 swapped
+    const ga = pair('G', 'A').find((c) => c.op.id === 'contains')
+    ok('反着拖（S₄ → A₄）也列「包含」', !!ga, pair('G', 'A').map((c) => c.op.id).join(','))
+    eq('而且标了 swapped（参数会摆成 (A₄, S₄)）', ga?.swapped, true)
+    ok(
+      '两个不相干的群之间（S₄ 与 S₃）没有「包含」',
+      !pair('G', 'H').some((c) => c.op.id === 'contains'),
+      pair('G', 'H').map((c) => c.op.id).join(','),
+    )
+    ok('而且候选不止一个（所以会弹菜单让用户挑）', ag.length > 1, ag.map((c) => c.op.id).join(','))
+
+    /* ── ④ 拆分的直接成果：吃不下子群集的 op 不再出现 ── */
+
+    const sylG = pair('Syl', 'G').map((c) => c.op.id)
+    for (const id of ['conjugationOnSet', 'cosetAction', 'centralizer', 'normalizer']) {
+      ok(`子群集 + 群：不再列出「${id}」（它吃不下一个列表）`, !sylG.includes(id), sylG.join(','))
+    }
+    eq('子群集 + 群：一个候选都不剩（列表跟群凑不出"用到两个"的操作）', sylG.length, 0)
+
+    /* ── ⑤ **菜单不撒谎**：逐个候选 dry-run ── */
+
+    {
+      const combos: [string, string][] = [
+        ['A', 'f'],
+        ['f', 'A'],
+        ['A', 'G'],
+        ['G', 'A'],
+        ['K', 'G'],
+        ['K', 'A'],
+        ['G', 'H'],
+        ['Syl', 'G'],
+        ['f', 'G'],
+        ['G', 'f'],
+      ]
+      const lies: string[] = []
+      for (const [x, y] of combos) {
+        for (const c of pair(x, y)) {
+          const picked = c.swapped ? [y, x] : [x, y]
+          const mk = (order: string[]) => {
+            const args: (string | null)[] = c.op.params.map((_, i) => order[i] ?? null)
+            const expr = composeCall(c.op, args)
+            return expr ? evalExpr(expr, table) : null
+          }
+          const r = mk(picked)
+          // 三种"点下去也没错"的例外：正序通 · 反序通（App 的 dispatchPairOp 会翻过去）·
+          // 要进编辑器（映射）或要补标量（补参条）
+          const needsMore = c.op.editor === true || c.op.params.some((p) => isScalarParam(p.type))
+          const revOk = !!mk([y, x])?.ok
+          if (!r?.ok && !needsMore && !revOk) {
+            const why = r && !r.ok ? r.error : 'composeCall 拼不出调用'
+            lies.push(`${x}→${y} ${c.op.id}${c.swapped ? '(反)' : ''} :: ${why}`)
+          }
+        }
+      }
+      eq('候选点下去都跑得通（没有"点了必错"的项）', lies.length, 0)
+      if (lies.length > 0) ok('  ↳ 撒谎的候选', false, lies.join(' | '))
+    }
+
+    /* ── ⑥ 面板「可做」：子群集能一键 底集，之后整条 Sylow 链就通了 ── */
+
+    {
+      const one = singleOpsFor(obj('Syl').value).map((o) => o.id)
+      ok('子群集的「可做」里有 底集', one.includes('underlyingSet'), one.join(','))
+
+      // 缺口 ⑤ 的判据：那一步**点得出来**，而且点出来之后下一环真的接得上
+      const chain = build([...STAGE, 'Ω = 底集(Syl)', 'Act = 共轭作用在(G, Ω)'])
+      const omega = chain.byId('Ω')?.value
+      eq('`底集(Syl)` 产出集合', omega?.type, 'set')
+      eq('集合基数 = n₃ = 4（手算）', omega?.type === 'set' ? omega.set.members.length : -1, 4)
+      ok('接着 `共轭作用在(G, Ω)` 能建出来', chain.byId('Act')?.value.type === 'action')
+      eq(
+        '作用点集的基数就是 n₃（Sylow III 的主角动作据此算出来）',
+        chain.byId('Act')?.value.type === 'action' ? chain.byId('Act')!.value.action.n : -1,
+        4,
+      )
+    }
+
+    /* ── ⑦ ParamType 拆分的判据本身（subset / setlike / omega） ── */
+
+    {
+      const lst = obj('Syl').value
+      eq('子群集列表的成员数 = 4', lst.type === 'subgroups' ? lst.subgroups.length : -1, 4)
+      ok('`setlike` 收整个子群集列表', paramAccepts('setlike', lst, []))
+      ok('`subset` **不收** 4 个成员的子群集', !paramAccepts('subset', lst, []))
+      ok('`omega` 也不收（Ω 走 omegaArgOf，只要单个数集）', !paramAccepts('omega', lst, []))
+
+      // A₄ 的 n₂ = 1（V₄ 是唯一的 Sylow 2-子群）→ 这个列表恰好一个成员
+      const single = buildLines(['G = A_4', 'P = Syl_p(G, 2)']).objects.find((o) => o.id === 'P')
+      const sv = single?.value
+      eq('`Syl_2(A₄)` 恰好一个成员（n₂ = 1）', sv?.type === 'subgroups' ? sv.subgroups.length : -1, 1)
+      ok(
+        '而"恰好一个成员"的子群集当单个数集读（`商(G,N)` 就靠这条）',
+        !!sv && paramAccepts('subset', sv, []),
+        sv?.type,
+      )
+      ok('`底集` 那个类型（`setlike`）两种都收', !!sv && paramAccepts('setlike', sv, []))
+
+      const gv = obj('A').value
+      ok('`omega` 收群对象（当集合读）', paramAccepts('omega', gv, []))
+      ok('`subset` 也收群对象', paramAccepts('subset', gv, []))
     }
   }
 }

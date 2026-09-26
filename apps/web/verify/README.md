@@ -36,6 +36,7 @@ node verify/e2e/proof-m3.mjs          # 轨道–稳定子 / 第一同构的参�
 node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报错分清（U18）
 node verify/e2e/relations.mjs         # 关系层：用户的 S₄↠S₃ 剧本（U19）
 node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G（U20）
+node verify/e2e/connect.mjs           # 拖拽连线 + 面板「可做」（U21，真鼠标拖）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -79,3 +80,9 @@ node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G�
 22. **断言"值"时不要 `JSON.stringify(值)`**：`Group` 里有 `generators[].inverse` 指回生成元自己（环），一 stringify 就抛 `Converting circular structure to JSON`，**而且是在整份回归跑到那一行时崩掉**（不是只失败一条）。写个 `describeValue()` 只摘 `symbol/order/index/isNormal` 那几项（`suites/usability.ts` 顶部）。
 23. **布局的"水平穿行"是另一半硬规范**：老走查只判了竖直箭头不穿对象，水平那半没判 —— 于是"两条水平边共用一个端点"时列序自相打架（`psi: B→G` 从 `H` 身上横穿）**一直没被发现**。`e2e/layout-spec.mjs` 现在两条都判。判据：水平的边（Δy ≤ 2）两端之间有别的节点的中心（同 y ±6）即失败。
 24. **`⊆` 这类"绝不会出现在群记号里"的中缀要进 `UNICODE_ALIASES`**：`findTopLevelInfix` 只认"两侧都不是标识符字符"的中缀，`H⊆G`（不补空格）会被当成一个整词。`∩`/`∪`/`·` 早就这么处理了，`⊆` 是 U20 补的。另外可以趁这个符号的"独占性"做一件直积的 `x` 不能做的事：`R = A ⊆ K9`（某一侧打错）**直接报"是哪一侧算不出来"**，而不是掉进记号解析、最后答非所问地说"这行写的是一个关系"。
+
+25. **画布上的文字必须 `user-select: none`，否则指针手势会被浏览器掐断**：节点标签是 KaTeX 的 HTML（装在 `foreignObject` 里），拖着一个节点**从另一个节点的标签上经过**时浏览器判定"开始选文本"、随即派发 `pointercancel` —— 手势走到一半就没了（U21 走查抓到 `evType: pointercancel`；**U10 的"拖动 + 吸附"同样暴露在这个风险下**）。两道防线：`.canvas { user-select: none }`（根因）+ 松手时用"拖动过程中最后一次悬停"兜底。**诊断口径**：把手势收尾时收到的事件类型打出来，`pointercancel` 就是它。
+26. **`CanvasView` 有个"没有图就早点 return 占位"的分支 → 新的 hook 必须放在它之前**：`?empty=1` 时 `view === null`、函数提前 return，于是"空画布 18 个 hook、有图 19 个" → React 抛 `Rendered more hooks than during the previous render` 并**卸载整棵子树**（症状是 `#root` 空、页面白屏，而 `page.on('pageerror')` 只给一行字）。在走查里加一句"等不到选择器就把 console 与 `#root` 打出来"，这条线索就是它捞出来的。
+27. **`PairCandidate.swapped` 的语义**：`false` = 参数顺序与"从 A 拖到 B"一致；`true` = **要反过来摆**（如从 A₄ 拖向 `f`，而 `像(f, H)` 的 f 必须在前面）。别写反 —— 它决定了 `dispatchPairOp` 第一次试哪个顺序。
+28. **走查里拖节点要先确认"落点上没有浮层"**：左上面板是浮层（画布不让位），节点可能正好压在它底下，`page.mouse.down` 打到的是面板、拖动当然不动。`e2e/connect.mjs` 的 `pickClear()` 用 `document.elementFromPoint` 挑一个露在外面的节点 —— 这是**走查的坑不是产品的坑**。
+29. **断言绑"自动命名"很脆**：新对象的名字由 `nextAutoName` 生成（`B`/`D`/`I`…），不由你指定。所以断言要绑**语义**：行数变多 / 画布上出现某个 label / 某条边出现，而不是 `Ω` 这种你以为会有的名字。

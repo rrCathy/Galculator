@@ -9,15 +9,19 @@ import {
   canPick,
   focusId,
   IDLE,
+  menuLabel,
   multiOps,
   needsEditor,
+  pairOps,
   pickedIds,
   pendingHint,
   singleOpsFor,
   type Interaction,
+  type PairCandidate,
 } from './gal/interaction'
 import { computedNumbers, type NumericEntry } from './gal/numeric'
 import { nextAutoName } from './gal/naming'
+import { opTemplate } from './gal/ops'
 import { proofHighlight, proofLines, type ProofParams, type ProofTemplate } from './gal/proof'
 import { CanvasView, type NodeAnchor } from './ui/CanvasView'
 import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
@@ -68,6 +72,16 @@ export default function App() {
   const [anchors, setAnchors] = useState<NodeAnchor[]>([])
   const [canvasSize, setCanvasSize] = useState({ w: 900, h: 620 })
   const [notice, setNotice] = useState<{ text: string; hint?: string } | null>(null)
+  /**
+   * 拖拽连线松手后的**候选菜单**（多个候选时才出现）。
+   * `at` 是画布容器内像素坐标——菜单按它定位，跟悬浮球同一套坐标。
+   */
+  const [connectMenu, setConnectMenu] = useState<{
+    at: { x: number; y: number }
+    from: string
+    to: string
+    cands: PairCandidate[]
+  } | null>(null)
 
   // 默认只展开「对象」：三个都摊开会把画布左上角整片盖住，连顶部那颗球都压上去了
   const [openObjects, setOpenObjects] = useState(true)
@@ -188,6 +202,7 @@ export default function App() {
     setOrbStage('closed')
     setMultiOpen(false)
     setComposerOpen(false)
+    setConnectMenu(null)
     setNotice(null)
   }, [])
 
@@ -313,17 +328,23 @@ export default function App() {
     [byId, objects, usedNames],
   )
 
-  /** 从某个节点发起一个操作：一元直接算，多元进 pending，缺标量进 fill，要编辑器进 editor。 */
-  const startOp = useCallback(
-    (op: OpDef, from: string) => {
-      if (needsEditor(op) && objectArity(op) === 1) {
-        setInter({ kind: 'editor', opId: op.id, picked: [from] })
+  /**
+   * 从某个节点发起一个操作：一元直接算，多元进 pending，缺标量进 fill，要编辑器进 editor。
+   *
+   * `dispatchOp` 是它的本体（**已经知道参数顺序**）；`startOp` 是"只点了第一个对象"
+   * 那种从零开始的形态。拖拽连线拿到的是**两个**已经定好顺序的对象，
+   * 走的是同一个 `dispatchOp`——所以三个入口（悬浮球 / 拖拽 / 左栏）最终都落到一处。
+   */
+  const dispatchOp = useCallback(
+    (op: OpDef, picked: string[]) => {
+      if (needsEditor(op) && objectArity(op) === picked.length) {
+        setInter({ kind: 'editor', opId: op.id, picked })
         setOrbStage('closed')
         return
       }
       const slots = scalarSlots(op)
-      if (objectArity(op) > 1) {
-        setInter({ kind: 'pending', opId: op.id, picked: [from] })
+      if (objectArity(op) > picked.length) {
+        setInter({ kind: 'pending', opId: op.id, picked })
         setOrbStage('closed')
         return
       }
@@ -332,13 +353,83 @@ export default function App() {
         slots.forEach((s) => {
           scalars[s] = scalarDefault(op, s)
         })
-        setInter({ kind: 'fill', opId: op.id, picked: [from], scalars })
+        setInter({ kind: 'fill', opId: op.id, picked, scalars })
         setOrbStage('closed')
         return
       }
-      runOp(op, [from])
+      runOp(op, picked)
     },
     [runOp],
+  )
+
+  const startOp = useCallback((op: OpDef, from: string) => dispatchOp(op, [from]), [dispatchOp])
+
+  /**
+   * 拖拽连线的**参数顺序**：正序不行就反序再试。
+   *
+   * 拖拽不表达顺序，而参数是有序的。`pairOps` 只能按类型匹配猜一次，
+   * 对 `包含(H, G)` 这种**两位同型**的操作猜不出谁该在前
+   * （`(S₄, A₄)` 与 `(A₄, S₄)` 都能填进两个 `group` 槽），
+   * 于是"把 S₄ 拖到 A₄ 上"会拼出 `包含(S₄, A₄)` —— 那是错的。
+   *
+   * 所以拖拽这条路**自己兜一次**：正序求值走得通就用正序，否则反序；
+   * 两种都不行才按正序交给 `dispatchOp`（那时它的报错才有着落，
+   * 比如「映射」要先弹编辑器）。
+   *
+   * **只在这条手势上这么做**：手打的 `R = S_4 ⊆ A_4` 要照样报错，不许替用户改。
+   */
+  const tryOrder = useCallback(
+    (op: OpDef, picked: string[]): boolean => {
+      const args: (string | null)[] = op.params.map((_, i) => picked[i] ?? null)
+      const expr = composeCall(op, args)
+      return !!expr && evalExpr(expr, byId).ok
+    },
+    [byId],
+  )
+
+  const dispatchPairOp = useCallback(
+    (op: OpDef, from: string, to: string, swappedPref = false) => {
+      const first = swappedPref ? [to, from] : [from, to]
+      const second = swappedPref ? [from, to] : [to, from]
+      if (tryOrder(op, first)) return dispatchOp(op, first)
+      if (tryOrder(op, second)) return dispatchOp(op, second)
+      return dispatchOp(op, first)
+    },
+    [tryOrder, dispatchOp],
+  )
+
+  /**
+   * **拖拽连线松手**（第四批）：两个对象已定，「这两个能做的事」列出来。
+   *
+   * 三条纪律：
+   *   · **唯一候选直接执行** —— 这是"方便"的关键（拖 H 到 f 上就该直接出 `f(H)`）；
+   *   · 多个才弹菜单，且按**数学意图**排序（声明包含 / 商 / 像 在最前）；
+   *   · 一个都没有 → 说清"这两个之间没有可做的操作"，而不是静默无反应。
+   */
+  const onConnect = useCallback(
+    (from: string, to: string, at: { x: number; y: number }) => {
+      const a = byId.get(from)
+      const b = byId.get(to)
+      if (!a || !b) return
+      const cands = pairOps(a.value, b.value)
+      if (cands.length === 0) {
+        setNotice({
+          text: `${a.id} 与 ${b.id} 之间暂时没有可做的操作`,
+          hint: '拖拽只列"真的用到这两个对象"的操作；单个对象的操作请点它左上角的球',
+        })
+        setConnectMenu(null)
+        return
+      }
+      if (cands.length === 1) {
+        const c = cands[0]
+        setConnectMenu(null)
+        dispatchPairOp(c.op, from, to, c.swapped)
+        return
+      }
+      setNotice(null)
+      setConnectMenu({ at, from, to, cands })
+    },
+    [byId, dispatchPairOp],
   )
 
   /** 编辑器确认：产出一行定义，走与"打出来的"完全相同的那条求值路径。 */
@@ -416,7 +507,11 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
       if (inter.kind === 'pending' || inter.kind === 'fill' || inter.kind === 'editor') reset()
-      else if (composerOpen) setComposerOpen(false)
+      // 连线菜单最先关：它是"刚松手"的那一层，不该连带把选中也取消掉
+      else if (connectMenu) {
+        setConnectMenu(null)
+        setNotice(null)
+      } else if (composerOpen) setComposerOpen(false)
       else if (orbStage !== 'closed' || multiOpen) {
         setOrbStage('closed')
         setMultiOpen(false)
@@ -424,7 +519,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [inter, orbStage, multiOpen, composerOpen, reset])
+  }, [inter, orbStage, multiOpen, composerOpen, connectMenu, reset])
 
   /* ── 数值区 ────────────────────────────────────────── */
 
@@ -536,6 +631,7 @@ export default function App() {
     <div className="app">
       <CanvasView
         graph={graph}
+        objects={objects}
         selectedId={busy ? null : focus}
         onSelect={onNodeClick}
         onBackgroundClick={() => {
@@ -545,7 +641,46 @@ export default function App() {
         onAnchors={onAnchors}
         pickedIds={markedIds}
         pickableIds={pickableIds}
+        onConnect={onConnect}
       />
+
+      {/*
+        拖拽连线的候选菜单（第四批）。**唯一候选不弹菜单**——直接执行了，
+        所以这里出现就一定是"这两个能做好几件事"，得让用户挑。
+       */}
+      {connectMenu && (
+        <div
+          className="connect-menu"
+          style={{
+            left: Math.min(Math.max(connectMenu.at.x, 12), Math.max(12, canvasSize.w - 268)),
+            top: Math.min(Math.max(connectMenu.at.y, 12), Math.max(12, canvasSize.h - 300)),
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="connect-head">
+            <b>{connectMenu.from}</b> 与 <b>{connectMenu.to}</b>
+            <span className="count">{connectMenu.cands.length}</span>
+            <button className="connect-close" onClick={reset} title="Esc">
+              ✕
+            </button>
+          </div>
+          {connectMenu.cands.map((c) => (
+            <button
+              key={`${c.op.id}:${c.swapped ? 1 : 0}`}
+              className="connect-item"
+              title={`${c.op.notation} —— ${c.op.doc}`}
+              onClick={() => {
+                setConnectMenu(null)
+                dispatchPairOp(c.op, connectMenu.from, connectMenu.to, c.swapped)
+              }}
+            >
+              <span className="connect-label">{menuLabel(c.op)}</span>
+              <code>{opTemplate(c.op)}</code>
+            </button>
+          ))}
+          <div className="connect-hint">参数顺序已经按操作摆好，点一下就建出来</div>
+        </div>
+      )}
 
       {focusedObj && anchor && !busy && (
         <ObjectOrb
@@ -597,6 +732,8 @@ export default function App() {
           node={busy ? null : focusedObj}
           table={objects}
           onExtract={extractSubgroup}
+          singleOps={singleOps}
+          onRunOp={(op) => focusedObj && startOp(op, focusedObj.id)}
         />
       </div>
 

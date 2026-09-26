@@ -7,6 +7,8 @@ import {
   type ParamType,
 } from './ops'
 import { objectArity } from './compose'
+// 包含判据与信息面板的「关系」层（U19）**共用同一份**
+import { containment } from './relations'
 import type { GalValue } from './value'
 
 /**
@@ -114,10 +116,11 @@ const MENU_LABEL: Record<string, string> = {
   stabilizers: '稳定子',
   fixedPoints: '不动点',
   kernel: '核 ker',
-  image: '像 im',
+  image: '像 f(H)',
   closure: '生成子群 ⟨S⟩',
   elementOrder: '元素阶 ord',
   map: '映射 f: G → H',
+  contains: '包含 ⊆',
 }
 
 export function menuLabel(op: OpDef): string {
@@ -128,7 +131,9 @@ export function menuLabel(op: OpDef): string {
 
 export const PARAM_LABEL: Record<ParamType, string> = {
   group: '群',
-  subset: '集合 / 子群',
+  subset: '元素集 / 子群',
+  setlike: '集合 / 子群集',
+  omega: '集合 Ω',
   action: '作用',
   map: '映射',
   element: '元素记号',
@@ -164,4 +169,98 @@ export function canPick(
   if (!p) return false
   if (isScalarParam(p.type)) return false
   return paramAccepts(p.type, candidate, pickedValues)
+}
+
+/* ── 两个对象凑一起（第四批：拖拽连线）────────────────────── */
+
+export interface PairCandidate {
+  op: OpDef
+  /**
+   * `true` = 参数顺序与"从 A 拖到 B"相反（B 当第一参）。
+   *
+   * 拖拽天然不表达顺序，而参数是**有序**的（`像(f, H)` 的 f 必须在前面）。
+   * 所以两个方向都试、各自记下顺序 —— 于是"从 H 拖向 f"和"从 f 拖向 H"都能成，
+   * 用户不必记住哪个该在前面。
+   */
+  swapped: boolean
+}
+
+/**
+ * 菜单里的排序 —— 越靠前越像"用户此刻想干的事"。
+ *
+ * 判据是**数学意图**而不是注册表顺序：声明包含 / 商 / 像 是"说清这两个的关系"，
+ * 直积是"造个新的"，集合运算（∩ ∪ ∖ ·）在群上用得最少，映射要进编辑器（最重）。
+ */
+const PAIR_PRIORITY = [
+  'contains',
+  'quotient',
+  'image',
+  'directProduct',
+  'intersection',
+  'productSet',
+  'union',
+  'difference',
+  'map',
+]
+
+/**
+ * 把两个对象凑一起能做的操作（拖拽连线的候选）。
+ *
+ * ## 与 `opsFor` 的关系
+ *
+ * `opsFor([A, B])` 会连**单对象**操作一起返回（B 只是"顺带选中"），
+ * 而拖拽的语义是"**这两个**能凑出什么" —— 所以这里要求两个对象
+ * **各占一个参数位**，且第二个参数位之后的必需参数都必须能由文本补（标量）或是可选的。
+ *
+ * ## 两个方向都试
+ *
+ * 参数有序而拖拽无序：`像(f, H)` 与 `包含(H, G)` 都是两参，但先后不能反。
+ * 于是正反各试一次、合并去重（同一 op 只留先匹配上的那个顺序）。
+ */
+export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
+  const out: PairCandidate[] = []
+  for (const op of OPS) {
+    if (op.params.length < 2) continue
+    const [p0, p1] = op.params
+    // 前两位都得是**画布上选得出来的对象**参数：标量（元素记号 / 素数 / 整数）拖不出来
+    if (isScalarParam(p0.type) || isScalarParam(p1.type)) continue
+    // 第三位往后：可选的留着，标量的交给补参条，其余（还得再选对象的）这条手势凑不齐
+    const restOk = op.params.slice(2).every((p) => p.optional || isScalarParam(p.type))
+    if (!restOk) continue
+    /**
+     * **`包含` 单独走一遍实判**。
+     *
+     * 它的两个参数都是 `group` —— 类型上任何两个群都"填得上"，而且正反都算匹配，
+     * 于是**顺序也无从区分**。可它偏偏有真判据（H 得真是 G 的子群、且严格小于）：
+     * 只按类型匹配的话，"把 S₄ 拖到 S₃ 上"会列出一条点了必然报错的「包含」，
+     * 而这一批的纪律就是**菜单不撒谎**。
+     *
+     * 所以这里：两个方向各判一次，取成立的那个（判据本身就定了顺序）。
+     * 别的同型参数 op（直积 / 映射）没这个问题 —— 它们对任意两个对象都成立。
+     */
+    if (op.id === 'contains') {
+      if (a.type !== 'group' || b.type !== 'group') continue
+      const ab = containment(a.group, b.group)
+      const ba = containment(b.group, a.group)
+      if (ab && ab.index > 1) out.push({ op, swapped: false })
+      else if (ba && ba.index > 1) out.push({ op, swapped: true })
+      continue
+    }
+
+    const forward = paramAccepts(p0.type, a, []) && paramAccepts(p1.type, b, [a])
+    const backward = paramAccepts(p0.type, b, []) && paramAccepts(p1.type, a, [b])
+    if (!forward && !backward) continue
+    out.push({ op, swapped: !forward && backward })
+  }
+
+  const rank = (c: PairCandidate): number => {
+    const i = PAIR_PRIORITY.indexOf(c.op.id)
+    return i < 0 ? PAIR_PRIORITY.length : i
+  }
+  const regIndex = new Map(OPS.map((o, i) => [o.id, i]))
+  return out.sort(
+    (x, y) =>
+      rank(x) - rank(y) ||
+      (regIndex.get(x.op.id) ?? 0) - (regIndex.get(y.op.id) ?? 0),
+  )
 }

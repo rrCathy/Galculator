@@ -10,6 +10,8 @@ import {
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type NormalizedSubgroup } from '../gal/value'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { RELATION_LABEL, relationsFor, type Relation } from '../gal/relations'
+import { menuLabel } from '../gal/interaction'
+import { opTemplate, type OpDef } from '../gal/ops'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
@@ -37,6 +39,8 @@ export function InfoDock({
   node,
   table,
   onExtract,
+  singleOps = [],
+  onRunOp,
 }: {
   open: boolean
   onToggle: () => void
@@ -53,6 +57,15 @@ export function InfoDock({
    * "能作为某个映射的源或靶的，才配当顶点"，而子群集里的每一项**本身**就是子群。
    */
   onExtract?: (sub: NormalizedSubgroup) => void
+  /**
+   * 「可做」那一行（第四批，缺口 ⑤）。
+   *
+   * **不上画布的对象没有悬浮球**（球挂在节点/箭头上）——于是 `Syl_p(G)` 这种
+   * 子群集**根本点不出操作**，`Syl → 底集 → 共轭作用在` 那条链中间只能打字。
+   * 把单对象操作摆在信息面板里，就补上了这个入口（同一个 `singleOpsFor`，零新机制）。
+   */
+  singleOps?: OpDef[]
+  onRunOp?: (op: OpDef) => void
 }) {
   const group = node && node.value.type === 'group' ? node.value.group : null
 
@@ -125,6 +138,27 @@ export function InfoDock({
                   只列「已经建出来」的对象之间能确定的关系；要看全部子群 / 正规子群，用「子群」tab 或
                   Sub(G) / 正规子群(G)。
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* 「可做」：这个对象能立刻做的单对象操作。**不上画布的对象只有这一条入口** */}
+          {onRunOp && singleOps.length > 0 && (
+            <div className="info-ops">
+              <span className="info-ops-head">可做</span>
+              {singleOps.slice(0, 8).map((op) => (
+                <button
+                  key={op.id}
+                  type="button"
+                  className="info-op"
+                  title={`${op.notation} —— ${op.doc}`}
+                  onClick={() => onRunOp(op)}
+                >
+                  {menuLabel(op)}
+                </button>
+              ))}
+              {singleOps.length > 8 && (
+                <span className="info-ops-more">…还有 {singleOps.length - 8} 个（点对象旁的球看全部）</span>
               )}
             </div>
           )}
