@@ -10,7 +10,7 @@ import {
   type Group,
 } from '@groupviz/core'
 import { composeMapLine } from '../gal/compose'
-import { checkName, nextAutoName } from '../gal/naming'
+import { checkName, nextAutoName, normalizeName } from '../gal/naming'
 import { prettySymbol } from '../gal/pretty'
 import { TexOrText } from './Tex'
 import type { OpDef } from '../gal/ops'
@@ -117,7 +117,9 @@ export function MapBuilder({
       img: H.elements.find((e) => e.id === images[g.gen.name])?.label ?? images[g.gen.name],
     }))
     const expr = composeMapLine(op, [src.id, tgt.id], pairs)
-    onSubmit(`${nameDraft.trim() || autoName} = ${expr}`)
+    // 名字同样过一遍希腊字母归一（`\phi` → φ）——与输入框、表达式三处**同源**，
+    // 否则这里建出的映射会顶着 `\phi` 字面串当 id，用户在别处用 φ 引不到。
+    onSubmit(`${normalizeName(nameDraft.trim()) || autoName} = ${expr}`)
   }
 
   /**

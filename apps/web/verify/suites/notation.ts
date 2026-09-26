@@ -19,7 +19,7 @@
  */
 import { build, eq, ok, suite } from '../harness'
 import { elementNotation, resolveElementLoose } from '../../src/gal/ops'
-import { prettySymbol } from '../../src/gal/pretty'
+import { normalizeGreek, prettySymbol } from '../../src/gal/pretty'
 
 export function run(): void {
   suite('notation · 展示形态与记号回认')
@@ -133,5 +133,74 @@ export function run(): void {
     // `\alpha_{2}` 与 `\alpha_2` 都展示成 `α₂`；同一群里不该同时出现两者。
     // 构造不出来就只验 prettySymbol 的多对一性质（这是 ⓪ 层加唯一性判据的理由）。
     eq('两种 TeX 折叠成同一展示形态', prettySymbol('\\alpha_{2}'), prettySymbol('\\alpha_2'))
+  }
+
+  /* ══ 希腊字母：输入与匹配的闭环 ═══════════════════════════ */
+
+  /**
+   * 这一节的由来（2026-09-26，用户："关于 φ 这个希腊字符，你还没修啊"）。
+   *
+   * 现象：`\phi = 映射(…)` **建得出来**（输入框那侧过 `normalizeName`），
+   * 但 `ker(\phi)` **引不到**（求值那侧没归一）—— 而 `ker(φ)` 引得到。
+   * 用户看到的只是"有时候好使、有时候不好使"。
+   *
+   * 根因是**归一只做了一半**：建对象时归一、引用时不归一。
+   * 修法两道：两侧共用 `normalizeGreek`（`pretty.ts`），且把归一放到
+   * **造对象的最窄关口**（`build.ts` 拆名字处）——三个入口各自归一总会漏一个。
+   */
+  suite('notation · 希腊字母：输入与匹配（四种写法等价）')
+  {
+    const PHI = '\u03c6' // φ GREEK SMALL LETTER PHI（本项目的标准写法）
+    const PHISYM = '\u03d5' // ϕ GREEK PHI SYMBOL —— LaTeX 的 \phi 排出来是这个
+
+    // ① 归一本身：两个方向
+    eq('LaTeX 别名 \\phi → φ', normalizeGreek('\\phi'), PHI)
+    eq('\\varphi → φ', normalizeGreek('\\varphi'), PHI)
+    eq('符号变体 ϕ(U+03D5) → φ（从论文里复制来的是这个码位）', normalizeGreek(PHISYM), PHI)
+    eq('大写也有：\\Phi → Φ', normalizeGreek('\\Phi'), 'Φ')
+    eq('内嵌也认：ker(\\phi)', normalizeGreek('ker(\\phi)'), `ker(${PHI})`)
+    eq('变体与标准写法在句子中间同归一', normalizeGreek(`ord(A, ${PHISYM})`), `ord(A, ${PHI})`)
+
+    // ② 不能误伤：表里没有的命令、单反斜杠（集合差）、拉丁名字
+    eq('不认识的命令原样留着', normalizeGreek('A \\ B'), 'A \\ B')
+    eq('单反斜杠不动', normalizeGreek('\\'), '\\')
+    eq('拉丁对象名不受影响', normalizeGreek('G \\ H'), 'G \\ H')
+
+    // ③ 建对象：四种写法给**同一个 id**
+    const built = ['φ', '\\phi', '\\varphi', PHISYM].map((n) => {
+      const r = build([`${n} = 映射(C_6, C_3, a→2)`])
+      return r.objects[0]?.id ?? '（没建出来）'
+    })
+    ok('四种写法建出的 id 完全相同', new Set(built).size === 1, built.join(' | '))
+    eq('而且就是标准字符 φ', built[0], PHI)
+
+    // ④ 引用：四种写法**互相**引用都通（这条就是当初漏掉的半边）
+    const written = ['φ', '\\phi', '\\varphi', PHISYM]
+    written.forEach((n, i) => {
+      const r = build([`φ = 映射(C_6, C_3, a→2)`, `K = ker(${n})`])
+      eq(`用第 ${i + 1} 种写法引用 φ 建出的映射`, r.orderOf('K'), 2)
+    })
+
+    // ④' 反过来也要通：建的时候用 LaTeX 写法
+    const rev = build(['\\phi = 映射(C_6, C_3, a→2)', 'K = ker(φ)'])
+    eq('建时用 \\phi、引用时用 φ', rev.orderOf('K'), 2)
+
+    // ⑤ 元素级：展示形态与 LaTeX 写法落到同一个元素
+    const aut = build(['G = S_4', 'A = Aut(G)'])
+    const A = aut.byId('A')
+    if (A?.value.type === 'group') {
+      const g = A.value.group
+      const a1 = g.elements.find((e) => e.label === '\\alpha_1')
+      ok('自同构群里确有 \\alpha_1', !!a1, g.elements.slice(0, 4).map((e) => e.label).join(' '))
+      ok('敲展示形态 α₁ 认得出', !!a1 && resolveElementLoose(g, 'α₁')?.id === a1.id)
+      ok('敲 LaTeX 写法 \\alpha_1 也认得出', !!a1 && resolveElementLoose(g, '\\alpha_1')?.id === a1.id)
+    }
+
+    // ⑥ 重名检查也按归一后的名字算（否则 `φ` 与 `\phi` 能各建一个）
+    // 注意别用 `err('φ')` —— 它取的是**第一个**叫这名字的行（那是成功的第一行）。
+    const dup = build(['φ = C_6', '\\phi = C_3'])
+    eq('两行的名字归一后是同一个', dup.lineStates[1]?.name, 'φ')
+    eq('于是第二行被拦下', dup.lineStates[1]?.ok, false)
+    eq('理由就是重名', dup.lineStates[1]?.error, '名字「φ」重复定义')
   }
 }

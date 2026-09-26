@@ -135,6 +135,32 @@ const ids = await objIds()
 ok('`\\phi` 被接受，对象表里出现 φ', ids.some((x) => x.startsWith('φ')), JSON.stringify(ids))
 ok('没有求值失败的行（φ 是合法名字）', (await page.locator('.row-err').count()) === 0)
 
+/**
+ * **引用**这一半从前漏了（2026-09-26 用户："关于 φ 这个希腊字符，你还没修啊"）。
+ *
+ * 建的时候名字归一了（`ComposerOrb` 过 `normalizeName`），引用的时候没有 ——
+ * 于是 `ker(\phi)` 找不到那个叫 φ 的映射（报"ker(·) 需要一个映射对象"），
+ * 而 `ker(φ)` 找得到。用户看到的只是"有时候好使有时候不好使"。
+ * 四种写法（`φ` / `\phi` / `\varphi` / `ϕ`）现在必须**处处等价**。
+ */
+await addLine('K1', 'ker(\\phi)')
+await addLine('K2', 'ker(φ)')
+await addLine('K3', 'ker(\u03d5)') // ϕ：从论文 PDF 里复制来的通常是这个码位
+await page.waitForTimeout(340)
+
+const kerErrs = await page.evaluate(() =>
+  [...document.querySelectorAll('.row-err')].map((e) => e.textContent.trim()),
+)
+ok('LaTeX 写法 `ker(\\phi)` 引得到那个 φ', kerErrs.length === 0, JSON.stringify(kerErrs))
+const allRows = await objIds()
+ok('三种写法各建出一个核（引用都成功）', allRows.filter((x) => /^K\d/.test(x)).length === 3, JSON.stringify(allRows))
+ok(
+  '而且对象表里只有一个 φ（不是 φ 与 \\phi 各一个）',
+  allRows.filter((x) => /^[\u03c6\u03d5]/.test(x)).length === 1,
+  JSON.stringify(allRows),
+)
+await page.screenshot({ path: '../../docs/assets/u23-greek-phi.png' })
+
 /* ══ ⑨ 报错分清「没这功能」与「打错了」 ═══════════════════ */
 
 await typeExpr('极大子群(G)')

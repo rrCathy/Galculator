@@ -1,6 +1,6 @@
 import { createGroupFromSymbol, parseGroupNotation } from '@groupviz/core'
 import { INFIX_SYMBOLS, INFIX_TABLE, OPS, opByCall, type OpArg, type OpDef } from './ops'
-import { prettySymbol } from './pretty'
+import { normalizeGreek, prettySymbol } from './pretty'
 import type { GalValue } from './value'
 import type { GalObject } from './types'
 
@@ -88,6 +88,18 @@ function normalizeAngle(s: string): string {
 export function normalizeExpr(s: string, angle = true): string {
   let t = s.trim()
   for (const [re, to] of UNICODE_ALIASES) t = t.replace(re, to)
+  /**
+   * **希腊字母归一**（与名字那一侧共用 `normalizeGreek`）。
+   *
+   * 这是"输入与匹配"闭环的另一半，缺了它就是这条真漏洞：
+   * 建对象时名字归一了（`ComposerOrb` 过 `normalizeName`），**引用时却没有** ——
+   * 于是 `φ = 映射(…)` 建出来的对象，用 `ker(\phi)` 引不到（"需要一个映射对象"），
+   * 而用 `ker(φ)` 就行；用户看到的只是"有时候好使有时候不好使"。
+   *
+   * 归一之后 `\phi` / `\varphi` / `φ` / `ϕ` 四种写法**处处等价**——对象名、引用、
+   * 元素记号（`ord(G, α₂)` 与 `ord(G, \alpha_2)` 同值）。
+   */
+  t = normalizeGreek(t)
   if (angle) t = normalizeAngle(t)
   return t.replace(/\s+/g, ' ').trim()
 }

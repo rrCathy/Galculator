@@ -37,6 +37,41 @@ export const GREEK: Record<string, string> = {
   Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
 }
 
+/**
+ * 希腊字母的**符号变体**（数学排版用的那些码位）→ 上表用的标准字符。
+ *
+ * 为什么要它：LaTeX 的 `\phi` 排出来是 **ϕ（U+03D5）**，而 `\varphi` 排出来才是
+ * φ（U+03C6）—— 本表统一用后者（与 `tex.ts` 的 `toTex` 方向一致）。于是用户
+ * 从别处（论文 PDF / 网页 / 别的编辑器）**复制**来的往往是 U+03D5 ——
+ * 肉眼一模一样，代码点却不同，不归一就是"看着对、实则两个字符"。
+ *
+ * 这五个是三对希腊字母的"排版变体"码位，与 `varsigma`（ς 自成一体）不同。
+ */
+const GREEK_VARIANTS: Record<string, string> = {
+  '\u03d1': 'θ', // ϑ theta symbol
+  '\u03d5': 'φ', // ϕ phi symbol
+  '\u03d6': 'π', // ϖ pi symbol
+  '\u03f1': 'ρ', // ϱ rho symbol
+  '\u03f5': 'ε', // ϵ epsilon symbol
+}
+
+/**
+ * 把一段文本里的希腊字母**统一成一种写法**。输入与匹配的闭环靠它合上。
+ *
+ * 两个方向缺一不可：
+ *   · **LaTeX 别名** `\phi` / `\varphi` → φ（普通键盘敲不出 φ，但敲得出 `\phi`）
+ *   · **符号变体** ϕ → φ（从别处复制来的是变体码位）
+ *
+ * **只认上表里的名字**，别的一律不动 —— 于是集合差 `A \ B` 里的那个反斜杠
+ * 不会被误伤（`B` 不在表里）。`\cdot` 也安全（`cdot` 不在表里，且它在
+ * `UNICODE_ALIASES` 里已经被更早地换成 `·`）。
+ */
+export function normalizeGreek(s: string): string {
+  return s
+    .replace(/\\([A-Za-z]+)/g, (m, name: string) => GREEK[name] ?? m)
+    .replace(/[\u03d1\u03d5\u03d6\u03f1\u03f5]/g, (c) => GREEK_VARIANTS[c] ?? c)
+}
+
 /** 整数 → 上标形态（`2` → `²`，`12` → `¹²`）。用于阶分解这类展示。 */
 export function superscript(n: number): string {
   return mapChars(String(n), SUP)

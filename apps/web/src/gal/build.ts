@@ -6,6 +6,7 @@ import {
   type Subgroup,
 } from '@groupviz/core'
 import { evalExpr, looksLikeRelation } from './evalDef'
+import { normalizeName } from './naming'
 import { prettySymbol } from './pretty'
 import type { GalObject } from './types'
 
@@ -54,7 +55,15 @@ export function buildLines(lines: string[]): {
       })
       return
     }
-    const name = raw.slice(0, eq).trim()
+    /**
+     * 名字过一遍希腊字母归一（`\phi` → `φ`）。
+     *
+     * **必须在这一层做**（而不是只在前端入口）：三个入口（输入框 / 映射编辑器 /
+     * 将来别的）各自归一，总会漏一个 —— 漏掉的那个建出的对象会顶着 `\phi`
+     * 字面串当 id，于是"建得到、引不到"。归一放在**造对象的最窄关口**，
+     * 后面的 id、重复检查、引用查找就全链条一致了。
+     */
+    const name = normalizeName(raw.slice(0, eq).trim())
     const rhs = raw.slice(eq + 1).trim()
     if (!name) {
       lineStates.push({ index, raw, name: '', ok: false, error: '等号左侧缺少名字' })

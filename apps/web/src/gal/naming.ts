@@ -1,5 +1,5 @@
 import { OPS } from './ops'
-import { GREEK, subscript } from './pretty'
+import { normalizeGreek, subscript } from './pretty'
 
 /**
  * 自动命名与"名字体检"（交互模型 §3.2）。
@@ -40,21 +40,21 @@ export function isReservedName(name: string): boolean {
 const NAME_RE = /^[A-Za-z0-9_\u4e00-\u9fff\u0370-\u03ff\u1f00-\u1fff]+$/
 
 /**
- * **LaTeX 写法的希腊字母 → 真字符**（`\phi` → `φ`、`\varphi` → `φ`）。
+ * **名字里的希腊字母归一**（`\phi` → `φ`、`ϕ` → `φ`）。
  *
  * 为什么必须有这一条：整个项目到处用 LaTeX（core 的符号本身就是 TeX），
  * 证明模板的定义行里写着 `φ = 映射(G, H, a→2)`——而**普通键盘敲不出 φ**。
  * 于是"展示成什么样，就得能照着敲回去"这条契约就反着破了：
  * 系统生成一个用户输不进来的记号。
  *
- * 这里只做**单个**希腊字母（`\phi` / `\alpha` / `\Gamma`），不做全套 LaTeX——
- * 名字是标识符，不是排版内容。变体按 `prettySymbol` 的同一张表归一
- * （`\varepsilon` 与 `\epsilon` 都成 `ε`），否则"显示 → 再敲回去"会来回变形。
+ * 归一本身（LaTeX 别名 + 符号变体）在 `pretty.ts#normalizeGreek`——
+ * **表达式那一侧用的是同一个函数**（`evalDef.ts#normalizeExpr`）。
+ * 两边共用一个，是为了让"敲进去的名字"与"引用它时敲的名字"必然相等：
+ * 这曾经是个真漏洞（建的时候归一、引用的时候不归一，于是 `\phi = …` 建出来的
+ * 对象用 `\phi` 引不到）。
  */
 export function normalizeName(raw: string): string {
-  const t = raw.trim()
-  const m = /^\\([A-Za-z]+)$/.exec(t)
-  return m && GREEK[m[1]] ? GREEK[m[1]] : t
+  return normalizeGreek(raw.trim())
 }
 
 /** 是否像一个名字（用于"整行粘贴"的拆分判断）。 */
