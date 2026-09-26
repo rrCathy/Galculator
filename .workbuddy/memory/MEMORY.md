@@ -6,11 +6,9 @@
 ## 1. 遗留（详单在 ROADMAP）
 - **可用性缺口**（`docs/USABILITY.md` §6，状态列在表里）：①②③④⑤⑥⑦⑨⑩ 已修（U18/U19/U20/U21）；剩
   **⑧** 伴生边（π/↪）还不是一等对象 · **⑪** core 缺失项（极大子群 / Inn / Hall / 合成列 / Burnside / φ(n) / gcd / ⋊）。
-- **第五批（下一件，补回归）**：重写 U10 走查（拖动/缩放/格点/钉住**整个功能零回归**——
-  U21 只顺手验了"拖动仍会钉住"，它**依然没有独立走查**）· 径向菜单走查 ·
-  `grid.ts`/`interaction.ts` 的语义层断言。
-- **第五批（补回归）**：重写 U10 走查（拖动/缩放/格点/钉住**整个功能零回归**）· 径向菜单走查 ·
-  `grid.ts`/`interaction.ts` 的语义层断言。
+- **第五批 ✅（U22，补回归）**：U10 走查 `e2e/grid-drag.mjs`(42) · 径向菜单 `e2e/radial-menu.mjs`(51) ·
+  `suites/grid.ts`(48) · `suites/interaction.ts`(81) —— 全部进了 `verify:e2e` / `run.ts`。
+  `docs/USABILITY.md §7` 只剩 **`ui/MapBuilder`** 没线。
 - **草稿画布**（用户构思，已给设计推演）：判据是"**位置有没有语义**"——交换图上位置是信息
   （格点 + 吸附 + 自动布局），草稿上不是（自由摆放 + 不画结构边 + 不做自动布局）。
   要定三点：分页 vs 同屏（推荐分页）· 产出就地留下 · 不连结构边。
@@ -70,6 +68,13 @@
 - **断言里不许 `JSON.stringify(值)`**：`Group.generators[].inverse` 是环 → `Converting circular structure to JSON`，
   **整份回归崩在那一行**。写 `describeValue()` 只摘 symbol/order/index/isNormal。
 - **几何判据要成对**：只判"竖直不穿行"会让"水平穿行"藏很久（实测藏了 7 天）。
+- **走查的场地有两份入场**：`/` **自带示例定义**（一进来就有 `S₄ → 底集(Syl) → Orb/Stab` 那张图），
+  `?empty=1` 才是空画布。要空画布就得显式带参；反过来在 `/` 上按"空"写断言会撞
+  「名字「G」已被占用」（U22 查了三轮才查明）。
+- **判据别用"节点数 +1"**：`build.ts` 的**隐式补点**（第一同构那套补出 `f/ker`）会被显式建出的
+  `ker` **取代** → 数量不变才是对的。比 **id 列表**，别比总数。
+- **格点走查用 `getBBox()`**（格点与节点都在 viewBox 空间，直接比 → 判据敢收到 < 0.5）；
+  **"铺满"看 col × row 规模，不看格点总数**（视口平移一点就会进出格线：实测 20 → 16）。
 - **画布上的文字必须 `user-select: none`**：节点标签是 KaTeX 的 HTML（`foreignObject` 里），
   拖着一个节点**从另一个节点的标签上经过**时浏览器判定"开始选文本"→ `pointercancel` **把手势掐断**
   （U10 的"拖动+吸附"同样暴露）。诊断口径：把手势收尾收到的事件类型打出来。
@@ -127,66 +132,12 @@
   凑一起"那条路（第四批要做）；②不上画布的中间产物选不中 → 操作点不到；③结论区"识别结果 ≠ 自身符号才说"
   → 结构记号（`C₂`、`C₂×C₂`）的构造物**永远沉默**（判据已改成看 `node.opId`；`isoSymbol` 是死代码）。
 
-## 5. 参考：core v2.3.0 速查＋坑
-> 包在 `node_modules/.pnpm/@groupviz+core@2.3.0/...`，**先 grep `*.d.ts` 再动手**（踩过：误以为共轭作用要自己实现）。
-> 下面只记**容易找错的那几个**，不是全表。
+## 5. 参考（**按需读**，不常驻本文件）
 
-**入口** `parseGroupNotation`（统一入口；`createGroupFromSymbol` 不吃裸符号）· `computeLatticeLayout` ·
-`detectIsomorphicGroup`（超限 null；**core 的 D₃ 就是 S₃**）· `getAllSmallGroups`/`getSmallGroupBySymbol`/`getPrecomputed`。
-**Sylow** `findSylowSubgroups`（与 op `Syl_p` **逐项同序**）`conjugateSubgroup`（返回**排序**后的数组）。
-**作用** `computeOrbits` `computeStabilizers` `computeConjugationPerms` `computeLeftTranslationPerms` `computeCosetActionPerms`。
-**子群** `buildSubgroupGroup(parent, elements, symbol, gens?)`（元素 id 沿用母群）· `subgroupStructureSymbol`（**返回 TeX**）·
-`subgroupSetKey(elementIds)`（**收 id 不收元素**）· `subgroupFromElementIds`（**静默**，见坑）· `isSubgroupElementSet` ·
-`findAllNormalSubgroups` · `getCentralizer`/`getNormalizer`/`getGroupCenter` · `computeQuotientGroup`。
-**映射** `Homomorphism`（**不要另立结构**）· `extendFromGenerators`/`extractGeneratorMapping`（key 是**元素 id**）·
-`verifyHomomorphism`（violation 全是**元素 id**）`computeKernelFromMapping`/`computeImageFromMapping` · `autoBuildMapping`。
-**元素** `resolveElement`（认 id/label/value/循环记号）。**阈值**（guards.ts）ENUMERATION 144 · SYLOW_MAX_ORDER 144。
+- **core v2.3.0 速查＋坑**（入口 / Sylow / 作用 / 子群 / 映射的 API 与静默失败清单）
+  与 **代码落点**（`apps/web/src/` 各文件的职责与关键导出）
+  → 见 **`.workbuddy/memory/REFERENCE.md`**。
 
-### 5.1 core 的坑（全是静默失败）
-- `extendFromGenerators`/`extractGeneratorMapping` 的 Map key 是**生成元元素的 id**，传 `gen.name` 得 `null` 且无报错。
-- `createGroupFromSymbol` 不吃裸符号 → 先过 `parseGroupNotation`；群符号是 `\operatorname{Aut}(S_{4})` 这种完整 TeX。
-- `C_n` 是**加法群**（生成元 `a`、元素 `0..n-1`），课本写乘法 `r^k` → 本地三级回退（精确 → 生成元的幂 →
-  单生成元群单字母别名）。
-- `subgroupStructureSymbol` 返回 TeX → 展示前必须过 `prettySymbol`。
-- **商群元素 id `qcoset-<i>` 的 `i` 只在自家母群里有意义**（= 陪集序）；跨商群按 id 匹配会**静默命中另一个陪集**
-  （实测 9 组里 5 组侥幸通过）。跨群比较用 **`cosetMemberLabels`** 做语义键。
-- **`subgroupFromElementIds` 对认不得的引用是静默的**（丢掉 → 返回平凡子群）。判包含必须另加两道关：
-  id 全覆盖 + 校验出的阶 = `|H|`（`gal/relations.ts#containment`）。
-- **A₄ 的 n₂ = 1（V₄ 正规）、n₃ = 4** —— 演示 Sylow II/III 要用 p = 3。
-- **S₄ 的生成元是 `s12`（σ₁₂）与 `c`（σ₁₂₃₄）**；S₄ ↠ S₃ 用 `映射(G, S_3, s12→23, c→13)`（两像**必须是对换且不同**）。
-  `c` 是 4-循环 → 像的阶只能整除 4 → S₃ 里就是对换，所以"`c ↦ 3-循环`"永远报不是同态；两像相同则退化成符号映射（ker = A₄）。
-
-## 6. 参考：代码落点（apps/web/src/）
-- `gal/`：`value`(8 值类型 + `sortOf`) `ops`(注册表 34 条：mechanism/call/infix/params/arity/optional/variadic/
-  editor/result/run + `opsFor`/`paramAccepts`) `naming` `compose` `interaction`(idle→selected→menu→pending/fill)
-  `evalDef` `build`(`firstIsoObjects` 隐式补点) `derive`(`arrowOf`/`alongsideEdges`/`computeLevels`) `insights`
-  `relations` `tex` `pretty` `numeric` `grid` `proof` · `ui/`：`CanvasView` `DockPanel`（**收起时 body 不渲染**）
-  `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb`（**`.orb-center` 与 MultiOrb 撞类名**）
-  `ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex` `ProofDock`
-- **证明（`gal/proof.ts`）**：`ProofStep{kind,text,tex,line,highlight}` + `ProofTemplate{slots,defaults,suggest?,
-  build(group?,p?,extra?)}` + 5 条模板（Sylow I/II/III · ORBIT_STABILIZER · FIRST_ISO）。
-  **支点：每步 `line` = 一整行定义 → 交给现成的求值器**（零新求值机制、机器写的行可见可改）；数字由 `build()` 真算。
-  `extra` 装参数槽值（全是文本）；`templateReady` 与 `build` 共用同一批纯函数。**`SYLOW_III` 的关键是换主角**：
-  `G ↷ Ω` 只给 `n_p | m`，`n_p ≡ 1 (mod p)` 要 `P ↷ Ω`。**OST** = 共轭作用在自身上（轨道 = 共轭类、稳定子 =
-  中心化子，两路交叉核对）。**FirstIso** = 只写 3 行，`φ/ker` 与 `φ/im` 靠 `build.ts` 自动补 ——
-  **模板绝不产出 `ker`/`im` 的定义行**。
-- **关系层（`gal/relations.ts`，U19）**：`relationsFor(node, table)` → kind = `kernel`|`image`|`quotient`|`equal`|
-  `subgroup`|`contains`|`derived`。两条来源：**① `node.sources` + `node.opId`**；**② `containment(H, G)`**
-  三道关（id 全覆盖 → `subgroupFromElementIds` → **阶相等**）再 `findAllNormalSubgroups` + `subgroupSetKey` 判 ⊴。
-  **指数 1 单列成 `equal`**（元素完全相同 = 同一个群）。面板落点：`InfoDock` 在**结论层与 tab 之间**插一节「关系」。
-- **`relation` 值类型（U20）**：`GalRelation{from,to,index,isNormal,normalUnknown}`；`sortOf → 'edge'`
-  （**是边不是顶点**，不占节点不占行）。**`像(f, H)`** = `image` op 的**可选第二参**（`arity 1 / optional 1`）：
-  同一个 op，别名只指向一条路；建出**靶群里的子群**（第二同构的 `H′`）；**叙述分家**——两参说 `= f(H)`、
-  单参说 `= im f`。**`包含(H, G)`**（`call: ['包含','include','subset']`、`infix: ['⊆']`）→ 一条
-  `gedge-relation` 边，`label = isNormal ? '⊴' : '↪'`，带 `objectId`（**可点选**）；判定复用 `containment()`
-  （判据同源），**声明的压过自动生成的同向 `↪`**（不叠两条）。**正规性是算出来的不是声明的** →
-  没有"声明正规子群"这个操作；**指数 1 拒收**（包含是严格小于）。三种写法等价：`A ⊆ G` / `A⊆G` / `包含(A, G)`。
-- **拖拽连线的落点（U21）**：`gal/interaction.ts#pairOps(a,b)` → `PairCandidate{op, swapped}[]`
-  （`PAIR_PRIORITY` 定序；**`contains` 单独走两个方向各实判一次**，判据定顺序）；
-  `CanvasView` 的手势 `mode:'connect'`（**起点/落点都能是边背后的对象** → 收了 prop `objects`）+
-  底栏「连线」开关/Shift；`App.dispatchPairOp` 做"正序不通就反序"的兜底；
-  信息面板「可做」= `InfoDock` 的 `singleOps`/`onRunOp`。
-  **`ParamType` 拆成三个**（U21）：`subset`（单个数集，含"恰好一个成员"的列表）/ `setlike`（**只有 `底集`** 收整个子群集列表）/ `omega`（Ω，走 `omegaArgOf`）。
-- **列序规则（U20 换掉）**：水平边当约束图 → **分量内穷举列序，取"两端之间夹着别的组"的边数最少者**；
-  **并列只接受严格更优**（布局稳，多一条边不重排）；分量 > 7 保持原序**不猜**。
-  换掉的是"夹在中间的组挪到行尾"——它在**两条水平边共用一个端点**时自相打架。
+为什么搬出去：这两节加起来 7.4K 字节，只在动手查 API / 找函数时才用得上，
+而本文件的注入有上限 —— 留在里面会**把前四节挤掉**（截断从末尾开始），得不偿失。
+文件头的规则仍然是"**细节一律在仓库里**"：真要找什么，`grep` 比这份清单更准。

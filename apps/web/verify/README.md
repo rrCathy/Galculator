@@ -8,7 +8,7 @@
 
 | 段 | 内容 | 位置 |
 |---|---|---|
-| **语义层** | 纯逻辑断言：注册表 / 求值 / 派生图 / 结论层 | `verify/run.ts` + `verify/suites/*.ts` |
+| **语义层** | 纯逻辑断言：注册表 / 求值 / 派生图 / 结论层 / 格点与吸附 / 交互状态机 | `verify/run.ts` + `verify/suites/*.ts`（`grid` · `interaction` 是 U22 补的）|
 | **几何层** | 真浏览器：DOM 里读节点坐标与箭头 marker，验硬规范 | `verify/e2e/*.mjs` |
 
 期望值一律**来自数学**（手算的理论值），不从运行结果里抄——否则测试永远通过。
@@ -37,6 +37,8 @@ node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报�
 node verify/e2e/relations.mjs         # 关系层：用户的 S₄↠S₃ 剧本（U19）
 node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G（U20）
 node verify/e2e/connect.mjs           # 拖拽连线 + 面板「可做」（U21，真鼠标拖）
+node verify/e2e/grid-drag.mjs         # 格点 / 拖动吸附 / 平移 / 缩放 / 复位（U10 的补线，U22）
+node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -86,3 +88,8 @@ node verify/e2e/connect.mjs           # 拖拽连线 + 面板「可做」（U21�
 27. **`PairCandidate.swapped` 的语义**：`false` = 参数顺序与"从 A 拖到 B"一致；`true` = **要反过来摆**（如从 A₄ 拖向 `f`，而 `像(f, H)` 的 f 必须在前面）。别写反 —— 它决定了 `dispatchPairOp` 第一次试哪个顺序。
 28. **走查里拖节点要先确认"落点上没有浮层"**：左上面板是浮层（画布不让位），节点可能正好压在它底下，`page.mouse.down` 打到的是面板、拖动当然不动。`e2e/connect.mjs` 的 `pickClear()` 用 `document.elementFromPoint` 挑一个露在外面的节点 —— 这是**走查的坑不是产品的坑**。
 29. **断言绑"自动命名"很脆**：新对象的名字由 `nextAutoName` 生成（`B`/`D`/`I`…），不由你指定。所以断言要绑**语义**：行数变多 / 画布上出现某个 label / 某条边出现，而不是 `Ω` 这种你以为会有的名字。
+
+30. **`/` 与 `?empty=1` 是两份不同的入场，而不是"同一个页面的两种状态"**：`/` **自带示例定义**（一进来就有 `S₄ → 底集(Syl) → Orb/Stab` 那张图），`?empty=1` 才是空画布。走查要空画布就得显式带参数；反过来，在 `/` 上按"空"的前提写断言会撞上 composer 报「名字「G」已被占用」（`e2e/grid-drag.mjs` 第 ⑦ 段踩过，查了三轮才查明）。
+31. **判据别用"节点数 +1"**：`build.ts` 会**隐式补点**（第一同构那一套自动补出 `f/ker` 之类），显式建出的 `ker` 会**取代**它 —— 所以**数量不变才是对的**。用 id 列表比对（`'G,H,A,B,f/ker' → 'G,H,A,B,I'`）一眼就能看出是"新增"还是"取代"；只比总数会得到"点击无效"的错误结论（`e2e/radial-menu.mjs` 第 ⑨ 段）。
+32. **格点走查统一用 `getBBox()` 取 viewBox 坐标**：`.grid-dot` 是 `<circle cx/cy>`（本来就是 viewBox 坐标），节点用 `getBBox()` 拿到的也是 —— **同一空间直接比**，比经 `getBoundingClientRect` 换算少一层误差（"对象精确落在格点上"这条判据因此能收到 **< 0.5**）。另外 **"格点铺满"的判据是 col × row 的规模，不是格点总数**：视口平移一点，边界上进出视口的格线数量就会变（实测同一张图 20 → 16 个）。
+33. **没有 `<svg>` 也是合法状态**：空画布时 `CanvasView` 走占位分支、**连 svg 都不渲染**。所以读数函数要容忍 `svg.canvas === null`（返回空集合），别让它把整份走查崩在第一行。

@@ -16,6 +16,8 @@ import { run as algebra } from './suites/algebra'
 import { run as notation } from './suites/notation'
 import { run as proof } from './suites/proof'
 import { run as usability } from './suites/usability'
+import { run as grid } from './suites/grid'
+import { run as interaction } from './suites/interaction'
 
 diagram()
 firstIso()
@@ -24,6 +26,8 @@ algebra()
 notation()
 proof()
 usability()
+grid()
+interaction()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1
