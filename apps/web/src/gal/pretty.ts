@@ -72,6 +72,65 @@ export function normalizeGreek(s: string): string {
     .replace(/[\u03d1\u03d5\u03d6\u03f1\u03f5]/g, (c) => GREEK_VARIANTS[c] ?? c)
 }
 
+/**
+ * 上下标的**反向**表（`₄` → `4`）。
+ *
+ * 为什么放在这里：它与上面的 `SUB` / `SUP` 是**同一件事的两半**
+ * （正向：`4` → `₄`，展示用；反向：`₄` → `4`，回认用）。写两份表就意味着
+ * "能显示成什么样"与"能敲回去什么"会慢慢对不上 —— 而本项目恰好有一条铁律
+ * 叫「**展示成什么样，就得照着敲回去**」。`tex.ts` 渲染回 TeX 也消费这张表。
+ *
+ * 比正向表多几个字母（`a`/`e`/`h`/`l`/`o`/`t`/`u`/`v`/`x`）——正向表只做
+ * 它实际会用到的，反向表要尽量宽（用户可能从任何地方复制来一个 `Aᵤ`）。
+ */
+export const SUB_FROM: Record<string, string> = {
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
+  '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
+  '₊': '+', '₋': '-', '₌': '=', '₍': '(', '₎': ')',
+  'ₐ': 'a', 'ₑ': 'e', 'ₕ': 'h', 'ᵢ': 'i', 'ⱼ': 'j', 'ₖ': 'k', 'ₗ': 'l',
+  'ₘ': 'm', 'ₙ': 'n', 'ₒ': 'o', 'ₚ': 'p', 'ᵣ': 'r', 'ₛ': 's', 'ₜ': 't',
+  'ᵤ': 'u', 'ᵥ': 'v', 'ₓ': 'x',
+}
+
+/** 上标的反向表（`²` → `2`）。与 `SUB_FROM` 同理。 */
+export const SUP_FROM: Record<string, string> = {
+  '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
+  '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
+  '⁺': '+', '⁻': '-', '⁼': '=', '⁽': '(', '⁾': ')', 'ⁿ': 'n', 'ⁱ': 'i',
+}
+
+/**
+ * 上下标字符 → 引擎记号（`S₄` → `S_4`、`C₂×C₂` → `C_2×C_2`）。
+ *
+ * **这条是"看得见却打不出来"的最后一块**：元素级早就修了
+ * （`ops.ts#resolveElementLoose` 的 ⓪ 层拿 `prettySymbol` 回认），
+ * 但**群记号级**一直没修 —— 画布上节点标签写的是 `S₄`，
+ * 用户照着抄回去建群却报"无法识别：S₄"（2026-09-26 实测）。
+ *
+ * 连续的同类下标合并成一个（`C₁₂` → `C_12`，不是 `C_1_2`）——
+ * 与 `tex.ts` 渲染回 `_{12}` 的分组口径一致。
+ */
+export function normalizeScript(s: string): string {
+  let out = ''
+  let mode: 'sub' | 'sup' | null = null
+  for (const c of s) {
+    const sub = SUB_FROM[c]
+    const sup = sub === undefined ? SUP_FROM[c] : undefined
+    const kind: 'sub' | 'sup' | null = sub !== undefined ? 'sub' : sup !== undefined ? 'sup' : null
+    if (kind === null) {
+      mode = null
+      out += c
+      continue
+    }
+    if (mode !== kind) {
+      out += kind === 'sub' ? '_' : '^'
+      mode = kind
+    }
+    out += kind === 'sub' ? sub : sup
+  }
+  return out
+}
+
 /** 整数 → 上标形态（`2` → `²`，`12` → `¹²`）。用于阶分解这类展示。 */
 export function superscript(n: number): string {
   return mapChars(String(n), SUP)

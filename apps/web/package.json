@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "verify": "vite build --ssr verify/run.ts --outDir .tmp-verify/vout --logLevel warn && node .tmp-verify/vout/run.js",
-    "verify:e2e": "node verify/e2e/dock-layout.mjs && node verify/e2e/layout-spec.mjs && node verify/e2e/first-iso-square.mjs && node verify/e2e/third-iso.mjs && node verify/e2e/tex-render.mjs && node verify/e2e/proof-step.mjs && node verify/e2e/proof-sylow3.mjs && node verify/e2e/proof-params.mjs && node verify/e2e/proof-m3.mjs && node verify/e2e/usability-fixes.mjs && node verify/e2e/relations.mjs && node verify/e2e/relation-ops.mjs && node verify/e2e/connect.mjs && node verify/e2e/grid-drag.mjs && node verify/e2e/radial-menu.mjs"
+    "verify:e2e": "node verify/e2e/dock-layout.mjs && node verify/e2e/layout-spec.mjs && node verify/e2e/first-iso-square.mjs && node verify/e2e/third-iso.mjs && node verify/e2e/tex-render.mjs && node verify/e2e/proof-step.mjs && node verify/e2e/proof-sylow3.mjs && node verify/e2e/proof-params.mjs && node verify/e2e/proof-m3.mjs && node verify/e2e/usability-fixes.mjs && node verify/e2e/relations.mjs && node verify/e2e/relation-ops.mjs && node verify/e2e/connect.mjs && node verify/e2e/grid-drag.mjs && node verify/e2e/radial-menu.mjs && node verify/e2e/copy-label.mjs"
   },
   "dependencies": {
     "@groupviz/core": "^2.3.0",

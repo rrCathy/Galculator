@@ -18,8 +18,9 @@
  *   - 系统生成的提示串（`元素：…`）**不许出现反斜杠**（那是引擎记号漏到展示层）。
  */
 import { build, eq, ok, suite } from '../harness'
+import { normalizeExpr } from '../../src/gal/evalDef'
 import { elementNotation, resolveElementLoose } from '../../src/gal/ops'
-import { normalizeGreek, prettySymbol } from '../../src/gal/pretty'
+import { normalizeGreek, normalizeScript, prettySymbol } from '../../src/gal/pretty'
 
 export function run(): void {
   suite('notation · 展示形态与记号回认')
@@ -202,5 +203,59 @@ export function run(): void {
     eq('两行的名字归一后是同一个', dup.lineStates[1]?.name, 'φ')
     eq('于是第二行被拦下', dup.lineStates[1]?.ok, false)
     eq('理由就是重名', dup.lineStates[1]?.error, '名字「φ」重复定义')
+  }
+
+  /* ══ 群记号的展示形态也能照着敲回去 ═══════════════════════ */
+
+  /**
+   * 这一节的由来（2026-09-26）：**元素级**的"展示 → 回认"早就有了（本文件上半部分），
+   * 但**群记号级**一直没有 —— 画布上节点标签写的是 `S₄`，用户照着抄回去建群，
+   * 报的是"无法识别：S₄"。**面板、节点标签、文档里给的记号，全都是敲不回来的。**
+   *
+   * 判据比元素级简单：两种写法必须建出**同阶的群**（阶相同就说明落到同一个群上；
+   * 群符号没有"两个不同群同阶"的歧义问题——记号本身是唯一的）。
+   */
+  suite('notation · 群记号：展示形态能照着敲回去')
+  {
+    const pairs: [string, string][] = [
+      ['S_4', 'S₄'], ['S_3', 'S₃'], ['A_4', 'A₄'], ['A_5', 'A₅'],
+      ['D_4', 'D₄'], ['C_6', 'C₆'], ['C_12', 'C₁₂'],
+      ['Q_8', 'Q₈'], ['S_6', 'S₆'],
+      ['C_2 x C_2', 'C₂×C₂'], ['Z_6', 'Z₆'],
+    ]
+    for (const [eng, pretty] of pairs) {
+      const a = build([`X = ${eng}`])
+      const b = build([`Y = ${pretty}`])
+      ok(
+        `「${pretty}」不报"无法识别"`,
+        !!b.orderOf('Y'),
+        b.line('Y')?.error ?? '（没给出阶）',
+      )
+      eq(`「${pretty}」与「${eng}」同阶`, b.orderOf('Y'), a.orderOf('X'))
+    }
+
+    // ── 归一本身 ──
+    eq('S₄ → S_4', normalizeExpr('S₄'), 'S_4')
+    eq('Z₆ → Z_6', normalizeExpr('Z₆'), 'Z_6')
+    eq('C₂×C₂ → C_2 x C_2（下标与乘号一起还原）', normalizeExpr('C₂×C₂'), 'C_2 x C_2')
+    eq('C₁₂ → C_12（连续下标合并成一个，不是 C_1_2）', normalizeScript('C₁₂'), 'C_12')
+    eq('上标也还原（C₂² → C_2^2）', normalizeScript('C₂²'), 'C_2^2')
+
+    // ── 不能误伤 ──
+    eq('没有上下标的原样不动', normalizeExpr('GL(2,3)'), 'GL(2,3)')
+    eq('普通数字不是下标', normalizeExpr('C_12'), 'C_12')
+
+    // 元素记号 `α₂` 归一成 `α_2` 之后，仍要能被元素回认接住（⓪ 层按**展示形态**比）。
+    // 这条是回归保护：新加的归一不能把已经修好的元素回认弄坏。
+    const aut = build(['G = S_4', 'A = Aut(G)'])
+    const A = aut.byId('A')
+    if (A?.value.type === 'group') {
+      const ag = A.value.group
+      const a1 = ag.elements.find((e) => e.label === '\\alpha_1')
+      ok('自同构群里确有 \\alpha_1', !!a1)
+      if (a1) {
+        eq('归一后的 α_1 仍命中同一个元素', resolveElementLoose(ag, normalizeScript('α₁'))?.id, a1.id)
+      }
+    }
   }
 }

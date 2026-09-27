@@ -9,26 +9,19 @@
  * 转换是保守的：认得出就转，认不出就原样留着（KaTeX 的 `throwOnError: false`
  * 会把认不出的部分画成红字，比整行退化成纯文本更容易发现）。
  */
+import { SUB_FROM, SUP_FROM } from './pretty'
 
 /* ── 上下标 ────────────────────────────────────────────── */
 
-const SUB_CHARS: Record<string, string> = {
-  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
-  '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9',
-  '₊': '+', '₋': '-', '₌': '=', '₍': '(', '₎': ')',
-  'ₐ': 'a', 'ₑ': 'e', 'ₕ': 'h', 'ᵢ': 'i', 'ⱼ': 'j', 'ₖ': 'k', 'ₗ': 'l',
-  'ₘ': 'm', 'ₙ': 'n', 'ₒ': 'o', 'ₚ': 'p', 'ᵣ': 'r', 'ₛ': 's', 'ₜ': 't',
-  'ᵤ': 'u', 'ᵥ': 'v', 'ₓ': 'x',
-}
-
-const SUP_CHARS: Record<string, string> = {
-  '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4',
-  '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9',
-  '⁺': '+', '⁻': '-', '⁼': '=', '⁽': '(', '⁾': ')', 'ⁿ': 'n', 'ⁱ': 'i',
-}
-
-const SUB_RE = new RegExp(`[${Object.keys(SUB_CHARS).join('')}]+`, 'g')
-const SUP_RE = new RegExp(`[${Object.keys(SUP_CHARS).join('')}]+`, 'g')
+/**
+ * 表在 `pretty.ts` —— 与**展示方向**的正向表（`4` → `₄`）搁在一处。
+ *
+ * 同一件事写两张表，"能显示成什么样"与"能敲回去什么"就会慢慢对不上，
+ * 而本项目有条铁律叫「展示成什么样，就得照着敲回去」。这里只负责把它们
+ * 渲染成 TeX 的 `_{…}` 形态（回认用的 `_x` 形态见 `normalizeScript`）。
+ */
+const SUB_RE = new RegExp(`[${Object.keys(SUB_FROM).join('')}]+`, 'g')
+const SUP_RE = new RegExp(`[${Object.keys(SUP_FROM).join('')}]+`, 'g')
 
 /* ── 运算符与希腊字母 ──────────────────────────────────── */
 
@@ -128,8 +121,8 @@ export function toTex(label: string): string {
   let s = label
 
   // ① Unicode 上下标 → _{...} / ^{...}
-  s = s.replace(SUB_RE, (m) => `_{${[...m].map((c) => SUB_CHARS[c] ?? c).join('')}}`)
-  s = s.replace(SUP_RE, (m) => `^{${[...m].map((c) => SUP_CHARS[c] ?? c).join('')}}`)
+  s = s.replace(SUB_RE, (m) => `_{${[...m].map((c) => SUB_FROM[c] ?? c).join('')}}`)
+  s = s.replace(SUP_RE, (m) => `^{${[...m].map((c) => SUP_FROM[c] ?? c).join('')}}`)
 
   // ② 运算符 / 希腊字母
   for (const [from, to] of SYMBOLS) {

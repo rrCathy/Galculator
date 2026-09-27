@@ -1,6 +1,6 @@
 import { createGroupFromSymbol, parseGroupNotation } from '@groupviz/core'
 import { INFIX_SYMBOLS, INFIX_TABLE, OPS, opByCall, type OpArg, type OpDef } from './ops'
-import { normalizeGreek, prettySymbol } from './pretty'
+import { normalizeGreek, normalizeScript, prettySymbol } from './pretty'
 import type { GalValue } from './value'
 import type { GalObject } from './types'
 
@@ -100,6 +100,13 @@ export function normalizeExpr(s: string, angle = true): string {
    * 元素记号（`ord(G, α₂)` 与 `ord(G, \alpha_2)` 同值）。
    */
   t = normalizeGreek(t)
+  /**
+   * **上下标字符归一**（`S₄` → `S_4`）。这是"看得见却打不出来"的最后一块：
+   * 元素级早有回认（`resolveElementLoose` ⓪ 层拿 `prettySymbol` 比对），
+   * 但**群记号级**一直没有 —— 画布上节点标签写的就是 `S₄` / `C₂×C₂`，
+   * 用户照着抄回去建群却报"无法识别：S₄"（2026-09-26 实测，全员如此）。
+   */
+  t = normalizeScript(t)
   if (angle) t = normalizeAngle(t)
   return t.replace(/\s+/g, ' ').trim()
 }
