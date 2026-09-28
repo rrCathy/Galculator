@@ -25,7 +25,11 @@ export function run(): void {
   // ── 商群：\\pi 是满射，且第二个参数（子群）带包含箭头 ──
   {
     const b = build(['G = D_4', 'N = 闭包(G, r2)', 'Q = 商(G, N)'])
-    eq('商群 \\pi 边与 N -> G 包含边', edgesOf(b.objects).join(' | '), 'G -\\pi-> Q [map:surjective] | N -\\hookrightarrow-> G [map:injective]')
+    eq(
+      '商群 \\pi 边与 N \\trianglelefteq G 包含边（商群的前提就是 N 正规）',
+      edgesOf(b.objects).join(' | '),
+      'G -\\pi-> Q [map:surjective] | N -\\trianglelefteq-> G [map:injective]',
+    )
     eq('|D_4 / \\langle r^2\\rangle| = 8 / 2 = 4', b.orderOf('Q'), 4)
     ok('N 升级为真群对象（不是集合）', b.byId('N')?.value.type === 'group')
   }
@@ -65,7 +69,9 @@ export function run(): void {
     const b = build(['G = D_4', 'A = 闭包(G, r)', 'B = 闭包(G, r2, s)', 'I = A \\cap B'])
     ok('A \\cap B 升级为群对象', b.byId('I')?.value.type === 'group')
     eq('|\\langle r\\rangle \\cap \\langle r^2,s\\rangle| = 2（= \\langle r^2\\rangle）', b.orderOf('I'), 2)
-    ok('A \\cap B 带包含箭头', edgesOf(b.objects).some((e) => e.startsWith('I -\\hookrightarrow-> A')))
+    // `A = \langle r\rangle \cong C_4` 是**循环群**（交换）\to 子群必正规
+    // \to 标签是 `\trianglelefteq` 而不是 `\hookrightarrow`
+    ok('A \\cap B 带包含箭头（且 A 交换 \to 正规）', edgesOf(b.objects).some((e) => e.startsWith('I -\\trianglelefteq-> A')))
   }
   {
     // 反方向：两个子群只交于单位元时，交是平凡群（阶 1）

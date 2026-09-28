@@ -39,6 +39,41 @@ export interface CanvasNode extends GalObject {
 }
 
 /**
+ * 结构伴生边的**语义身份**（缺口 ⑧）。
+ *
+ * 伴生箭头（`π` / `π_1` / `↪` / `=` / `≅`）**不是用户写的**——它们是操作的结构
+ * 顺手长出来的（"操作 = 结果对象 + 结构伴生"，`derive.ts` 的 `alongsideEdges`）。
+ * 从前它们在画布上是一根**点不动的线**：用户看着 `N ↪ G` 想知道账（指数多少、
+ * 正不正规），只能自己去信息面板里翻。
+ *
+ * 这一层把它补上：每条伴生边就地带着"它是什么 + 两端是谁 + 账是多少"。
+ * **它不是一等对象**（不进对象表、不能被引用、没有悬浮球）——见 `doc` 那段
+ * 的边界说明；要能被引用的包含请写 `R = A \subseteq B`（U20）。
+ */
+export type StructuralKind =
+  /** `π : G ↠ G/N` 自然投影（商映射）—— 把每个元素送到它所在的陪集 */
+  | 'naturalProjection'
+  /** `π_1 : A × B ↠ A` 积投影 —— 忘掉另一个因子 */
+  | 'projection'
+  /** `H ↪ G` 子群包含（正规时是 `⊴`） */
+  | 'inclusion'
+  /** `Orb = Ω` 相等 —— "轨道吃下整个 Ω"，即作用传递 */
+  | 'equality'
+  /** 第一同构定理的 `G/ker φ ≅ im φ` */
+  | 'isomorphism'
+
+export interface StructuralEdge {
+  kind: StructuralKind
+  /** 一句话（纯文本，不写 LaTeX 命令 —— 它走纯文本那面）*/
+  doc: string
+  /** 两端在画布上的记号（LaTeX，显示走 KaTeX）*/
+  from: string
+  to: string
+  /** 就地带出来的**账**（键是纯文本标签、值是 TeX 式子）—— 每条都真算 */
+  facts: { k: string; v: string }[]
+}
+
+/**
  * 画布上的一条边。
  *   - map         实线箭头：数学里的映射，一等对象
  *   - action      作用线：`G ↷ Ω`，特殊样式
@@ -56,9 +91,18 @@ export interface GalEdge {
    *
    * 有了它，箭头就能**被点选**：点箭头 → 选中那个映射对象 →
    * 悬浮球出现在箭头旁 → 直接点 `ker` / `im`（比手打 `K = ker(F)` 顺手得多）。
-   * 结构伴生箭头（π / π₁ / ↪）目前还不是对象，所以没有这个字段。
    */
   objectId?: string
+  /**
+   * 结构伴生边的语义身份（缺口 ⑧）——**只有** `alongsideEdges` 与轨道边产出的
+   * 那几类边才有。它让"点不动的线"变成"点得开、看得见账的线"。
+   *
+   * 与 `objectId` 的关系：两条路都能让边被点中，但后果不同 ——
+   *   - 有 `objectId` → 点中的是**对象**（能继续 `ker` / `im` / `像`）
+   *   - 只有 `structural` → 点中的是**这条箭头本身**（只看账，不给操作按钮）
+   * 两者可以同时没有（来源线 `provenance` 就是，它不可点）。
+   */
+  structural?: StructuralEdge
   /**
    * 映射的**类型** —— 决定箭头的**形状**（DIAGRAM_SPEC §1.6）：
    *

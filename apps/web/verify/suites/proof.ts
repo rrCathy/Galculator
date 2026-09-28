@@ -672,13 +672,16 @@ export function run(): void {
         steps[steps.length - 1].text,
       )
 
-      // ── 画布：\\pi / \\cong 自动补出来，非满射还多一条 \\hookrightarrow（正方形） ──
+      // ── 画布：\\pi / \\cong 自动补出来，非满射还多一条包含边（正方形） ──
       const g = deriveCanvas(b.objects)
       const labels = g.edges.map((e) => e.label).join(',')
       ok(`FirstIso ${label}：画布上有 \\pi 与 \\cong 两条自动补的边`, !!labels.match(/\\pi/) && !!labels.match(/\\cong/), labels)
       eq(
-        `FirstIso ${label}：非满射才有 ->（正方形）`,
-        g.edges.some((e) => e.label === '\\hookrightarrow'),
+        // 标签是 `\trianglelefteq` 还是 `\hookrightarrow` 由**正规性**定（像在靶群里
+        // 正不正规）。这里只钉"非满射才多出那条腰"，不绑死标签 ——
+        // 换到非交换的靶群上，同一条边就会画成 `\hookrightarrow`。
+        `FirstIso ${label}：非满射才有那条包含边（正方形多一条腰）`,
+        g.edges.some((e) => e.label === '\\trianglelefteq' || e.label === '\\hookrightarrow'),
         !c.surj,
       )
       ok(

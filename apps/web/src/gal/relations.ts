@@ -36,13 +36,28 @@ const ENUM_CAP = 144
 
 /* ── 正规性：同群只算一次 ──────────────────────────────── */
 
+/**
+ * 缓存 key 的元素指纹。
+ *
+ * **只看 `symbol#order` 会串**（2026-09-28，缺口 ⑧ 逼出来的真 bug）：
+ * 两个 `C_2` —— 一个从记号建（元素 `e0 e1`）、一个是从 `C_4` 里摘出来的子群
+ * （元素 `e0 e2`）—— 记号与阶一模一样，但一个是"不是 C₄ 的子群"、一个"是"。
+ * 更险的是 `V_4` 与 `C_4`：core 给它们的元素 id 都是 `e0 e1 e2 e3`，
+ * 所以指纹还得连着**记号**一起算。
+ *
+ * 从前不显眼：`containment` 只在**用户点开面板**时才被调用，一次会话里
+ * 撞上的概率低。缺口 ⑧ 让画布派生（`deriveCanvas`）也要问包含关系
+ * （伴生边要写指数与正规性），调用面一宽就露了。
+ */
+const fingerprint = (g: Group) => `${g.symbol}#${g.order}#${g.elements.map((e) => e.id).join(',')}`
+
 const normalKeysCache = new Map<string, Set<string> | null>()
 
 /**
  * 群 G 的全部正规子群的「集合键」。超枚举守卫 / 算不动 → `null`（= 不判定，不是"不正规"）。
  */
 function normalKeys(G: Group): Set<string> | null {
-  const key = `${G.symbol}#${G.order}`
+  const key = fingerprint(G)
   const hit = normalKeysCache.get(key)
   if (hit !== undefined) return hit
   let out: Set<string> | null = null
@@ -85,7 +100,7 @@ export interface Containment {
  * 不会因为"名字一样"就被判成包含。
  */
 export function containment(H: Group, G: Group): Containment | null {
-  const key = `${H.symbol}#${H.order}<-${G.symbol}#${G.order}`
+  const key = `${fingerprint(H)}<-${fingerprint(G)}`
   const hit = containmentCache.get(key)
   if (hit !== undefined) return hit
 

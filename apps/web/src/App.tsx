@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildLines } from './gal/build'
-import { deriveCanvas } from './gal/derive'
+import { deriveCanvas, STRUCT_PREFIX } from './gal/derive'
 import { evalExpr } from './gal/evalDef'
 import { opById, type OpDef } from './gal/ops'
 import { composeCall, objectArity, scalarDefault, scalarSlots } from './gal/compose'
@@ -139,6 +139,21 @@ export default function App() {
     return graph.nodes.find((n) => n.id === focus) ?? null
   }, [objects, graph.nodes, focus])
   const anchor = focus ? (anchors.find((a) => a.id === focus) ?? null) : null
+
+  /**
+   * 焦点是一条**结构伴生边**（缺口 ⑧）：`π` / `π_1` / `↪` / `=` / `≅`。
+   *
+   * 它不是一等对象（不进对象表、不能被引用），所以 `focusedObj` 查不到它 ——
+   * 但用户点它时想看的东西很具体：**这条箭头是什么、账是多少**。
+   * 单独走这一支，不硬塞进 `GalValue`（那会为了一个"只读的说明"动值类型的定义）。
+   *
+   * 前缀 `struct:` 不可能与对象名撞：对象名过 `NAME_RE`，不许出现冒号。
+   */
+  const focusedEdge = useMemo(() => {
+    if (!focus?.startsWith(STRUCT_PREFIX)) return null
+    const e = graph.edges.find((x) => `${STRUCT_PREFIX}${x.id}` === focus)
+    return e?.structural ? { edge: e, info: e.structural } : null
+  }, [focus, graph.edges])
 
   const pendOp = useMemo(() => {
     const id = activeOpId(inter)
@@ -730,6 +745,8 @@ export default function App() {
           tab={infoTab}
           onTab={setInfoTab}
           node={busy ? null : focusedObj}
+          // 焦点也可能是一条**结构伴生边**（缺口 ⑧）——它与 `node` 互斥
+          edge={busy ? null : focusedEdge}
           table={objects}
           onExtract={extractSubgroup}
           singleOps={singleOps}

@@ -40,6 +40,7 @@ node verify/e2e/connect.mjs           # 拖拽连线 + 面板「可做」（U21�
 node verify/e2e/grid-drag.mjs         # 格点 / 拖动吸附 / 平移 / 缩放 / 复位（U10 的补线，U22）
 node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）
 node verify/e2e/copy-label.mjs        # 把画布上的记号抄回去：三条复制路径（U24）
+node verify/e2e/structural-edges.mjs  # 结构伴生边可点：π/↪/=/≅ 的账与三条纪律（U26）
 node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来的字符（U25，输入 + 显示两半）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
@@ -154,3 +155,15 @@ node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来
     悬浮球两层 / 证明面板 / 报错面 / 普通页面），每一站用 `document.createTreeWalker`
     扫一遍文本节点，**跳过 `.katex` 子树**（那些是设计要的排版字形），再扫 `title` /
     `placeholder` / `data-*` 与输入框的值。这类"全局不变量"的回归比逐条断言更能守住约定。
+42. **按参数记号的缓存，key 里要有"身份指纹"**（2026-09-28，U26 逼出来的潜伏 bug）。
+    `containment(H, G)` 的 key 原来只看 `symbol#order` —— 记号与阶相同的两个群会串：
+    从记号建的 `C_2`（元素 `e0 e1`）与从 `C_4` 里摘出来的 2 阶子群（元素 `e0 e2`）一模一样地命中
+    同一条缓存。从前它只在用户点开面板时被调用，撞上的概率低；**画布派生也要问它之后
+    （伴生边要写指数与正规性），调用面一宽就露了**。修法：key 加元素 id 的 join（且连着记号
+    —— `V_4` 与 `C_4` 的元素 id 恰好都是 `e0..e3`，光有 id 指纹还会撞）。**判据**：一个
+    带缓存的纯函数，key 必须唯一决定"参数在数学上是谁"，而不是决定"参数叫什么名字"。
+    顺带：扩大一个带缓存函数的调用面之前，先审它的 key。
+43. **走查脚本结尾要有 `await browser.close()`**。漏了它，Chromium 的进程句柄会**钉住
+    node 的事件循环** —— 断言全部打完、输出全部落盘，进程却不退出，表象是"脚本卡死"
+    （实际上活已经干完了）。全仓库 18 个走查只有 U26 那份第一版漏了，其余都有 —— 写新的
+    时从旧脚本抄结尾，别手打。

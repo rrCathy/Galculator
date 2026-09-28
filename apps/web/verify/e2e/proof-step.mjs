@@ -95,7 +95,8 @@ for (let i = 0; i < 12; i++) {
 }
 const fin = await snapshot()
 ok('最终节点 = G / P / Orb / Stab / \\Omega', fin.ids.join(' ') === 'A/Omega G O P S', `ids=${fin.ids.join(',')}`)
-ok('最终边含 \\hookrightarrow（包含）', fin.edges.filter((l) => l === '\\hookrightarrow').length === 2, `edges=${fin.edges.join(',')}`)
+// Sylow I（A_4, p=2）：P 与 Stab 都是 V_4 \trianglelefteq A_4（A_4 的 n_2 = 1，唯一的 Sylow 2-子群必正规）
+ok('最终边含 \\trianglelefteq（正规包含）', fin.edges.filter((l) => l === '\\trianglelefteq').length === 2, `edges=${fin.edges.join(',')}`)
 ok('最终边含 = （Orb = \\Omega，传递）', fin.edges.includes('='), `edges=${fin.edges.join(',')}`)
 ok('最终边含 ~>（作用）', fin.edges.includes('\\curvearrowright'), `edges=${fin.edges.join(',')}`)
 // `.proof-text` 走 KaTeX，`innerText` 拿到的是**渲染后**的字符 —— `\blacksquare`

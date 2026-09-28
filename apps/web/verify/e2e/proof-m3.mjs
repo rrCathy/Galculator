@@ -286,19 +286,21 @@ if (at.G && at.H && at['\\varphi/ker'] && at['\\varphi/im']) {
 
 const byLabel = Object.fromEntries(isoEnd.edges.map((e) => [e.label, e]))
 ok('画布上有 4 条实线边', isoEnd.edges.length === 4, isoEnd.edges.map((e) => e.label).join(','))
-ok('有 \\pi / \\cong / \\hookrightarrow / \\varphi 四条边', ['\\pi', '\\cong', '\\hookrightarrow', '\\varphi'].every((x) => !!byLabel[x]), isoEnd.edges.map((e) => e.label).join(','))
+ok('有 \\pi / \\cong / \\trianglelefteq / \\varphi 四条边', ['\\pi', '\\cong', '\\trianglelefteq', '\\varphi'].every((x) => !!byLabel[x]), isoEnd.edges.map((e) => e.label).join(','))
 {
   const pi = seg(byLabel['\\pi']?.d)
-  const inj = seg(byLabel['\\hookrightarrow']?.d)
+  const incl = seg(byLabel['\\trianglelefteq']?.d)
   const phi = seg(byLabel['\\varphi']?.d)
   const iso = seg(byLabel['\\cong']?.d)
   if (pi) ok('\\pi 是竖边', Math.abs(pi.x1 - pi.x2) <= 1, `\\Delta x=${Math.abs(pi.x1 - pi.x2)}`)
-  if (inj) ok('-> 是竖边', Math.abs(inj.x1 - inj.x2) <= 1, `\\Delta x=${Math.abs(inj.x1 - inj.x2)}`)
+  if (incl) ok('包含边是竖边', Math.abs(incl.x1 - incl.x2) <= 1, `\\Delta x=${Math.abs(incl.x1 - incl.x2)}`)
   if (phi) ok('\\varphi 是横边', Math.abs(phi.y1 - phi.y2) <= 1, `\\Delta y=${Math.abs(phi.y1 - phi.y2)}`)
   if (iso) ok('\\cong 是横边', Math.abs(iso.y1 - iso.y2) <= 1, `\\Delta y=${Math.abs(iso.y1 - iso.y2)}`)
 }
 ok('\\pi 是满射（双箭头）', /-surj\b/.test(byLabel['\\pi']?.end ?? ''), byLabel['\\pi']?.end)
-ok('\\hookrightarrow 是单射（起点尾钩）', /-hook\b/.test(byLabel['\\hookrightarrow']?.start ?? ''), byLabel['\\hookrightarrow']?.start)
+// C_6 交换 \to 像必正规 \to `\trianglelefteq`；它仍是**单射**（尾钩），
+// 只是"正规"这层信息由标签承担（U20 定的原则：正规的 `\trianglelefteq`、非正规的 `\hookrightarrow`）
+ok('包含边是单射（起点尾钩）', /-hook\b/.test(byLabel['\\trianglelefteq']?.start ?? ''), byLabel['\\trianglelefteq']?.start)
 ok(
   '\\cong 两端都是普通箭头（同构，与 ->> / -> 可分）',
   /-head\b/.test(byLabel['\\cong']?.end ?? '') && /-head\b/.test(byLabel['\\cong']?.start ?? ''),
@@ -323,7 +325,11 @@ await page.waitForTimeout(700)
 await goAll()
 const tri = await canvas()
 ok('满射时图上只有 3 个顶点（三角形，不补 im \\varphi）', tri.nodes.length === 3, tri.nodes.map((n) => n.id).join(','))
-ok('满射时没有 \\hookrightarrow 边', !tri.edges.some((e) => e.label === '\\hookrightarrow'), tri.edges.map((e) => e.label).join(','))
+ok(
+  '满射时没有包含边（三角形不补那条腰）',
+  !tri.edges.some((e) => e.label === '\\hookrightarrow' || e.label === '\\trianglelefteq'),
+  tri.edges.map((e) => e.label).join(','),
+)
 ok('满射时那一步在文本里说了「im \\varphi = H」', tri.allStepsRaw.some((t) => t.includes('im \\varphi = H')), tri.allStepsRaw.join(' | ').slice(0, 120))
 ok(
   '满射时不多那一步（10 步 vs 非满射 11 步）',

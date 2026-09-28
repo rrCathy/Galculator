@@ -113,7 +113,8 @@ const byLabel = Object.fromEntries(data.edges.map((e) => [e.label, e]))
 ok('画布上有 4 条实线边', data.edges.length === 4, `labels=${data.edges.map((e) => e.label).join(',')}`)
 ok('有 \\pi 边', !!byLabel['\\pi'])
 ok('有 \\cong 边', !!byLabel['\\cong'])
-ok('有 \\hookrightarrow 边', !!byLabel['\\hookrightarrow'])
+// `im \\varphi \\le H` 在 C_6（**交换群**）里必正规 \to 标签是 `\trianglelefteq`
+ok('有 \\trianglelefteq 边（C_6 交换 \to 像必正规）', !!byLabel['\\trianglelefteq'], Object.keys(byLabel).join(','))
 ok('有 \\varphi 边（用户画的）', !!byLabel['\\varphi'])
 
 // ── 边的轴向（DIAGRAM_SPEC §1.1：水平箭头同高、垂直箭头同列）──
@@ -123,16 +124,16 @@ ok('有 \\varphi 边（用户画的）', !!byLabel['\\varphi'])
   const phi = seg(byLabel['\\varphi']?.d ?? '')
   const iso = seg(byLabel['\\cong']?.d ?? '')
   const pi = seg(byLabel['\\pi']?.d ?? '')
-  const inj = seg(byLabel['\\hookrightarrow']?.d ?? '')
+  const incl = seg(byLabel['\\trianglelefteq']?.d ?? '')
   if (phi) ok('\\varphi（G->H）水平', Math.abs(phi.y1 - phi.y2) <= 1, `\\Delta y=${Math.abs(phi.y1 - phi.y2)}`)
   if (iso) ok('\\cong（G/ker->im）水平', Math.abs(iso.y1 - iso.y2) <= 1, `\\Delta y=${Math.abs(iso.y1 - iso.y2)}`)
   if (pi) ok('\\pi（G->G/ker）垂直', Math.abs(pi.x1 - pi.x2) <= 1, `\\Delta x=${Math.abs(pi.x1 - pi.x2)}`)
-  if (inj) ok('->（im->H）垂直', Math.abs(inj.x1 - inj.x2) <= 1, `\\Delta x=${Math.abs(inj.x1 - inj.x2)}`)
+  if (incl) ok('包含边（im->H）垂直', Math.abs(incl.x1 - incl.x2) <= 1, `\\Delta x=${Math.abs(incl.x1 - incl.x2)}`)
 }
 
 // ── 箭头形状（DIAGRAM_SPEC §1.6）──
 ok('\\pi 是满射（双箭头）', /-surj\b/.test(byLabel['\\pi']?.end ?? ''), byLabel['\\pi']?.end)
-ok('\\hookrightarrow 是单射（起点尾钩）', /-hook\b/.test(byLabel['\\hookrightarrow']?.start ?? ''), byLabel['\\hookrightarrow']?.start)
+ok('包含边是单射（起点尾钩）', /-hook\b/.test(byLabel['\\trianglelefteq']?.start ?? ''), byLabel['\\trianglelefteq']?.start)
 ok('\\cong 是同构（两端都是普通箭头）', /-head\b/.test(byLabel['\\cong']?.end ?? '') && /-head\b/.test(byLabel['\\cong']?.start ?? ''), `${byLabel['\\cong']?.start} / ${byLabel['\\cong']?.end}`)
 ok('\\cong 不是满射形状（与 ->> 可分）', !/-surj\b/.test(byLabel['\\cong']?.end ?? ''))
 ok('\\cong 不是单射形状（与 -> 可分）', !/-hook\b/.test(byLabel['\\cong']?.start ?? ''))

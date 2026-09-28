@@ -4,8 +4,14 @@
 > 细节一律在仓库里。进度 `docs/ROADMAP.md` · 交互 `docs/INTERACTION.md` · 图 `docs/DIAGRAM_SPEC.md` · 证明 `docs/PROOF_SPEC.md` · 任务清单 `docs/TASKS.md`（输入视角）· 可用性 `docs/USABILITY.md`（动作视角）· 流水 `.workbuddy/memory/YYYY-MM-DD.md`
 
 ## 1. 遗留（详单在 ROADMAP）
-- **可用性缺口**（`docs/USABILITY.md` §6，状态列在表里）：①②③④⑤⑥⑦⑨⑩ 已修（U18/U19/U20/U21）；剩
-  **⑧** 伴生边（π/↪）还不是一等对象 · **⑪** core 缺失项（极大子群 / Inn / Hall / 合成列 / Burnside / φ(n) / gcd / ⋊）。
+- **可用性缺口**（`docs/USABILITY.md` §6，状态列在表里）：**①–⑩ 全部修完**（U18–U21 + U26）；
+  剩 **⑪** core 缺失项（极大子群 / Inn / Hall / 合成列 / Burnside / φ(n) / gcd / ⋊）——
+  core 已有**合成列**（`computeSubgroupSeries`）与**半直积分解**（`findSemidirectDecompositions`），是接线不是重写。
+- **伴生边的语义身份（U26，2026-09-28）**：画布上 `π`/`π₁`/`↪`/`=`/`≅` 可点了 ——
+  `StructuralEdge`（kind+两端+账）挂在 `GalEdge.structural`，焦点前缀 `struct:<边id>`（`edgeFocusId` 三分支），
+  **不升级为一等对象**（不进对象表 / 不挂球，列 `ker` 就是撒谎）；账走 `containment()` 判据同源；
+  蓝灰细线不变。**伴生包含边的标签由正规性定**（正规 `⊴` / 否则 `↪`）——
+  `Z(G)⊴G`、`im φ ⊴ C₆`（交换群）这类不再被画成普通单射。回归 `suites/structural.ts`(31) + `e2e/structural-edges.mjs`(34)。
 - **第五批 ✅（U22，补回归）**：U10 走查 `e2e/grid-drag.mjs`(42) · 径向菜单 `e2e/radial-menu.mjs`(51) ·
   `suites/grid.ts`(48) · `suites/interaction.ts`(81) —— 全部进了 `verify:e2e` / `run.ts`。
   `docs/USABILITY.md §7` 只剩 **`ui/MapBuilder`** 没线。
@@ -94,7 +100,9 @@
 - **菜单/候选不撒谎**：列给用户点的东西，点下去必须真能跑（或至多"要补参/进编辑器"）。
   U21 靠它抓出两笔账（`包含` 两位同型 · `ParamType` 一型两用 → 拆 `setlike`/`omega`）。
 - **`verify/README.md`** 还收着：块注释不许有"星号+斜杠" · rolldown 对模板串换行转义 + 多字节与 U+2500 报错
-  → 输出装饰一律 ASCII · 几何判据比**轴向**与**节点中心** · 别写恒真断言 · 回归失败先判"bug 还是期望值写错"。
+  → 输出装饰一律 ASCII · 几何判据比**轴向**与**节点中心** · 别写恒真断言 · 回归失败先判"bug 还是期望值写错" ·
+  **缓存 key 要带身份指纹**（containment 只看 symbol#order 会串，42 号）· **走查结尾必须 `browser.close()`**
+  （漏了 node 挂着不退，43 号）。
 - **教训：算得对 != 画得对**（第二同构在修 G3 前阶全对，图上 `H∩N` 却是集合圆、包含箭头是虚线）。
 
 ## 4. 理念与已定决策

@@ -35,12 +35,13 @@ export function run(): void {
     eq('|im \\varphi| = 3', b.orderOf('\\varphi/im'), 3)
     eq('|G/ker \\varphi| = 3', b.orderOf('\\varphi/ker'), 3)
     eq(
-      '正方形四条边齐（\\pi 满射 / \\cong 同构 / -> 单射 / \\varphi 同态）',
+      '正方形四条边齐（\\pi 满射 / \\cong 同构 / \\trianglelefteq 单射 / \\varphi 同态）',
       edgesOf(b.objects).join('\n'),
       [
         'G -\\pi-> \\varphi/ker [map:surjective]',
         'G -\\varphi-> H [map]',
-        '\\varphi/im -\\hookrightarrow-> H [map:injective]',
+        // C_6 是**交换群** \to 它的子群一律正规 \to 包含边画 `\trianglelefteq`
+        '\\varphi/im -\\trianglelefteq-> H [map:injective]',
         '\\varphi/ker -\\cong-> \\varphi/im [map:iso]',
       ].join('\n'),
     )
@@ -82,6 +83,6 @@ export function run(): void {
     eq('|G/ker \\varphi| = 3', b.orderOf('\\varphi/ker'), 3)
     eq('|im \\varphi| = 3', b.orderOf('\\varphi/im'), 3)
     ok('\\cong 边指向 im \\varphi（不是靶群）', edgesOf(b.objects).some((e) => e.startsWith('\\varphi/ker -\\cong-> \\varphi/im')))
-    ok('im \\varphi -> H 是单射边', edgesOf(b.objects).some((e) => e === '\\varphi/im -\\hookrightarrow-> H [map:injective]'))
+    ok('im \\varphi -> H 是单射边（H = C_6 交换 \to 画 \\trianglelefteq）', edgesOf(b.objects).some((e) => e === '\\varphi/im -\\trianglelefteq-> H [map:injective]'))
   }
 }

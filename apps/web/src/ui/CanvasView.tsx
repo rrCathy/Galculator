@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from '../gal/types'
+import { edgeFocusId } from '../gal/derive'
 import { gridOf, gridSpec, quantize, snapToGrid, visibleGridPoints, type GridSpec } from '../gal/grid'
 import { pairOps } from '../gal/interaction'
 import type { GalValue } from '../gal/value'
@@ -908,7 +909,11 @@ export function CanvasView({
       r: Math.max(view.boxes[i].hw, view.boxes[i].hh) * scale,
       kind: 'node',
     }))
-    // 映射箭头的中点也上报——箭头背后的对象要能选中（点箭头 → ker / im）
+    // 映射箭头的中点也上报——箭头背后的对象要能选中（点箭头 → ker / im）。
+    //
+    // **只有"背后有对象"的边**才上报（缺口 ⑧ 的边界）：结构伴生边（π / ↪ / ≅）
+    // 也能点，但它不是对象——挂上悬浮球就会列出 `ker` / `im` 这种
+    // **点了必然报错**的按钮（U21 的纪律：菜单不撒谎）。所以它只进信息面板。
     graph.edges.forEach((e, k) => {
       if (!e.objectId) return
       const pts = view.edgePts[k]
@@ -1280,6 +1285,9 @@ export function CanvasView({
           //   · 结构伴生（pi / pi1 / hook）→ 蓝灰细线（派生出来的结构关系）
           //   · 来源线 → 淡虚线
           // 声明的包含（U20）与**显式映射同档**：它是用户画的、一等的、可点选的。
+          //
+          // 注意（缺口 ⑧）：结构伴生边**变成可点之后配色不动** —— "可点"改的是
+          // 它能不能被问账，不是它在图里的分量。派生出来的结构关系仍然比用户画的轻。
           const isExplicitMap = (e.kind === 'map' || e.kind === 'relation') && !!e.objectId
           const stroke =
             e.kind === 'action'
@@ -1315,9 +1323,12 @@ export function CanvasView({
           // 标签位置在 `view.edgePts` 里按**沿行进方向左侧**算好（§1.5），
           // 字号比对象小一号（§1.4）。
           const mid = pts.labelPt
-          // 箭头背后的对象（映射 / 作用）→ 可点选，于是能"点箭头 → ker / im"
-          const selectable = !!e.objectId
-          const isSelected = selectable && e.objectId === selectedId
+          // 箭头背后的对象（映射 / 作用）→ 可点选，于是能"点箭头 → ker / im"；
+          // **结构伴生边**（π / π_1 / ↪ / = / ≅）背后没有对象，但它也得能点开看账
+          // （缺口 ⑧）—— 焦点 id 由 `edgeFocusId` 定：有对象给对象，否则给 `struct:<边 id>`。
+          const focusId = edgeFocusId(e)
+          const selectable = !!focusId
+          const isSelected = selectable && focusId === selectedId
           const line = pts.d
           return (
             <g
@@ -1327,6 +1338,8 @@ export function CanvasView({
               }`}
               data-edge-id={e.id}
               data-object-id={e.objectId ?? ''}
+              // 结构伴生边的**类型**（走查与断言读它，不必去猜 CSS）
+              data-structural={e.structural?.kind ?? ''}
               // 原始形态（`\hookrightarrow`）—— 标签走 KaTeX 之后 `text` 里是渲染结果，
               // 走查与断言要的是**逻辑形态**，所以单独放一份
               data-label={e.label ?? ''}
@@ -1340,7 +1353,7 @@ export function CanvasView({
                   strokeWidth={14}
                   onClick={(ev) => {
                     ev.stopPropagation()
-                    onSelect(e.objectId!)
+                    onSelect(focusId!)
                   }}
                 />
               )}

@@ -6,7 +6,7 @@
  *   "f(A₄) 怎么创建？直接拖到 f 上？没这个功能"
  *
  * 这里在真浏览器里把两条都做出来，并验几何层：
- *   - `FA = 像(f, A)` 长出 `f(A) \\hookrightarrow S₃` 的顶点与边
+ *   - `FA = 像(f, A)` 长出 `f(A) \\trianglelefteq S₃` 的顶点与边（`A_3 \\trianglelefteq S_3`，指数 2）
  *   - `R = A \\subseteq G` 长出**可点选**的关系边（A₄ \\trianglelefteq S₄ \\to 标签 `\\trianglelefteq`）
  *   - 点那条边 \\to 信息面板给出「关系」的账（指数 24/12 = 2）
  *   - 假声明（D₄ \\subseteq S₄）被拦在行里
@@ -145,7 +145,7 @@ await page.waitForTimeout(400)
 const errs = await rowErrs()
 ok('七行全部求值成功', errs.length === 0, JSON.stringify(errs))
 
-/* ── 几何：子群像的顶点 + 两条 \\hookrightarrow + 一条可点选的关系边 ── */
+/* ── 几何：子群像的顶点 + 那条正规包含边 + 一条可点选的关系边 ── */
 
 const cs = await canvasState()
 const at = Object.fromEntries(cs.nodes.map((n) => [n.id, n]))
@@ -158,7 +158,8 @@ ok('关系边标签是 \\trianglelefteq（A_4 \\trianglelefteq S_4）', relEdge?
 ok('关系边可点选（有 hit 层）', !!relEdge?.hit)
 ok('关系边带单射尾钩', /-hook/.test(relEdge?.start ?? ''), relEdge?.start)
 
-const incl = cs.edges.find((e) => e.cls.includes('gedge-map') && e.label === '\\hookrightarrow')
+const incl = cs.edges.find((e) => e.cls.includes('gedge-map') && e.label === '\\trianglelefteq')
+// `f(A_4) \cong C_3 \le S_3`，而 `A_3 \trianglelefteq S_3`（指数 2）\to 标签是 `\trianglelefteq`
 ok('画布上有 f(A) -> S_3 的包含边', !!incl, cs.edges.map((e) => `${e.cls}:${e.label}`).join(' | '))
 
 // 轴向（DIAGRAM_SPEC §1.1）：A 与 G 同层（都是输入）\\to 画成水平箭头

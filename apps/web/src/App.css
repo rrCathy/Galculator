@@ -594,6 +594,13 @@ body {
   color: #77756d;
 }
 
+/* 结构伴生箭头（缺口 ⑧）：与映射 / 关系同属"边"，但它是**派生出来的** ——
+   底色取画布上那条蓝灰线（ALONGSIDE_EDGE）的浅版，一眼看出同一种东西。 */
+.chip-structural {
+  background: #e8eef7;
+  color: #3f5b82;
+}
+
 .sub-tag {
   display: inline-flex;
   align-items: baseline;
@@ -776,6 +783,24 @@ body {
   color: var(--text-faint);
   font-family: var(--mono);
   font-size: 11.5px;
+}
+
+/* ── 结构伴生边（缺口 ⑧）：点画布上 π / ↪ / ≅ 时的那一节 ── */
+
+.edge-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.edge-doc {
+  padding: 5px 0 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.edge-facts {
+  padding: 3px 0 1px;
 }
 
 .info-tabs {

@@ -1,6 +1,15 @@
 import type { Group } from '@groupviz/core'
-import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from './types'
+import type {
+  CanvasGraph,
+  CanvasNode,
+  GalEdge,
+  GalObject,
+  StructuralEdge,
+  StructuralKind,
+} from './types'
 import { canvasShape, isCanvasValue, type GalSet } from './value'
+import { containment } from './relations'
+import { prettySymbol } from './pretty'
 
 /**
  * 派生深度 = 依赖链长度。输入对象为 0，其派生结果为 1，再派生为 2……
@@ -95,6 +104,94 @@ export function arrowOf(m: { isInjective: boolean | null; isSurjective: boolean 
   return undefined
 }
 
+/* ── 边的焦点身份（缺口 ⑧）───────────────────────────── */
+
+/**
+ * 结构伴生边没有背后的对象，就用**边自己的 id** 造一个焦点 id。
+ *
+ * 前缀是必须的：`focus` 是一个裸字符串，会在对象表、画布节点、边三处查。
+ * `struct:` 里有冒号，而对象名（`NAME_RE`）不许有冒号，所以永远不会撞。
+ */
+export const STRUCT_PREFIX = 'struct:'
+
+/**
+ * 结构伴生边的类型名（面板上那行中文）。
+ *
+ * 放在这里而不是面板里：这些名字是 `StructuralKind` 的**语义**，
+ * 与产生它们的 `alongsideEdges` 搁在一处，改一处就不会漏另一处。
+ */
+export const STRUCTURAL_LABEL: Record<StructuralKind, string> = {
+  naturalProjection: '自然投影（商映射）',
+  projection: '积投影',
+  inclusion: '包含（子群）',
+  equality: '相等（轨道 = Omega）',
+  isomorphism: '同构（第一同构定理）',
+}
+
+/**
+ * 这条边被点中时焦点是谁？
+ *
+ * | 情形 | 焦点 | 点开能看到 |
+ * |---|---|---|
+ * | 背后有对象（映射 / 声明的关系）| 那个对象 | 域靶单满核像，还能接着 `ker` / `像` |
+ * | 只有结构身份（`π` / `↪` / `≅`）| `struct:<边 id>` | 这条箭头是什么、账是多少 |
+ * | 都没有（来源线）| `null` | 不可点 |
+ */
+export function edgeFocusId(e: GalEdge): string | null {
+  if (e.objectId) return e.objectId
+  if (e.structural) return `${STRUCT_PREFIX}${e.id}`
+  return null
+}
+
+/** 节点 id → 它在画布上的记号（结构伴生边的账要用它写算式）。 */
+function nodeLabel(objects: GalObject[], id: string): string {
+  return objects.find((o) => o.id === id)?.label ?? id
+}
+
+/** 包含边（`H ↪ G` / `H ⊴ G`）的账。
+ *
+ * 判定走 `relations.ts#containment()`（U19 那套三道关）—— **判据同源**：
+ * 画布上这条线画的 `↪` 还是 `⊴`、面板里说的指数与正规性，与"关系"那一节
+ * 用的是同一份 `findAllNormalSubgroups` 结果，不会出现两种说法。
+ * 判不出来（超枚举守卫）就明说"未判定"，**不猜**。
+ */
+function inclusionFacts(H: Group, G: Group, hLabel: string, gLabel: string) {
+  const c = containment(H, G)
+  const facts: { k: string; v: string }[] = []
+  if (c) {
+    facts.push({
+      k: '指数',
+      v: `[${gLabel} : ${hLabel}] = ${G.order} / ${H.order} = ${c.index}`,
+    })
+    facts.push({
+      k: '正规',
+      v:
+        c.normal === true
+          ? `${hLabel} \\trianglelefteq ${gLabel}（正规）`
+          : c.normal === false
+            ? `非正规（只单射进 ${gLabel}）`
+            : '未判定（群太大，未枚举）',
+    })
+  } else {
+    // 判不出来时**至少**把阶写对（那是直接读出来的，不需要枚举）
+    facts.push({ k: '阶', v: `|${hLabel}| = ${H.order} \\cdot |${gLabel}| = ${G.order}` })
+    facts.push({ k: '正规', v: '未判定（群太大，未枚举）' })
+  }
+  return facts
+}
+
+/**
+ * 包含边的**标签**：正规就画 `⊴`，否则画 `↪`（判不出来**不猜**，画 `↪`）。
+ *
+ * 与面板里那句"⊴ 正规 / 非正规"同源（都走 `containment`）——
+ * 从前这里硬写着 `↪`，于是 `Z(G) ⊴ G`、`ker f ⊴ dom`、`C_3 ⊴ S_3`
+ * 这些**定理级**的正规包含全被画成了普通的单射，与面板自相矛盾。
+ * U20 定的原则本来就是"正规的 `⊴`、非正规的 `↪`，画布上一眼可分"。
+ */
+function inclusionLabel(H: Group, G: Group): string {
+  return containment(H, G)?.normal === true ? '\\trianglelefteq' : '\\hookrightarrow'
+}
+
 /** 结构伴生边（U3）——**操作 = 结果对象 + 结构伴生**：
  * 一个操作在长出结果节点的同时，也长出了它和旧对象之间的那条**映射箭头**。
  *
@@ -116,21 +213,33 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
   const consumed = new Set<string>()
   const byId = new Map(objects.map((o) => [o.id, o]))
 
+  /** 节点 id → 它在画布上的记号（结构伴生边的账要用它写算式） */
+  const labelOf = (id: string): string => nodeLabel(objects, id)
+
   /**
    * 子群结果的母群：从来源里找——
    * 直接来源是群就用它；是映射就用映射的端群；是**作用**就用作用的群
    * （`Stab(H)` 的母群是 G —— DIAGRAM_SPEC §5.2 的 `Stab ↪ G`）。
+   *
+   * 返回 `{ id, group }` 两个：`id` 是画布节点（画边用），
+   * `group` 是群对象（算指数 / 判正规用）。
    */
-  const parentOf = (o: GalObject, want: 'domain' | 'codomain'): string | null => {
+  const parentOf = (o: GalObject, want: 'domain' | 'codomain'): { id: string; group: Group } | null => {
     for (const s of o.sources) {
       const src = byId.get(s)
       if (!src) continue
-      if (src.value.type === 'group') return groupNodeId(objects, src.value.group)
-      if (src.value.type === 'action') return groupNodeId(objects, src.value.action.group)
+      if (src.value.type === 'group') {
+        const id = groupNodeId(objects, src.value.group)
+        if (id) return { id, group: src.value.group }
+      }
+      if (src.value.type === 'action') {
+        const id = groupNodeId(objects, src.value.action.group)
+        if (id) return { id, group: src.value.action.group }
+      }
       if (src.value.type === 'map') {
         const g = src.value.map[want]
         const id = groupNodeId(objects, g)
-        if (id) return id
+        if (id) return { id, group: g }
       }
     }
     return null
@@ -142,32 +251,58 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
 
     if (op === 'quotient') {
       const g = parentOf(o, 'domain')
-      if (g && g !== o.id) {
-        // 自然投影是**满射**（课本写 `π : G ↠ G/N`）
-        edges.push({
-          id: `${g}->${o.id}:pi`,
-          kind: 'map',
-          from: g,
-          to: o.id,
-          label: '\\pi',
-          arrow: 'surjective',
-        })
-        consumed.add(o.id)
-      }
+      const Q = o.value.type === 'group' ? o.value.group : null
       // **商的第二个参数是母群的子群**——求值时就校验过（`asCoreSubgroup` 不过则报错），
       // 所以这里照直画 `Y ↪ X`。第三同构定理的 `K/N ↪ G/N` 靠这一条：
       // 没有它，那个梯形少一条腰（而 `KN` 自己不是子群升级来的对象，
       // 它的 `↪` 不会由别处产生）。
       // 重复情形（`商(G, N)` 且 N 自己是 `闭包` 等子群升级对象）会被末尾的去重收掉。
       const second = o.sources.map((s) => byId.get(s))[1]
+      const N = second?.value.type === 'group' ? second.value.group : null
+      if (g && g.id !== o.id) {
+        const facts: { k: string; v: string }[] = []
+        if (second && N) facts.push({ k: '核', v: `\\ker \\pi = ${labelOf(second.id)}` })
+        if (Q && N) {
+          facts.push({
+            k: '阶',
+            v: `|${labelOf(o.id)}| = ${g.group.order} / ${N.order} = ${Q.order}`,
+          })
+        }
+        facts.push({ k: '满射', v: '是（自然投影恒满）' })
+        // 自然投影是**满射**（课本写 `π : G ↠ G/N`）
+        edges.push({
+          id: `${g.id}->${o.id}:pi`,
+          kind: 'map',
+          from: g.id,
+          to: o.id,
+          label: '\\pi',
+          arrow: 'surjective',
+          structural: {
+            kind: 'naturalProjection',
+            doc: '自然投影（商映射）：把每个元素送到它所在的那个陪集',
+            from: labelOf(g.id),
+            to: labelOf(o.id),
+            facts,
+          },
+        })
+        consumed.add(o.id)
+      }
       if (g && second?.value.type === 'group' && nodeIds.has(second.id)) {
         edges.push({
-          id: `${second.id}->${g}:incl`,
+          id: `${second.id}->${g.id}:incl`,
           kind: 'map',
           from: second.id,
-          to: g,
-          label: '\\hookrightarrow',
+          to: g.id,
+          label: inclusionLabel(second.value.group, g.group),
           arrow: 'injective',
+          structural: {
+            kind: 'inclusion',
+            doc:
+              '商的第二个参数是母群的子群（商群良定义的前提）',
+            from: labelOf(second.id),
+            to: labelOf(g.id),
+            facts: inclusionFacts(second.value.group, g.group, labelOf(second.id), labelOf(g.id)),
+          },
         })
       }
       continue
@@ -176,14 +311,26 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
     if (op === 'directProduct') {
       const factors = o.sources.filter((s) => nodeIds.has(s)).slice(0, 2)
       factors.forEach((f, i) => {
+        const label = i === 0 ? '\\pi_1' : '\\pi_2'
+        const other = factors[1 - i]
+        const facts: { k: string; v: string }[] = []
+        if (other) facts.push({ k: '核', v: `\\ker ${label} = ${labelOf(other)}` })
+        facts.push({ k: '满射', v: '是（积投影恒满）' })
         // 积投影是**满射**（`π₁ : A × B ↠ A`）
         edges.push({
           id: `${o.id}->${f}:proj${i}`,
           kind: 'map',
           from: o.id,
           to: f,
-          label: i === 0 ? '\\pi_1' : '\\pi_2',
+          label,
           arrow: 'surjective',
+          structural: {
+            kind: 'projection',
+            doc: other ? `积投影：忘掉 ${labelOf(other)} 那个因子` : '积投影：忘掉另一个因子',
+            from: labelOf(o.id),
+            to: labelOf(f),
+            facts,
+          },
         })
       })
       if (factors.length > 0) consumed.add(o.id)
@@ -196,16 +343,31 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
       // 那个 `?` 取决于像占不占满靶群 —— 这正是三角形与正方形的分岔：
       //   满射   `im φ = H`      → 直指靶群节点（三角形）
       //   非满射 `im φ ⊊ H`      → 指工具补的 `im φ` 顶点（正方形）
-      const m = (() => {
+      const mObj = (() => {
         for (const src of o.sources) {
           const hit = byId.get(src)
-          if (hit?.value.type === 'map') return hit.value.map
+          if (hit?.value.type === 'map') return hit
         }
         return null
       })()
-      if (!m) continue
+      if (!mObj || mObj.value.type !== 'map') continue
+      const m = mObj.value.map
       const dom = groupNodeId(objects, m.domain)
       if (dom) {
+        const Q = o.value.type === 'group' ? o.value.group : null
+        const facts: { k: string; v: string }[] = []
+        if (m.kernel) {
+          // 映射没有节点（只画边），引用它用**引用名**（`f`）——
+          // 与画布上那条边的标签同源（U5：`ker(φ)` 而不是 `ker(C₆ → C₃)`）
+          facts.push({ k: '核', v: `\\ker \\pi = \\ker ${mObj.id}` })
+        }
+        if (Q) {
+          facts.push({
+            k: '阶',
+            v: `|${labelOf(o.id)}| = ${m.domain.order} / ${m.kernel?.length ?? '|ker|'} = ${Q.order}`,
+          })
+        }
+        facts.push({ k: '满射', v: '是（自然投影恒满）' })
         edges.push({
           id: `${dom}->${o.id}:pi`,
           kind: 'map',
@@ -213,6 +375,13 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           to: o.id,
           label: '\\pi',
           arrow: 'surjective',
+          structural: {
+            kind: 'naturalProjection',
+            doc: `自然投影：商掉的是 ${labelOf(mObj.id)} 的核`,
+            from: labelOf(dom),
+            to: labelOf(o.id),
+            facts,
+          },
         })
       }
       const imSize = m.image?.length ?? 0
@@ -228,6 +397,9 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
         )
       })()
       if (target && target !== o.id) {
+        const other = objects.find((x) => x.id === target)
+        const a = o.value.type === 'group' ? o.value.group.order : null
+        const b = other?.value.type === 'group' ? other.value.group.order : null
         // 第一同构的结论本身就是**同构**（双向箭头）
         edges.push({
           id: `${o.id}->${target}:iso`,
@@ -236,6 +408,18 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           to: target,
           label: '\\cong',
           arrow: 'iso',
+          structural: {
+            kind: 'isomorphism',
+            doc: '第一同构定理：商掉核，剩下的就是像',
+            from: labelOf(o.id),
+            to: labelOf(target),
+            facts: [
+              ...(a !== null && b !== null
+                ? [{ k: '两边同阶', v: `|${labelOf(o.id)}| = ${a} = |${labelOf(target)}| = ${b}` }]
+                : []),
+              { k: '同构', v: '\\cong（既单又满）' },
+            ],
+          },
         })
       }
       consumed.add(o.id)
@@ -248,15 +432,30 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
     const isSubgroupResult = SUBGROUP_RESULT_OPS.has(op) || op === 'kernel' || wantsCodomain
     if (!isSubgroupResult) continue
     const parent = parentOf(o, wantsCodomain ? 'codomain' : 'domain')
-    if (parent && parent !== o.id) {
+    if (parent && parent.id !== o.id) {
+      const H = o.value.type === 'group' ? o.value.group : null
       // 包含是**单射**（`i : im φ ↪ H`）
       edges.push({
-        id: `${o.id}->${parent}:incl`,
+        id: `${o.id}->${parent.id}:incl`,
         kind: 'map',
         from: o.id,
-        to: parent,
-        label: '\\hookrightarrow',
+        to: parent.id,
+        label: H ? inclusionLabel(H, parent.group) : '\\hookrightarrow',
         arrow: 'injective',
+        structural: {
+          kind: 'inclusion',
+          doc:
+            op === 'kernel'
+              ? '核必是定义域的正规子群'
+              : op === 'image' || op === 'firstIsoImage'
+                ? '像落在靶群里'
+                : '这个操作的结果必是来源群的子群',
+          from: labelOf(o.id),
+          to: labelOf(parent.id),
+          facts: H
+            ? inclusionFacts(H, parent.group, labelOf(o.id), labelOf(parent.id))
+            : [{ k: '正规', v: '未判定' }],
+        },
       })
       consumed.add(o.id)
     }
@@ -354,6 +553,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
         // 轨道 **等于** Ω 时标签写 `=`（传递）——那其实是"相等"，
         // 所以画成同构箭头（既单又满）；否则是严格的子集包含 → 单射。
         const same = size > 0 && size === src.value.action.n
+        const here = nodeLabel(objects, o.id)
         edges.push({
           id: `${o.id}->${home}:incl`,
           kind: 'map',
@@ -361,6 +561,23 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
           to: home,
           label: same ? '=' : '\\hookrightarrow',
           arrow: same ? 'iso' : 'injective',
+          structural: {
+            kind: same ? 'equality' : 'inclusion',
+            doc: same
+              ? '轨道吃下整个 Omega：这个作用传递'
+              : o.opId === 'fixedPoints'
+                ? '不动点集是 Omega 的子集（被它固定住的那些点）'
+                : '轨道是 Omega 的子集（一个点能走到的全部落点）',
+            from: here,
+            to: nodeLabel(objects, home),
+            facts: [
+              { k: '大小', v: `|${here}| = ${size}` },
+              { k: 'Omega', v: `|\\Omega| = ${src.value.action.n}` },
+              ...(same
+                ? [{ k: '传递', v: '\\text{是}（轨道只有一个）' }]
+                : []),
+            ],
+          },
         })
       }
       consumed.add(o.id)

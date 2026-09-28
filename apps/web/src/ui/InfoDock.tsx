@@ -10,12 +10,13 @@ import {
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type NormalizedSubgroup } from '../gal/value'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { RELATION_LABEL, relationsFor, type Relation } from '../gal/relations'
+import { STRUCTURAL_LABEL } from '../gal/derive'
 import { menuLabel } from '../gal/interaction'
 import { opTemplate, type OpDef } from '../gal/ops'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
-import type { GalObject } from '../gal/types'
+import type { GalEdge, GalObject, StructuralEdge } from '../gal/types'
 
 const ENUM_CAP = 144
 
@@ -37,6 +38,7 @@ export function InfoDock({
   tab,
   onTab,
   node,
+  edge,
   table,
   onExtract,
   singleOps = [],
@@ -48,6 +50,14 @@ export function InfoDock({
   onTab: (t: InfoTab) => void
   /** 焦点**对象**——不限于节点：映射只画箭头，但同样有信息可看 */
   node: GalObject | null
+  /**
+   * 焦点是一条**结构伴生边**（缺口 ⑧）——`π` / `π_1` / `↪` / `=` / `≅`。
+   *
+   * 与 `node` **互斥**：一条边要么背后有对象（那是 `node`），要么只有结构身份
+   * （那是这里）。它只回答"这条箭头是什么、账是多少"——不列可做的操作
+   * （它不是对象，列出来的按钮点了必然报错）。
+   */
+  edge?: { edge: GalEdge; info: StructuralEdge } | null
   /** 当前对象表（关系层要在里面找"谁包含我 / 我包含谁"）*/
   table: GalObject[]
   /**
@@ -86,7 +96,9 @@ export function InfoDock({
 
   return (
     <DockPanel title="信息" open={open} onToggle={onToggle} bodyWidth={298}>
-      {!node && <div className="empty">点画布上的对象，看它的信息</div>}
+      {!node && !edge && <div className="empty">点画布上的对象，看它的信息</div>}
+
+      {edge && <EdgeSection edge={edge} />}
 
       {node && (
         <>
@@ -201,6 +213,56 @@ export function InfoDock({
         </>
       )}
     </DockPanel>
+  )
+}
+
+/**
+ * 「这条箭头」—— 点一条**结构伴生边**时看到的（缺口 ⑧）。
+ *
+ * 从前这些线是**点不动的**：画布上 `π : G ↠ G/N`、`N ↪ G`、`G/ker φ ≅ im φ`
+ * 明明画着，想知道"这根箭头到底是什么、核是谁、指数多少"却只能自己去面板里翻
+ * —— 而且多半翻不到，因为伴生箭头根本没有对象。
+ *
+ * 这一节只回答两件事：**它是什么**（类型 + 一句话）与**账是多少**（就地算的）。
+ * 底下那句边界是必须的（U18/U19 的教训）：它不是一等对象，别让人以为
+ * "能点 = 能用"。要能引用、能删、能进证明的包含，请自己写一行。
+ */
+function EdgeSection({ edge }: { edge: { edge: GalEdge; info: StructuralEdge } }) {
+  const { edge: e, info } = edge
+  return (
+    <>
+      <div className="info-target">
+        <span className="chip chip-structural">结构箭头</span>
+        {/* 原始形态（`from|label|to`）—— 走查读它，DOM 文本是 KaTeX 渲染后的 */}
+        <strong className="edge-target" data-edge-kind={info.kind} data-pair={`${info.from}|${e.label ?? ''}|${info.to}`}>
+          <TexOrText text={info.from} />
+          {e.label && <Tex tex={e.label} />}
+          <TexOrText text={info.to} />
+        </strong>
+        <span className="info-def">{STRUCTURAL_LABEL[info.kind]}</span>
+      </div>
+
+      <div className="edge-doc">{info.doc}</div>
+
+      {info.facts.length > 0 && (
+        <div className="edge-facts">
+          {info.facts.map((f, i) => (
+            <div key={i} className="insp-row">
+              <span className="insp-k">{f.k}</span>
+              <span className="insp-v">
+                <TexOrText text={f.v} />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="rel-note">
+        这条箭头是操作的伴生（由某个操作顺手长出来的），不是一等对象：
+        它不能当参数、也不列可做的操作。要一条能引用、能删、能进证明的包含，
+        自己写一行「R = 包含(A, B)」。
+      </div>
+    </>
   )
 }
 
