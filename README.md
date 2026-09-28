@@ -136,10 +136,13 @@ apps/web/            Vite + React 19 + TS 前端
     derive.ts        对象表 → 画布图
     grid.ts          格点与吸附（列中心 × 行中心；拖动吸附是纯函数，可单测）
     proof.ts         **Proof Spec 执行侧（M1）**：ProofStep / ProofTemplate / Sylow I 模板
+    structure.ts     **结构事实（U27）**：完美 / 合成列 / 导来列 / 直积或半直积分解（≤60 阶 + 缓存）
   verify/            **回归线（入库）**
     run.ts           语义层入口（vite SSR 打包后 node 直跑）
-    suites/          分组断言：diagram / firstIso / thirdIso / algebra
-    e2e/             真浏览器几何走查：layout-spec / first-iso-square / third-iso
+    suites/          分组断言（11 组）：diagram / firstIso / thirdIso / algebra / notation /
+                     proof / usability / structural / structure / grid / interaction
+    e2e/             真浏览器几何走查（19 套）：layout-spec / grid-drag / proof-m3 /
+                     structure-ops / no-unicode-leak / …
     README.md        跑法与写断言时的坑
   src/ui/
     CanvasView.tsx   SVG 交换图画布（硬约束网格布局 + 视图变换 + 拖动吸附 + 上报节点坐标）
@@ -398,6 +401,13 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器几何走查（读 DOM �
   **U8** 工具条（雏形已随 U10 落地）+ 群目录 + 查表（「零门槛入口」）·
   `ui/MapBuilder` 的走查（`§7` 里最后一块没线的地方）· 交换图画布打磨 ·
   ⑪ 剩下的：Hall 子群 · 子群格图 · 自定义作用编辑器。
+
+![「结构」节 + 数值区：合成列因子、导来列、分解，与 gcd / φ(n) / 轨道数的结果](docs/assets/u27-structure-facts.png)
+
+_（U27：点 `S₄` → 「基本」tab 的**「结构」节**——完美 / 合成列（若尔当-赫尔德因子 + 条数）/
+导来列（`24 > 12 > 4 > 1`）/ 分解（`S₄ ≅ A₄ ⋊ C₂`，已重建验证，另有 9 条同类候选）；
+左下数值区里是 `gcd(12, 18)` · `lcm(4, 6)` · `phi(12)` · `轨道数(A)` 四个新操作的结果。
+左上「可做」一行里新增的 `Inn` / `极大子群` 都点得出来）_
 
 ![对象悬浮球：节点左上角的深色球 → 环绕 4 个按钮](docs/assets/u3-ring.png)
 

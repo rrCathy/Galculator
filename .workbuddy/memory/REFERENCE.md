@@ -13,10 +13,16 @@
 **作用** `computeOrbits` `computeStabilizers` `computeConjugationPerms` `computeLeftTranslationPerms` `computeCosetActionPerms`。
 **子群** `buildSubgroupGroup(parent, elements, symbol, gens?)`（元素 id 沿用母群）· `subgroupStructureSymbol`（**返回 TeX**）·
 `subgroupSetKey(elementIds)`（**收 id 不收元素**）· `subgroupFromElementIds`（**静默**，见坑）· `isSubgroupElementSet` ·
-`findAllNormalSubgroups` · `getCentralizer`/`getNormalizer`/`getGroupCenter` · `computeQuotientGroup`。
+`findAllNormalSubgroups` · `getCentralizer`/`getNormalizer`/`getGroupCenter` · `computeQuotientGroup` ·
+**子群格** `computeSubgroupLattice`（`nodes[]` 带 `elementIds/order/index/isNormal/level`；`edges[].from → to` 是**自下而上**，
+覆盖边 = Hasse）· `findMinimalGenerators(elements, group)`。
+**结构与判定（U27 接线用的）** `computeSubgroupSeries(group, 'derived'|'lowerCentral'|'upperCentral'|'composition')`
+（`terms/factors/reachesTrivial/solvable/nilpotent/alternativeCount`；超 `SERIES_MAX_ORDER` 144 返 **null**）·
+`findSemidirectDecompositions`（候选带 **`verified`** 与 `rebuiltIsoSymbol`；`phiMap.get(hId).map` 恒等 ⟺ 作用平凡 ⟺ 直积）·
+`computeBurnsideCount(perms, n)` · `getConjugacyClasses` · `isPerfect` / `isSolvable` / `isNilpotent` / `isSimpleGroup` / `isGroupCyclic`。
 **映射** `Homomorphism`（**不要另立结构**）· `extendFromGenerators`/`extractGeneratorMapping`（key 是**元素 id**）·
 `verifyHomomorphism`（violation 全是**元素 id**）`computeKernelFromMapping`/`computeImageFromMapping` · `autoBuildMapping`。
-**元素** `resolveElement`（认 id/label/value/循环记号）。**阈值**（guards.ts）ENUMERATION 144 · SYLOW_MAX_ORDER 144。
+**元素** `resolveElement`（认 id/label/value/循环记号）。**阈值**（guards.ts）ENUMERATION 144 · SYLOW_MAX_ORDER 144 · SERIES_MAX_ORDER 144 · PROPERTIES_CUTOFF 144。
 
 ### 5.1 core 的坑（全是静默失败）
 - `extendFromGenerators`/`extractGeneratorMapping` 的 Map key 是**生成元元素的 id**，传 `gen.name` 得 `null` 且无报错。
@@ -28,17 +34,24 @@
   （实测 9 组里 5 组侥幸通过）。跨群比较用 **`cosetMemberLabels`** 做语义键。
 - **`subgroupFromElementIds` 对认不得的引用是静默的**（丢掉 → 返回平凡子群）。判包含必须另加两道关：
   id 全覆盖 + 校验出的阶 = `|H|`（`gal/relations.ts#containment`）。
+- **`computeSubgroupLattice` 超限（> `ENUMERATION_LIMIT` 144）不报错，而是静默退化成"{e} 与 G 两点"**
+  （实测 216 阶群）——照单全收会把**平凡子群**当成 G 的极大子群。要自己判阶再拒（`ops.ts` 的 `极大子群`）。
+- **合成列 / 半直积分解都贵**：S₅（120）一次 3 秒（合成列 2.2s）、A₅（60）约 250ms —— 自动展示必须自带上限；
+  分解候选的 `verified` 是"重建后与 G 同构类相同"，**只用 verified 的**。
+- **因子 `label` 形态不统一**：`C_{2}` 带花括号、A₅ 那个是 `A_5` —— 比较前过 `prettySymbol`。
 - **A₄ 的 n₂ = 1（V₄ 正规）、n₃ = 4** —— 演示 Sylow II/III 要用 p = 3。
 - **S₄ 的生成元是 `s12`（σ₁₂）与 `c`（σ₁₂₃₄）**；S₄ ↠ S₃ 用 `映射(G, S_3, s12→23, c→13)`（两像**必须是对换且不同**）。
   `c` 是 4-循环 → 像的阶只能整除 4 → S₃ 里就是对换，所以"`c ↦ 3-循环`"永远报不是同态；两像相同则退化成符号映射（ker = A₄）。
 
 ## 6. 参考：代码落点（apps/web/src/）
-- **回归线**（U22 收口后）：`verify/run.ts` 串 9 个套件（含 `suites/grid.ts` 48 · `suites/interaction.ts` 81）·
-  `verify:e2e` 串 15 个走查（含 `grid-drag.mjs` 42 · `radial-menu.mjs` 51）—— 语义 **980** / 走查 **400**。
-- `gal/`：`value`(8 值类型 + `sortOf`) `ops`(注册表 34 条：mechanism/call/infix/params/arity/optional/variadic/
+- **回归线**（U27 收口后）：`verify/run.ts` 串 **11** 个套件（含 `suites/grid.ts` 48 · `suites/interaction.ts` 81 ·
+  `suites/structure.ts` 107）· `verify:e2e` 串 **19** 个走查（含 `grid-drag.mjs` 42 · `radial-menu.mjs` 51 ·
+  `structure-ops.mjs` 47）—— 语义 **1169** / 走查 **546**。
+- `gal/`：`value`(8 值类型 + `sortOf`) `ops`(注册表 **38 条**：mechanism/call/infix/params/arity/optional/variadic/
   editor/result/run + `opsFor`/`paramAccepts`) `naming` `compose` `interaction`(idle→selected→menu→pending/fill)
   `evalDef` `build`(`firstIsoObjects` 隐式补点) `derive`(`arrowOf`/`alongsideEdges`/`computeLevels`) `insights`
-  `relations` `tex` `pretty` `numeric` `grid` `proof` · `ui/`：`CanvasView` `DockPanel`（**收起时 body 不渲染**）
+  `relations` `structure`(U27：`structureFacts` 上限 60 + 指纹缓存；`factorsText`/`chainText` 供 `data-*`)
+  `tex` `pretty` `numeric` `grid` `proof` · `ui/`：`CanvasView` `DockPanel`（**收起时 body 不渲染**）
   `ObjectDock`/`OpDock`/`InfoDock`/`NumericDock` `ComposerOrb`（**`.orb-center` 与 MultiOrb 撞类名**）
   `ObjectOrb`/`MultiOrb` `MapBuilder` `ElementsTable` `Tex` `ProofDock`
 - **证明（`gal/proof.ts`）**：`ProofStep{kind,text,tex,line,highlight}` + `ProofTemplate{slots,defaults,suggest?,

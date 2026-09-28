@@ -216,24 +216,25 @@ Syl_p(G)（列表，不上画布）──底集──▶ Ω（集合，上画布
 | 所有 p-子群 | `pSub(G, p)` | 枚举 + 筛（p-群）| `findAllPSubgroups` |
 | Sylow p-子群 | `Syl_p(G)` | 枚举 + 筛（p-群 ∧ 极大）| `findSylowSubgroups` |
 | 所有正规子群 | | 枚举 + 筛（正规）| `findAllNormalSubgroups` |
-| 所有极大子群 | | 枚举 + 筛（极大）| |
+| 所有极大子群 | `极大子群(G)` | （U27 落地）子群格上指向 G 的**覆盖边** | `computeSubgroupLattice` |
 | 共轭类 | | 作用导出（轨道）| `getConjugacyClasses` |
 | 元素阶分布 | | 枚举 + 筛（分组）| `elementOrderDistribution` |
 
-### 5.6 结构序列
+### 5.6 结构序列 —— ✅ U27 接了前两个（信息面板「结构」节）
 
 | 操作 | 记法 | 机制 | 实现 |
 |---|---|---|---|
-| 导列 | `G ⊇ G' ⊇ G'' ⊇ …` | 迭代 | `commutatorClosure` 迭代 |
-| 上／下中心列 | | 迭代 | `computeSeries` |
-| 合成列 | | 迭代 | |
+| 导列 | `G ⊇ G' ⊇ G'' ⊇ …` | 迭代 | `computeSubgroupSeries(g, 'derived')` |
+| 上／下中心列 | | 迭代 | `computeSubgroupSeries(g, 'upperCentral' / 'lowerCentral')` |
+| 合成列 | | 迭代 | `computeSubgroupSeries(g, 'composition')`（因子 + `alternativeCount`）|
+| 半直积分解 | `G ≅ N ⋊ H` | 枚举 + 筛（已验证重建）| `findSemidirectDecompositions` |
 | 主列 | | 迭代 | |
 
 ### 5.7 判定
 
 | 操作 | 机制 | 实现 |
 |---|---|---|
-| 是否交换 / 循环 / 单 / 可解 / 幂零 / p-群 | 属性库 | `properties` |
+| 是否交换 / 循环 / 单 / 可解 / 幂零 / 完美 / p-群 | 属性库 | `isGroupCyclic` `isSimpleGroup` `isSolvable` `isNilpotent` `isPerfect` |
 | `H ≤ G` | 属性库 | `isSubgroupElementSet` |
 | `H ⊴ G` | 属性库 | |
 | `G ≅ H` | 识别 | `detectIsomorphicGroup` |
