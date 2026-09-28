@@ -1,103 +1,121 @@
 /**
- * 展示形态与记号回认 —— 这一组的由来是一个**真报上来的 bug**。
+ * 记号：「展示 / 输入 / 回认」三侧统一到**同一个形态** —— 这一组的由来是一个真报上来的 bug。
  *
- * 现象（2026-09-21，用户截图）：`A = Aut(S_4)` 之后，信息面板的「生成元」栏
- * 显示成 `\alpha_2, \alpha_8`，`ord(A, )` 的提示显示成一屏
- * `\mathrm{id}, \alpha_1, …, \alpha_{23}`。
+ * 现象（2026-09-21，用户截图）：`A = Aut(S_4)` 之后面板的「生成元」栏显示成
+ * `alpha₂, alpha₈`（半截货），而"看得见"的 `\\alpha₂` 又**打不出来**。
  *
- * 根因不是"某个面板忘了渲染"，而是**两道程序都缺了**：
- *   ① 展示层（`prettySymbol`）不认希腊字母与 `\mathrm`——`\alpha_{2}` 掉进
- *      "去反斜杠"兜底，变成 `alpha₂` 这种半截货；
- *   ② 回认层（`resolveElementLoose`）只认引擎记号，于是"看得见"的 `α₂`
- *      **打不出来**——面板给你的记号你照着敲，系统说"没有这个元素"。
+ * 随后两轮（U23 \\varphi、U24 下标）的修法都是"让 Unicode 形态能敲回去"。**2026-09-27 用户换了方向**：
  *
- * 判据（都可从数学/契约手推，不从运行结果抄）：
- *   - `prettySymbol` 是**展示**变换：幂等可预期、对纯 ASCII 恒等；
- *   - 三种写法（`α₂` / `\alpha_2` / `\alpha_{2}`）必须落到**同一个**元素；
- *   - `|⟨g⟩| = ord(g)`——这条恒等式顺带把"解析到的到底是不是同一个元素"钉死；
- *   - 系统生成的提示串（`元素：…`）**不许出现反斜杠**（那是引擎记号漏到展示层）。
+ * > 把键盘上打不出来的字符都处理了，不要显示出来，也不支持输入这些。
+ *
+ * 于是形态**反过来统一到 ASCII / LaTeX**：`S_4` \\cdot`\varphi` \\cdot`\times`。
+ * 显示仍靠 KaTeX 渲染（视觉零退化），而文本流、复制、输入三者同源 ——
+ * 转换链从两跳变一跳，"两个码位""打不回来"那一整类问题**从根上不存在了**。
+ *
+ * 判据（都可从契约手推，不从运行结果抄）：
+ *   - `prettySymbol` 是**规范**变换：只动上下标的花括号，其余原样（幂等）；
+ *   - 它的输出**不含任何非 ASCII 非中文字符** —— 这是用户要求最直接的检验；
+ *   - 键盘打不出来的字符**一律拦**，并给出**可照抄**的改法（`scanNotAscii`）；
+ *   - 折叠必须**保语义**：`C_2^2` \\to`C_2^2`，**不是** `C_22`（那是 22 阶的另一个群）；
+ *   - 引擎给的 TeX 记号与用户敲的 ASCII 记号**是同一个形态**，不再互相翻译。
  */
 import { build, eq, ok, suite } from '../harness'
-import { normalizeExpr } from '../../src/gal/evalDef'
 import { elementNotation, resolveElementLoose } from '../../src/gal/ops'
-import { normalizeGreek, normalizeScript, prettySymbol } from '../../src/gal/pretty'
+import { checkName } from '../../src/gal/naming'
+import { foldToAscii, prettySymbol, scanNotAscii } from '../../src/gal/pretty'
+
+/** 键盘打不出来的字母 —— 作为**被拦的样本**用，不作为写法。 */
+const PHI = '\u03c6' // \\varphi
+const PHISYM = '\u03d5' // \\varphi（LaTeX 的 \phi 排出来是这个码位）
+const SUB4 = '\u2084' // ₄
+const SUP2 = '\u00b2' // ^2
+const OMEGA = '\u03a9' // \\Omega
+const CAP = '\u2229' // \\cap
+const SUBSET = '\u2286' // \\subseteq
+
+/** 串里有没有**键盘打不出来**的东西（中文与中文标点不算）。 */
+const hasNonAscii = (s: string): boolean => scanNotAscii(s) !== null
 
 export function run(): void {
-  suite('notation · 展示形态与记号回认')
+  suite('notation \\cdot 展示形态：简化 LaTeX（全 ASCII）')
 
-  // ── prettySymbol：展示变换 ──
+  // ── prettySymbol：只做"上下标花括号"的规范化，别的原样 ──
   {
-    eq('\\mathrm{id} → id', prettySymbol('\\mathrm{id}'), 'id')
-    eq('\\alpha_2 → α₂', prettySymbol('\\alpha_2'), 'α₂')
-    eq('\\alpha_{2} → α₂', prettySymbol('\\alpha_{2}'), 'α₂')
-    eq('\\alpha_{12} → α₁₂', prettySymbol('\\alpha_{12}'), 'α₁₂')
-    eq('\\sigma_{12} → σ₁₂', prettySymbol('\\sigma_{12}'), 'σ₁₂')
-    // 回归：群符号的既有行为不能被希腊字母表撞坏
-    eq('S_{4} → S₄', prettySymbol('S_{4}'), 'S₄')
-    eq('\\operatorname{Aut}(S_{4}) → Aut(S₄)', prettySymbol('\\operatorname{Aut}(S_{4})'), 'Aut(S₄)')
-    eq('\\times → ×', prettySymbol('C_{2}\\times C_{2}'), 'C₂×C₂')
-    // 纯 ASCII 记号必须**恒等**——否则 S₄ 的元素名（`12` / `34`）会被改坏
+    eq('S_{4} -> S_4（单字符省花括号）', prettySymbol('S_{4}'), 'S_4')
+    eq('C_{12} -> C_{12}（多字符保留）', prettySymbol('C_{12}'), 'C_{12}')
+    eq('A_10 -> A_{10}（裸的多字符**补上**花括号）', prettySymbol('A_10'), 'A_{10}')
+    eq('\\alpha_{2} -> \\alpha_2', prettySymbol('\\alpha_{2}'), '\\alpha_2')
+    eq('\\operatorname{Aut}(S_{4}) 只简化下标', prettySymbol('\\operatorname{Aut}(S_{4})'), '\\operatorname{Aut}(S_4)')
+    eq('C_{2}\\times C_{2} -> C_2\\times C_2', prettySymbol('C_{2}\\times C_{2}'), 'C_2\\times C_2')
+    eq('\\mathrm{id} 原样（KaTeX 自己会排成正体）', prettySymbol('\\mathrm{id}'), '\\mathrm{id}')
+    eq('\\left/ \\right去掉（KaTeX 不需要）', prettySymbol('\\left(S_{4}\\right)'), '(S_4)')
+    // 纯 ASCII 记号必须**恒等** —— 否则 S_4 的元素名（`12` / `34`）会被改坏
     eq('12 不变', prettySymbol('12'), '12')
+    eq('幂等：再跑一遍没有变化', prettySymbol(prettySymbol('S_{4}')), 'S_4')
   }
 
-  // ── Aut(S₄)：引擎记号真的长得像 LaTeX ──
-  const b = build(['A = Aut(S_4)'])
-  const a = b.byId('A')
-  ok('Aut(S_4) 建出群', a?.value.type === 'group')
-  if (a?.value.type !== 'group') return
+  // ── 最核心的一条：展示形态里**不许有键盘打不出来的字符** ──
+  {
+    const b = build(['A = Aut(S_4)'])
+    const a = b.byId('A')
+    ok('Aut(S_4) 建出群', a?.value.type === 'group')
+    if (a?.value.type !== 'group') return
+    // 数学：Aut(Sₙ) \\cong Sₙ（n \\ne 2, 6）\\Rightarrow|Aut(S₄)| = 24
+    eq('|Aut(S_4)| = 24', a.value.group.order, 24)
 
-  // 数学：Aut(Sₙ) ≅ Sₙ（n ≠ 2, 6）⇒ |Aut(S₄)| = 24
-  eq('|Aut(S₄)| = 24', a.value.group.order, 24)
+    const labels = a.value.group.elements.map((e) => e.label)
+    ok('引擎给的元素记号本身就是 TeX（含反斜杠）', labels.every((l) => l.includes('\\')), labels[0])
+    ok(
+      '**展示形态全是 ASCII**（这是用户的直接要求）',
+      labels.every((l) => !hasNonAscii(prettySymbol(l))),
+      labels.map(prettySymbol).find(hasNonAscii) ?? '(none)',
+    )
+    ok('单位元的展示形态是 \\mathrm{id}（渲染出来就是 id）', prettySymbol(a.value.group.identity.label) === '\\mathrm{id}')
+    ok(
+      '生成元的展示形态也是 ASCII',
+      a.value.group.generators.every((g) => !hasNonAscii(prettySymbol(g.symbol))),
+    )
+  }
 
-  const ids = a.value.group.elements.map((e) => e.label)
-  ok('元素记号确实是引擎 TeX（含反斜杠）', ids.every((l) => l.includes('\\')), ids[0])
-  ok('展示形态里不再有反斜杠', ids.every((l) => !prettySymbol(l).includes('\\')))
-  ok('单位元展示成 id', prettySymbol(a.value.group.identity.label) === 'id')
-  ok(
-    '生成元展示形态无反斜杠',
-    a.value.group.generators.every((g) => !prettySymbol(g.symbol).includes('\\')),
-  )
-
-  // ── 三种写法落到同一个元素 ──
+  // ── 引擎形态与用户敲的形态**是同一个**：`\alpha_2` 与 `\alpha_{2}` 落同一元素 ──
   {
     const three = build([
       'A = Aut(S_4)',
-      'n1 = ord(A, α₂)',
-      'n2 = ord(A, \\alpha_2)',
-      'n3 = ord(A, \\alpha_{2})',
+      'n1 = ord(A, \\alpha_2)',
+      'n2 = ord(A, \\alpha_{2})',
     ])
-    const vals = ['n1', 'n2', 'n3'].map((n) => {
+    const vals = ['n1', 'n2'].map((n) => {
       const o = three.byId(n)
       return o?.value.type === 'number' ? o.value.value : null
     })
-    ok('三种写法都能求值', vals.every((v) => v !== null), JSON.stringify(vals))
-    ok('三种写法给出同一个值', vals[0] !== null && vals[0] === vals[1] && vals[1] === vals[2])
-    // 数学：⟨α₂⟩ 的阶就是 α₂ 的阶
-    const B = build(['A = Aut(S_4)', 'n = ord(A, α₂)', 'B = 闭包(A, α₂)'])
-    eq('|⟨α₂⟩| = ord(α₂)', B.orderOf('B'), vals[0])
-    const C = build(['A = Aut(S_4)', 'C = 闭包(A, \\alpha_2)'])
-    eq('TeX 写法闭包同阶', C.orderOf('C'), B.orderOf('B'))
+    ok('两种花括号写法都能求值', vals.every((v) => v !== null), JSON.stringify(vals))
+    ok('两种写法给出同一个值', vals[0] !== null && vals[0] === vals[1], JSON.stringify(vals))
+
+    // 数学：\\langle\\alpha₂\\rangle 的阶就是 \\alpha₂ 的阶
+    const B = build(['A = Aut(S_4)', 'n = ord(A, \\alpha_2)', 'B = 闭包(A, \\alpha_2)'])
+    eq('|\\langle\\alpha_2\\rangle| = ord(\\alpha_2)', B.orderOf('B'), vals[0])
   }
 
-  // ── 提示串：给用户抄的那条不许漏引擎记号 ──
+  // ── 提示串：给用户抄的那条必须**全是 ASCII**（否则抄不回去） ──
   {
     const bad = build(['A = Aut(S_4)', 'n = ord(A, zzz)'])
     const s = bad.line('n')
     ok('解析失败有错误', !!s && !s.ok)
     const hint = s?.hint ?? ''
-    ok('提示里没有反斜杠', !hint.includes('\\'), hint.slice(0, 60))
-    ok('提示里列出展示形态的元素', hint.includes('id') && hint.includes('α₁'), hint.slice(0, 60))
-    ok('错误串里的群名也是展示形态', !(s?.error ?? '').includes('\\'), s?.error ?? '')
+    ok('元素提示里没有键盘打不出的字符', !hasNonAscii(hint), hint.slice(0, 70))
+    ok('提示里列的是引擎形态的记号', hint.includes('\\alpha_1') || hint.includes('\\mathrm{id}'), hint.slice(0, 70))
+    ok('错误串也是 ASCII', !hasNonAscii(s?.error ?? ''), s?.error ?? '')
   }
 
-  // ── 置换群元素：core 的单循环不带括号，展示层要补回来（U15）──
+  /* ══ 置换群元素：core 的单循环不带括号，展示层要补回来（U15）═══ */
+
   {
     const b = build(['G = S_4'])
     const g = b.byId('G')
     if (g?.value.type === 'group') {
       const grp = g.value.group
       const three = grp.elements.find((e) => e.label === '234')
-      ok('core 的 S₄ 单循环标签确实不带括号', !!three, grp.elements.map((e) => e.label).join(' '))
+      ok('core 的 S_4 单循环标签确实不带括号', !!three, grp.elements.map((e) => e.label).join(' '))
       if (three) {
         eq('展示层把 234 补成 (234)', elementNotation(grp, three), '(234)')
         // 补完必须还能敲回去——"展示成什么样，就得能照着敲回去"
@@ -110,152 +128,112 @@ export function run(): void {
       const dbl = grp.elements.find((e) => e.label === '(12)(34)')
       ok('带括号的双对换原样不动', !!dbl && elementNotation(grp, dbl) === '(12)(34)')
 
-      // 提示串也跟着走课本记号（用户照着它抄）
       const hint = build(['G = S_4', 'n = ord(G, zzz)']).line('n')?.hint ?? ''
       ok('元素提示里用 (234) 而不是 234', hint.includes('(234)'), hint.slice(0, 80))
-      ok('提示里没有反斜杠', !hint.includes('\\'), hint.slice(0, 80))
+      ok('提示里没有键盘打不出的字符', !hasNonAscii(hint), hint.slice(0, 80))
     }
   }
   {
-    // C₁₂ 里有元素标签 `10`——**它不是置换，不许加括号**。
+    // C_12 里有元素标签 `10`——**它不是置换，不许加括号**。
     // 加括号那一关靠 resolveElementLoose 的回认挡住（`(10)` 解析不了）。
     const c = build(['H = C_12'])
     const h = c.byId('H')
     if (h?.value.type === 'group') {
       const grp = h.value.group
       const ten = grp.elements.find((e) => e.label === '10')
-      ok('C₁₂ 里确有标签 10 的元素', !!ten, grp.elements.map((e) => e.label).join(' '))
+      ok('C_12 里确有标签 10 的元素', !!ten, grp.elements.map((e) => e.label).join(' '))
       if (ten) eq('但它不是置换，保持原样', elementNotation(grp, ten), '10')
     }
   }
 
-  // ── 多对一不猜：展示形态撞车时不许静默命中 ──
+  /* ══ 「键盘打不出来的字符」：一律拦，并给可照抄的改法 ═══════════════ */
+
+  suite('notation \\cdot 键盘打不出来的字符：拦下来 + 给改法')
   {
-    // `\alpha_{2}` 与 `\alpha_2` 都展示成 `α₂`；同一群里不该同时出现两者。
-    // 构造不出来就只验 prettySymbol 的多对一性质（这是 ⓪ 层加唯一性判据的理由）。
-    eq('两种 TeX 折叠成同一展示形态', prettySymbol('\\alpha_{2}'), prettySymbol('\\alpha_2'))
-  }
+    // ① 分四类（调用方据此说不同的话）
+    eq('下标字符', scanNotAscii(SUB4)?.kind, 'subscript')
+    eq('上标字符', scanNotAscii(SUP2)?.kind, 'superscript')
+    eq('希腊字母', scanNotAscii(PHI)?.kind, 'greek')
+    eq('数学符号', scanNotAscii(CAP)?.kind, 'symbol')
+    eq('纯 ASCII 不报', scanNotAscii('S_4'), null)
+    eq('中文放行（那是用户写的内容）', scanNotAscii('闭包(G)'), null)
+    eq('中文标点也放行（—— … 是输入法的标准标点）', scanNotAscii('A —— B …'), null)
 
-  /* ══ 希腊字母：输入与匹配的闭环 ═══════════════════════════ */
+    // ② 建议是**整串真折过**的结果，不是模板 —— 做法借自 GroupViz 的 canonical.ts
+    eq('S₄ -> S_4（整串折，不是只折那个字符）', scanNotAscii(`S${SUB4}`)?.suggestion, 'S_4')
+    eq('\\varphi -> \\varphi', scanNotAscii(PHI)?.suggestion, '\\varphi')
+    eq('\\Omega -> \\Omega', scanNotAscii(OMEGA)?.suggestion, '\\Omega')
+    eq('嵌在表达式里也折整串：ker(\\varphi)', scanNotAscii(`ker(${PHI})`)?.suggestion, 'ker(\\varphi)')
+    eq('A \\cap B -> A \\cap B', scanNotAscii(`A ${CAP} B`)?.suggestion, 'A \\cap B')
 
-  /**
-   * 这一节的由来（2026-09-26，用户："关于 φ 这个希腊字符，你还没修啊"）。
-   *
-   * 现象：`\phi = 映射(…)` **建得出来**（输入框那侧过 `normalizeName`），
-   * 但 `ker(\phi)` **引不到**（求值那侧没归一）—— 而 `ker(φ)` 引得到。
-   * 用户看到的只是"有时候好使、有时候不好使"。
-   *
-   * 根因是**归一只做了一半**：建对象时归一、引用时不归一。
-   * 修法两道：两侧共用 `normalizeGreek`（`pretty.ts`），且把归一放到
-   * **造对象的最窄关口**（`build.ts` 拆名字处）——三个入口各自归一总会漏一个。
-   */
-  suite('notation · 希腊字母：输入与匹配（四种写法等价）')
-  {
-    const PHI = '\u03c6' // φ GREEK SMALL LETTER PHI（本项目的标准写法）
-    const PHISYM = '\u03d5' // ϕ GREEK PHI SYMBOL —— LaTeX 的 \phi 排出来是这个
+    // ③ **折叠必须保语义**（GroupViz 那边实测栽过的坑）
+    //    `C_2^2` 若折成 `C_22`，建议用户改写成 `C_{22}` —— 静默给出**另一个群**。
+    eq('C_2^2 -> C_2^2（不是 C_22！）', scanNotAscii(`C_2${SUP2}`)?.suggestion, 'C_2^2')
+    eq('C₁₂ -> C_12（连续同类合并成一个）', scanNotAscii('C\u2081\u2082')?.suggestion, 'C_12')
+    eq('C₂\\times C₂ -> C_2\\times C_2（下标与乘号一起折）', scanNotAscii('C\u2082\u00d7C\u2082')?.suggestion, 'C_2\\times C_2')
+    eq('\\varphi（U+03D5，论文里复制来的是这个码位）也给同一条建议', scanNotAscii(PHISYM)?.suggestion, '\\varphi')
 
-    // ① 归一本身：两个方向
-    eq('LaTeX 别名 \\phi → φ', normalizeGreek('\\phi'), PHI)
-    eq('\\varphi → φ', normalizeGreek('\\varphi'), PHI)
-    eq('符号变体 ϕ(U+03D5) → φ（从论文里复制来的是这个码位）', normalizeGreek(PHISYM), PHI)
-    eq('大写也有：\\Phi → Φ', normalizeGreek('\\Phi'), 'Φ')
-    eq('内嵌也认：ker(\\phi)', normalizeGreek('ker(\\phi)'), `ker(${PHI})`)
-    eq('变体与标准写法在句子中间同归一', normalizeGreek(`ord(A, ${PHISYM})`), `ord(A, ${PHI})`)
-
-    // ② 不能误伤：表里没有的命令、单反斜杠（集合差）、拉丁名字
-    eq('不认识的命令原样留着', normalizeGreek('A \\ B'), 'A \\ B')
-    eq('单反斜杠不动', normalizeGreek('\\'), '\\')
-    eq('拉丁对象名不受影响', normalizeGreek('G \\ H'), 'G \\ H')
-
-    // ③ 建对象：四种写法给**同一个 id**
-    const built = ['φ', '\\phi', '\\varphi', PHISYM].map((n) => {
-      const r = build([`${n} = 映射(C_6, C_3, a→2)`])
-      return r.objects[0]?.id ?? '（没建出来）'
-    })
-    ok('四种写法建出的 id 完全相同', new Set(built).size === 1, built.join(' | '))
-    eq('而且就是标准字符 φ', built[0], PHI)
-
-    // ④ 引用：四种写法**互相**引用都通（这条就是当初漏掉的半边）
-    const written = ['φ', '\\phi', '\\varphi', PHISYM]
-    written.forEach((n, i) => {
-      const r = build([`φ = 映射(C_6, C_3, a→2)`, `K = ker(${n})`])
-      eq(`用第 ${i + 1} 种写法引用 φ 建出的映射`, r.orderOf('K'), 2)
-    })
-
-    // ④' 反过来也要通：建的时候用 LaTeX 写法
-    const rev = build(['\\phi = 映射(C_6, C_3, a→2)', 'K = ker(φ)'])
-    eq('建时用 \\phi、引用时用 φ', rev.orderOf('K'), 2)
-
-    // ⑤ 元素级：展示形态与 LaTeX 写法落到同一个元素
-    const aut = build(['G = S_4', 'A = Aut(G)'])
-    const A = aut.byId('A')
-    if (A?.value.type === 'group') {
-      const g = A.value.group
-      const a1 = g.elements.find((e) => e.label === '\\alpha_1')
-      ok('自同构群里确有 \\alpha_1', !!a1, g.elements.slice(0, 4).map((e) => e.label).join(' '))
-      ok('敲展示形态 α₁ 认得出', !!a1 && resolveElementLoose(g, 'α₁')?.id === a1.id)
-      ok('敲 LaTeX 写法 \\alpha_1 也认得出', !!a1 && resolveElementLoose(g, '\\alpha_1')?.id === a1.id)
+    // ④ 真的建不出来，而且报错里**有改法**
+    {
+      const bad = build([`${PHI} = C_6`])
+      eq('用 \\varphi 当名字建不出对象', bad.objects.length, 0)
+      const st = bad.lineStates[0]
+      ok('报错说"键盘打不出来"', (st?.error ?? '').includes('键盘打不出来'), st?.error)
+      ok('并给出可照抄的改法', (st?.hint ?? '').includes('\\varphi'), st?.hint ?? '')
+    }
+    {
+      const bad = build(['G = S_4', `X = C_2${SUP2}`])
+      eq('表达式里用 ^2 也建不出来', bad.orderOf('X'), null)
+      const st = bad.lineStates.find((s) => s.raw.includes('X'))
+      ok('报错说"上标字符"', (st?.error ?? '').includes('上标字符'), st?.error)
+      ok('改法是 C_2^2', (st?.hint ?? '').includes('C_2^2'), st?.hint ?? '')
+    }
+    {
+      const bad = build([`N = C_6`, `R = N ${SUBSET} G`])
+      ok('关系行里的 \\subseteq 也被拦', (bad.lineStates.at(-1)?.error ?? '').includes('键盘打不出来'), bad.lineStates.at(-1)?.error)
     }
 
-    // ⑥ 重名检查也按归一后的名字算（否则 `φ` 与 `\phi` 能各建一个）
-    // 注意别用 `err('φ')` —— 它取的是**第一个**叫这名字的行（那是成功的第一行）。
-    const dup = build(['φ = C_6', '\\phi = C_3'])
-    eq('两行的名字归一后是同一个', dup.lineStates[1]?.name, 'φ')
-    eq('于是第二行被拦下', dup.lineStates[1]?.ok, false)
-    eq('理由就是重名', dup.lineStates[1]?.error, '名字「φ」重复定义')
+    // ⑤ 名字那一侧同一套判据（`checkName`）
+    ok('\\varphi 不能当名字', !checkName(PHI, []).ok)
+    ok('提示给的是 \\varphi', (checkName(PHI, []).hint ?? '').includes('\\varphi'), checkName(PHI, []).hint ?? '')
+    ok('\\varphi可以当名字（全是 ASCII）', checkName('\\varphi', []).ok, checkName('\\varphi', []).error ?? '')
+    ok('\\Omega也可以', checkName('\\Omega', []).ok)
+    // 名字层只要求"是命令形态"（\ + 字母）—— 是不是真实命令交给画布：
+    // KaTeX 认不出的会画成红字，比在这里维护一张 LaTeX 命令全集便宜得多
+    ok('\\foo也合法（形态对即可，渲染时会红字提醒）', checkName('\\foo', []).ok)
+    ok('带空格的不行', !checkName('a b', []).ok)
+
+    // ⑥ 折叠函数本身：纯 ASCII 恒等
+    eq('foldToAscii 对纯 ASCII 恒等', foldToAscii('S_4'), 'S_4')
+    eq('foldToAscii 不动中文', foldToAscii('闭包(G)'), '闭包(G)')
   }
 
-  /* ══ 群记号的展示形态也能照着敲回去 ═══════════════════════ */
+  /* ══ 群记号：ASCII 形态建得出、Unicode 形态被拦 ═══════════════ */
 
-  /**
-   * 这一节的由来（2026-09-26）：**元素级**的"展示 → 回认"早就有了（本文件上半部分），
-   * 但**群记号级**一直没有 —— 画布上节点标签写的是 `S₄`，用户照着抄回去建群，
-   * 报的是"无法识别：S₄"。**面板、节点标签、文档里给的记号，全都是敲不回来的。**
-   *
-   * 判据比元素级简单：两种写法必须建出**同阶的群**（阶相同就说明落到同一个群上；
-   * 群符号没有"两个不同群同阶"的歧义问题——记号本身是唯一的）。
-   */
-  suite('notation · 群记号：展示形态能照着敲回去')
+  suite('notation \\cdot 群记号：ASCII 形态能敲、Unicode 形态被拦')
   {
-    const pairs: [string, string][] = [
-      ['S_4', 'S₄'], ['S_3', 'S₃'], ['A_4', 'A₄'], ['A_5', 'A₅'],
-      ['D_4', 'D₄'], ['C_6', 'C₆'], ['C_12', 'C₁₂'],
-      ['Q_8', 'Q₈'], ['S_6', 'S₆'],
-      ['C_2 x C_2', 'C₂×C₂'], ['Z_6', 'Z₆'],
+    const good = ['S_4', 'S_3', 'A_4', 'A_5', 'D_4', 'C_6', 'C_12', 'Q_8', 'S_6', 'Z_6', 'C_2 x C_2']
+    for (const g of good) {
+      const r = build([`X = ${g}`])
+      ok(`「${g}」建得出群`, !!r.orderOf('X'), r.line('X')?.error ?? '（没给出阶）')
+    }
+
+    // 旧的 Unicode 写法：一律拦，且报错带改法
+    const bads: [string, string][] = [
+      ['S\u2084', 'S_4'],
+      ['C\u2082\u00d7C\u2082', 'C_2\\times C_2'],
+      ['Z\u2086', 'Z_6'],
+      ['A\u2084', 'A_4'],
     ]
-    for (const [eng, pretty] of pairs) {
-      const a = build([`X = ${eng}`])
-      const b = build([`Y = ${pretty}`])
-      ok(
-        `「${pretty}」不报"无法识别"`,
-        !!b.orderOf('Y'),
-        b.line('Y')?.error ?? '（没给出阶）',
-      )
-      eq(`「${pretty}」与「${eng}」同阶`, b.orderOf('Y'), a.orderOf('X'))
+    for (const [bad, fixed] of bads) {
+      const r = build([`X = ${bad}`])
+      eq(`「${bad}」建不出来`, r.orderOf('X'), null)
+      const st = r.lineStates.find((s) => s.raw.includes('X'))
+      ok(`「${bad}」的改法是「${fixed}」`, (st?.hint ?? '').includes(fixed), st?.hint ?? '')
     }
 
-    // ── 归一本身 ──
-    eq('S₄ → S_4', normalizeExpr('S₄'), 'S_4')
-    eq('Z₆ → Z_6', normalizeExpr('Z₆'), 'Z_6')
-    eq('C₂×C₂ → C_2 x C_2（下标与乘号一起还原）', normalizeExpr('C₂×C₂'), 'C_2 x C_2')
-    eq('C₁₂ → C_12（连续下标合并成一个，不是 C_1_2）', normalizeScript('C₁₂'), 'C_12')
-    eq('上标也还原（C₂² → C_2^2）', normalizeScript('C₂²'), 'C_2^2')
-
-    // ── 不能误伤 ──
-    eq('没有上下标的原样不动', normalizeExpr('GL(2,3)'), 'GL(2,3)')
-    eq('普通数字不是下标', normalizeExpr('C_12'), 'C_12')
-
-    // 元素记号 `α₂` 归一成 `α_2` 之后，仍要能被元素回认接住（⓪ 层按**展示形态**比）。
-    // 这条是回归保护：新加的归一不能把已经修好的元素回认弄坏。
-    const aut = build(['G = S_4', 'A = Aut(G)'])
-    const A = aut.byId('A')
-    if (A?.value.type === 'group') {
-      const ag = A.value.group
-      const a1 = ag.elements.find((e) => e.label === '\\alpha_1')
-      ok('自同构群里确有 \\alpha_1', !!a1)
-      if (a1) {
-        eq('归一后的 α_1 仍命中同一个元素', resolveElementLoose(ag, normalizeScript('α₁'))?.id, a1.id)
-      }
-    }
+    // 重名检查按**字面名字**算（不再有归一，所以 `\phi` 与 `\varphi` 是两个名字）
+    const dup = build(['X = C_6', 'X = C_3'])
+    eq('同名会被拦住', dup.lineStates[1]?.error, '名字「X」重复定义')
   }
 }

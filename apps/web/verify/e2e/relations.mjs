@@ -1,13 +1,13 @@
 /**
  * 走查：**关系层**（U19）在真浏览器里的样子 —— 用户的原始剧本。
  *
- * 用户的投诉原话："我创建了 f: S₄→S₃ 的满同态，设出了 K = ker(f)，第一个问题：
+ * 用户的投诉原话："我创建了 f: S₄\\to S₃ 的满同态，设出了 K = ker(f)，第一个问题：
  * K 是什么？(…) 第三个问题，我想拉个箭头表示 A₄ 和 K 的包含关系，但做不到"。
  *
  * 这一套就照着他那条路走一遍，验"关系"那一节真的把话说了：
- *   - K 的面板：`K = ker f` · ⊴ S₄ · 指数 24 / 4 = 6
- *   - K 的面板：`K ≤ A`（V₄ ≤ A₄）· 指数 12 / 4 = 3 · ⊴ 正规
- *   - A 的面板：`A ≤ G`（A₄ ≤ S₄）· 指数 24 / 12 = 2 · ⊴ 正规
+ *   - K 的面板：`K = ker f` \\cdot \\trianglelefteq S₄ \\cdot 指数 24 / 4 = 6
+ *   - K 的面板：`K \\le A`（V₄ \\le A₄）\\cdot 指数 12 / 4 = 3 \\cdot \\trianglelefteq 正规
+ *   - A 的面板：`A \\le G`（A₄ \\le S₄）\\cdot 指数 24 / 12 = 2 \\cdot \\trianglelefteq 正规
  *   - 边界声明：只列"已经建出来"的对象
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/relations.mjs`
@@ -91,16 +91,23 @@ const relState = () =>
       has: document.querySelectorAll('.relations').length > 0,
       tags: [...document.querySelectorAll('.rel-tag')].map((e) => e.textContent.trim()),
       bodies: [...document.querySelectorAll('.rel-body')].map((e) => clean(e.textContent)),
-      details: [...document.querySelectorAll('.rel-detail')].map((e) => clean(e.textContent)),
+      // 附注读 `data-detail`（**原始形态**）：DOM 文本是 KaTeX 渲染后的结果，
+      // 而且 `clean()` 会抹掉空白 —— `	rianglelefteq S_4` 那一个空格正是要比的东西
+      details: [...document.querySelectorAll('.rel-detail')].map(
+        (e) => e.dataset.detail ?? clean(e.textContent),
+      ),
       note: clean(document.querySelector('.rel-note')?.textContent),
     }
   })
 
-/* ══ 剧本：S₄ ↠ S₃，取核，再手打 A₄ ═══════════════════ */
+/** 只抹空白 —— 原始形态里 `24 / 4 = 6` 的空格是排版，比的时候得忽略。 */
+const sq = (s) => String(s ?? '').replace(/\s+/g, '')
+
+/* ══ 剧本：S₄ \\twoheadrightarrow S₃，取核，再手打 A₄ ═══════════════════ */
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12→23, c→13)')
+await addLine('f', '映射(G, H, s12->23, c->13)')
 await addLine('K', 'ker(f)')
 await addLine('A', 'A_4')
 await page.keyboard.press('Escape')
@@ -109,7 +116,7 @@ await page.waitForTimeout(300)
 const errs = await page.evaluate(() =>
   [...document.querySelectorAll('.row-err')].map((e) => e.textContent.trim()),
 )
-ok('五行全部求值成功（含 S₄ ↠ S₃ 那个同态）', errs.length === 0, JSON.stringify(errs))
+ok('五行全部求值成功（含 S_4 ->> S_3 那个同态）', errs.length === 0, JSON.stringify(errs))
 
 /* ══ K 的面板：核 + 子群关系 ═════════════════════════════ */
 
@@ -124,14 +131,14 @@ ok(
   JSON.stringify(K.bodies),
 )
 ok(
-  '核的附注说了「⊴ S₄」与手算的 24 / 4 = 6',
-  K.details.some((d) => d.includes('⊴S₄') && d.includes('24/4=6')),
+  '核的附注说了「\\trianglelefteq S_4」与手算的 24 / 4 = 6',
+  K.details.some((d) => d.includes('\\trianglelefteq S_4') && sq(d).includes('24/4=6')),
   JSON.stringify(K.details),
 )
-ok('关系里有一条「子群」（K ≤ A₄）', K.tags.includes('子群'), K.tags.join(','))
+ok('关系里有一条「子群」（K \\le A_4）', K.tags.includes('子群'), K.tags.join(','))
 ok(
-  'K ≤ A₄ 那一行手算对上了 12 / 4 = 3 且判了 ⊴ 正规',
-  K.details.some((d) => d.includes('12/4=3') && d.includes('⊴正规')),
+  'K \\le A_4 那一行手算对上了 12 / 4 = 3 且判了 \\trianglelefteq 正规',
+  K.details.some((d) => sq(d).includes('12/4=3') && d.includes('\\trianglelefteq 正规')),
   JSON.stringify(K.details),
 )
 
@@ -143,13 +150,13 @@ ok('点得中 A 那一行', await clickRow('A'))
 await page.waitForTimeout(400)
 const A = await relState()
 ok(
-  'A 的面板里列出 A ≤ G（两个独立声明的群之间的包含）',
-  A.details.some((d) => d.includes('24/12=2')),
+  'A 的面板里列出 A \\le G（两个独立声明的群之间的包含）',
+  A.details.some((d) => sq(d).includes('24/12=2')),
   JSON.stringify(A.details),
 )
 ok(
-  '并且判出 ⊴ 正规（指数 2 的子群必正规）',
-  A.details.some((d) => d.includes('24/12=2') && d.includes('⊴正规')),
+  '并且判出 \\trianglelefteq 正规（指数 2 的子群必正规）',
+  A.details.some((d) => sq(d).includes('24/12=2') && d.includes('\\trianglelefteq 正规')),
   JSON.stringify(A.details),
 )
 ok(
@@ -164,7 +171,7 @@ ok('点得中 H 那一行', await clickRow('H'))
 await page.waitForTimeout(400)
 const H = await relState()
 ok(
-  'S₃ 的面板里列出"谁由我而来"（f 的靶）',
+  'S_3 的面板里列出"谁由我而来"（f 的靶）',
   H.tags.includes('派生') && H.details.some((d) => d.includes('map')),
   JSON.stringify(H),
 )

@@ -30,7 +30,7 @@ export function ObjectDock({
 
   return (
     <DockPanel title="对象" count={inputs.length} open={open} onToggle={onToggle}>
-      {inputs.length === 0 && <div className="empty">点下方 ✎ 声明一个群，如 G = D_4</div>}
+      {inputs.length === 0 && <div className="empty">点下方 * 声明一个群，如 G = D_4</div>}
       {inputs.map((s) => (
         <ObjectRow key={s.index} state={s} onRemove={onRemove} onSelect={onSelect} />
       ))}

@@ -51,12 +51,12 @@ export function NumericDock({
         ) : (
           entries.map((e) => (
             <div key={e.key} className={`num-row num-${e.source}`}>
-              {/* 标签可能是拖进来的元素记号（`阶(α₂)`）或算出来的定义（`ord(A, α₂)`）——
+              {/* 标签可能是拖进来的元素记号（`阶(alpha_2)`）或算出来的定义（`ord(A, alpha_2)`）----
                   两种都可能带引擎记号，交给 TexOrText 统一处置 */}
               <TexOrText className="num-label" text={e.label} />
               <span className="num-value">{e.value}</span>
               <button className="x" onClick={() => onRemove(e.key)} title="移除">
-                ×
+                x
               </button>
             </div>
           ))

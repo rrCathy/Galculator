@@ -1682,6 +1682,31 @@ body {
   font-size: 1em;
 }
 
+/**
+ * 边标签（`\pi` / `\hookrightarrow` / `=`）—— 与节点同一个渲染路径。
+ *
+ * 白描边靠 text-shadow 模拟：标签压在线**中点**上，不"抠"出来会和线糊在一起
+ *（节点那边用的是 SVG 的 `paintOrder="stroke"`，HTML 里没有对应物）。
+ */
+.gedge-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  white-space: nowrap;
+  user-select: none;
+  text-shadow:
+    0 0 3px #fff,
+    0 0 3px #fff,
+    0 0 3px #fff,
+    0 0 3px #fff;
+}
+
+.gedge-label .katex {
+  font-size: 1em;
+}
+
 .gnode-main {
   display: block;
   font-weight: 500;

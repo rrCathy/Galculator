@@ -51,7 +51,7 @@ function ringItems(value: GalValue, singleOps: OpDef[]): RingItem[] {
         key: op.id,
         label: op.call?.[0] ?? menuLabel(op),
         opId: op.id,
-        title: `${op.notation} —— ${op.doc}`,
+        title: `${op.notation} ---- ${op.doc}`,
       })),
     ]
   }
@@ -124,7 +124,9 @@ export function ObjectOrb({
           else onClose()
         }}
       >
-        ⋯
+        {/* 球面上的三点。**必须是 ASCII**（2026-09-27 起）——
+            它从前是 `⋯`（U+22EF），那个字符键盘打不出来 */}
+        ...
       </button>
 
       {stage === 'ring' &&
@@ -172,7 +174,7 @@ export function ObjectOrb({
             <button
               key={op.id}
               className="orb-op"
-              title={`${op.notation} —— ${op.doc}`}
+              title={`${op.notation} ---- ${op.doc}`}
               onClick={() => onRun(op)}
             >
               <span className="orb-op-label">{menuLabel(op)}</span>

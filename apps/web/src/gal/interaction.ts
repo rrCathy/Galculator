@@ -93,14 +93,22 @@ export function multiOps(): OpDef[] {
   return OPS.filter((op) => objectArity(op) > 1)
 }
 
-/** 悬浮球面板里的短标签：一圈放不下 `pSub(G, p)` 这种全记法。 */
+/**
+ * 悬浮球面板里的短标签：一圈放不下 `pSub(G, p)` 这种全记法。
+ *
+ * ⚠️ **这一张表里不许写 LaTeX 命令**（2026-09-27 起）。这一圈标签在按钮上是
+ * **纯文本**显示，写了 `\times` 用户就会看到一串反斜杠；而如果改成走渲染，
+ * 数学模式又会把 `中心 Z` 里的空格吃掉（KaTeX 在数学模式下忽略空格）。
+ * 所以这里的形态就是**中文 + ASCII**：`交`、`并`、`包含` 这些词已经说清了操作，
+ * 不需要再挂一个符号。要挂符号就得把标签拆成"文字 + 数学"两段渲染 —— 不值得。
+ */
 const MENU_LABEL: Record<string, string> = {
-  directProduct: '直积 ×',
+  directProduct: '直积',
   quotient: '商 /',
-  intersection: '交 ∩',
-  union: '并 ∪',
-  difference: '差 \\',
-  productSet: '积集 ·',
+  intersection: '交',
+  union: '并',
+  difference: '差',
+  productSet: '积集',
   center: '中心 Z',
   centralizer: '中心化子 C_G',
   normalizer: '正规化子 N_G',
@@ -117,10 +125,10 @@ const MENU_LABEL: Record<string, string> = {
   fixedPoints: '不动点',
   kernel: '核 ker',
   image: '像 f(H)',
-  closure: '生成子群 ⟨S⟩',
+  closure: '生成子群 <S>',
   elementOrder: '元素阶 ord',
-  map: '映射 f: G → H',
-  contains: '包含 ⊆',
+  map: '映射 f: G -> H',
+  contains: '包含',
 }
 
 export function menuLabel(op: OpDef): string {
@@ -133,13 +141,13 @@ export const PARAM_LABEL: Record<ParamType, string> = {
   group: '群',
   subset: '元素集 / 子群',
   setlike: '集合 / 子群集',
-  omega: '集合 Ω',
+  omega: '集合 \\Omega',
   action: '作用',
   map: '映射',
   element: '元素记号',
   prime: '素数',
   int: '整数',
-  genImage: '生成元 → 像',
+  genImage: '生成元 \\to 像',
 }
 
 /** 该操作凑齐对象参数后要不要弹编辑器（映射构建器）。 */
@@ -151,7 +159,7 @@ export function needsEditor(op: OpDef): boolean {
 export function pendingHint(op: OpDef, pickedCount: number): string {
   const p = op.params[pickedCount]
   if (!p) return '选择参数'
-  return `选择「${p.name}」（${PARAM_LABEL[p.type]}）· 第 ${pickedCount + 1} / ${objectArity(op)} 个对象`
+  return `选择「${p.name}」（${PARAM_LABEL[p.type]}），第 ${pickedCount + 1} / ${objectArity(op)} 个对象`
 }
 
 /**

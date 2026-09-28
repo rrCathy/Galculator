@@ -46,8 +46,8 @@ const DEFAULT_LINES = [
   // 打开就能看到交换图：`G ↷ Ω`、`Orb(H) = Ω`（传递）、`N_G(H) ↪ G`
   'G = S_4',
   'Syl = Syl_p(G, 3)',
-  'Ω = 底集(Syl)',
-  'A = 共轭作用在(G, Ω)',
+  'Omega= 底集(Syl)',
+  'A = 共轭作用在(G, Omega)',
   'O = 轨道(A, 1)',
   'N = 稳定子(A, 1)',
 ]
@@ -645,7 +645,7 @@ export default function App() {
       />
 
       {/*
-        拖拽连线的候选菜单（第四批）。**唯一候选不弹菜单**——直接执行了，
+        拖拽连线的候选菜单（第四批）。**唯一候选不弹菜单**----直接执行了，
         所以这里出现就一定是"这两个能做好几件事"，得让用户挑。
        */}
       {connectMenu && (
@@ -661,14 +661,14 @@ export default function App() {
             <b>{connectMenu.from}</b> 与 <b>{connectMenu.to}</b>
             <span className="count">{connectMenu.cands.length}</span>
             <button className="connect-close" onClick={reset} title="Esc">
-              ✕
+              x
             </button>
           </div>
           {connectMenu.cands.map((c) => (
             <button
               key={`${c.op.id}:${c.swapped ? 1 : 0}`}
               className="connect-item"
-              title={`${c.op.notation} —— ${c.op.doc}`}
+              title={`${c.op.notation} ---- ${c.op.doc}`}
               onClick={() => {
                 setConnectMenu(null)
                 dispatchPairOp(c.op, connectMenu.from, connectMenu.to, c.swapped)
@@ -796,10 +796,10 @@ export default function App() {
         <div className="notice">
           <span>
             {notice.text}
-            {notice.hint ? ` · ${notice.hint}` : ''}
+            {notice.hint ? ` -${notice.hint}` : ''}
           </span>
           <button onClick={() => setNotice(null)} title="关闭">
-            ×
+            x
           </button>
         </div>
       )}

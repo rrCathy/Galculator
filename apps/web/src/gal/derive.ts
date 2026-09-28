@@ -149,7 +149,7 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           kind: 'map',
           from: g,
           to: o.id,
-          label: 'π',
+          label: '\\pi',
           arrow: 'surjective',
         })
         consumed.add(o.id)
@@ -166,7 +166,7 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           kind: 'map',
           from: second.id,
           to: g,
-          label: '↪',
+          label: '\\hookrightarrow',
           arrow: 'injective',
         })
       }
@@ -182,7 +182,7 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           kind: 'map',
           from: o.id,
           to: f,
-          label: i === 0 ? 'π₁' : 'π₂',
+          label: i === 0 ? '\\pi_1' : '\\pi_2',
           arrow: 'surjective',
         })
       })
@@ -211,7 +211,7 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           kind: 'map',
           from: dom,
           to: o.id,
-          label: 'π',
+          label: '\\pi',
           arrow: 'surjective',
         })
       }
@@ -234,7 +234,7 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
           kind: 'map',
           from: o.id,
           to: target,
-          label: '≅',
+          label: '\\cong',
           arrow: 'iso',
         })
       }
@@ -255,7 +255,7 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
         kind: 'map',
         from: o.id,
         to: parent,
-        label: '↪',
+        label: '\\hookrightarrow',
         arrow: 'injective',
       })
       consumed.add(o.id)
@@ -312,16 +312,18 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       omega.from && objects.some((x) => x.id === omega.from) ? omega.from : null
     if (!home) home = setNodeId(objects, omega)
     if (!home) {
-      home = `${o.id}/Ω`
+      // ⚠️ **id 用纯 ASCII**（`/Omega`），label 才是 LaTeX（`\Omega`）。
+      // id 会进选择器、断言、URL；带反斜杠与空格的 id 是自找麻烦。
+      home = `${o.id}/Omega`
       nodes.push({
         id: home,
         origin: 'derived',
-        label: 'Ω',
+        label: '\\Omega',
         def: `${o.id} 的作用点集`,
         sources: [o.id],
         value: { type: 'set', set: omega },
         opId: 'omega',
-        recipe: '作用的 Ω',
+        recipe: '作用的 \\Omega',
         shape: 'set',
         level: (levels.get(o.id) ?? 0) + 1,
       })
@@ -357,7 +359,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
           kind: 'map',
           from: o.id,
           to: home,
-          label: same ? '=' : '↪',
+          label: same ? '=' : '\\hookrightarrow',
           arrow: same ? 'iso' : 'injective',
         })
       }
@@ -391,7 +393,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       kind: 'action',
       from,
       to,
-      label: '↷',
+      label: '\\curvearrowright',
       objectId: o.id,
     })
   }
@@ -430,7 +432,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       from,
       to,
       // 正规是**算出来**的：`⊴` 与 `↪` 的区别一眼可见
-      label: R.isNormal ? '⊴' : '↪',
+      label: R.isNormal ? '\\trianglelefteq' : '\\hookrightarrow',
       objectId: o.id,
       arrow: 'injective',
     })
@@ -449,7 +451,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       !(
         e.kind === 'map' &&
         !e.objectId &&
-        e.label === '↪' &&
+        e.label === '\\hookrightarrow' &&
         declaredPairs.has(`${e.from}->${e.to}`)
       ),
   )

@@ -1,15 +1,15 @@
 /**
- * 走查：**子群像 f(H)** 与 **声明包含 H ⊆ G**（U20）—— 用户的原始诉求。
+ * 走查：**子群像 f(H)** 与 **声明包含 H \\subseteq G**（U20）—— 用户的原始诉求。
  *
  * 投诉原话两条：
  *   "我想拉个箭头表示 A₄ 和 K 的包含关系，但做不到，没这个功能"
  *   "f(A₄) 怎么创建？直接拖到 f 上？没这个功能"
  *
  * 这里在真浏览器里把两条都做出来，并验几何层：
- *   - `FA = 像(f, A)` 长出 `f(A) ↪ S₃` 的顶点与边
- *   - `R = A ⊆ G` 长出**可点选**的关系边（A₄ ⊴ S₄ → 标签 `⊴`）
- *   - 点那条边 → 信息面板给出「关系」的账（指数 24/12 = 2）
- *   - 假声明（D₄ ⊆ S₄）被拦在行里
+ *   - `FA = 像(f, A)` 长出 `f(A) \\hookrightarrow S₃` 的顶点与边
+ *   - `R = A \\subseteq G` 长出**可点选**的关系边（A₄ \\trianglelefteq S₄ \\to 标签 `\\trianglelefteq`）
+ *   - 点那条边 \\to 信息面板给出「关系」的账（指数 24/12 = 2）
+ *   - 假声明（D₄ \\subseteq S₄）被拦在行里
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/relation-ops.mjs`
  */
@@ -28,7 +28,7 @@ const ok = (name, cond, detail = '') => {
   }
 }
 
-/** `M x y L x y` → 端点（曲线返回 null）。 */
+/** `M x y L x y` \\to 端点（曲线返回 null）。 */
 function seg(d) {
   const m = /^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)\s*L\s*(-?[\d.]+)[\s,]+(-?[\d.]+)$/.exec((d ?? '').trim())
   if (!m) return null
@@ -110,7 +110,7 @@ const canvasState = () =>
       const path = g.querySelector('path:not(.gedge-hit)')
       return {
         cls: g.getAttribute('class') ?? '',
-        label: g.querySelector('text')?.textContent ?? '',
+        label: g.dataset.label ?? '',
         d: path?.getAttribute('d') ?? '',
         end: path?.getAttribute('marker-end') ?? '',
         start: path?.getAttribute('marker-start') ?? '',
@@ -134,18 +134,18 @@ const infoState = () =>
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12→23, c→13)')
+await addLine('f', '映射(G, H, s12->23, c->13)')
 await addLine('K', 'ker(f)')
 await addLine('A', 'A_4')
 await addLine('FA', '像(f, A)')
-await addLine('R', 'A ⊆ G')
+await addLine('R', 'A \\subseteq G')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(400)
 
 const errs = await rowErrs()
 ok('七行全部求值成功', errs.length === 0, JSON.stringify(errs))
 
-/* ── 几何：子群像的顶点 + 两条 ↪ + 一条可点选的关系边 ── */
+/* ── 几何：子群像的顶点 + 两条 \\hookrightarrow + 一条可点选的关系边 ── */
 
 const cs = await canvasState()
 const at = Object.fromEntries(cs.nodes.map((n) => [n.id, n]))
@@ -154,22 +154,22 @@ ok('画布上没有「关系」顶点（关系是边不是点）', !at.R, `nodes
 
 const relEdge = cs.edges.find((e) => e.cls.includes('gedge-relation'))
 ok('画布上有关系边', !!relEdge, cs.edges.map((e) => e.cls).join(' | '))
-ok('关系边标签是 ⊴（A₄ ⊴ S₄）', relEdge?.label === '⊴', relEdge?.label)
+ok('关系边标签是 \\trianglelefteq（A_4 \\trianglelefteq S_4）', relEdge?.label === '\\trianglelefteq', relEdge?.label)
 ok('关系边可点选（有 hit 层）', !!relEdge?.hit)
 ok('关系边带单射尾钩', /-hook/.test(relEdge?.start ?? ''), relEdge?.start)
 
-const incl = cs.edges.find((e) => e.cls.includes('gedge-map') && e.label === '↪')
-ok('画布上有 f(A) ↪ S₃ 的包含边', !!incl, cs.edges.map((e) => `${e.cls}:${e.label}`).join(' | '))
+const incl = cs.edges.find((e) => e.cls.includes('gedge-map') && e.label === '\\hookrightarrow')
+ok('画布上有 f(A) -> S_3 的包含边', !!incl, cs.edges.map((e) => `${e.cls}:${e.label}`).join(' | '))
 
-// 轴向（DIAGRAM_SPEC §1.1）：A 与 G 同层（都是输入）→ 画成水平箭头
+// 轴向（DIAGRAM_SPEC §1.1）：A 与 G 同层（都是输入）\\to 画成水平箭头
 {
   const s = seg(relEdge?.d)
-  ok('A ⊆ G 画成水平箭头', !!s && Math.abs(s.y1 - s.y2) <= 1, s ? `Δy=${Math.abs(s.y1 - s.y2)}` : 'not a segment')
+  ok('A \\subseteq G 画成水平箭头', !!s && Math.abs(s.y1 - s.y2) <= 1, s ? `\\Delta y=${Math.abs(s.y1 - s.y2)}` : 'not a segment')
   ok('两个端点同高（同层 y 相等）', !!at.A && !!at.G && Math.abs(at.A.cy - at.G.cy) <= 1, `${at.A?.cy} vs ${at.G?.cy}`)
   ok('两列分开（非退化）', !!at.A && !!at.G && Math.abs(at.A.cx - at.G.cx) > 10, `${at.A?.cx} vs ${at.G?.cx}`)
 }
 
-/* ── 点那条关系边 → 信息面板给出「关系」的账 ── */
+/* ── 点那条关系边 \\to 信息面板给出「关系」的账 ── */
 
 ok('点得中关系边', await clickSvg('.gedge-relation .gedge-hit'))
 await page.waitForTimeout(400)
@@ -183,22 +183,22 @@ ok(
 )
 ok('面板里判了正规（是）', ri.keys.includes('正规') && ri.vals.includes('是'), JSON.stringify(ri.vals))
 
-/* ── 点 f(A) 顶点 → 是群，且是靶群里的子群 ── */
+/* ── 点 f(A) 顶点 \\to 是群，且是靶群里的子群 ── */
 
 ok('点得中 f(A) 顶点', await clickSvg('g.gnode[data-id="FA"] .gnode-hit'))
 await page.waitForTimeout(400)
 const fi = await infoState()
 ok('点 f(A) 看到的是群', fi.chip === '群', `${fi.chip} :: ${fi.head}`)
-ok('阶是 3（手算：A₄ 的像 ≅ C₃）', fi.vals.some((v) => v.includes('|G| = 3')), JSON.stringify(fi.vals))
+ok('阶是 3（手算：A_4 的像 \\cong C_3）', fi.vals.some((v) => v.includes('|G| = 3')), JSON.stringify(fi.vals))
 
 /* ── 假声明被拦在行里 ── */
 
 await addLine('D', 'D_4')
-// 假声明是**输入层**就拦住的（按钮置灰 → 根本写不进对象表），
+// 假声明是**输入层**就拦住的（按钮置灰 \\to 根本写不进对象表），
 // 所以这里看的是状态行，不是 `.row-err`。这一点与"定义表里的行"是两条不同的路。
-const submitted = await addLine('R2', 'D ⊆ G')
+const submitted = await addLine('R2', 'D \\subseteq G')
 const st = await page.evaluate(() => document.querySelector('.composer-status')?.textContent ?? '')
-ok('`D ⊆ G`（D₄ 不是 S₄ 的子群）被输入层拦住', submitted === false, `submitted=${submitted}`)
+ok('`D \\subseteq G`（D_4 不是 S_4 的子群）被输入层拦住', submitted === false, `submitted=${submitted}`)
 ok('拦的理由是"不是子群"', st.includes('不是') && st.includes('子群'), st)
 ok('对象表里没有多出任何求值失败的行', (await rowErrs()).length === 0)
 

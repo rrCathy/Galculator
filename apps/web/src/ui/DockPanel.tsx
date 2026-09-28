@@ -37,7 +37,7 @@ export function DockPanel({
     <section className={`dock dock-${direction}${open ? ' open' : ''}`}>
       <header className="dock-head">
         <button className="dock-toggle" onClick={onToggle} title={open ? '收起' : '展开'}>
-          <span className="dock-caret">{open ? '▾' : direction === 'up' ? '▴' : '▸'}</span>
+          <span className="dock-caret">{open ? 'v' : direction === 'up' ? '^' : '>'}</span>
           <span className="dock-title">{title}</span>
           {count !== undefined && count > 0 && <span className="count">{count}</span>}
         </button>

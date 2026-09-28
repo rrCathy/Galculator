@@ -1,7 +1,7 @@
 /**
  * 第三同构定理的自动成图（缺口 **G4**）。
  *
- * `(G/N)/(K/N) ≅ G/K`（`N ⊴ K ⊴ G`）。算术判据用第三同构定理本身：
+ * `(G/N)/(K/N) \\cong G/K`（`N \\trianglelefteq K \\trianglelefteq G`）。算术判据用第三同构定理本身：
  * **结果群的阶必须等于 |G/K|** —— 期望值是手算的理论值，不是跑出来的数。
  *
  * 卡住它的根因不是"算不动"，而是**元素 id 的语义**：core 的商群元素 id 是
@@ -16,48 +16,48 @@ import { build, eq, ok, suite } from '../harness'
 /** 商群元素（陪集）的语义键：成员标签排序。 */
 function cosetKey(group: { elements: { id: string; cosetMemberLabels?: string[] }[] }, i: number): string {
   const e = group.elements.find((x) => x.id === `qcoset-${i}`)
-  return e?.cosetMemberLabels ? [...e.cosetMemberLabels].sort().join(',') : '∅'
+  return e?.cosetMemberLabels ? [...e.cosetMemberLabels].sort().join(',') : '\\varnothing'
 }
 
-/** (G, N, K) → 第三同构 `(G/N)/(K/N) ≅ G/K`，`want` = |G/K|（手算）。 */
+/** (G, N, K) \\to 第三同构 `(G/N)/(K/N) \\cong G/K`，`want` = |G/K|（手算）。 */
 const CASES: { name: string; lines: string[]; want: number }[] = [
   {
-    name: 'C₁₂, N=⟨6⟩, K=⟨2⟩（K/N 的陪集序与 G/N 错位）',
+    name: 'C_12, N=\\langle 6\\rangle, K=\\langle 2\\rangle（K/N 的陪集序与 G/N 错位）',
     lines: ['G = C_12', 'N = 闭包(G, 6)', 'K = 闭包(G, 2)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
     want: 2,
   },
   {
-    name: 'C₁₂, N=⟨6⟩, K=⟨3⟩',
+    name: 'C_12, N=\\langle 6\\rangle, K=\\langle 3\\rangle',
     lines: ['G = C_12', 'N = 闭包(G, 6)', 'K = 闭包(G, 3)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
     want: 3,
   },
   {
-    name: 'D₄, N=⟨r²⟩, K=⟨r⟩',
+    name: 'D_4, N=\\langle r^2\\rangle, K=\\langle r\\rangle',
     lines: ['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
     want: 2,
   },
   {
-    name: 'D₄, N=⟨r²⟩, K=⟨r², s⟩',
+    name: 'D_4, N=\\langle r^2\\rangle, K=\\langle r^2, s\\rangle',
     lines: ['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r2, s)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
     want: 2,
   },
   {
-    name: 'D₄, N=⟨r²⟩, K=⟨r², sr₁⟩',
+    name: 'D_4, N=\\langle r^2\\rangle, K=\\langle r^2, sr_1\\rangle',
     lines: ['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r2, sr1)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
     want: 2,
   },
   {
-    name: 'D₆, N=⟨r²⟩, K=⟨r⟩',
+    name: 'D_6, N=\\langle r^2\\rangle, K=\\langle r\\rangle',
     lines: ['G = D_6', 'N = 闭包(G, r2)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
     want: 2,
   },
   {
-    name: 'D₆, N=⟨r³⟩, K=⟨r⟩',
+    name: 'D_6, N=\\langle r^3\\rangle, K=\\langle r\\rangle',
     lines: ['G = D_6', 'N = 闭包(G, r3)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
     want: 2,
   },
   {
-    name: 'S₄, N=V₄, K=A₄',
+    name: 'S_4, N=V_4, K=A_4',
     lines: [
       'G = S_4',
       'N = 闭包(G, (12)(34), (13)(24))',
@@ -69,7 +69,7 @@ const CASES: { name: string; lines: string[]; want: number }[] = [
     want: 2,
   },
   {
-    name: 'A₄, N=V₄, K=A₄（退化：商为平凡群）',
+    name: 'A_4, N=V_4, K=A_4（退化：商为平凡群）',
     lines: [
       'G = A_4',
       'N = 闭包(G, (12)(34), (13)(24))',
@@ -83,12 +83,12 @@ const CASES: { name: string; lines: string[]; want: number }[] = [
 ]
 
 export function run(): void {
-  suite('thirdIso · 第三同构定理 (G/N)/(K/N)（G4）')
+  suite('thirdIso \\cdot 第三同构定理 (G/N)/(K/N)（G4）')
 
   for (const c of CASES) {
     const b = build(c.lines)
     const firstErr = b.lineStates.find((s) => !s.ok)
-    ok(`可求值：${c.name}`, !firstErr, firstErr ? `${firstErr.name} → ${firstErr.error}` : '')
+    ok(`可求值：${c.name}`, !firstErr, firstErr ? `${firstErr.name} -> ${firstErr.error}` : '')
     eq(`|(G/N)/(K/N)| = |G/K|：${c.name}`, b.orderOf('Q'), c.want)
   }
 
@@ -98,7 +98,7 @@ export function run(): void {
     const gn = b.byId('GN')
     const kn = b.byId('KN')
     if (gn?.value.type === 'group' && kn?.value.type === 'group') {
-      ok('同上：编号错位（GN.qcoset-1 ≠ KN.qcoset-1）', cosetKey(gn.value.group, 1) !== cosetKey(kn.value.group, 1), `gn=${cosetKey(gn.value.group, 1)} kn=${cosetKey(kn.value.group, 1)}`)
+      ok('同上：编号错位（GN.qcoset-1 \\ne KN.qcoset-1）', cosetKey(gn.value.group, 1) !== cosetKey(kn.value.group, 1), `gn=${cosetKey(gn.value.group, 1)} kn=${cosetKey(kn.value.group, 1)}`)
       ok(
         '对齐按语义：KN 的 1 号陪集在 GN 里是 2 号',
         cosetKey(gn.value.group, 2) === cosetKey(kn.value.group, 1),
@@ -109,7 +109,7 @@ export function run(): void {
     }
   }
 
-  // ── 图：第三同构的骨架（`K/N ↪ G/N` 是那个梯形缺失的一条腰）──
+  // ── 图：第三同构的骨架（`K/N \\hookrightarrow G/N` 是那个梯形缺失的一条腰）──
   {
     const b = build([
       'G = C_12',
@@ -119,17 +119,17 @@ export function run(): void {
       'KN = 商(K, N)',
       'Q = 商(GN, KN)',
     ])
-    const edges = deriveCanvas(b.objects).edges.map((e) => `${e.from} -${e.label ?? '∅'}-> ${e.to} [${e.kind}:${e.arrow}]`)
-    ok('KN ↪ GN（K/N 是 G/N 的子群）', edges.includes('KN -↪-> GN [map:injective]'))
-    ok('G →π→ GN', edges.includes('G -π-> GN [map:surjective]'))
-    ok('GN →π→ (G/N)/(K/N)', edges.includes('GN -π-> Q [map:surjective]'))
-    ok('K →π→ K/N', edges.includes('K -π-> KN [map:surjective]'))
+    const edges = deriveCanvas(b.objects).edges.map((e) => `${e.from} -${e.label ?? '\\varnothing'}-> ${e.to} [${e.kind}:${e.arrow}]`)
+    ok('KN -> GN（K/N 是 G/N 的子群）', edges.includes('KN -\\hookrightarrow-> GN [map:injective]'))
+    ok('G ->\\pi-> GN', edges.includes('G -\\pi-> GN [map:surjective]'))
+    ok('GN ->\\pi-> (G/N)/(K/N)', edges.includes('GN -\\pi-> Q [map:surjective]'))
+    ok('K ->\\pi-> K/N', edges.includes('K -\\pi-> KN [map:surjective]'))
   }
 
   // ── 反例：**不是**子群就仍然要拦（对齐不等于放宽判定）──
   {
     const b = build(['G = C_12', 'N = 闭包(G, 6)', 'K = 闭包(G, 2)', 'GN = 商(G, N)', 'Q = 商(GN, K)'])
-    ok('拿 G 的子群去商 G/N → 报错', b.err('Q') !== null, `err=${b.err('Q')}`)
+    ok('拿 G 的子群去商 G/N -> 报错', b.err('Q') !== null, `err=${b.err('Q')}`)
     ok('错误信息说明了原因', (b.err('Q') ?? '').includes('不是'), `err=${b.err('Q')}`)
   }
 }

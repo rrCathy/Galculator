@@ -373,7 +373,7 @@ export function CanvasView({
      * 传染成一列（`C₆` 与 `C₃` 直接叠在一起）。判据必须按**边的语义**来，
      * 而不是按几何猜。
      */
-    const VERTICAL_LABELS = new Set(['π', 'π₁', 'π₂', '↪', '=', '⊴'])
+    const VERTICAL_LABELS = new Set(['\\pi', '\\pi_1', '\\pi_2', '\\hookrightarrow', '=', '\\trianglelefteq'])
     const isVerticalConstraint = (e: GalEdge): boolean =>
       // **作用线**也算：课本里 `G ↷ Ω` 本来就是往下画的（DIAGRAM_SPEC §5.2 的三层结构）
       e.kind === 'action' ||
@@ -401,7 +401,9 @@ export function CanvasView({
      * 包含箭头斜着画完全正常（课本里两种都有）。所以 π 先占列，
      * `↪` 挤不进去就自己变斜线。
      */
-    const VERTICAL_PRIORITY: Record<string, number> = { 'π': 0, 'π₁': 0, 'π₂': 0, '=': 0, '↪': 1 }
+    const VERTICAL_PRIORITY: Record<string, number> = {
+      '\\pi': 0, '\\pi_1': 0, '\\pi_2': 0, '=': 0, '\\hookrightarrow': 1,
+    }
 
     const members: number[][] = Array.from({ length: n }, (_, i) => [i])
     const lvl = (i: number) => graph.nodes[i].level
@@ -492,11 +494,18 @@ export function CanvasView({
     const levelOfNode = (i: number) => graph.nodes[i].level
     const horizontalPairs: [number, number][] = []
     for (const e of graph.edges) {
-      // 只有**用户画的**箭头才算水平关系：
-      // 结构伴生（π / ↪）是竖直的，作用线也是竖直的，`≅` 是对角的。
-      // 声明的包含（U20）与显式映射同档：同层时画水平，跨层时由竖直约束接管。
-      const userDrawn = (e.kind === 'map' || e.kind === 'relation') && !!e.objectId
-      if (!userDrawn) continue
+      /**
+       * 同层的**映射 / 关系边**都算水平关系 —— 包括**派生**出来的那些。
+       *
+       * 从前这里要求 `!!e.objectId`（只算用户手画的），理由是"结构伴生（`\pi` / `\hookrightarrow`）
+       * 是竖直的、`≅` 是对角的"。前两条成立（它们跨层，下面那道同层判据就挡住了），
+       * 但 `≅` **不成立**：第一同构的 `im ≅ H` 两端本来就在同一层，几何上它就是水平的。
+       * 实测（2026-09-27）：`psi/ker --≅--> psi/im` 横向跨过排在中间的 `phi/ker`，
+       * 而列序不为它让路 → 箭头从对象身上穿过。判据既然要求"水平箭头不穿行"，
+       * 约束就不能只算用户画的那几条。
+       */
+      const spanSameRow = e.kind === 'map' || e.kind === 'relation'
+      if (!spanSameRow) continue
       const i = idx.get(e.from)
       const j = idx.get(e.to)
       if (i === undefined || j === undefined || i === j) continue
@@ -579,7 +588,7 @@ export function CanvasView({
       const permute = (arr: number[]): number[] => {
         let best = [...arr]
         let bestBad = violations(best)
-        if (bestBad === 0) return best // 原序已经全满足 → 一个字都不动
+        if (bestBad === 0) return best // 原序已经全满足 到一个字都不动
         const out: number[] = []
         const used = new Array<boolean>(arr.length).fill(false)
         const walk = () => {
@@ -943,7 +952,7 @@ export function CanvasView({
     return (
       <div className="canvas-wrap" ref={wrapRef}>
         <div className="canvas-empty">
-          <p>点下方的 ✎ 输入一行定义，画布长出第一个对象</p>
+          <p>点下方的 * 输入一行定义，画布长出第一个对象</p>
           <code>G = D_4</code>
         </div>
       </div>
@@ -1171,11 +1180,11 @@ export function CanvasView({
         <defs>
           {/*
             箭头**形状**编码映射类型（DIAGRAM_SPEC §1.6）。课本里
-            `G ↠ G/N`、`im φ ↪ H`、`G/ker φ ≅ im φ` 一眼可分，
+            `G 到>G/N`、`im \\phi到H`、`G/ker \\phi~=im \\phi` 一眼可分，
             因为三种形状分别承担定理的三个断言（满 / 单 / 双）：
-              · `-head` 一般同态（V 形）
-              · `-surj` 满射：**双箭头**（两个 V 叠放）
-              · `-hook` 单射：**尾部竖钩**（挂在 markerStart 上，`↪`）
+              -`-head` 一般同态（V 形）
+              -`-surj` 满射：**双箭头**（两个 V 叠放）
+              -`-hook` 单射：**尾部竖钩**（挂在 markerStart 上，`到`）
             同构 = 双箭头 + 尾钩，两件一起用。
           */}
           {EDGE_STYLES.map((st) => (
@@ -1239,7 +1248,7 @@ export function CanvasView({
         </defs>
 
         {/* 格点（DIAGRAM_SPEC §1.1）：一条**无限延伸**的规则网格，像坐标纸一样铺满画布。
-            自动布局的行列中心量化到它上面，拖动松手也吸附到它上面——
+            自动布局的行列中心量化到它上面，拖动松手也吸附到它上面----
             所以"对象落在格点上"在两条路径上都成立。 */}
         {view.gridPts.length > 0 && (
           <g className="grid" aria-hidden="true">
@@ -1318,6 +1327,9 @@ export function CanvasView({
               }`}
               data-edge-id={e.id}
               data-object-id={e.objectId ?? ''}
+              // 原始形态（`\hookrightarrow`）—— 标签走 KaTeX 之后 `text` 里是渲染结果，
+              // 走查与断言要的是**逻辑形态**，所以单独放一份
+              data-label={e.label ?? ''}
             >
               {selectable && (
                 <path
@@ -1351,28 +1363,53 @@ export function CanvasView({
                 markerEnd={endMarker}
                 markerStart={startMarker}
               />
-              {e.label && (
-                <text
-                  x={mid.x}
-                  y={mid.y}
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  fontSize={pts.labelFont}
-                  fill={isSelected ? PICK_STROKE : stroke}
-                  stroke="#fff"
-                  strokeWidth={3.5}
-                  paintOrder="stroke"
-                  strokeLinejoin="round"
-                >
-                  {e.label}
-                </text>
-              )}
+              {e.label &&
+                (() => {
+                  /**
+                   * 边标签**也走 KaTeX**（2026-09-27）。
+                   *
+                   * 从前这里是 `<text>{e.label}</text>` —— 纯文本，因为标签本来就是
+                   * 单字符的 `\pi` / `\hookrightarrow` 这种"近 Unicode"记号，画出来看得懂。
+                   * 文本形态统一到简化 LaTeX 之后就不行了：`\hookrightarrow` 会**原样**
+                   * 显示成一串反斜杠字母（实测截图里满屏这样），而节点标签是渲染好的 ——
+                   * 一眼就看得出两种标签不同源。
+                   *
+                   * 与节点同一条路：`labelTexHtml`（TeX → KaTeX HTML）+ `measureTex`
+                   *（离屏量宽，同一份缓存）。
+                   */
+                  const html = labelTexHtml(e.label)
+                  const size = measureTex(e.label, pts.labelFont)
+                  const w = Math.max(size?.w ?? e.label.length * pts.labelFont * 0.7, 10)
+                  const h = (size?.h ?? pts.labelFont) * 1.5
+                  return (
+                    <foreignObject
+                      x={mid.x - w / 2}
+                      y={mid.y - h / 2}
+                      width={w}
+                      height={h}
+                      className="gedge-fo"
+                    >
+                      {/* 白描边靠 `.gedge-label` 的 text-shadow：标签压在线中点上，
+                          不"抠"出来会和线糊在一起（SVG 那边是 `paintOrder="stroke"`） */}
+                      <div
+                        className="gedge-label"
+                        style={{ color: isSelected ? PICK_STROKE : stroke, fontSize: pts.labelFont }}
+                      >
+                        <span
+                          {...(html
+                            ? { dangerouslySetInnerHTML: { __html: html } }
+                            : { children: e.label })}
+                        />
+                      </div>
+                    </foreignObject>
+                  )
+                })()}
             </g>
           )
         })}
 
         {/* 拖拽连线的**橡皮筋**：从起点到指针（吸到悬停目标就改成吸到它的中心）。
-            起点可能是**节点**（群/集合）也可能是**边**（映射/关系）——
+            起点可能是**节点**（群/集合）也可能是**边**（映射/关系）----
             后者没有 `screen` 坐标，取它的标签位置。
             画在边之上、节点之下；`pointerEvents="none"`，不干扰命中测试。 */}
         {connect &&
@@ -1510,7 +1547,7 @@ export function CanvasView({
                       ? { dangerouslySetInnerHTML: { __html: labelHtml } }
                       : { children: n.label })}
                   />
-                  {/* 副行（|G| = 24 这类）不再画在画布上——交换图的节点只有符号，
+                  {/* 副行（|G| = 24 这类）不再画在画布上----交换图的节点只有符号，
                       要数字去信息面板看 */}
                 </div>
               </foreignObject>
@@ -1525,7 +1562,7 @@ export function CanvasView({
 
       {/* 视图工具条（右下）：**看得见**的视图状态 + 一键还原 */}
       <div className="canvas-toolbar">
-        <span className="canvas-zoom" title="滚轮缩放 · 空白处拖动平移 · 双击空白适应窗口">
+        <span className="canvas-zoom" title="滚轮缩放 -空白处拖动平移 -双击空白适应窗口">
           {zoomPct}%
         </span>
         <button
@@ -1534,9 +1571,9 @@ export function CanvasView({
             setConnectMode((v) => !v)
             setConnect(null)
           }}
-          title="连线模式：在对象上按下、拖到另一个对象上松手 —— 这两个能做的事会列出来（按住 Shift 拖也是连线，不必开这个开关）"
+          title="连线模式：在对象上按下、拖到另一个对象上松手 ---- 这两个能做的事会列出来（按住 Shift 拖也是连线，不必开这个开关）"
         >
-          连线{connectMode ? ' ✓' : ''}
+          连线{connectMode ? ' v' : ''}
         </button>
         <button
           className="ct-btn"
@@ -1554,7 +1591,7 @@ export function CanvasView({
           disabled={pinnedCount === 0}
           title="清除手动摆放的位置，回到自动排版"
         >
-          恢复自动布局{pinnedCount > 0 ? ` · ${pinnedCount}` : ''}
+          恢复自动布局{pinnedCount > 0 ? `（${pinnedCount}）` : ''}
         </button>
       </div>
     </div>

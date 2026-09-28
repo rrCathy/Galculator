@@ -6,8 +6,8 @@
  * 「信息」是另一类活（"看"）。
  *
  * 叠成一列会带来一个新风险：**两栏都展开时总高越过视口**。所以验两件事：
- *   · 静态几何 —— 同列（x 相等）、上下相邻（gap 一致）、信息另起一列且顶对齐；
- *   · 高度封顶 —— 塞满两栏 + 矮视口时，整列**不越出视口**，且是
+ *   \\cdot 静态几何 —— 同列（x 相等）、上下相邻（gap 一致）、信息另起一列且顶对齐；
+ *   \\cdot 高度封顶 —— 塞满两栏 + 矮视口时，整列**不越出视口**，且是
  *     "缩下去变可滚动"而不是"被裁掉"（`scrollHeight > clientHeight`）。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/dock-layout.mjs`
@@ -111,7 +111,7 @@ const readGeo = (page) =>
     `col.h=${g.col.h} obj.h=${g.obj.h} op.h=${g.op.h}`,
   )
 
-  // 收起「操作」→ 列变矮，且对象纹丝不动（收展不动布局）
+  // 收起「操作」\\to 列变矮，且对象纹丝不动（收展不动布局）
   const objBefore = g.obj
   await page.locator('.dock-toggle:has-text("操作")').first().click()
   await page.waitForTimeout(300)

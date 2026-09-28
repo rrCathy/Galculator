@@ -78,6 +78,6 @@ export function composeMapLine(
   pairs: { gen: string; img: string }[],
 ): string {
   const head = callHead(op) ?? '映射'
-  const args = [...refs, ...pairs.map((p) => `${p.gen}→${p.img}`)]
+  const args = [...refs, ...pairs.map((p) => `${p.gen}\\to ${p.img}`)]
   return `${head}(${args.join(', ')})`
 }

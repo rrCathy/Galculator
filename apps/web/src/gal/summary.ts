@@ -70,24 +70,24 @@ export function buildElementTable(group: Group): ElementTable {
 
   const rows: FactRow[] = [
     { key: 'order', label: '阶', numeric: true, values: facts.map((f) => String(f.order)) },
-    { key: 'center', label: '∈Z?', numeric: false, values: facts.map((f) => (f.inCenter ? '✓' : '✗')) },
+    { key: 'center', label: '\\in Z?', numeric: false, values: facts.map((f) => (f.inCenter ? 'v' : 'x')) },
     {
       key: 'class',
       label: '共轭类',
       numeric: true,
-      values: facts.map((f) => (f.classIndex === null ? '—' : String(f.classIndex))),
+      values: facts.map((f) => (f.classIndex === null ? '--' : String(f.classIndex))),
     },
     {
       key: 'classSize',
       label: '类大小',
       numeric: true,
-      values: facts.map((f) => (f.classSize === null ? '—' : String(f.classSize))),
+      values: facts.map((f) => (f.classSize === null ? '--' : String(f.classSize))),
     },
     {
       key: 'centralizer',
       label: '中心化子',
       numeric: true,
-      values: facts.map((f) => (f.centralizerOrder === null ? '—' : String(f.centralizerOrder))),
+      values: facts.map((f) => (f.centralizerOrder === null ? '--' : String(f.centralizerOrder))),
     },
   ]
 

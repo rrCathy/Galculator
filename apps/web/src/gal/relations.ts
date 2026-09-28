@@ -220,8 +220,8 @@ export function relationsFor(node: GalObject, table: GalObject[]): Relation[] {
           tex: `${toTex(node.id)} = \\ker ${toTex(src.id)}`,
           text: `${node.id} = ker ${src.id}`,
           detail:
-            `核必是定义域的正规子群：⊴ ${prettySymbol(G.symbol)}` +
-            (c ? ` · ${indexText(prettySymbol(G.symbol), node.id, K.order, G.order, c.index)}` : ''),
+            `核必是定义域的正规子群：\\trianglelefteq ${prettySymbol(G.symbol)}` +
+            (c ? ` \\cdot ${indexText(prettySymbol(G.symbol), node.id, K.order, G.order, c.index)}` : ''),
         })
         continue
       }
@@ -245,9 +245,9 @@ export function relationsFor(node: GalObject, table: GalObject[]): Relation[] {
           text: hArg ? `${node.id} = ${src.id}(${hArg.id})` : `${node.id} = im ${src.id}`,
           detail: hArg
             ? `${hArg.id} 在 ${src.id} 下的像，落在靶群 ${prettySymbol(H.symbol)} 里` +
-              (c ? ` · ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}` : '')
+              (c ? ` \\cdot ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}` : '')
             : c
-              ? `像落在靶群里 · ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}`
+              ? `像落在靶群里 \\cdot ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}`
               : `像落在靶群 ${prettySymbol(H.symbol)} 里`,
         })
         continue
@@ -279,11 +279,11 @@ export function relationsFor(node: GalObject, table: GalObject[]): Relation[] {
           kind: 'contains',
           other: o.id,
           tex: `${toTex(o.id)} \\le ${toTex(node.id)}`,
-          text: `${o.id} ≤ ${node.id}`,
+          text: `${o.id} \\le ${node.id}`,
           detail:
-            `${prettySymbol(G.symbol)} ≤ ${prettySymbol(K.symbol)}` +
-            ` · ${cBack.normal === true ? '⊴ 正规' : cBack.normal === false ? '非正规' : '正规性未判定'}` +
-            ` · ${indexText(node.id, o.id, G.order, K.order, cBack.index)}`,
+            `${prettySymbol(G.symbol)} \\le ${prettySymbol(K.symbol)}` +
+            ` \\cdot ${cBack.normal === true ? '\\trianglelefteq 正规' : cBack.normal === false ? '非正规' : '正规性未判定'}` +
+            ` \\cdot ${indexText(node.id, o.id, G.order, K.order, cBack.index)}`,
         })
       }
     }
@@ -298,7 +298,7 @@ export function relationsFor(node: GalObject, table: GalObject[]): Relation[] {
       kind: kind as RelationKind,
       other: '',
       tex: '',
-      text: `…还有 ${n} 个同类关系`,
+      text: `...还有 ${n} 个同类关系`,
     })
   }
   return sorted
@@ -321,12 +321,12 @@ function subgroupRow(name: string, K: Group, src: GalObject, G: Group, c: Contai
     tex: same
       ? `${toTex(name)} = ${toTex(src.id)}`
       : `${toTex(name)} \\le ${toTex(src.id)}`,
-    text: same ? `${name} = ${src.id}` : `${name} ≤ ${src.id}`,
+    text: same ? `${name} = ${src.id}` : `${name} \\le ${src.id}`,
     detail: same
-      ? `${prettySymbol(K.symbol)} —— 元素完全相同，就是同一个群（两种造法）`
-      : `${prettySymbol(K.symbol)} ≤ ${prettySymbol(G.symbol)}` +
-        ` · ${c.normal === true ? '⊴ 正规' : c.normal === false ? '非正规' : '正规性未判定'}` +
-        ` · ${indexText(src.id, name, K.order, G.order, c.index)}`,
+      ? `${prettySymbol(K.symbol)} ---- 元素完全相同，就是同一个群（两种造法）`
+      : `${prettySymbol(K.symbol)} \\le ${prettySymbol(G.symbol)}` +
+        ` \\cdot ${c.normal === true ? '\\trianglelefteq 正规' : c.normal === false ? '非正规' : '正规性未判定'}` +
+        ` \\cdot ${indexText(src.id, name, K.order, G.order, c.index)}`,
   }
 }
 
@@ -349,8 +349,8 @@ function derivedRelations(node: GalObject, table: GalObject[], push: (r: Relatio
           tex: `${toTex(node.id)} = ${toTex(gn)} / ${toTex(nn)}`,
           text: `${node.id} = ${gn} / ${nn}`,
           detail:
-            `N = ${nn} ⊴ ${gn}（商群良定义）` +
-            ` · |Q| = |G| / |N| = ${g.order} / ${k.order} = ${g.order / k.order}`,
+            `N = ${nn} \\trianglelefteq ${gn}（商群良定义）` +
+            ` \\cdot|Q| = |G| / |N| = ${g.order} / ${k.order} = ${g.order / k.order}`,
         })
       }
     }
@@ -371,7 +371,7 @@ function derivedRelations(node: GalObject, table: GalObject[], push: (r: Relatio
       kind: 'derived',
       other: '',
       tex: '',
-      text: `…还有 ${kids.length - DERIVED_CAP} 个以它为源的对象`,
+      text: `...还有 ${kids.length - DERIVED_CAP} 个以它为源的对象`,
     })
   }
 }

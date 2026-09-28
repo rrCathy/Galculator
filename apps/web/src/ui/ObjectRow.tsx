@@ -46,7 +46,7 @@ export function ObjectRow({
         }}
         title="删除"
       >
-        ×
+        x
       </button>
     </div>
   )
@@ -65,12 +65,12 @@ export function BadRow({
       <div className="row-top">
         <code className="row-def">{state.raw}</code>
         <button className="x" onClick={() => onRemove(state.index)} title="删除">
-          ×
+          x
         </button>
       </div>
       <div className="row-err">
         {state.error}
-        {state.hint ? ` · ${state.hint}` : ''}
+        {state.hint ? ` -${state.hint}` : ''}
       </div>
     </div>
   )

@@ -57,8 +57,8 @@ export function MapBuilder({
   /** 映射的默认名：**优先希腊字母**（φ / ψ）——`φ : G → H` 比 `f` 更像交换图 */
   const autoName = useMemo(() => {
     const used = new Set(usedNames.map((n) => n.toLowerCase()))
-    if (!used.has('φ')) return 'φ'
-    if (!used.has('ψ')) return 'ψ'
+    if (!used.has('\\phi')) return '\\phi'
+    if (!used.has('psi')) return 'psi'
     return nextAutoName(usedNames)
   }, [usedNames])
   const nameCheck = useMemo(() => checkName(nameDraft, usedNames), [nameDraft, usedNames])
@@ -92,14 +92,14 @@ export function MapBuilder({
       return {
         state: 'bad',
         error: v
-          ? `f(${label(G, v.a)}·${label(G, v.b)}) ≠ f(${label(G, v.a)})·f(${label(G, v.b)})`
+          ? `f(${label(G, v.a)}-${label(G, v.b)}) !=f(${label(G, v.a)})-f(${label(G, v.b)})`
           : '这组像不构成同态',
         hint: v ? `左 = ${label(H, v.lhs)}；右 = ${label(H, v.rhs)}` : undefined,
       }
     }
     const props = getHomomorphismProperties(G, H, res)
     const kind = props.isIsomorphism
-      ? '同构 ≅'
+      ? '同构 ~='
       : props.isInjective
         ? '单射（嵌入）'
         : props.isSurjective
@@ -152,26 +152,26 @@ export function MapBuilder({
         <span className="chip chip-map">映射</span>
         <strong>f :</strong>
         <TexOrText text={src.label} />
-        <span className="mb-arrow">→</span>
+        <span className="mb-arrow">到</span>
         <TexOrText text={tgt.label} />
         <button className="mb-x" onClick={onCancel} title="取消（Esc）">
-          ×
+          x
         </button>
       </div>
 
-      <div className="mb-hint">同态由生成元的像唯一决定——填每个生成元映到哪</div>
+      <div className="mb-hint">同态由生成元的像唯一决定----填每个生成元映到哪</div>
 
       <div className="mb-rows">
         {gens.map((g) => (
           <label key={g.gen.name} className="mb-row">
             <span className="mb-gen">{prettySymbol(g.gen.name)}</span>
-            <span className="mb-to">↦</span>
+            <span className="mb-to">到</span>
             <select
               value={images[g.gen.name] ?? ''}
               onChange={(e) => setImages((p) => ({ ...p, [g.gen.name]: e.target.value }))}
             >
-              <option value="">—</option>
-              {/* 原生 `<option>` 里只能放纯文本（塞不进 KaTeX）→ 用展示形态 */}
+              <option value="">--</option>
+              {/* 原生 `<option>` 里只能放纯文本（塞不进 KaTeX）到用展示形态 */}
               {H.elements.map((el) => (
                 <option key={el.id} value={el.id}>
                   {prettySymbol(el.label)}
@@ -188,24 +188,24 @@ export function MapBuilder({
       <div className={`mb-check ${check.state}`}>
         {check.state === 'empty' && (
           <span>
-            {prettySymbol(G.symbol)} → {prettySymbol(H.symbol)}：{gens.length} 个生成元待填
-            {autoNote ? ` · ${autoNote}` : ''}
+            {prettySymbol(G.symbol)} 到{prettySymbol(H.symbol)}：{gens.length} 个生成元待填
+            {autoNote ? ` -${autoNote}` : ''}
           </span>
         )}
         {check.state === 'bad' && (
           <>
-            <span className="mb-bad-mark">✗</span>
+            <span className="mb-bad-mark">x</span>
             <span>
               {check.error}
-              {check.hint ? ` · ${check.hint}` : ''}
+              {check.hint ? ` -${check.hint}` : ''}
             </span>
           </>
         )}
         {check.state === 'ok' && (
           <>
-            <span className="mb-ok-mark">✓</span>
+            <span className="mb-ok-mark">v</span>
             <span>
-              {check.kind} · |ker| = {check.kernel} · |im| = {check.image}
+              {check.kind} -|ker| = {check.kernel} -|im| = {check.image}
               {autoNote ? `（${autoNote}）` : ''}
             </span>
           </>

@@ -3,17 +3,29 @@
  *
  * 从前的三条 Sylow 模板把群与 p 写死（只有 A₄ 一份实例）。这一轮把它们改成入参，
  * 于是"挑参数"本身成了学习动作。走查验的就是这条链**在真浏览器里真的通**：
- *   · 面板给一个群输入框，体检行当场报 `|G| = 12 = 2²·3`；
- *   · p 按钮只列 |G| 的素因子，并且**把 n_p 写在按钮上**（哪个 p 有戏一目了然）；
- *   · 换群之后 n_p 跟着变（改 S₄ → n₂ = 3）；
- *   · 跑不通的组合被**拦住并说明理由**（Sylow III + n_p = 1），不是点了才发现；
- *   · 换个群起跑 → 步数、实例行、画布节点都对；
- *   · 全程控制台零错误。
+ *   \\cdot 面板给一个群输入框，体检行当场报 `|G| = 12 = 2^2\\cdot 3`；
+ *   \\cdot p 按钮只列 |G| 的素因子，并且**把 n_p 写在按钮上**（哪个 p 有戏一目了然）；
+ *   \\cdot 换群之后 n_p 跟着变（改 S₄ \\to n₂ = 3）；
+ *   \\cdot 跑不通的组合被**拦住并说明理由**（Sylow III + n_p = 1），不是点了才发现；
+ *   \\cdot 换个群起跑 \\to 步数、实例行、画布节点都对；
+ *   \\cdot 全程控制台零错误。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/proof-params.mjs`
  */
 const PW = 'file:///C:/newproject/GroupViz/node_modules/playwright/index.mjs'
 const BASE = process.env.GAL_BASE ?? 'http://127.0.0.1:5273'
+
+/**
+ * **键盘打不出来的字符**（中文与中文标点除外）—— 这才是「不可接受」的东西。
+ *
+ * 2026-09-27 的形态约定反转之后，`\cdot` 这样的反斜杠命令**是正确形态**
+ *（复制出去能贴进 LaTeX 博客、也能敲回来），所以判据从"不含反斜杠"
+ * 换成"不含键盘打不出的字符"。
+ */
+const hasNonAscii = (s) =>
+  /[^\x00-\x7F\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF\u2013\u2014\u2018-\u201D\u2026]/.test(
+    String(s ?? ''),
+  )
 
 let pass = 0
 let fail = 0
@@ -64,13 +76,17 @@ const setGroup = async (v) => {
 // ── 起步：默认 A₄ ──
 ok('证明面板里有群输入框', (await page.locator('.proof-group input').count()) === 1)
 ok('默认群是 A_4', (await page.locator('.proof-group input').inputValue()) === 'A_4')
-const order0 = await page.locator('.proof-order').innerText()
-ok('体检行给出 |G| 的分解', order0.includes('12') && order0.includes('2²·3'), order0)
-ok('体检行不含反斜杠', !order0.includes('\\'), order0)
+// `.proof-order` 是**数学式**（不是提示语）→ 走 KaTeX 渲染，所以要读 `data-order`
+// （原始形态 `\lvert G\rvert = 12 = 2^{2} \cdot 3`）。`innerText` 拿到的是排版结果
+//（`\cdot` 成了 ·、上下标成了 CSS 排的），比不了源码串。
+const order0 = (await page.locator('.proof-order').getAttribute('data-order')) ?? ''
+ok('体检行给出 |G| 的分解', order0.includes('12') && /2\^\{2\}[\s\S]*3/.test(order0), order0)
+// 判据是"没有键盘打不出的字符"，不是"没有反斜杠"（见文件头的 hasNonAscii 说明）。
+ok('体检行里没有键盘打不出的字符', !hasNonAscii(order0), order0)
 
 const a4 = await cardState(I)
-ok('p 按钮只列 |A₄| 的素因子（2 与 3）', a4.primes.length === 2, JSON.stringify(a4.primes))
-ok('p 按钮上写着 n_p', /n₂ = 1/.test(a4.primes[0]) && /n₃ = 4/.test(a4.primes[1]), JSON.stringify(a4.primes))
+ok('p 按钮只列 |A_4| 的素因子（2 与 3）', a4.primes.length === 2, JSON.stringify(a4.primes))
+ok('p 按钮上写着 n_p', /n_2 = 1/.test(a4.primes[0]) && /n_3 = 4/.test(a4.primes[1]), JSON.stringify(a4.primes))
 ok('Sylow I 默认选 p = 2', /p = 2/.test(a4.selected), a4.selected)
 
 // n_p = 1 撑不起 Sylow III —— 必须在按钮边就拦住并说明理由
@@ -80,21 +96,21 @@ await page.waitForTimeout(200)
 const iiiLow = await cardState(III)
 ok('Sylow III 切到 n_p = 1 的 p 就被拦', iiiLow.canStart === false, JSON.stringify(iiiLow))
 ok('拦的理由说清了 n_p = 1', iiiLow.bad.includes('= 1'), iiiLow.bad)
-ok('拦的理由不含反斜杠', !iiiLow.bad.includes('\\'), iiiLow.bad)
+ok('拦的理由里没有键盘打不出的字符', !hasNonAscii(iiiLow.bad), iiiLow.bad)
 
 // ── 换群：S₄ ──
 await setGroup('S_4')
-const orderS4 = await page.locator('.proof-order').innerText()
-ok('换群后体检行跟着变（|S₄| = 24 = 2³·3）', orderS4.includes('24') && orderS4.includes('2³·3'), orderS4)
+const orderS4 = (await page.locator('.proof-order').getAttribute('data-order')) ?? ''
+ok('换群后体检行跟着变（|S_4| = 24 = 2^{3}·3）', orderS4.includes('24') && /2\^\{3\}[\s\S]*3/.test(orderS4), orderS4)
 const s4 = await cardState(I)
-ok('S₄ 的 p 按钮仍是 2 与 3，n₂ 变成 3', /n₂ = 3/.test(s4.primes[0]) && /n₃ = 4/.test(s4.primes[1]), JSON.stringify(s4.primes))
+ok('S_4 的 p 按钮仍是 2 与 3，n_2 变成 3', /n_2 = 3/.test(s4.primes[0]) && /n_3 = 4/.test(s4.primes[1]), JSON.stringify(s4.primes))
 const iiiS4 = await cardState(III)
-ok('S₄ 上 Sylow III 可起跑（n₃ = 4）', iiiS4.canStart === true, JSON.stringify(iiiS4))
+ok('S_4 上 Sylow III 可起跑（n_3 = 4）', iiiS4.canStart === true, JSON.stringify(iiiS4))
 
 // ── 换群：D₆（n₂ = 3 有戏、n₃ = 1 没戏）──
 await setGroup('D_6')
 const d6 = await cardState(I)
-ok('D₆ 的 n₂ = 3、n₃ = 1', /n₂ = 3/.test(d6.primes[0]) && /n₃ = 1/.test(d6.primes[1]), JSON.stringify(d6.primes))
+ok('D_6 的 n_2 = 3、n_3 = 1', /n_2 = 3/.test(d6.primes[0]) && /n_3 = 1/.test(d6.primes[1]), JSON.stringify(d6.primes))
 
 // ── 认不出的群：红字 + 全部禁用 ──
 await setGroup('这不是群记号')
@@ -115,10 +131,12 @@ ok('切到 p = 3 后可以起跑', picked.canStart === true, JSON.stringify(pick
 await card(III).locator('.proof-start').click()
 await page.waitForTimeout(600)
 
-const inst = await page.locator('.proof-instance').innerText()
-ok('实例行写明「S_4 · p = 3」', inst.includes('S_4') && inst.includes('p = 3'), inst)
+// 读 `data-instance`（**原始形态**）：`.proof-instance` 走 KaTeX，`innerText` 拿到的是
+// 排版结果（下标是 CSS 排的，`innerText` 会被 KaTeX 的隐藏 MathML 结构搅乱）
+const inst = (await page.locator('.proof-instance').getAttribute('data-instance')) ?? ''
+ok('实例行写明「S_4，p = 3」', inst.includes('S_4') && inst.includes('p = 3'), inst)
 const total = await page.locator('.proof-step').count()
-ok('Sylow III 在 S₄ 上仍是 14 步', total === 14, `got=${total}`)
+ok('Sylow III 在 S_4 上仍是 14 步', total === 14, `got=${total}`)
 
 // 走到底，看画布上真长出了证明图
 for (let i = 0; i < 16; i++) {
@@ -133,28 +151,32 @@ const dom = await page.evaluate(() => {
     labels: Object.fromEntries(
       [...svg.querySelectorAll('g.gnode')].map((g) => [g.dataset.id, g.dataset.label ?? '']),
     ),
-    edges: [...svg.querySelectorAll('g.gedge')].map((g) => g.querySelector('text')?.textContent ?? ''),
+    edges: [...svg.querySelectorAll('g.gedge')].map((g) => g.dataset.label ?? ''),
     rows: [...document.querySelectorAll('.row-err')].map((e) => e.textContent.trim()),
     last: document.querySelector('.proof-step.on .proof-text')?.textContent ?? '',
   }
 })
 ok('走到底没有求值失败的行', dom.rows.length === 0, dom.rows.join(' | '))
-// 子群集 S 是 list（**不上画布**），它在画布外的宿主是 Ω；作用 A / B 是一等**边**，不占节点
+// 子群集 S 是 list（**不上画布**），它在画布外的宿主是 \\Omega；作用 A / B 是一等**边**，不占节点
 ok(
-  '画布上有 G / Ω / O / N / P / F / OB',
-  ['G', 'Ω', 'O', 'N', 'P', 'F', 'OB'].every((x) => dom.ids.includes(x)),
+  '画布上有 G / \\Omega / O / N / P / F / OB',
+  ['G', 'Omega', 'O', 'N', 'P', 'F', 'OB'].every((x) => dom.ids.includes(x)),
   dom.ids.join(','),
 )
 ok('画布上没有孤立的子群集节点 S', !dom.ids.includes('S'), dom.ids.join(','))
-ok('画布上有两条 ↷（G 与 P 各一条）', dom.edges.filter((l) => l === '↷').length === 2, dom.edges.join(','))
-ok('结论说 n₃ ≡ 1 (mod 3)', dom.last.includes('≡ 1 (mod 3)'), dom.last)
+ok('画布上有两条 ~>（G 与 P 各一条）', dom.edges.filter((l) => l === '\\curvearrowright').length === 2, dom.edges.join(','))
+// `dom.last` 是**渲染后**的文本（KaTeX 把 \equiv 排成 ≡ U+2261、下标用 CSS 排）
+ok('结论说 n_3 ≡ 1 (mod 3)', dom.last.replace(/\s+/g, '').includes('\u22611(mod3)'), dom.last)
 ok('结论文本里没有反斜杠', !dom.last.includes('\\'), dom.last)
 
-// core 把 S₄ 的单循环写成 `234`（不带括号）——画布上必须是课本记号 `⟨(234)⟩`，
+// core 把 S₄ 的单循环写成 `234`（不带括号）——画布上必须是课本记号 `<234>` 带括号那一版，
 // 否则节点标签读起来像个整数（U15 顺带修掉的展示层毛病）
 ok(
-  'P 的节点标签是 ⟨(234)⟩ 而不是 ⟨234⟩',
-  /^⟨\([0-9]+\)⟩$/.test(dom.labels.P ?? ''),
+  'P 的节点标签带括号（不会读成一个整数）',
+  // `\langle` 与 `(` 之间那个空格**必须留**：生成元标签可能以字母开头（`s12`），
+  // 紧贴会粘成 `\langles12` —— 一个不存在的命令。空格在数学模式里不产生可见间距，
+  // 所以判据放宽成"可有可无"。
+  /^\\langle\s?\([0-9]+\)\\rangle$/.test(dom.labels.P ?? ''),
   dom.labels.P,
 )
 

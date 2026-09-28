@@ -86,7 +86,7 @@ export function ComposerOrb({
         onClick={onToggle}
         title={open ? '收起输入' : '输入定义（名字 = 表达式）'}
       >
-        ✎
+        *
       </button>
       {open && (
         <div className="composer-card">
@@ -108,7 +108,7 @@ export function ComposerOrb({
               value={exprDraft}
               onChange={(e) => setExprDraft(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="表达式，如 Z(G) · G / N · ⟨G, (123)⟩"
+              placeholder="表达式，如 Z(G) -G / N -\<G, (123)\>"
               spellCheck={false}
               autoComplete="off"
             />
@@ -147,7 +147,7 @@ function ComposerStatus({
     return (
       <div className="composer-status bad">
         {nameCheck.error}
-        {nameCheck.hint ? <span className="status-meta"> · {nameCheck.hint}</span> : null}
+        {nameCheck.hint ? <span className="status-meta">，{nameCheck.hint}</span> : null}
       </div>
     )
   }
@@ -160,7 +160,7 @@ function ComposerStatus({
         {warn}
         <div className="composer-status bad">
           {preview.error}
-          {preview.hint ? ` · ${preview.hint}` : ''}
+          {preview.hint ? `，${preview.hint}` : ''}
         </div>
       </>
     )
@@ -171,7 +171,7 @@ function ComposerStatus({
       <>
         {warn}
         <div className="composer-status good">
-          <span className="ok-mark">✓</span>
+          <span className="ok-mark">v</span>
           <span className={`chip chip-${preview.value.type}`}>
             {VALUE_TYPE_LABEL[preview.value.type]}
           </span>
@@ -187,7 +187,7 @@ function ComposerStatus({
 
   return (
     <div className="composer-status hint">
-      名字留空 → 自动命名「{autoName}」（已避开注册表的 {RESERVED_CALL_NAMES.length} 个调用名）
+      名字留空 到自动命名「{autoName}」（已避开注册表的 {RESERVED_CALL_NAMES.length} 个调用名）
     </div>
   )
 }

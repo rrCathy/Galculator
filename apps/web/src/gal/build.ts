@@ -6,7 +6,7 @@ import {
   type Subgroup,
 } from '@groupviz/core'
 import { evalExpr, looksLikeRelation } from './evalDef'
-import { normalizeName } from './naming'
+import { checkName, normalizeName } from './naming'
 import { prettySymbol } from './pretty'
 import type { GalObject } from './types'
 
@@ -51,17 +51,17 @@ export function buildLines(lines: string[]): {
         name: '',
         ok: false,
         error: rel ? '这行写的是一个关系，不是定义' : '缺少「=」',
-        hint: rel ? '包含可以声明：写成 `R = A ⊆ B`；要建对象就写成「名字 = 表达式」' : undefined,
+        hint: rel ? '包含可以声明：写成 `R = A \\subseteq B`；要建对象就写成「名字 = 表达式」' : undefined,
       })
       return
     }
     /**
-     * 名字过一遍希腊字母归一（`\phi` → `φ`）。
+     * 名字在这一层过一道关：`normalizeName`（只 trim）+ `checkName`（体检）。
      *
-     * **必须在这一层做**（而不是只在前端入口）：三个入口（输入框 / 映射编辑器 /
-     * 将来别的）各自归一，总会漏一个 —— 漏掉的那个建出的对象会顶着 `\phi`
-     * 字面串当 id，于是"建得到、引不到"。归一放在**造对象的最窄关口**，
-     * 后面的 id、重复检查、引用查找就全链条一致了。
+     * **必须放在造对象的最窄关口**（而不是只在前端入口）：入口有三个
+     *（输入框 / 映射编辑器 / `buildLines`），各自校验总会漏一个 —— 而"漏掉的
+     * 那个"正是 U23 那类 bug 的产地（建得到、引不到）。放在这里，后面的 id、
+     * 重复检查、引用查找就全链条一致。
      */
     const name = normalizeName(raw.slice(0, eq).trim())
     const rhs = raw.slice(eq + 1).trim()
@@ -71,6 +71,14 @@ export function buildLines(lines: string[]): {
     }
     if (byId.has(name)) {
       lineStates.push({ index, raw, name, ok: false, error: `名字「${name}」重复定义` })
+      return
+    }
+    // 名字体检：键盘打不出来的字符在这里**也**要拦（与输入框同一套判据）。
+    // 从前只在前端拦，于是 `buildLines(['φ = C_6'])` 能绕过去建出一个
+    // 用户**敲不回来**的对象（名字是 φ，展示/复制的却是别的形态）。
+    const chk = checkName(name, byId.keys())
+    if (!chk.ok) {
+      lineStates.push({ index, raw, name, ok: false, error: chk.error, hint: chk.hint })
       return
     }
 
@@ -164,7 +172,7 @@ function firstIsoObjects(objects: GalObject[]): GalObject[] {
           sources: [o.id],
           value: { type: 'group', group: Q },
           opId: 'firstIso',
-          recipe: '第一同构定理：G/ker φ ≅ im φ',
+          recipe: '第一同构定理：G/ker \\varphi \\cong im \\varphi',
         })
       }
     }
@@ -193,7 +201,7 @@ function firstIsoObjects(objects: GalObject[]): GalObject[] {
           group: buildSubgroupGroup(m.codomain, im, symbol ?? `im ${o.id}`),
         },
         opId: 'firstIsoImage',
-        recipe: '第一同构定理：G/ker φ ≅ im φ',
+        recipe: '第一同构定理：G/ker \\varphi \\cong im \\varphi',
       })
     }
   }

@@ -123,8 +123,23 @@ export function InfoDock({
                 <div key={i} className={`rel rel-${r.kind}`}>
                   <span className="rel-tag">{RELATION_LABEL[r.kind]}</span>
                   <div className="rel-body">
-                    {r.tex ? <Tex tex={r.tex} /> : <span className="rel-text">{r.text}</span>}
-                    {r.detail && <div className="rel-detail">{r.detail}</div>}
+                    {r.tex ? (
+                      <Tex tex={r.tex} />
+                    ) : (
+                      <span className="rel-text">
+                        <TexOrText text={r.text} />
+                      </span>
+                    )}
+                    {r.detail && (
+                      <div
+                        className="rel-detail"
+                        // 原始形态（`\trianglelefteq S_4 \cdot 指数[S_4:K] = 24/4=6`）——
+                        // 走查与断言读它（DOM 文本是 KaTeX **渲染后**的，比不了源码串）
+                        data-detail={r.detail}
+                      >
+                        <TexOrText text={r.detail} />
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -151,14 +166,14 @@ export function InfoDock({
                   key={op.id}
                   type="button"
                   className="info-op"
-                  title={`${op.notation} —— ${op.doc}`}
+                  title={`${op.notation} ---- ${op.doc}`}
                   onClick={() => onRunOp(op)}
                 >
                   {menuLabel(op)}
                 </button>
               ))}
               {singleOps.length > 8 && (
-                <span className="info-ops-more">…还有 {singleOps.length - 8} 个（点对象旁的球看全部）</span>
+                <span className="info-ops-more">...还有 {singleOps.length - 8} 个（点对象旁的球看全部）</span>
               )}
             </div>
           )}
@@ -220,7 +235,7 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
           // 原样贴出来就是反斜杠；必须过一遍 KaTeX
           <TexList items={group.generators.map((g) => g.symbol)} />
         ) : (
-          <span>—</span>
+          <span>--</span>
         )}
       </Row>
       <Row k="交换">
@@ -273,10 +288,10 @@ function SubgroupsTab({ group }: { group: Group }) {
     <div className="insp-subs">
       {/*
         这个列表是**共轭类代表**（core 的 `listCosetStripSubgroups`），**不是全部子群**。
-        不写清会被读成"G 只有这么几个子群"——S₄ 只列 9 条，实际有 30 个非平凡真子群。
+        不写清会被读成"G 只有这么几个子群"----S_4 只列 9 条，实际有 30 个非平凡真子群。
       */}
       <div className="insp-note">
-        共轭类代表：同一行里的子群彼此共轭，「×n」是这一类有几个。
+        共轭类代表：同一行里的子群彼此共轭，「\\xn」是这一类有几个。
         平凡群与 G 自身不在此列。
       </div>
 
@@ -286,9 +301,13 @@ function SubgroupsTab({ group }: { group: Group }) {
             {s.structure ? <Tex tex={s.structure} /> : `阶 ${s.order}`}
           </span>
           <span className="insp-sub-meta">
-            {s.isNormal ? <b className="insp-normal">⊴ 正规</b> : null}
-            |H|={s.order} · [G:H]={s.index}
-            {s.orbitSize > 1 ? ` · ×${s.orbitSize}` : ''}
+            {s.isNormal ? (
+              <b className="insp-normal">
+                <Tex tex="\\trianglelefteq" /> 正规
+              </b>
+            ) : null}
+            |H|={s.order} -[G:H]={s.index}
+            {s.orbitSize > 1 ? ` -x${s.orbitSize}` : ''}
           </span>
         </div>
       ))}
@@ -327,17 +346,17 @@ function OtherTab({
               key={i}
               type="button"
               className="sub-tag sub-tag-btn"
-              title={`阶 ${s.order} · 指数 ${s.index ?? '—'} · 点击取出为对象`}
+              title={`阶 ${s.order} -指数 ${s.index ?? '--'} -点击取出为对象`}
               onClick={() => onExtract?.(s)}
             >
               <TexOrText text={s.label} />
               <em>|H|={s.order}</em>
-              {s.isNormal && <b>⊴</b>}
+              {s.isNormal && <b>\\normal in</b>}
               {s.isSylow && <b className="syl">Syl</b>}
             </button>
           ))}
           {v.subgroups.length > 30 && (
-            <div className="insp-line dim">…共 {v.subgroups.length} 个</div>
+            <div className="insp-line dim">...共 {v.subgroups.length} 个</div>
           )}
         </div>
       )
@@ -356,7 +375,7 @@ function OtherTab({
             ))}
           </div>
           {v.set.members.length > 40 && (
-            <div className="insp-line dim">…共 {v.set.members.length} 个</div>
+            <div className="insp-line dim">...共 {v.set.members.length} 个</div>
           )}
         </>
       )
@@ -373,7 +392,7 @@ function OtherTab({
               <Tex tex={A.group.symbol} />（|G| = {A.group.order}）
             </span>
           </Row>
-          <Row k="Ω">
+          <Row k="Omega">
             <span>
               {A.n} 个点
               {A.omegaBase === 'self' ? '（就是 G 自身）' : ''}
@@ -381,15 +400,15 @@ function OtherTab({
           </Row>
           {members.length > 0 && (
             <Row k="点">
-              {/* `#` 在 math mode 里是非法字符 → 编号留在纯文本，只有记号自己进 KaTeX */}
+              {/* `#` 在 math mode 里是非法字符 到编号留在纯文本，只有记号自己进 KaTeX */}
               <span className="insp-elems">
                 {members.slice(0, 16).map((m, i) => (
                   <span key={i}>
-                    {i > 0 && ' · '}
+                    {i > 0 && ' -'}
                     #{i + 1} <TexOrText text={m.label} />
                   </span>
                 ))}
-                {members.length > 16 ? ` …共 ${members.length} 个` : ''}
+                {members.length > 16 ? ` ...共 ${members.length} 个` : ''}
               </span>
             </Row>
           )}
@@ -416,7 +435,7 @@ function OtherTab({
             <Row k="单 / 满">
               <span>
                 {v.map.isInjective ? '单射' : '非单'}
-                {' · '}
+                {' -'}
                 {v.map.isSurjective ? '满射' : '非满'}
               </span>
             </Row>
@@ -437,7 +456,7 @@ function OtherTab({
                 {v.map.genImages.map((g, i) => (
                   <span key={i}>
                     {i > 0 && '，'}
-                    <TexOrText text={g.generator} /> ↦ <TexOrText text={g.image.label} />
+                    <TexOrText text={g.generator} /> 到<TexOrText text={g.image.label} />
                   </span>
                 ))}
               </span>
@@ -457,7 +476,8 @@ function OtherTab({
           </Row>
           <Row k="记号">
             <span>
-              <Tex tex={R.from.symbol} /> {R.isNormal ? '⊴' : '⊆'} <Tex tex={R.to.symbol} />
+              <Tex tex={R.from.symbol} />{' '}
+              <Tex tex={R.isNormal ? '\\trianglelefteq' : '\\subseteq'} /> <Tex tex={R.to.symbol} />
             </span>
           </Row>
           <Row k="子群">

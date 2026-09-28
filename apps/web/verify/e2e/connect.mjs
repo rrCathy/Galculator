@@ -2,15 +2,15 @@
  * 走查：**拖拽连线**与**信息面板的「可做」**（第四批 = 缺口 ⑩⑤）—— 真浏览器、真指针。
  *
  * 用户提的两件事：
- *   · "把 H 移到 f 上做 f(H)"（`USABILITY.md` 缺口 ③ 的原话）
- *   · `Syl_p(G) → 底集(S) → 共轭作用在` 那条链**中间必须打字**（缺口 ⑤）
+ *   \\cdot"把 H 移到 f 上做 f(H)"（`USABILITY.md` 缺口 ③ 的原话）
+ *   \\cdot`Syl_p(G) \\to 底集(S) \\to 共轭作用在` 那条链**中间必须打字**（缺口 ⑤）
  *
  * 这一套用真 `page.mouse` 拖（不是 dispatchEvent）——手势走的是
  * `onPointerDown` + window 上的原生 move/up，只有真事件能验到那条通路。
  *
  * 验证的四条：
- *   ① 唯一候选**直接执行**：把 A₄ 拖到 `f` 那条箭头上 → 立刻长出 `f(A)`
- *   ② 多候选**弹菜单**：把 A₄ 拖到 S₄ 上 → 菜单第一条是「包含 ⊆」→ 点它长出关系边
+ *   ① 唯一候选**直接执行**：把 A₄ 拖到 `f` 那条箭头上 \\to 立刻长出 `f(A)`
+ *   ② 多候选**弹菜单**：把 A₄ 拖到 S₄ 上 \\to 菜单第一条是「包含 \\subseteq」\\to 点它长出关系边
  *   ③ 落点可以是**边**（映射不占节点，但正是要拖过去的目标）
  *   ④ 信息面板的「可做」：子群集能一键 `底集`
  *
@@ -124,13 +124,17 @@ const canvasState = () =>
       ...rect(g.querySelector('.gnode-hit')),
     }))
     const edges = [...svg.querySelectorAll('g.gedge')].map((g) => {
-      const label = g.querySelector('text')
       return {
         id: g.dataset.edgeId ?? '',
         objectId: g.dataset.objectId ?? '',
-        label: label?.textContent ?? '',
+        // `data-label` 是**原始形态**（`\hookrightarrow`）；DOM 里那个 foreignObject
+        // 才是渲染结果，比不了源码串
+        label: g.dataset.label ?? '',
         cls: g.getAttribute('class') ?? '',
-        ...rect(label ?? g),
+        // 落点要按**标签**算（不是整条边组的包围盒）：边组横跨两个对象，
+        // 包围盒中心可能离标签很远，而 `hitAt` 认的是标签点。
+        //（标签从前的 `<text>` 换成了 foreignObject 里的 `.gedge-label`）
+        ...rect(g.querySelector('.gedge-label') ?? g),
       }
     })
     return {
@@ -158,7 +162,7 @@ const dragPointer = async (a, b, shift = false) => {
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12→23, c→13)')
+await addLine('f', '映射(G, H, s12->23, c->13)')
 await addLine('A', 'A_4')
 await addLine('Syl', 'Syl_p(G, 3)')
 await page.keyboard.press('Escape')
@@ -170,7 +174,7 @@ const before = await canvasState()
 const nodeA = before.nodes.find((n) => n.id === 'A')
 const nodeG = before.nodes.find((n) => n.id === 'G')
 const edgeF = before.edges.find((e) => e.objectId === 'f')
-ok('画布上有 A₄ 节点', !!nodeA, before.nodes.map((n) => n.id).join(','))
+ok('画布上有 A_4 节点', !!nodeA, before.nodes.map((n) => n.id).join(','))
 ok('画布上有 f 那条边（映射不占节点）', !!edgeF, before.edges.map((e) => `${e.objectId}:${e.label}`).join(','))
 
 /* ── ① 唯一候选直接执行：A₄ 拖到 f 上 ── */
@@ -178,7 +182,7 @@ ok('画布上有 f 那条边（映射不占节点）', !!edgeF, before.edges.map
 await dragPointer(nodeA, edgeF, true) // Shift 拖 = 连线（不必先开开关）
 const afterOne = await canvasState()
 const newLabels = afterOne.nodes.map((n) => n.label).join(' | ')
-ok('拖 A₄ 到 f 上 → 直接长出 f(A)（唯一候选，没弹菜单）', /f\(A\)/.test(newLabels), newLabels)
+ok('拖 A_4 到 f 上 -> 直接长出 f(A)（唯一候选，没弹菜单）', /f\(A\)/.test(newLabels), newLabels)
 ok('没有多出错误行', (await rowErrs()).length === 0, JSON.stringify(await rowErrs()))
 ok('也没弹菜单', (await page.locator('.connect-menu').count()) === 0)
 
@@ -195,7 +199,7 @@ await dragPointer(
   mid.nodes.find((n) => n.id === 'G'),
 )
 const menu = await page.locator('.connect-menu').count()
-ok('多候选 → 弹出候选菜单', menu === 1)
+ok('多候选 -> 弹出候选菜单', menu === 1)
 if (menu === 0) {
   const st = await canvasState()
   console.log(`    [diag] notices=${JSON.stringify(st.notices)}`)
@@ -207,7 +211,7 @@ if (menu === 0) {
 const items = await page.evaluate(() =>
   [...document.querySelectorAll('.connect-item .connect-label')].map((e) => e.textContent.trim()),
 )
-ok('菜单第一条是「包含 ⊆」（按数学意图排序）', (items[0] ?? '').includes('包含'), items.join(' | '))
+ok('菜单第一条是「包含 \\subseteq」（按数学意图排序）', (items[0] ?? '').includes('包含'), items.join(' | '))
 
 if (menu === 1) {
   await page.screenshot({ path: '../../docs/assets/u21-connect-menu.png' })
@@ -217,7 +221,7 @@ await page.waitForTimeout(420)
 const afterTwo = await canvasState()
 const relEdge = afterTwo.edges.find((e) => e.cls.includes('gedge-relation'))
 ok('点「包含」后长出关系边', !!relEdge, afterTwo.edges.map((e) => e.label).join(','))
-ok('关系边标签是 ⊴（A₄ ⊴ S₄，正规性是算出来的）', relEdge?.label === '⊴', relEdge?.label)
+ok('关系边标签是 \\trianglelefteq（A_4 \\trianglelefteq S_4，正规性是算出来的）', relEdge?.label === '\\trianglelefteq', relEdge?.label)
 ok('对象表里多了一行（那条关系是个一等对象）', (await rowIds()).length > idsBefore, (await rowIds()).join(','))
 ok('没有错误行', (await rowErrs()).length === 0, JSON.stringify(await rowErrs()))
 
@@ -242,7 +246,7 @@ ok(
   afterSet.nodes.some((n) => /底集/.test(n.label)),
   afterSet.nodes.map((n) => n.label).join(' | '),
 )
-ok('画布上多出一个集合节点 Ω', afterSet.nodes.length > nodesBefore, `${nodesBefore} → ${afterSet.nodes.length}`)
+ok('画布上多出一个集合节点 \\Omega', afterSet.nodes.length > nodesBefore, `${nodesBefore} -> ${afterSet.nodes.length}`)
 ok('没有错误行', (await rowErrs()).length === 0, JSON.stringify(await rowErrs()))
 
 /* ── ④ 关掉连线模式后，普通拖动仍是"移动 + 钉住"（U10 零回归） ── */
@@ -276,7 +280,7 @@ ok('普通拖动仍是移动（没有连线菜单）', (await page.locator('.con
 const pinCount = await page.evaluate(
   () => [...document.querySelectorAll('.ct-btn')].map((b) => b.textContent).join(' | '),
 )
-ok('拖动把它钉住了（U10 的行为一个像素没动）', /恢复自动布局 · 1/.test(pinCount), pinCount)
+ok('拖动把它钉住了（U10 的行为一个像素没动）', /恢复自动布局（1）/.test(pinCount), pinCount)
 
 ok('控制台零错误', logs.length === 0, logs.join(' | '))
 console.log('')

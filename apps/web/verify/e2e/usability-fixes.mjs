@@ -3,8 +3,8 @@
  *
  * 覆盖 `docs/USABILITY.md` 的四条缺口：
  *   ① 结论区对"构造出来的群"不再沉默（K 的信息里有「识别」+ SmallGroup）
- *   ③ 子群 tab 标清"这是共轭类代表"，正规的标 ⊴ 正规
- *   ⑤ 名字能敲 LaTeX 希腊字母（`\phi` → φ）
+ *   ③ 子群 tab 标清"这是共轭类代表"，正规的标 \\trianglelefteq 正规
+ *   ⑤ 名字能敲 LaTeX 希腊字母（`\phi` \\to \\varphi）
  *   ⑨ 报错分清"没这功能"与"打错了"
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/usability-fixes.mjs`
@@ -43,7 +43,7 @@ const ensureCard = async () => {
   }
 }
 
-/** 填一行并提交（名字可为空 → 走自动命名）。提交不了就把状态行打出来。 */
+/** 填一行并提交（名字可为空 \\to 走自动命名）。提交不了就把状态行打出来。 */
 const addLine = async (name, expr) => {
   await ensureCard()
   await page.fill('.composer-name', name)
@@ -128,37 +128,66 @@ const objIds = async () => {
 
 await addLine('G', 'C_6')
 await addLine('H', 'C_6')
-await addLine('\\phi', '映射(G, H, a→2)')
+await addLine('\\phi', '映射(G, H, a->2)')
 await page.waitForTimeout(300)
 
 const ids = await objIds()
-ok('`\\phi` 被接受，对象表里出现 φ', ids.some((x) => x.startsWith('φ')), JSON.stringify(ids))
-ok('没有求值失败的行（φ 是合法名字）', (await page.locator('.row-err').count()) === 0)
+ok('`\\phi` 被接受，对象表里出现同名对象', ids.some((x) => x.startsWith('\\phi')), JSON.stringify(ids))
+ok('没有求值失败的行（`\\phi` 是合法名字）', (await page.locator('.row-err').count()) === 0)
 
 /**
- * **引用**这一半从前漏了（2026-09-26 用户："关于 φ 这个希腊字符，你还没修啊"）。
+ * **引用**这一半曾经漏过（2026-09-26 用户："关于 φ 这个希腊字符，你还没修啊"）。
  *
- * 建的时候名字归一了（`ComposerOrb` 过 `normalizeName`），引用的时候没有 ——
- * 于是 `ker(\phi)` 找不到那个叫 φ 的映射（报"ker(·) 需要一个映射对象"），
- * 而 `ker(φ)` 找得到。用户看到的只是"有时候好使有时候不好使"。
- * 四种写法（`φ` / `\phi` / `\varphi` / `ϕ`）现在必须**处处等价**。
+ * 那时建对象那侧会把 `\phi` 归一成真字符 φ、引用那侧不会 —— 于是
+ * `ker(\phi)` 找不到那个映射（报"需要一个映射对象"）而 `ker(φ)` 找得到，
+ * 用户看到的只是"有时候好使有时候不好使"。
+ *
+ * 2026-09-27 形态约定反转之后，这条约束**换了形式但更强**：
+ * 名字只有一种形态（ASCII / LaTeX 命令），**没有第二套写法要去对齐** ——
+ * 那个 bug 的形状从根上不存在了。所以现在验的是：
+ *   · 同名引用必定找得到（`ker(\phi)`）；
+ *   · 另一个别名**就是另一个名字**（`ker(\varphi)` 找不到，且报错说清"没有这个对象"）；
+ *   · 真字符 ϕ 一律被拦（它键盘打不出来）。
  */
-await addLine('K1', 'ker(\\phi)')
-await addLine('K2', 'ker(φ)')
-await addLine('K3', 'ker(\u03d5)') // ϕ：从论文 PDF 里复制来的通常是这个码位
+// 三条都走**输入框那条路**：被拦的会在这里就拦下（按钮置灰），所以判据看 status，
+// 不看 `.row-err` —— 后者是"进了对象表才求值失败"，根本不是被拦的样子。
+const okK1 = await addLine('K1', 'ker(\\phi)')
+const stK2 = await status()
+const okK2 = await addLine('K2', 'ker(\\varphi)')
+const stK3pre = await status()
+const okK3 = await addLine('K3', 'ker(\u03d5)') // 真字符 ϕ（从论文 PDF 里复制来的通常是这个码位）
+const stK3 = await status()
 await page.waitForTimeout(340)
 
-const kerErrs = await page.evaluate(() =>
-  [...document.querySelectorAll('.row-err')].map((e) => e.textContent.trim()),
-)
-ok('LaTeX 写法 `ker(\\phi)` 引得到那个 φ', kerErrs.length === 0, JSON.stringify(kerErrs))
 const allRows = await objIds()
-ok('三种写法各建出一个核（引用都成功）', allRows.filter((x) => /^K\d/.test(x)).length === 3, JSON.stringify(allRows))
+ok('同名引用找得到（`ker(\\phi)` 通）', okK1 === true && allRows.some((x) => /^K1/.test(x)), JSON.stringify(allRows))
 ok(
-  '而且对象表里只有一个 φ（不是 φ 与 \\phi 各一个）',
-  allRows.filter((x) => /^[\u03c6\u03d5]/.test(x)).length === 1,
+  '另一个别名**是另一个名字**（`ker(\\varphi)` 找不到，不再被静默归一）',
+  okK2 === false && allRows.every((x) => !/^K2/.test(x)),
+  `submitted=${okK2}`,
+)
+ok(
+  '真字符 ϕ 被拦下（键盘打不出来）',
+  okK3 === false && allRows.every((x) => !/^K3/.test(x)),
+  `submitted=${okK3}`,
+)
+ok(
+  '拦 ϕ 的理由说清是"键盘打不出来"',
+  stK3.text.includes('键盘打不出来'),
+  `${stK3.cls} :: ${stK3.text}`,
+)
+ok(
+  '而且给出了可照抄的改法（`\\varphi`）',
+  stK3.text.includes('\\varphi'),
+  stK3.text,
+)
+ok(
+  '对象表里没有任何非 ASCII 的名字（形态统一了）',
+  allRows.every((x) => !/^[^\x00-\x7F]/.test(x)),
   JSON.stringify(allRows),
 )
+void stK2
+void stK3pre
 await page.screenshot({ path: '../../docs/assets/u23-greek-phi.png' })
 
 /* ══ ⑨ 报错分清「没这功能」与「打错了」 ═══════════════════ */
@@ -169,21 +198,21 @@ ok('`极大子群(G)` 报「没有名为…的操作」', s1.text.includes('没�
 ok('并给了相近操作（Sub(G)）', s1.text.includes('Sub(G)'), s1.text)
 ok('不再说"可用的群记号"', !s1.text.includes('群记号'), s1.text)
 
-// 关系行是在**输入框**里打的 → 走 evalExpr（不是 buildLines），所以这里验的是 preview 那句话。
-// 注意 U20 之后 `⊆` 已经是**真操作**了：这里不再甩"写的是一个关系"，
+// 关系行是在**输入框**里打的 \\to 走 evalExpr（不是 buildLines），所以这里验的是 preview 那句话。
+// 注意 U20 之后 `\\subseteq` 已经是**真操作**了：这里不再甩"写的是一个关系"，
 // 而是真的去算，算不通就报"为什么算不通"——这才是提示该有的样子。
-await typeExpr('H ⊆ G')
+await typeExpr('H \\subseteq G')
 const s2 = await status()
-ok('`H ⊆ G`（两个 C₆，元素相同）报「同一个」', s2.text.includes('同一个'), `${s2.cls} :: ${s2.text}`)
+ok('`H \\subseteq G`（两个 C_6，元素相同）报「同一个」', s2.text.includes('同一个'), `${s2.cls} :: ${s2.text}`)
 ok('不再说"这行写的是一个关系"', !s2.text.includes('这行写的是一个关系'), s2.text)
 ok('也不甩"无法识别的群记号"', !s2.text.includes('群记号'), s2.text)
 
-// 某一侧根本不存在 → 直接点出是哪一侧，而不是答非所问
-await typeExpr('A ⊆ K9')
+// 某一侧根本不存在 \\to 直接点出是哪一侧，而不是答非所问
+await typeExpr('A \\subseteq K9')
 const s3 = await status()
-ok('`A ⊆ K9` 报「算不出来」（指出是哪一侧）', s3.text.includes('算不出来'), s3.text)
+ok('`A \\subseteq K9` 报「算不出来」（指出是哪一侧）', s3.text.includes('算不出来'), s3.text)
 
-// 真·打错字：保持"无法识别"
+// 真\\cdot打错字：保持"无法识别"
 await typeExpr('G S_4')
 const s4 = await status()
 ok('乱写仍是「无法识别」', s4.text.includes('无法识别'), s4.text)
@@ -194,7 +223,7 @@ await page.waitForTimeout(250)
 
 /* ══ ① K 的信息：结论区不再沉默 ═══════════════════════════ */
 
-await addLine('K', 'ker(φ)')
+await addLine('K', 'ker(\\phi)')
 await page.waitForTimeout(300)
 ok('K 建出来了', (await page.locator('.row-err').count()) === 0)
 
@@ -209,7 +238,7 @@ ok(
 )
 ok('不再只有"阶"一条', kInfo.labels.length >= 2, kInfo.labels.join(','))
 
-/* ══ ③ 子群 tab：标清"共轭类代表" + ⊴ 正规 ═══════════════ */
+/* ══ ③ 子群 tab：标清"共轭类代表" + \\trianglelefteq 正规 ═══════════════ */
 
 // 换一个子群丰富点的群，看得更清楚
 await ensureCard()
@@ -220,7 +249,7 @@ await page.waitForTimeout(350)
 await page.keyboard.press('Escape')
 await page.waitForTimeout(250)
 
-ok('点得中 S₄ 那一行', await clickRow('S'))
+ok('点得中 S_4 那一行', await clickRow('S'))
 await page.waitForTimeout(300)
 await page.click('.info-tab:has-text("子群")')
 await page.waitForTimeout(350)
@@ -236,12 +265,12 @@ ok(
   subInfo.notes.join(' | '),
 )
 ok(
-  '正规子群有显眼的「⊴ 正规」标记',
+  '正规子群有显眼的「\\trianglelefteq 正规」标记',
   subInfo.normals.length > 0 && subInfo.normals.every((x) => x.includes('正规')),
   JSON.stringify(subInfo.normals),
 )
 ok(
-  'S₄ 的子群列表里有 2 个正规代表（A₄ 与 V₄）',
+  'S_4 的子群列表里有 2 个正规代表（A_4 与 V_4）',
   subInfo.normals.length === 2,
   JSON.stringify(subInfo.normals),
 )

@@ -1,5 +1,5 @@
 import { OPS } from './ops'
-import { normalizeGreek, subscript } from './pretty'
+import { scanNotAscii, subscript } from './pretty'
 
 /**
  * 自动命名与"名字体检"（交互模型 §3.2）。
@@ -31,30 +31,29 @@ export function isReservedName(name: string): boolean {
   return RESERVED.has(name.trim().toLowerCase())
 }
 
-/** 合法名字：拉丁字母 / 数字 / 下划线 / 中文。 */
 /**
- * 名字允许：拉丁字母 / 数字 / 下划线 / 中文 / **希腊字母**。
- * 希腊字母是刻意的——数学里映射习惯叫 φ、ψ，群同态写成 `φ : G → H`
- * 比 `f` 更"像交换图"（用户提的）。
+ * 名字允许：拉丁字母 / 数字 / 下划线 / 中文 / **LaTeX 命令**（`\varphi`、`\Omega`）。
+ *
+ * ⚠️ 2026-09-27 起**不再允许直接写希腊字母字符**（φ、Ω）——它们键盘打不出来，
+ * 而本轮的约定是"系统里出现的每个字符都必须是键盘打得出的"。要叫 φ 就写 `\varphi`：
+ * 它全是 ASCII，显示时由 KaTeX 渲染成 φ，复制出去还是 `\varphi`。
+ *
+ * 反斜杠**不会**与集合差的中缀冲突：中缀要求"两侧都不是标识符字符"，
+ * 而命令名里 `\` 后面必定紧跟字母（`findTopLevelInfix` 那侧天然避开）。
  */
-const NAME_RE = /^[A-Za-z0-9_\u4e00-\u9fff\u0370-\u03ff\u1f00-\u1fff]+$/
+const NAME_RE = /^[A-Za-z0-9_\\\u4e00-\u9fff]+$/
 
 /**
- * **名字里的希腊字母归一**（`\phi` → `φ`、`ϕ` → `φ`）。
+ * 名字归一 —— **只去掉首尾空白**。
  *
- * 为什么必须有这一条：整个项目到处用 LaTeX（core 的符号本身就是 TeX），
- * 证明模板的定义行里写着 `φ = 映射(G, H, a→2)`——而**普通键盘敲不出 φ**。
- * 于是"展示成什么样，就得能照着敲回去"这条契约就反着破了：
- * 系统生成一个用户输不进来的记号。
- *
- * 归一本身（LaTeX 别名 + 符号变体）在 `pretty.ts#normalizeGreek`——
- * **表达式那一侧用的是同一个函数**（`evalDef.ts#normalizeExpr`）。
- * 两边共用一个，是为了让"敲进去的名字"与"引用它时敲的名字"必然相等：
- * 这曾经是个真漏洞（建的时候归一、引用的时候不归一，于是 `\phi = …` 建出来的
- * 对象用 `\phi` 引不到）。
+ * 这曾经是个真漏洞的现场（U23，2026-09-26）：那时会把 `\phi` 与 `φ` 归一成
+ * 同一个字符，而**只归一了一半**（建对象那侧归一、引用那侧没有），于是
+ * "当名字用行、当引用用不行"。2026-09-27 用户把约定改成"文本形态一律 ASCII"
+ * 之后，归一这件事**整条不需要了**：`\varphi` 就是它本身的形态，
+ * 没有第二套写法要去对齐 —— 那一整类 bug 随之消失。
  */
 export function normalizeName(raw: string): string {
-  return normalizeGreek(raw.trim())
+  return raw.trim()
 }
 
 /** 是否像一个名字（用于"整行粘贴"的拆分判断）。 */
@@ -79,14 +78,23 @@ export interface NameCheck {
  * 但得让他知道自动命名会跳过这个名字。
  */
 export function checkName(raw: string, used: Iterable<string>): NameCheck {
-  // 先过 LaTeX 别名（`\phi` → `φ`）——用户敲不出 φ，但敲得出 `\phi`
   const name = normalizeName(raw)
   if (!name) return { ok: true }
+  // 「键盘打不出来的字符」先拦，并给出**可照抄的改法**（与表达式那侧同一套判据）
+  const bad = scanNotAscii(name)
+  if (bad) {
+    const what =
+      bad.kind === 'subscript' ? '下标字符'
+      : bad.kind === 'superscript' ? '上标字符'
+      : bad.kind === 'greek' ? '希腊字母'
+      : '数学符号'
+    return { ok: false, error: `${what}「${bad.char}」键盘打不出来`, hint: `改用：${bad.suggestion}` }
+  }
   if (!NAME_RE.test(name)) {
     return {
       ok: false,
-      error: '名字只能用字母（含希腊字母）/ 数字 / 下划线 / 中文',
-      hint: '希腊字母可以写成 LaTeX：\\phi · \\varphi · \\alpha · \\sigma …',
+      error: '名字只能用字母 / 数字 / 下划线 / 中文，或 LaTeX 命令（如 \\varphi）',
+      hint: '要叫 φ 就写 \\varphi（全是 ASCII，显示时渲染成 φ）',
     }
   }
   const lower = name.toLowerCase()
@@ -96,7 +104,7 @@ export function checkName(raw: string, used: Iterable<string>): NameCheck {
     }
   }
   if (isReservedName(name)) {
-    return { ok: true, warn: `「${name}」也是操作名 —— 手写没问题，但自动命名会跳过它` }
+    return { ok: true, warn: `「${name}」也是操作名 ---- 手写没问题，但自动命名会跳过它` }
   }
   return { ok: true }
 }

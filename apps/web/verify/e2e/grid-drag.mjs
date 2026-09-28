@@ -1,17 +1,17 @@
 /**
- * 走查：**开放视图编辑**（U10）—— 格点 · 拖动吸附 · 平移 · 缩放 · 复位。
+ * 走查：**开放视图编辑**（U10）—— 格点 \\cdot 拖动吸附 \\cdot 平移 \\cdot 缩放 \\cdot 复位。
  *
  * 为什么补这一份：U10 当年的走查脚本**从未进仓库**（只留下两张截图），
  * 而它现在是**唯一"零回归"的功能** —— U21 只顺手验了"拖动仍会钉住"，
  * 拖动 / 缩放 / 格点 / 钉住这一整套没有任何东西守着。
  *
  * 这一套按 DIAGRAM_SPEC §1.1 的硬规范验：
- *   · 格点是**真实的点**（画出来）且**无限延伸**（像坐标纸，不是预生成的有限表）
- *   · 对象**精确落在格点上**（自动布局与手动拖动两条路都成立）
- *   · 拖动 = 吸附到最近的**空格点** → 钉住 → 别个节点纹丝不动
- *   · 平移位移**逐点相同**（U10 那个 setPointerCapture 的坑：拖 90 只动 11）
- *   · 缩放围绕指针，读数与格点间距**按同一比例**变
- *   · 复位 / 持久化 / 空画布不残留
+ *   \\cdot 格点是**真实的点**（画出来）且**无限延伸**（像坐标纸，不是预生成的有限表）
+ *   \\cdot 对象**精确落在格点上**（自动布局与手动拖动两条路都成立）
+ *   \\cdot 拖动 = 吸附到最近的**空格点** \\to 钉住 \\to 别个节点纹丝不动
+ *   \\cdot 平移位移**逐点相同**（U10 那个 setPointerCapture 的坑：拖 90 只动 11）
+ *   \\cdot 缩放围绕指针，读数与格点间距**按同一比例**变
+ *   \\cdot 复位 / 持久化 / 空画布不残留
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/grid-drag.mjs`
  */
@@ -95,7 +95,7 @@ const pickClear = async (exclude = []) => {
   return null
 }
 
-/** 真鼠标拖：down → 分步 move →（可选）mid 回调 → up */
+/** 真鼠标拖：down \\to 分步 move \\to（可选）mid 回调 \\to up */
 const drag = async (from, to, mid) => {
   await page.mouse.move(from.x, from.y)
   await page.mouse.down()
@@ -110,11 +110,11 @@ const drag = async (from, to, mid) => {
 }
 
 /**
- * 网格"铺开程度"= 互为不同的列数 × 行数。
+ * 网格"铺开程度"= 互为不同的列数 \\times 行数。
  *
  * 判据为什么不是格点**总数**：视口被平移一点，边界上进出视口的格线数量就会变
- * （实测同一张图 20 → 16），而"铺满"的语义其实是"画布上是一个成片的网格"。
- * 所以用 col × row 的规模来判。
+ * （实测同一张图 20 \\to 16），而"铺满"的语义其实是"画布上是一个成片的网格"。
+ * 所以用 col \\times row 的规模来判。
  */
 const gridCoverage = (st) => ({
   cols: new Set(st.dots.map((d) => Math.round(d.cx * 10) / 10)).size,
@@ -173,7 +173,7 @@ const addLine = async (name, expr) => {
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12→23, c→13)')
+await addLine('f', '映射(G, H, s12->23, c->13)')
 await addLine('A', 'A_4')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(400)
@@ -187,7 +187,7 @@ console.log('')
 console.log('== ① 格点：真实存在的点 ==')
 {
   const cov = gridCoverage(st)
-  ok('格点成片铺开（至少 4×4）', cov.cols >= 4 && cov.rows >= 4, `${cov.cols} 列 × ${cov.rows} 行 = ${st.dots.length} 个`)
+  ok('格点成片铺开（至少 4\\times 4）', cov.cols >= 4 && cov.rows >= 4, `${cov.cols} 列 \\times ${cov.rows} 行 = ${st.dots.length} 个`)
 
   // 等距：把格点按行分组，每行内相邻间距必须只有一个值
   const rows = new Map()
@@ -233,7 +233,7 @@ console.log('== ① 格点：真实存在的点 ==')
   ok('每个节点的中心都**精确**落在格点上', worst < 0.5, `最大偏差 ${worst.toFixed(3)}（${worstId}）`)
 }
 
-/* ══ ② 拖动：吸附 → 钉住 → 别个不动 ═══════════════════════ */
+/* ══ ② 拖动：吸附 \\to 钉住 \\to 别个不动 ═══════════════════════ */
 
 console.log('')
 console.log('== ② 拖动：吸附到最近的空格点 ==')
@@ -248,7 +248,7 @@ let dragged = null
     const others0 = before.nodes.filter((n) => n.id !== dragged.id)
     const edgeD0 = before.edgeD
 
-    // 拖到斜下方 260×200 屏幕像素
+    // 拖到斜下方 260\\times 200 屏幕像素
     const target = { x: dragged.x + 260, y: dragged.y + 200 }
     let midRing = 0
     let midEdgeD = ''
@@ -264,7 +264,7 @@ let dragged = null
     ok('拖动中显示**吸附预览环**（松手会落在哪一格）', midRing > 0, `snap-ring=${midRing}`)
     ok('拖动中边跟着重画（不是松手才动）', midEdgeD !== edgeD0 && midEdgeD.length > 0)
 
-    ok('节点真的动了', !!me1 && Math.hypot(me1.cx - me0.cx, me1.cy - me0.cy) > 40, `${me0.cx.toFixed(0)},${me0.cy.toFixed(0)} → ${me1?.cx.toFixed(0)},${me1?.cy.toFixed(0)}`)
+    ok('节点真的动了', !!me1 && Math.hypot(me1.cx - me0.cx, me1.cy - me0.cy) > 40, `${me0.cx.toFixed(0)},${me0.cy.toFixed(0)} -> ${me1?.cx.toFixed(0)},${me1?.cy.toFixed(0)}`)
 
     // 吸附后仍要精确落在格点上
     const { dist } = nearestDot(after.dots, me1)
@@ -282,8 +282,8 @@ let dragged = null
     }
     ok('其它节点纹丝不动（拖走一个不会引起重排）', maxShift < 0.5, `最大位移 ${maxShift.toFixed(3)}`)
 
-    // 钉住 → 工具条出现计数
-    ok('工具条出现「恢复自动布局 · n」', /恢复自动布局 · \d+/.test(after.buttons.join(' | ')), after.buttons.join(' | '))
+    // 钉住 \\to 工具条出现计数
+    ok('工具条出现「恢复自动布局（n）」', /恢复自动布局（\d+）/.test(after.buttons.join(' | ')), after.buttons.join(' | '))
   }
 }
 
@@ -351,16 +351,16 @@ console.log('== ④ 空白拖动 = 平移画布 ==')
     const dys = shifts.map((s) => s.dy)
     const spreadX = Math.max(...dxs) - Math.min(...dxs)
     const spreadY = Math.max(...dys) - Math.min(...dys)
-    ok('位移**逐点相同**（刚体平移）', spreadX < 0.5 && spreadY < 0.5, `Δx 极差 ${spreadX.toFixed(3)} · Δy 极差 ${spreadY.toFixed(3)}`)
+    ok('位移**逐点相同**（刚体平移）', spreadX < 0.5 && spreadY < 0.5, `\\Delta x 极差 ${spreadX.toFixed(3)} \\cdot \\Delta y 极差 ${spreadY.toFixed(3)}`)
 
-    // **那个坑**：`setPointerCapture` 只让第一次 pointermove 到位 → 拖 90 只动 11。
+    // **那个坑**：`setPointerCapture` 只让第一次 pointermove 到位 \\to 拖 90 只动 11。
     // 判据不能只看"动了没"，要看"动了多少"。
     const mag = Math.hypot(dxs[0], dys[0])
     ok('位移量与手势量级相当（不是只走了 1/8）', mag > DX * 0.5, `拖 ${DX}px 实际位移 ${mag.toFixed(1)}（viewBox 单位 ≈ 像素）`)
 
     const covMoved = gridCoverage(after)
     ok('平移后格点仍成片铺开（跟着画布走）', covMoved.cols >= 4 && covMoved.rows >= 4,
-      `${covMoved.cols} 列 × ${covMoved.rows} 行 = ${after.dots.length} 个`)
+      `${covMoved.cols} 列 \\times ${covMoved.rows} 行 = ${after.dots.length} 个`)
     ok('平移后节点仍落在格点上', after.nodes.every((n) => nearestDot(after.dots, n).dist < 0.5))
   }
 }
@@ -388,7 +388,7 @@ console.log('== ⑤ 滚轮缩放 ==')
 
     const after = await canvasState()
     const zoom1 = parseInt(after.zoom, 10)
-    ok('读数变大', zoom1 > zoom0, `${zoom0}% → ${zoom1}%`)
+    ok('读数变大', zoom1 > zoom0, `${zoom0}% -> ${zoom1}%`)
 
     const spot1 = await nodeScreen(focus.id)
     const drift = Math.hypot(spot1.x - spot0.x, spot1.y - spot0.y)
@@ -401,7 +401,7 @@ console.log('== ⑤ 滚轮缩放 ==')
     // 格点间距按**同一比例**变（格点是世界坐标的网格，缩放它就该等比）
     const kRatio = zoom1 / zoom0
     const gapRatio = dotGap0 > 0 ? dotGap1 / dotGap0 : 0
-    ok('格点间距与读数**同比例**变', Math.abs(gapRatio - kRatio) < 0.06, `读数 ×${kRatio.toFixed(2)} vs 格距 ×${gapRatio.toFixed(2)}`)
+    ok('格点间距与读数**同比例**变', Math.abs(gapRatio - kRatio) < 0.06, `读数 \\times${kRatio.toFixed(2)} vs 格距 \\times${gapRatio.toFixed(2)}`)
 
     ok('缩放后节点仍精确落在格点上（一起缩放）', after.nodes.every((n) => nearestDot(after.dots, n).dist < 0.5))
 
@@ -411,7 +411,7 @@ console.log('== ⑤ 滚轮缩放 ==')
     await page.mouse.wheel(0, 400)
     await page.waitForTimeout(320)
     const back = await canvasState()
-    ok('向下滚回去', parseInt(back.zoom, 10) < zoom1, `${zoom1}% → ${back.zoom}`)
+    ok('向下滚回去', parseInt(back.zoom, 10) < zoom1, `${zoom1}% -> ${back.zoom}`)
   }
 }
 
@@ -438,9 +438,9 @@ console.log('== ⑥ 复位与钉住清除 ==')
     await page.mouse.dblclick(blank.x, blank.y)
     await page.waitForTimeout(420)
     const after = (await canvasState()).zoom
-    ok('双击空白 → 回到 100%（适应窗口）', after === '100%', `${zoomed} → ${after}`)
+    ok('双击空白 -> 回到 100%（适应窗口）', after === '100%', `${zoomed} -> ${after}`)
   } else {
-    ok('双击空白 → 回到 100%（适应窗口）', false, '找不到空白处')
+    ok('双击空白 -> 回到 100%（适应窗口）', false, '找不到空白处')
   }
 
   // 「适应窗口」按钮
@@ -454,13 +454,13 @@ console.log('== ⑥ 复位与钉住清除 ==')
 
   // 「恢复自动布局」清掉钉住
   const beforeReset = await canvasState()
-  const pinned = /恢复自动布局 · (\d+)/.exec(beforeReset.buttons.join(' | '))
+  const pinned = /恢复自动布局（(\d+)）/.exec(beforeReset.buttons.join(' | '))
   ok('此时确实有钉住的节点', !!pinned, beforeReset.buttons.join(' | '))
 
   await page.click('.ct-btn:has-text("恢复自动布局")')
   await page.waitForTimeout(460)
   const afterReset = await canvasState()
-  const stillPinned = /恢复自动布局 · \d+/.test(afterReset.buttons.join(' | '))
+  const stillPinned = /恢复自动布局（\d+）/.test(afterReset.buttons.join(' | '))
   ok('点一下就全放回自动布局（计数消失）', !stillPinned, afterReset.buttons.join(' | '))
   ok('节点仍在格点上（自动布局也量化）', afterReset.nodes.every((n) => nearestDot(afterReset.dots, n).dist < 0.5))
 
@@ -468,7 +468,7 @@ console.log('== ⑥ 复位与钉住清除 ==')
   const moved = afterReset.nodes.find((n) => n.id === dragged?.id)
   const at0 = beforeReset.nodes.find((n) => n.id === dragged?.id)
   ok('被拖过的那个节点也回了位', !!moved && !!at0 && Math.hypot(moved.cx - at0.cx, moved.cy - at0.cy) > 20,
-    `${at0?.cx.toFixed(0)},${at0?.cy.toFixed(0)} → ${moved?.cx.toFixed(0)},${moved?.cy.toFixed(0)}`)
+    `${at0?.cx.toFixed(0)},${at0?.cy.toFixed(0)} -> ${moved?.cx.toFixed(0)},${moved?.cy.toFixed(0)}`)
 }
 
 /* ══ ⑦ 持久化：空画布不写，普通页面写、清 ═══════════════ */

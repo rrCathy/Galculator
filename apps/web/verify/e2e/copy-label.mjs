@@ -5,8 +5,8 @@
  * "`S₄` 与 `S_4` 同阶"，但验不了**画布上显示的到底是不是 `S₄`**（那是渲染层的事）。
  *
  * 所以这一份走最真实的路径：
- *   建群 → 读出画布节点的 `data-label`（系统自己生成的展示串）→ **把那个串当新输入敲回去**
- *   → 它必须建出同一个群（标签集合是**不动点**）。
+ *   建群 \\to 读出画布节点的 `data-label`（系统自己生成的展示串）\\to **把那个串当新输入敲回去**
+ *   \\to 它必须建出同一个群（标签集合是**不动点**）。
  *
  * 由来（2026-09-26）：修之前，画布上写的是 `S₄`，用户照着抄回去报"无法识别：S₄"——
  * 面板、节点标签、文档里给的记号**全是敲不回来的**。元素级早就修过，群记号级一直漏着。
@@ -96,16 +96,18 @@ const seeds = await nodeLabels((n) => n.id.startsWith('G'))
 ok('六个群都上了画布', seeds.length === 6, seeds.map((s) => `${s.id}=${s.label}`).join(' '))
 ok('没有求值失败的行', (await rowErrs()).length === 0, JSON.stringify(await rowErrs()))
 
-// 展示形态的几个特征：有下标字符、**不该**漏出引擎记号（`_数字`）
+// 文本形态的两个特征（2026-09-27 起）：是**简化 LaTeX**（`S_4`），
+// 且**不含任何键盘打不出的字符**（Unicode 下标 / 希腊字母 / 数学符号都不许有）
 const labels = seeds.map((s) => s.label)
+const NON_ASCII = /[^\x20-\x7E\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF\u2018-\u201D]/
 ok(
-  '标签是**展示形态**（含 Unicode 下标字符）',
-  labels.some((l) => /[\u2080-\u2089]/.test(l)),
+  '标签是**简化 LaTeX 文本形态**（`S_4` / `C_{12}` / `C_2^2`）',
+  labels.some((l) => /_[0-9{]/.test(l)),
   labels.join(' | '),
 )
 ok(
-  '标签里**没有**引擎记号漏出来（不该出现 `S_4` 这种）',
-  labels.every((l) => !/_[0-9]/.test(l)),
+  '标签里**没有**键盘打不出的字符（Unicode 下标 / 希腊字母 / 数学符号）',
+  labels.every((l) => !NON_ASCII.test(l)),
   labels.join(' | '),
 )
 await page.screenshot({ path: '../../docs/assets/u24-copy-label.png' })
@@ -133,7 +135,7 @@ console.log('== 照着画布上的记号抄回去 ==')
   ok('没有求值失败的行', errs.length === 0, JSON.stringify(errs))
 
   // **不动点判据**：抄回去建出的群，它自己的标签应当与原标签**集合相同**
-  //（落到同一个群 → 同一个展示形态；顺序会因自动布局变化，所以比集合）
+  //（落到同一个群 \\to 同一个展示形态；顺序会因自动布局变化，所以比集合）
   const back = await nodeLabels((n) => n.id.startsWith('K'))
   ok('抄回去的六个都建出来了', back.length === 6, back.map((b) => `${b.id}=${b.label}`).join(' '))
 
@@ -141,7 +143,7 @@ console.log('== 照着画布上的记号抄回去 ==')
   ok(
     '标签集合是**不动点**（抄回去建出的还是同一批群）',
     sorted(back.map((b) => b.label)) === sorted(labels),
-    `${sorted(labels)}  →  ${sorted(back.map((b) => b.label))}`,
+    `${sorted(labels)}  ->  ${sorted(back.map((b) => b.label))}`,
   )
 }
 
@@ -161,13 +163,22 @@ console.log('== 面板里给的记号也抄得回去 ==')
     const clean = (s) => (s ?? '').replace(/[\u200b\u2061\u2062]/g, '')
     return [...document.querySelectorAll('.dock-topleft')].map((e) => clean(e.textContent)).join(' ')
   })
-  // 结论区给的是 `∣G∣ = 24 = 2³·3` —— 展示形态的标志是**下标或上标字符**
-  ok(
-    '信息面板里出现的是展示形态（下标 / 上标字符）',
-    /[\u2080-\u2089\u2070-\u2079\u00b2\u00b3\u00b9]/.test(panelText),
-    panelText.slice(0, 100),
+  // 面板文本里**不许**出现键盘打不出的字符（这是这一轮的核心契约）。
+  // 注意：KaTeX **渲染**之后才会出现 `∣`/`φ` 这类字形，而 `.dock-topleft` 的
+  // textContent 会把渲染结果也读进来 —— 所以这里挑的是"没有渲染过的纯文本面"
+  //（状态行、提示语），它们必须自己就是 ASCII。
+  const plainChrome = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll('.row-name, .insp-label, .rel-tag, .proof-kind, .dock-tab'),
+    ]
+      .map((e) => e.textContent ?? '')
+      .join(' '),
   )
-  ok('面板文本里没有引擎记号漏出来', !/_[0-9]/.test(panelText), panelText.slice(0, 100))
+  ok(
+    '面板的**纯文本面**（行名 / 标签 / tab）里没有键盘打不出的字符',
+    !NON_ASCII.test(plainChrome),
+    plainChrome.slice(0, 120),
+  )
 }
 
 /* ══ 反例：不该被过度容错 ═══════════════════════════════ */
@@ -194,7 +205,7 @@ console.log('== 框选复制得到的是 `S4`（下标由 CSS 排出来），那
   ok(
     '这些"可见文本"抄回去也建得出来',
     vBack.length === picked.length,
-    `抄了 ${picked.join(' ')} → 建出 ${vBack.map((x) => x.id + '=' + x.label).join(' ')}`,
+    `抄了 ${picked.join(' ')} -> 建出 ${vBack.map((x) => x.id + '=' + x.label).join(' ')}`,
   )
   ok('没有求值失败的行', (await rowErrs()).length === 0, JSON.stringify(await rowErrs()))
 }

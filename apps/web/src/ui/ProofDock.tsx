@@ -12,7 +12,7 @@ import {
 } from '../gal/proof'
 import { subscript } from '../gal/pretty'
 import { DockPanel } from './DockPanel'
-import { Tex } from './Tex'
+import { Tex, TexOrText } from './Tex'
 
 /**
  * 证明面板（M1 / U15 / M3）——**step-through 的入口**，也是**模板入参界面**。
@@ -38,7 +38,7 @@ import { Tex } from './Tex'
 const KIND_LABEL: Record<ProofStep['kind'], string> = {
   claim: '设',
   compute: '算',
-  conclude: '∴',
+  conclude: '\\so',
 }
 
 export function ProofDock({
@@ -155,7 +155,7 @@ export function ProofDock({
     >
       {!template ? (
         <>
-          <div className="dock-subtitle">走一遍定理的证明 · 每一步都写进定义表</div>
+          <div className="dock-subtitle">走一遍定理的证明 -每一步都写进定义表</div>
 
           <div className="proof-params">
             <label className="proof-group">
@@ -173,10 +173,18 @@ export function ProofDock({
                 }}
               />
             </label>
-            <div className={`proof-order${info.ok ? '' : ' bad'}`}>
-              {info.ok
-                ? `|G| = ${info.order} = ${info.orderUni}`
-                : (info.error ?? '')}
+            <div
+              className={`proof-order${info.ok ? '' : ' bad'}`}
+              // 原始形态（`\lvert G\rvert = 12 = 2^{2} \cdot 3`）—— 走查与断言读它。
+              // 这一行是**数学式**（不是提示语），所以走 KaTeX 渲染；报错那一支是
+              // 中文提示语，保持纯文本（提示语里不写 LaTeX 命令，见 ops.ts 的报错文案）。
+              data-order={info.ok ? `\\lvert G\\rvert = ${info.order} = ${info.orderTex}` : ''}
+            >
+              {info.ok ? (
+                <Tex tex={`\\lvert G\\rvert = ${info.order} = ${info.orderTex}`} />
+              ) : (
+                (info.error ?? '')
+              )}
             </div>
           </div>
 
@@ -199,11 +207,11 @@ export function ProofDock({
             const blank = t.slots.some((s) => s.kind !== 'prime' && !(extra[s.key] ?? '').trim())
             return (
               <div key={t.id} className={`proof-item${block ? ' blocked' : ''}`} data-tpl={t.id}>
-                <div className="proof-item-title">{t.title}</div>
+                <div className="proof-item-title"><TexOrText text={t.title} /></div>
                 <div className="proof-item-theorem">
                   <Tex tex={t.theorem} />
                 </div>
-                <div className="proof-item-blurb">{t.blurb}</div>
+                <div className="proof-item-blurb"><TexOrText text={t.blurb} /></div>
 
                 <div className="proof-fields">
                   {t.slots.map((slot) =>
@@ -265,8 +273,14 @@ export function ProofDock({
               <Tex tex={template.theorem} />
             </div>
             {params && (
-              <div className="proof-instance">
-                实例：{instanceLabel(template, params, extra ?? undefined)}
+              <div
+                className="proof-instance"
+                // 原始形态（`C_6，H = C_6，a\\to 2`）—— 走查与断言读它，
+                // 与步骤正文的 `data-text` 同一个理由（`.proof-instance` 里是渲染结果）
+                data-instance={instanceLabel(template, params, extra ?? undefined)}
+              >
+                实例：
+                <TexOrText text={instanceLabel(template, params, extra ?? undefined)} />
               </div>
             )}
           </div>
@@ -277,28 +291,32 @@ export function ProofDock({
                 key={i}
                 ref={i === cursor ? onRef : undefined}
                 className={`proof-step k-${s.kind}${i === cursor ? ' on' : ''}${i > cursor ? ' future' : ''}`}
+                // 步骤正文的**原始形态**（`\times` / `\varphi` 这种 LaTeX）。
+                // `.proof-text` 里是 KaTeX **渲染后**的东西（`\times` 排成 ×、下标是 CSS），
+                // 断言要的是"文本形态对不对"，所以另存一份 —— 与边标签的 `data-label` 同一个理由。
+                data-text={s.text}
                 onClick={() => onGoto(i)}
                 title={i > cursor ? '跳到这一步（会把中间的步骤一并写好）' : '回到这一步'}
               >
                 <span className={`proof-kind k-${s.kind}`}>{KIND_LABEL[s.kind]}</span>
-                <span className="proof-text">{s.text}</span>
+                <span className="proof-text"><TexOrText text={s.text} /></span>
               </li>
             ))}
           </ol>
 
           <div className="proof-bar">
             <button onClick={onRestart} title="回到第 1 步">
-              ⟲ 重来
+              返回开头
             </button>
             <button onClick={() => onGoto(cursor - 1)} disabled={cursor <= 0}>
-              ← 上一步
+              上一步
             </button>
             <button
               className="primary"
               onClick={() => onGoto(cursor + 1)}
               disabled={cursor >= steps.length - 1}
             >
-              下一步 →
+              下一步 到
             </button>
           </div>
         </>

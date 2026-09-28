@@ -1,76 +1,96 @@
-const SUB: Record<string, string> = {
-  '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄',
-  '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉',
-  '+': '₊', '-': '₋', '=': '₌', '(': '₍', ')': '₎',
-  n: 'ₙ', i: 'ᵢ', j: 'ⱼ', k: 'ₖ', p: 'ₚ', m: 'ₘ', r: 'ᵣ', s: 'ₛ',
-}
-
-const SUP: Record<string, string> = {
-  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-  '+': '⁺', '-': '⁻', '=': '⁼', '(': '⁽', ')': '⁾', n: 'ⁿ', i: 'ⁱ',
-}
-
-function mapChars(s: string, table: Record<string, string>): string {
-  return [...s].map((c) => table[c] ?? c).join('')
-}
-
 /**
- * 引擎 TeX 里的希腊字母 → Unicode。
+ * **Unicode 数学字符 → LaTeX**（`φ` → `\varphi `、`∩` → `\cap `、`₄` 见下面的上下标表）。
  *
- * **不能漏**：core 给自同构群的元素起的名字就是 `\alpha_{2}`——不认希腊字母的话
- * 会掉进末尾的"去反斜杠"兜底，展示成 `alpha₂` 这种半截货
- * （实测：`Aut(S₄)` 的生成元在信息面板里显示成 `alpha₂, alpha₅`）。
+ * 这张表的用途在这轮（2026-09-27）变了：
  *
- * 变体（`\varepsilon` / `\varphi` 这类）与 tex.ts 的 `toTex` 方向保持一致，
- * 否则"展示 → 反推 TeX → 渲染"会来回变形。
+ *   · **从前**它是渲染层的"反推器"——展示串是 Unicode，喂 KaTeX 前要翻译回 TeX；
+ *   · **现在**它只服务**两个**地方：渲染**老数据**（万一某个 label 还是 Unicode），
+ *     以及 `foldToAscii()` —— 用户敲了打不出来的字符时，用它折出"该敲什么"的建议。
+ *
+ * ⚠️ 长串在前（`⊆` 要先于 `⊂` 匹配）。带尾随空格是给**中缀**留的分隔符
+ *（LaTeX 里命令与后面的字母必须隔开，否则 `\pi x` 会粘成 `\pix`）。
  */
-export const GREEK: Record<string, string> = {
-  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ',
-  epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η',
-  theta: 'θ', vartheta: 'θ', iota: 'ι', kappa: 'κ',
-  lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ',
-  pi: 'π', varpi: 'π', rho: 'ρ', varrho: 'ρ',
-  sigma: 'σ', varsigma: 'ς', tau: 'τ', upsilon: 'υ',
-  phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
-  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π',
-  Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
-}
-
-/**
- * 希腊字母的**符号变体**（数学排版用的那些码位）→ 上表用的标准字符。
- *
- * 为什么要它：LaTeX 的 `\phi` 排出来是 **ϕ（U+03D5）**，而 `\varphi` 排出来才是
- * φ（U+03C6）—— 本表统一用后者（与 `tex.ts` 的 `toTex` 方向一致）。于是用户
- * 从别处（论文 PDF / 网页 / 别的编辑器）**复制**来的往往是 U+03D5 ——
- * 肉眼一模一样，代码点却不同，不归一就是"看着对、实则两个字符"。
- *
- * 这五个是三对希腊字母的"排版变体"码位，与 `varsigma`（ς 自成一体）不同。
- */
-const GREEK_VARIANTS: Record<string, string> = {
-  '\u03d1': 'θ', // ϑ theta symbol
-  '\u03d5': 'φ', // ϕ phi symbol
-  '\u03d6': 'π', // ϖ pi symbol
-  '\u03f1': 'ρ', // ϱ rho symbol
-  '\u03f5': 'ε', // ϵ epsilon symbol
-}
-
-/**
- * 把一段文本里的希腊字母**统一成一种写法**。输入与匹配的闭环靠它合上。
- *
- * 两个方向缺一不可：
- *   · **LaTeX 别名** `\phi` / `\varphi` → φ（普通键盘敲不出 φ，但敲得出 `\phi`）
- *   · **符号变体** ϕ → φ（从别处复制来的是变体码位）
- *
- * **只认上表里的名字**，别的一律不动 —— 于是集合差 `A \ B` 里的那个反斜杠
- * 不会被误伤（`B` 不在表里）。`\cdot` 也安全（`cdot` 不在表里，且它在
- * `UNICODE_ALIASES` 里已经被更早地换成 `·`）。
- */
-export function normalizeGreek(s: string): string {
-  return s
-    .replace(/\\([A-Za-z]+)/g, (m, name: string) => GREEK[name] ?? m)
-    .replace(/[\u03d1\u03d5\u03d6\u03f1\u03f5]/g, (c) => GREEK_VARIANTS[c] ?? c)
-}
+export const UNICODE_TO_TEX: [string, string][] = [
+  ['∩', '\\cap '],
+  ['∪', '\\cup '],
+  ['×', '\\times '],
+  ['·', '\\cdot '],
+  ['∘', '\\circ '],
+  ['∖', '\\setminus '],
+  ['−', '-'],
+  ['→', '\\to '],
+  ['←', '\\leftarrow '],
+  ['↦', '\\mapsto '],
+  ['↪', '\\hookrightarrow '],
+  ['↷', '\\curvearrowright '],
+  ['≅', '\\cong '],
+  ['≃', '\\simeq '],
+  ['≠', '\\ne '],
+  ['≤', '\\le '],
+  ['≥', '\\ge '],
+  ['⊆', '\\subseteq '],
+  ['⊂', '\\subset '],
+  ['⊇', '\\supseteq '],
+  ['⊃', '\\supset '],
+  ['∈', '\\in '],
+  ['∉', '\\notin '],
+  ['⊴', '\\trianglelefteq '],
+  ['⊵', '\\trianglerighteq '],
+  ['∅', '\\varnothing '],
+  ['∞', '\\infty '],
+  ['√', '\\surd '],
+  ['⊗', '\\otimes '],
+  ['⊕', '\\oplus '],
+  ['⟨', '\\langle '],
+  ['⟩', '\\rangle '],
+  ['⟶', '\\longrightarrow '],
+  ['⟹', '\\implies '],
+  ['∀', '\\forall '],
+  ['∃', '\\exists '],
+  ['α', '\\alpha '],
+  ['β', '\\beta '],
+  ['γ', '\\gamma '],
+  ['δ', '\\delta '],
+  ['ε', '\\varepsilon '],
+  ['ζ', '\\zeta '],
+  ['η', '\\eta '],
+  ['θ', '\\theta '],
+  ['ι', '\\iota '],
+  ['κ', '\\kappa '],
+  ['λ', '\\lambda '],
+  ['μ', '\\mu '],
+  ['ν', '\\nu '],
+  ['ξ', '\\xi '],
+  ['π', '\\pi '],
+  ['ρ', '\\rho '],
+  ['ς', '\\varsigma '],
+  ['σ', '\\sigma '],
+  ['τ', '\\tau '],
+  ['υ', '\\upsilon '],
+  ['φ', '\\varphi '],
+  // ── 排版变体：LaTeX 的 `\phi` 排出来是 ϕ、`\varphi` 排出来才是 φ ——
+  //    肉眼一样、码位不同。从论文 PDF / 期刊网页里复制来的通常是**变体**那一支，
+  //    所以必须一并折（从前只为渲染用，现在它还负责给出"该敲什么"）。
+  ['ϕ', '\\varphi '],
+  ['ϑ', '\\theta '],
+  ['ϖ', '\\varpi '],
+  ['ϱ', '\\rho '],
+  ['ϵ', '\\varepsilon '],
+  ['χ', '\\chi '],
+  ['ψ', '\\psi '],
+  ['ω', '\\omega '],
+  ['Γ', '\\Gamma '],
+  ['Δ', '\\Delta '],
+  ['Θ', '\\Theta '],
+  ['Λ', '\\Lambda '],
+  ['Ξ', '\\Xi '],
+  ['Π', '\\Pi '],
+  ['Σ', '\\Sigma '],
+  ['Υ', '\\Upsilon '],
+  ['Φ', '\\Phi '],
+  ['Ψ', '\\Psi '],
+  ['Ω', '\\Omega '],
+]
 
 /**
  * 上下标的**反向**表（`₄` → `4`）。
@@ -100,17 +120,18 @@ export const SUP_FROM: Record<string, string> = {
 }
 
 /**
- * 上下标字符 → 引擎记号（`S₄` → `S_4`、`C₂×C₂` → `C_2×C_2`）。
+ * 上下标字符 → ASCII 记号（`S₄` → `S_4`、`C₂×C₂` → `C_2×C_2`）。
  *
- * **这条是"看得见却打不出来"的最后一块**：元素级早就修了
- * （`ops.ts#resolveElementLoose` 的 ⓪ 层拿 `prettySymbol` 回认），
- * 但**群记号级**一直没修 —— 画布上节点标签写的是 `S₄`，
- * 用户照着抄回去建群却报"无法识别：S₄"（2026-09-26 实测）。
+ * ⚠️ **折叠必须保语义**。这一条是从 GroupViz 的 `notation/canonical.ts`
+ * 借来的（它的 `foldUnicodeScript` 与这个函数逐字同构），那边的注释写得很准：
  *
- * 连续的同类下标合并成一个（`C₁₂` → `C_12`，不是 `C_1_2`）——
- * 与 `tex.ts` 渲染回 `_{12}` 的分组口径一致。
+ * > 必须保留上下标语义：`C_2²` 要折成 `C_2^2`（而不是 `C_22`），否则提示会
+ * > 建议用户改写成 `C_{22}` —— 那正是原来静默给错群的根源。
+ *
+ * 所以"连续的同类合并"（`C₁₂` → `C_12`）与"下标转上标不合并"（`C_2²` → `C_2^2`）
+ * 两件事都要做对：前者是分组，后者是**换了运算符**。
  */
-export function normalizeScript(s: string): string {
+export function foldScript(s: string): string {
   let out = ''
   let mode: 'sub' | 'sup' | null = null
   for (const c of s) {
@@ -131,50 +152,163 @@ export function normalizeScript(s: string): string {
   return out
 }
 
-/** 整数 → 上标形态（`2` → `²`，`12` → `¹²`）。用于阶分解这类展示。 */
-export function superscript(n: number): string {
-  return mapChars(String(n), SUP)
+/** 中文与中文标点放行 —— 用户写的就是中文，那不是"键盘打不出的数学符号"。 */
+const CJK = /[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef\u2013\u2014\u2018-\u201d\u2026]/
+
+/**
+ * 把一整行里**键盘打不出来的字符**折成 ASCII 写法（**保语义**）。
+ *
+ * 这是"给建议"的核心：不是甩一句"写成 _x"的模板，而是把用户**这一行**
+ * 真折一遍，让他直接照着改。做法借自 GroupViz 的 `notation/canonical.ts`
+ *（那边叫 `foldUnicodeScript`，在报错时用它算出建议串）。
+ *
+ * 顺序有讲究：**先折上下标**（它是位置的语法），再折字符（它是记号的名字）。
+ */
+export function foldToAscii(raw: string): string {
+  let s = foldScript(raw)
+  for (const [from, to] of UNICODE_TO_TEX) {
+    if (s.includes(from)) s = s.split(from).join(to)
+  }
+  // 尾随空格只为分隔而留（`\varphi )` → `\varphi)`）；后面是字母时**必须**留着，
+  // 否则 `\times C_2` 会粘成 `\timesC_2` —— 一个不存在的命令（实测 KaTeX 报错）
+  return s.replace(/\\([A-Za-z]+) (?=[^A-Za-z]|$)/g, '\\$1')
 }
 
-/** 字符串 → 下标形态（`p` → `ₚ`，`12` → `₁₂`）。用于 n_p 这类记号。 */
-export function subscript(s: string): string {
-  return mapChars(s, SUB)
+/** 打不出来的字符分四类 —— 调用方可以据此说不同的话（也可以只说"该敲什么"）。 */
+export type NotAsciiKind = 'subscript' | 'superscript' | 'greek' | 'symbol'
+
+export interface NotAsciiIssue {
+  /** 第一个撞上的字符 */
+  char: string
+  kind: NotAsciiKind
+  /**
+   * **整串折叠后的形态** —— 用户可以直接照它改。
+   *
+   * 从 GroupViz 借来的做法（见 `foldToAscii`）：报错要**给出可照抄的写法**，
+   * 而不是"你自己体会"。这条在本项目里格外重要，因为记号本来就有两套形态
+   *（Unicode 展示 ↔ ASCII 输入），用户没有理由知道该用哪套。
+   */
+  suggestion: string
 }
 
 /**
- * 引擎的 TeX 形态群符号 → 近 Unicode 展示形态。
- * 例：`S_{4}` → `S₄`、`C_{2}\times C_{2}` → `C₂×C₂`、`\mathbb{Z}_{6}` → `ℤ₆`。
- * 只做展示，解析仍走引擎原始符号。
+ * 扫一遍：有没有**键盘打不出来**的字符？有就给 `{ char, kind, suggestion }`。
+ *
+ * 判据是"码位 + 不是中文"：ASCII 与中文/CJK 标点放行，其余一律拦。
+ * **拦住而不是替他转换** —— 静默转换会让"这个符号打不出来"一直藏着：
+ * 用户以为系统支持，直到某次把结果复制进博客才发现是乱码。
+ *（GroupViz 那边独立得出同一结论，理由更硬：静默折叠实测会给错群。）
+ */
+export function scanNotAscii(raw: string): NotAsciiIssue | null {
+  for (const c of raw) {
+    const o = c.charCodeAt(0)
+    if (o <= 127 || CJK.test(c)) continue
+    let kind: NotAsciiKind
+    if ((o >= 0x2080 && o <= 0x209c) || o === 0x2093) kind = 'subscript'
+    else if ((o >= 0x2070 && o <= 0x207f) || o === 0xb2 || o === 0xb3 || o === 0xb9) {
+      kind = 'superscript'
+    } else if (o >= 0x0370 && o <= 0x03ff) kind = 'greek'
+    else kind = 'symbol'
+    return { char: c, kind, suggestion: foldToAscii(raw) }
+  }
+  return null
+}
+
+/**
+ * **外部字符串里的非 ASCII 装饰 → 等价写法**（2026-09-27）。
+ *
+ * 用在**别人的文案**上 —— 主要是 `@groupviz/core` 的报错/提示。它里面写着
+ * `可用写法：C_{12} · S_{3} · D_{4}`，那个 `·`（列表分隔点）键盘打不出来，
+ * 而我们的约定是"界面上出现的每个字符都得是键盘敲得出的"。
+ *
+ * 为什么不让调用方各写各的：这类字符**成批出现**（列表分隔点 · 破折号 · 省略号），
+ * 一处一处改迟早漏 —— 所以放在**边界上**统一过一道。
+ *
+ * 只处理**装饰性**字符（分隔、标点）。数学符号不在这里管：那种情况应该走渲染
+ *（`TexOrText`），而不是把 `\alpha` 退化成 `alpha`。
+ */
+const FOREIGN_ASCII: Record<string, string> = {
+  '·': '、', // 列表分隔点（core 的提示里最常见）
+  '•': '、',
+  '‧': '、',
+  '—': '-', // 破折号 / 连接号
+  '–': '-',
+  '―': '-',
+  '…': '...', // 省略号
+  '⋯': '...',
+  '　': ' ', // 全角空格
+  '\u00a0': ' ',
+}
+
+export function asciiClean(raw: string): string {
+  let s = raw
+  for (const [from, to] of Object.entries(FOREIGN_ASCII)) {
+    if (s.includes(from)) s = s.split(from).join(to)
+  }
+  return s
+}
+
+/**
+ * 整数 → **TeX 上标形态**（`2` → `^2`、`12` → `^{12}`）。用于阶分解这类展示。
+ *
+ * 2026-09-27 之前它产出 Unicode 上标（`2` → `²`），文本形态统一到简化 LaTeX
+ * 之后必须改：多字符**要带花括号**，否则 KaTeX 只吃紧邻的一个字符
+ *（`^12` 渲染出来是 `¹2`，看着像 12 其实是 1 上标 + 2）。
+ */
+export function superscript(n: number): string {
+  const t = String(n)
+  return t.length === 1 ? `^${t}` : `^{${t}}`
+}
+
+/**
+ * 字符串 → **TeX 下标形态**（`p` → `_p`、`1` → `_1`）。
+ *
+ * ⚠️ 与 `superscript` 有意不同：这里**不加花括号** —— 主要消费者是 `naming.ts`
+ * 造**对象名**（`A_1`、`A_2`…），而名字里不能出现 `{}`（`NAME_RE` 只认
+ * 字母 / 数字 / 下划线 / 中文）。多字符下标（`A_101`）在**展示**时由
+ * `prettySymbol` 补上花括号，所以显示仍然是 `A_{101}`。
+ */
+export function subscript(s: string): string {
+  return `_${s}`
+}
+
+/**
+ * 引擎的 TeX 形态群符号 → **面向用户的文本形态**。
+ *
+ * ⚠️ 这条约定在 2026-09-27 变了（用户要求）：**系统里出现的每个字符都必须是
+ * 键盘打得出来的**（ASCII + 中文）。从前这里做的是"TeX → 近 Unicode"
+ *（`S_{4}` → `S4`、`\varphi` → 那个希腊字母、`\times` → ×），于是面板、画布、提示里
+ * 到处是**复制出去就成怪字符、且打不回来**的东西 —— U23 与 U24 两轮修的
+ * 正是它们打不回来的毛病，而根子在"文本形态选了 Unicode"。
+ *
+ * 现在的形态是**简化 LaTeX**：
+ *
+ * ```
+ * S_{4}  → S_4        （LaTeX 里 `_4` 与 `_{4}` 等价，省花括号更好读）
+ * C_{12} → C_{12}     （多字符保留）
+ * A_10   → A_{10}     （补上：不补的话 KaTeX 只把 `1` 当下标，渲染成 A 1 下标 0）
+ * \varphi / \times / \operatorname{Aut}  →  原样
+ * ```
+ *
+ * 其余**一律不动** —— 它们本身就是 ASCII，而渲染层（KaTeX）正好吃这一口。
+ * 于是"显示 / 复制 / 输入"三者统一到同一个形态，转换链从两跳变一跳。
  */
 export function prettySymbol(raw: string): string {
-  let s = raw.replace(/\s+/g, '').replace(/\\left|\\right/g, '')
-
-  /**
-   * 包裹类宏先展开成裸记号。
-   *
-   * `\mathrm` / `\mathbf` 这条**不能漏**：core 给**自同构群**的元素起的名字就是
-   * `\mathrm{id}` / `\alpha_{2}`（`createAutomorphismGroup`），漏了 `\mathrm`
-   * 会掉进末尾的"去反斜杠"兜底，变成 `mathrmid` 这种谁都认不出的东西。
-   */
-  s = s.replace(/\\mathbb\{([^{}]*)\}/g, '$1')
-  s = s.replace(/\\(?:mathrm|mathbf|mathit|mathsf|mathtt|operatorname|text)\{([^{}]*)\}/g, '$1')
-
-  // 多字符上下标 → Unicode
-  s = s.replace(/_\{([^{}]*)\}/g, (_, x: string) => mapChars(x, SUB))
-  s = s.replace(/\^\{([^{}]*)\}/g, (_, x: string) => mapChars(x, SUP))
-
-  // 单字符上下标
-  s = s.replace(/_([0-9a-zA-Z])/g, (_, c: string) => SUB[c] ?? `_${c}`)
-  s = s.replace(/\^([0-9a-zA-Z+-])/g, (_, c: string) => SUP[c] ?? `^${c}`)
-
-  // 运算符
-  s = s.replace(/\\rtimes/g, '⋊').replace(/\\times/g, '×').replace(/\\cdot/g, '·')
-  s = s.replace(/\\oplus/g, '⊕').replace(/\\cong/g, '≅').replace(/\\le/g, '≤')
-
-  // 希腊字母（必须排在运算符之后：`\rtimes` 这类先被吃掉了，才不会误认成希腊字母）
-  s = s.replace(/\\([A-Za-z]+)/g, (m, name: string) => GREEK[name] ?? m)
-
-  // 兜底：去掉残余花括号与反斜杠
-  s = s.replace(/\{([^{}]*)\}/g, '$1').replace(/\\/g, '')
-  return s
+  return raw
+    .replace(/\\left|\\right/g, '')
+    /**
+     * **空格必须留**（从前这里是把所有空白删光的）。
+     *
+     * LaTeX 里空格是**命令的分隔符**：`\times C_2` 删成 `\timesC_2` 就成了一个
+     * 不存在的命令（实测：`C_2\times C_2` → `C_2\timesC_2` → KaTeX 报错红字）。
+     * 从前要删是因为目标是 Unicode（乘号不需要分隔），现在形态是 LaTeX，删了就是错的。
+     */
+    .replace(/[ \t]+/g, ' ')
+    // 带花括号的：单字符省掉、多字符留着（顺带把 `{ 12 }` 里的空白规整掉）
+    .replace(/_\{\s*([0-9A-Za-z]+)\s*\}/g, (_m, x: string) => (x.length === 1 ? `_${x}` : `_{${x}}`))
+    .replace(/\^\{\s*([0-9A-Za-z]+)\s*\}/g, (_m, x: string) => (x.length === 1 ? `^${x}` : `^{${x}}`))
+    // 裸的多字符下标要**补上**花括号，否则 KaTeX 只把第一个字符当下标
+    .replace(/_([0-9A-Za-z]{2,})(?![0-9A-Za-z}])/g, '_{$1}')
+    .replace(/\^([0-9A-Za-z]{2,})(?![0-9A-Za-z}])/g, '^{$1}')
+    .trim()
 }

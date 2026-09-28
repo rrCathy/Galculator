@@ -28,7 +28,7 @@ export function MultiOrb({
         onClick={onToggle}
         title="多对象操作（还要再选对象）"
       >
-        ⊕
+        +
       </button>
       {open && (
         <div className="orb-ops-panel orb-center-panel">
@@ -40,7 +40,7 @@ export function MultiOrb({
             <button
               key={op.id}
               className="orb-op"
-              title={`${op.notation} —— ${op.doc}`}
+              title={`${op.notation} ---- ${op.doc}`}
               onClick={() => onPick(op)}
             >
               <span className="orb-op-label">{menuLabel(op)}</span>

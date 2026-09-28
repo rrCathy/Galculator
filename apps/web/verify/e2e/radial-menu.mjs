@@ -1,12 +1,12 @@
 /**
  * 走查：**对象悬浮球**（径向菜单，U2 落地 / U3.1 扩展）。
  *
- * 三个操作入口（左栏表 · 悬浮球 · ⊕球）里最早的这一个，一直没有独立走查。
+ * 三个操作入口（左栏表 \\cdot 悬浮球 \\cdot \\oplus球）里最早的这一个，一直没有独立走查。
  * 它写着几条用户直接摸得到的主张：
- *   · 球挂在节点**左上角**（右侧和下方是出边的地方，不遮箭头）
- *   · **映射没有节点**，球改挂在箭头中点上方 —— 于是"点箭头 → 点 ker"成立
- *   · 环绕按钮**按值类型定**：群给三个"看" + 一个「操作」；其它值给「信息」+ 直接铺开的单对象操作
- *   · 面板里**点一下直接创建**（不是"列出来看看"）
+ *   \\cdot 球挂在节点**左上角**（右侧和下方是出边的地方，不遮箭头）
+ *   \\cdot **映射没有节点**，球改挂在箭头中点上方 —— 于是"点箭头 \\to 点 ker"成立
+ *   \\cdot 环绕按钮**按值类型定**：群给三个"看" + 一个「操作」；其它值给「信息」+ 直接铺开的单对象操作
+ *   \\cdot 面板里**点一下直接创建**（不是"列出来看看"）
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/radial-menu.mjs`
  */
@@ -34,7 +34,7 @@ page.on('pageerror', (e) => logs.push('pageerror: ' + e.message))
 
 /* ── 辅助 ─────────────────────────────────────────────── */
 
-/** 画布上的节点/边是 SVG（`stroke: transparent` 的命中层 Playwright 判 not visible）→ 派发事件 */
+/** 画布上的节点/边是 SVG（`stroke: transparent` 的命中层 Playwright 判 not visible）\\to 派发事件 */
 const clickSvg = (sel) =>
   page.evaluate((s) => {
     const el = document.querySelector(s)
@@ -106,7 +106,7 @@ const addLine = async (name, expr) => {
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12→23, c→13)')
+await addLine('f', '映射(G, H, s12->23, c->13)')
 await addLine('A', 'A_4')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(450)
@@ -115,15 +115,15 @@ let st = await ui()
 ok('四个对象都上了画布', st.nodes.length >= 4, st.nodes.join(','))
 ok('一开始没有任何悬浮球（要先选中）', !st.orb)
 
-/* ══ ① 选中 → 球出现，且挂在对的位置 ═══════════════════ */
+/* ══ ① 选中 \\to 球出现，且挂在对的位置 ═══════════════════ */
 
 console.log('')
-console.log('== ① 选中一个对象 → 球出现 ==')
+console.log('== ① 选中一个对象 -> 球出现 ==')
 {
-  ok('点得中 S₄ 的节点', await selectNode('G'))
+  ok('点得中 S_4 的节点', await selectNode('G'))
   st = await ui()
   ok('球出现了', st.orb)
-  ok('球是"收起"态（只露一个 ⋯）', !st.orbOn)
+  ok('球是"收起"态（只露一个 \\cdot s）', !st.orbOn)
 
   // 挂在**左上角**：右侧与下方是出边的地方，球不该压在那儿
   const rel = await page.evaluate(() => {
@@ -138,10 +138,10 @@ console.log('== ① 选中一个对象 → 球出现 ==')
   ok('球挂在节点的**左上角**（不遮出边）', !!rel && rel.dx < 0 && rel.dy < 0, JSON.stringify(rel))
 }
 
-/* ══ ② 点球 → 环绕按钮按值类型定 ═══════════════════════ */
+/* ══ ② 点球 \\to 环绕按钮按值类型定 ═══════════════════════ */
 
 console.log('')
-console.log('== ② 点球 → 环绕按钮 ==')
+console.log('== ② 点球 -> 环绕按钮 ==')
 {
   ok('点得中球', await clickEl('.orb:not(.orb-center)'))
   st = await ui()
@@ -153,7 +153,7 @@ console.log('== ② 点球 → 环绕按钮 ==')
   )
 }
 
-/* ══ ③ 「基本」→ 信息面板跟着切 ════════════════════════ */
+/* ══ ③ 「基本」\\to 信息面板跟着切 ════════════════════════ */
 
 console.log('')
 console.log('== ③ 「基本」是"看"这一类 ==')
@@ -165,7 +165,7 @@ console.log('== ③ 「基本」是"看"这一类 ==')
   ok('看完自动把球收起（不挡路）', !st.orbOn)
 }
 
-/* ══ ④ 「操作」→ 单对象操作面板 ════════════════════════ */
+/* ══ ④ 「操作」\\to 单对象操作面板 ════════════════════════ */
 
 console.log('')
 console.log('== ④ 「操作」铺出单对象操作 ==')
@@ -184,7 +184,7 @@ console.log('== ④ 「操作」铺出单对象操作 ==')
   await page.screenshot({ path: '../../docs/assets/u2-radial-menu.png' })
 }
 
-/* ══ ⑤ 点一条 → 真的创建（不是"列出来看看"）════════════ */
+/* ══ ⑤ 点一条 \\to 真的创建（不是"列出来看看"）════════════ */
 
 console.log('')
 console.log('== ⑤ 点一下直接创建 ==')
@@ -201,11 +201,11 @@ console.log('== ⑤ 点一下直接创建 ==')
   await page.waitForTimeout(520)
 
   st = await ui()
-  ok('画布上真的多了一个对象', st.nodes.length === before + 1, `${before} → ${st.nodes.length}`)
+  ok('画布上真的多了一个对象', st.nodes.length === before + 1, `${before} -> ${st.nodes.length}`)
   ok('没有求值失败的行', st.errs.length === 0, JSON.stringify(st.errs))
 }
 
-/* ══ ⑥ 多对象球（⊕）：进 pending → 提示条说清下一位 ══════ */
+/* ══ ⑥ 多对象球（\\oplus）：进 pending \\to 提示条说清下一位 ══════ */
 
 console.log('')
 console.log('== ⑥ 多对象球：进 pending ==')
@@ -214,14 +214,14 @@ console.log('== ⑥ 多对象球：进 pending ==')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(320)
 
-  ok('点得中 ⊕ 球', await clickEl('.multi-orb .orb-center'))
+  ok('点得中 \\oplus 球', await clickEl('.multi-orb .orb-center'))
   st = await ui()
   ok('多对象面板出现了', st.centerPanel === 1)
   ok('列的是"多对象操作"', st.centerOps.length >= 10, `${st.centerOps.length} 条：${st.centerOps.join(' / ')}`)
   ok('里面有「商 /」', st.centerOps.includes('商 /'), st.centerOps.join(','))
   ok('单对象操作没混进来（中心 Z 不该在这儿）', !st.centerOps.includes('中心 Z'), st.centerOps.join(','))
 
-  // 点「商 /」→ 参数要 (G, N)，还没选任何对象 → pending
+  // 点「商 /」\\to 参数要 (G, N)，还没选任何对象 \\to pending
   const picked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-center-panel .orb-op')]
     const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === '商 /')
@@ -234,16 +234,16 @@ console.log('== ⑥ 多对象球：进 pending ==')
 
   st = await ui()
   ok('进了 pending（出现提示条）', st.pending === 1)
-  ok('提示条说清"还差哪一位"', st.hint === '选择「G」（群）· 第 1 / 2 个对象', String(st.hint))
-  // 这一位要的是**群**，而画布上的节点清一色是群 → 压暗为 0 才说明"压暗不是乱来的"。
+  ok('提示条说清"还差哪一位"', st.hint === '选择「G」（群），第 1 / 2 个对象', String(st.hint))
+  // 这一位要的是**群**，而画布上的节点清一色是群 \\to 压暗为 0 才说明"压暗不是乱来的"。
   //（`f` 填不进群的位置，但映射**不占节点**——它压根不在压暗的候选里，
   //  所以这里压暗 0 是对的，不是漏了。）
-  ok('第一位要群、场上节点全是群 → 压暗为 0（压暗不是乱来）', st.dim === 0, `dim=${st.dim}`)
+  ok('第一位要群、场上节点全是群 -> 压暗为 0（压暗不是乱来）', st.dim === 0, `dim=${st.dim}`)
 
   // 点第一个参数：S₃（挑它，好让"第二位"出现明显的合法/非法分野）
   await selectNode('H')
   st = await ui()
-  ok('选完第一位，提示条走到第 2 位', st.hint === '选择「N」（元素集 / 子群）· 第 2 / 2 个对象', String(st.hint))
+  ok('选完第一位，提示条走到第 2 位', st.hint === '选择「N」（元素集 / 子群），第 2 / 2 个对象', String(st.hint))
   ok('这一位要求"是它的子群"，所以有节点被压暗', st.dim > 0, `dim=${st.dim}`)
 
   await page.screenshot({ path: '../../docs/assets/u2-pending-hint.png' })
@@ -283,19 +283,19 @@ console.log('== ⑧ 缺标量的操作进补参条 ==')
   ok('出现补参条（不是 pending，也不是直接建）', st2.pending === 1 && st2.fillFields > 0, JSON.stringify({ pending: st2.pending, fields: st2.fillFields }))
   ok('补参条的标题是「补参数」', st2.hint === '补参数', String(st2.hint))
 
-  // 填素数 → 回车执行
+  // 填素数 \\to 回车执行
   await page.fill('.fill-field input', '3')
   await page.waitForTimeout(200)
   await page.keyboard.press('Enter')
   await page.waitForTimeout(560)
   const st3 = await ui()
-  ok('回车后真的建出来了（Syl_3(S₄)）', st3.pending === 0 && st3.errs.length === 0, JSON.stringify({ pending: st3.pending, errs: st3.errs }))
+  ok('回车后真的建出来了（Syl_3(S_4)）', st3.pending === 0 && st3.errs.length === 0, JSON.stringify({ pending: st3.pending, errs: st3.errs }))
 
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 }
 
-/* ══ ⑨ 映射没有节点 → 球挂在箭头上 ═════════════════════ */
+/* ══ ⑨ 映射没有节点 \\to 球挂在箭头上 ═════════════════════ */
 
 console.log('')
 console.log('== ⑨ 映射（只画箭头）的球 ==')
@@ -326,7 +326,7 @@ console.log('== ⑨ 映射（只画箭头）的球 ==')
   await clickEl('.orb:not(.orb-center)')
   st = await ui()
   ok(
-    '映射的环绕是「信息 + ker + im」（≤3 条就铺开，不收进下拉）',
+    '映射的环绕是「信息 + ker + im」（\\le 3 条就铺开，不收进下拉）',
     st.sats.join('|') === '信息|ker|im',
     st.sats.join('|'),
   )
@@ -336,13 +336,13 @@ console.log('== ⑨ 映射（只画箭头）的球 ==')
   await page.waitForTimeout(560)
   const st3 = await ui()
   const changed = st3.nodes.join(',') !== beforeList.join(',')
-  ok('点下去真有效果（画布上的对象换了，不是白点）', changed, `${beforeList.join(',')} → ${st3.nodes.join(',')}`)
+  ok('点下去真有效果（画布上的对象换了，不是白点）', changed, `${beforeList.join(',')} -> ${st3.nodes.join(',')}`)
   // 判据为什么不是"节点数 +1"：建图时 `build.ts` 已经**自动补出**了一个核对象
-  //（S₄ ↠ S₃ 的第一同构那一套），显式建出的核会**取代**它 —— 所以数量不变才是对的。
+  //（S₄ \\twoheadrightarrow S₃ 的第一同构那一套），显式建出的核会**取代**它 —— 所以数量不变才是对的。
   ok(
     '显式建出的核**取代**了自动补的那个（图上不留两份）',
     st3.nodes.length === beforeList.length,
-    `${beforeList.length} → ${st3.nodes.length}`,
+    `${beforeList.length} -> ${st3.nodes.length}`,
   )
   ok('没有求值失败的行', st3.errs.length === 0, JSON.stringify(st3.errs))
 }

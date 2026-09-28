@@ -2,8 +2,8 @@
  * 走查：第三同构定理的骨架（G4）——几何层。
  *
  * 语义层见 `verify/suites/thirdIso.ts`。这里验证图上真的长出了那几条边，
- * 且方向/形状正确：`KN ↪ GN`（第三同构的第一句）是**单射**、
- * `GN ↠ Q` 与 `K ↠ K/N` 是**满射**、竖直边同列。
+ * 且方向/形状正确：`KN \\hookrightarrow GN`（第三同构的第一句）是**单射**、
+ * `GN \\twoheadrightarrow Q` 与 `K \\twoheadrightarrow K/N` 是**满射**、竖直边同列。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/third-iso.mjs`
  */
@@ -39,7 +39,7 @@ page.on('pageerror', (e) => logs.push('pageerror: ' + e.message))
 await page.goto(URL, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
-// N ⊴ K ⊴ G：(G/N)/(K/N) ≅ G/K，|G/K| = 2
+// N \\trianglelefteq K \\trianglelefteq G：(G/N)/(K/N) \\cong G/K，|G/K| = 2
 const LINES = [
   'G = D_4',
   'N = 闭包(G, r2)',
@@ -74,7 +74,7 @@ const data = await page.evaluate(() => {
   const edges = [...svg.querySelectorAll('g.gedge')].map((g) => {
     const path = g.querySelector('path:not(.gedge-hit)')
     return {
-      label: g.querySelector('text')?.textContent ?? '',
+      label: g.dataset.label ?? '',
       d: path?.getAttribute('d') ?? '',
       end: path?.getAttribute('marker-end') ?? '',
       start: path?.getAttribute('marker-start') ?? '',
@@ -98,16 +98,16 @@ const KN = at['KN']
 const Q = at['Q']
 
 if (GN && KN && Q) {
-  // `KN ↪ GN`：水平边（KN 与 GN 同层），带尾钩
+  // `KN \\hookrightarrow GN`：水平边（KN 与 GN 同层），带尾钩
   const h = hEdgeAt(KN.cy)
   const inj = h.find((e) => /-hook\b/.test(e.start ?? ''))
-  ok('KN ↪ GN 存在（第三同构的第一句）', !!inj, `同层水平边=${h.length}`)
-  if (inj) ok('KN ↪ GN 是单射（尾钩）', /-hook\b/.test(inj.start), inj.start)
+  ok('KN -> GN 存在（第三同构的第一句）', !!inj, `同层水平边=${h.length}`)
+  if (inj) ok('KN -> GN 是单射（尾钩）', /-hook\b/.test(inj.start), inj.start)
 
-  // `GN ↠ Q`：竖直边，双箭头
+  // `GN \\twoheadrightarrow Q`：竖直边，双箭头
   const v = vEdgeAt(GN.cx)
   const pi2 = v.find((e) => /-surj\b/.test(e.end ?? ''))
-  ok('GN ↠ Q 存在（满射）', !!pi2, `同列竖直边=${v.length}`)
+  ok('GN ->> Q 存在（满射）', !!pi2, `同列竖直边=${v.length}`)
 } else {
   ok('GN / KN / Q 齐备', false)
 }

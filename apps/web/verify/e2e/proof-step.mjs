@@ -2,10 +2,10 @@
  * 走查：**证明面板的 step-through**（M1）。
  *
  * 验的是"走一步 = 写一行"这条链真的通：
- *   · 面板列出模板、点开始后 13 步可走；
- *   · 走的过程中**画布逐步长出证明图**（节点/边随步数增加）；
- *   · 当前步在列表里可见（自动滚进视野）、且它在画布上的对象被**高亮**；
- *   · 全程控制台零错误。
+ *   \\cdot 面板列出模板、点开始后 13 步可走；
+ *   \\cdot 走的过程中**画布逐步长出证明图**（节点/边随步数增加）；
+ *   \\cdot 当前步在列表里可见（自动滚进视野）、且它在画布上的对象被**高亮**；
+ *   \\cdot 全程控制台零错误。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/proof-step.mjs`
  */
@@ -45,7 +45,7 @@ const snapshot = () =>
     return {
       ids: nodes.map((n) => n.id).sort(),
       highlighted: nodes.filter((n) => /0\.16/.test(n.fill)).map((n) => n.id).sort(),
-      edges: [...svg.querySelectorAll('g.gedge')].map((g) => g.querySelector('text')?.textContent ?? ''),
+      edges: [...svg.querySelectorAll('g.gedge')].map((g) => g.dataset.label ?? ''),
       rows: [...document.querySelectorAll('.row-err')].map((e) => e.textContent.trim()),
     }
   })
@@ -72,10 +72,10 @@ for (let i = 0; i < 6; i++) {
   await page.waitForTimeout(320)
   growth.push((await snapshot()).ids.length)
 }
-ok('走 6 步后画布上多了 P 与 Ω', growth[growth.length - 1] >= 3, `每步节点数=${growth.join(',')}`)
+ok('走 6 步后画布上多了 P 与 \\Omega', growth[growth.length - 1] >= 3, `每步节点数=${growth.join(',')}`)
 const s6 = await snapshot()
 ok('P 上画布', s6.ids.includes('P'), `ids=${s6.ids.join(',')}`)
-ok('陪集作用的 Ω 上画布', s6.ids.some((id) => id.includes('/Ω')), `ids=${s6.ids.join(',')}`)
+ok('陪集作用的 \\Omega 上画布', s6.ids.some((id) => id.includes('/Omega')), `ids=${s6.ids.join(',')}`)
 ok('这一步没有求值失败的行', s6.rows.length === 0, s6.rows.join(' | '))
 
 // ── 当前步可见（自动滚进视野）──
@@ -94,11 +94,15 @@ for (let i = 0; i < 12; i++) {
   await page.waitForTimeout(260)
 }
 const fin = await snapshot()
-ok('最终节点 = G / P / Orb / Stab / Ω', fin.ids.join(' ') === 'A/Ω G O P S', `ids=${fin.ids.join(',')}`)
-ok('最终边含 ↪（包含）', fin.edges.filter((l) => l === '↪').length === 2, `edges=${fin.edges.join(',')}`)
-ok('最终边含 = （Orb = Ω，传递）', fin.edges.includes('='), `edges=${fin.edges.join(',')}`)
-ok('最终边含 ↷（作用）', fin.edges.includes('↷'), `edges=${fin.edges.join(',')}`)
-ok('结论文本出现 ∎', (await page.locator('.proof-step.on .proof-text').innerText()).includes('∎'))
+ok('最终节点 = G / P / Orb / Stab / \\Omega', fin.ids.join(' ') === 'A/Omega G O P S', `ids=${fin.ids.join(',')}`)
+ok('最终边含 \\hookrightarrow（包含）', fin.edges.filter((l) => l === '\\hookrightarrow').length === 2, `edges=${fin.edges.join(',')}`)
+ok('最终边含 = （Orb = \\Omega，传递）', fin.edges.includes('='), `edges=${fin.edges.join(',')}`)
+ok('最终边含 ~>（作用）', fin.edges.includes('\\curvearrowright'), `edges=${fin.edges.join(',')}`)
+// `.proof-text` 走 KaTeX，`innerText` 拿到的是**渲染后**的字符 —— `\blacksquare`
+// 在 KaTeX 里排成 ■（U+25A0），不是源码形态
+const lastFileText = await page.locator('.proof-step.on .proof-text').innerText()
+ok('结论文本渲染成了排版（有 katex 节点）', (await page.locator('.proof-step.on .proof-text .katex').count()) > 0, lastFileText.slice(0, 60))
+ok('结论文本出现收尾记号 ■', /[\u220e\u25a0]/.test(lastFileText), lastFileText.slice(-40))
 ok('下一步在末步禁用', await page.locator('.proof-bar button.primary').isDisabled())
 
 // ── 回退与合法性 ──

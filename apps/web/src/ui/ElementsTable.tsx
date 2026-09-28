@@ -45,7 +45,7 @@ export function ElementsTable({ group }: { group: Group }) {
                 </th>
                 {table.rows.map((row) => {
                   const v = row.values[i]
-                  const canDrag = row.numeric && v !== '—'
+                  const canDrag = row.numeric && v !== '--'
                   return (
                     <td
                       key={row.key}

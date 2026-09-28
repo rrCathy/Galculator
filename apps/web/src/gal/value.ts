@@ -120,7 +120,7 @@ export function normalizeSubgroup(s: RawSubgroupLike, group: Group): NormalizedS
       order <= 1
         ? '{e}'
         : gens.length > 0
-          ? `⟨${gens.map((g) => g.label).join(', ')}⟩`
+          ? `\\langle ${gens.map((g) => g.label).join(', ')}\\rangle`
           : `阶 ${order} 子群`,
   }
 }

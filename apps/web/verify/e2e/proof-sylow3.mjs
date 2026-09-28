@@ -2,11 +2,11 @@
  * 走查：**Sylow III 模板的 step-through**（M2）。
  *
  * 这一条的看点与 Sylow I 不同：证明里**出现了第二个作用**——「换主角」，
- * 让 P 自己作用在 Ω = Syl_p(G) 上（作用群是子群 P，Ω 的成员却是母群 G 的子群）。
+ * 让 P 自己作用在 \\Omega = Syl_p(G) 上（作用群是子群 P，\\Omega 的成员却是母群 G 的子群）。
  * 所以除了"逐步可走"，还要盯：
- *   · 画布上**有两条 ↷**（G ↷ Ω 与 P ↷ Ω），且 P 那条是从子群节点出发的；
- *   · 不动点 F 与其余轨道 OB 真的长出来；
- *   · 面板文本里那句 `n₃ ≡ 1 (mod 3)` 到位。
+ *   \\cdot 画布上**有两条 \\curvearrowright**（G \\curvearrowright \\Omega 与 P \\curvearrowright \\Omega），且 P 那条是从子群节点出发的；
+ *   \\cdot 不动点 F 与其余轨道 OB 真的长出来；
+ *   \\cdot 面板文本里那句 `n₃ \\equiv 1 (mod 3)` 到位。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/proof-sylow3.mjs`
  */
@@ -41,7 +41,7 @@ const snapshot = () =>
     return {
       ids: [...svg.querySelectorAll('g.gnode')].map((g) => g.dataset.id).sort(),
       edges: [...svg.querySelectorAll('g.gedge')].map((g) => ({
-        label: g.querySelector('text')?.textContent ?? '',
+        label: g.dataset.label ?? '',
         // 边分组只有 `gedge-<kind>`（from/to 在 derive 层断言，DOM 里没有）
         kind: [...g.classList].find((c) => c.startsWith('gedge-')) ?? '',
       })),
@@ -52,11 +52,13 @@ const snapshot = () =>
 
 // ── 面板：模板列表（M3 之后是五条，Sylow 三条仍在最前）──
 ok('列出 5 条模板（Sylow 三条 + 轨道–稳定子 + 第一同构）', (await page.locator('.proof-item').count()) === 5)
+// 认卡片用 **`data-tpl`（模板 id）**，不认标题文本：标题走 KaTeX 渲染，
+// 渲染后的 `textContent` 会把 `Sylow I` 里的空格吃掉（math mode 忽略空格）
 const titles = await page.evaluate(() =>
-  [...document.querySelectorAll('.proof-item')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()),
+  [...document.querySelectorAll('.proof-item')].map((x) => x.dataset.tpl ?? ''),
 )
-ok('第 1 条是 Sylow I', /Sylow I/.test(titles[0] ?? ''), titles.join(' | '))
-ok('第 3 条是 Sylow III', /Sylow III/.test(titles[2] ?? ''), titles.join(' | '))
+ok('第 1 条是 Sylow I', /^sylow-1/.test(titles[0] ?? ''), titles.join(' | '))
+ok('第 3 条是 Sylow III', /^sylow-3/.test(titles[2] ?? ''), titles.join(' | '))
 
 await page.locator('.proof-item[data-tpl="sylow-3-congruence"] .proof-start').click()
 await page.waitForTimeout(500)
@@ -79,7 +81,7 @@ ok('走完没有求值失败的行', fin.errors.length === 0, fin.errors.join(' 
 
 // 节点表：群 / 集合 / 数值集上画布；**作用与子群集不上画布**
 //（作用是"边"，子群集是"列表"—— DIAGRAM_SPEC §3 的存在层级）
-for (const id of ['G', 'Ω', 'O', 'N', 'P', 'F', 'OB']) {
+for (const id of ['G', 'Omega', 'O', 'N', 'P', 'F', 'OB']) {
   ok(`画布上有 ${id}`, fin.ids.includes(id), `ids=${fin.ids.join(',')}`)
 }
 for (const id of ['A', 'B', 'S']) {
@@ -87,17 +89,18 @@ for (const id of ['A', 'B', 'S']) {
 }
 ok('节点总数 = 7', fin.ids.length === 7, `ids=${fin.ids.join(',')}`)
 
-// 两条作用线：G ↷ Ω 与（换主角的）P ↷ Ω
-const actions = fin.edges.filter((e) => e.label === '↷')
-ok('画布上有两条 ↷（G ↷ Ω 与 P ↷ Ω）', actions.length === 2, JSON.stringify(actions))
+// 两条作用线：G \\curvearrowright \\Omega 与（换主角的）P \\curvearrowright \\Omega
+const actions = fin.edges.filter((e) => e.label === '\\curvearrowright')
+ok('画布上有两条 ~>（G ~> \\Omega 与 P ~> \\Omega）', actions.length === 2, JSON.stringify(actions))
 ok(
   '两条都是作用类边（gedge-action）',
   fin.edges.filter((e) => e.kind === 'gedge-action').length === 2,
   JSON.stringify(fin.edges.map((e) => e.kind)),
 )
 
-ok('结论说 n₃ ≡ 1 (mod 3)', fin.stepText.includes('≡ 1 (mod 3)'), fin.stepText.slice(0, 120))
-ok('结论同时说 n₃ | m', fin.stepText.includes('| m'), fin.stepText.slice(0, 120))
+const flatStep = fin.stepText.replace(/\s+/g, '')
+ok('结论说 n_3 ≡ 1 (mod 3)', flatStep.includes('\u22611(mod3)'), fin.stepText.slice(0, 120))
+ok('结论同时说 n_3 ∣ m', /[\u2223|]m/.test(flatStep), fin.stepText.slice(0, 120))
 
 await page.screenshot({ path: '../../docs/assets/u14-proof-sylow3.png' })
 

@@ -58,7 +58,7 @@ const describeValue = (v: { type: string } | undefined): string => {
 export function run(): void {
   /* ══ ① 结论区：构造出来的群不许沉默 ══════════════════════ */
 
-  suite('usability · 结论区的判据（缺口 ①）')
+  suite('usability \\cdot 结论区的判据（缺口 ①）')
   {
     // 手写的群记号 = 符号即答案，不重复说"同构于 S₄"
     eq('手写 `G = S_4` 只说 1 条（阶）', groupInsOf(['G = S_4']).labels.length, 1)
@@ -66,7 +66,7 @@ export function run(): void {
 
     // 由操作构造出来的群：即使符号与识别结果**归一后相同**，也要说
     //（`ker f` 的符号本来就是 `C_{2}`，不说的话信息面板里只剩一个"阶"）
-    const ker = groupInsOf(['G = C_6', 'H = C_6', 'f = 映射(G, H, a→2)', 'K = ker(f)'])
+    const ker = groupInsOf(['G = C_6', 'H = C_6', 'f = 映射(G, H, a\\to 2)', 'K = ker(f)'])
     ok('`K = ker(f)` 有「识别」条（不再沉默）', ker.labels.includes('识别'), ker.labels.join(','))
     ok(
       '「识别」条给出了 SmallGroup 坐标',
@@ -78,51 +78,56 @@ export function run(): void {
     // 不能说"它同构于自己"——label 是「识别」而不是「同构」就是归一成功的证据
     const klein = groupInsOf(['G = C_2 x C_2'])
     ok('`C_2 x C_2` 不说「同构」（同群异写）', !klein.labels.includes('同构'), klein.labels.join(','))
-    ok('但会给「识别」+ V₄ 的惯用名', klein.labels.includes('识别') && klein.insights.some((i) => (i.detail ?? '').includes('V₄')), JSON.stringify(klein.insights.map((i) => i.detail)))
+    ok('但会给「识别」+ V_4 的惯用名', klein.labels.includes('识别') && klein.insights.some((i) => (i.detail ?? '').includes('V_4')), JSON.stringify(klein.insights.map((i) => i.detail)))
 
-    // 符号与识别结果真的不同 → 是「同构」（真结论）
+    // 符号与识别结果真的不同 \\to 是「同构」（真结论）
     const q = groupInsOf(['G = S_4', 'N = 闭包(G, (12)(34), (13)(24))', 'Q = 商(G, N)'])
-    ok('`商(G,N)`（符号 S₄/N）说「同构」', q.labels.includes('同构'), q.labels.join(','))
+    ok('`商(G,N)`（符号 S_4/N）说「同构」', q.labels.includes('同构'), q.labels.join(','))
     ok(
-      '那条写着 ≅ S₃',
-      q.insights.some((i) => i.text.includes('S₃')),
+      '那条写着 \\cong S_3',
+      q.insights.some((i) => i.text.includes('S_3')),
       q.insights.map((i) => i.text).join(' | '),
     )
 
     // 闭包 / 自同构群也一样（它们都是"构造出来的"）
     ok('`闭包(G,r)` 有识别条', groupInsOf(['G = D_4', 'H = 闭包(G, r)']).labels.includes('识别'))
     const aut = groupInsOf(['G = S_4', 'A = Aut(G)'])
-    ok('`Aut(S₄)` 说「同构」（Aut(S₄) ≅ S₄）', aut.labels.includes('同构'), aut.labels.join(','))
+    ok('`Aut(S_4)` 说「同构」（Aut(S_4) \\cong S_4）', aut.labels.includes('同构'), aut.labels.join(','))
     ok('Aut 的识别带 SmallGroup(24, 11)', aut.insights.some((i) => (i.detail ?? '').includes('SmallGroup(24, 11)')), aut.insights.map((i) => i.detail).join(' | '))
   }
 
-  /* ══ ⑤ 名字：LaTeX 希腊字母能敲进来了 ═══════════════════ */
+  /* ══ ⑤ 名字：只有一种形态（缺口 ⑥，方向随形态统一而变）═══════ */
 
-  suite('usability · 名字里的 LaTeX 希腊字母（缺口 ⑥）')
+  suite('usability \\cdot 名字里的 LaTeX 命令（缺口 ⑥）')
   {
-    eq('`\\phi` → φ', normalizeName('\\phi'), 'φ')
-    eq('`\\varphi` → φ（与 \\phi 归一，否则显示/回认会来回变形）', normalizeName('\\varphi'), 'φ')
-    eq('`\\alpha` → α', normalizeName('\\alpha'), 'α')
-    eq('`\\Gamma` → Γ（大写也认）', normalizeName('\\Gamma'), 'Γ')
-    eq('真字符 φ 原样', normalizeName('φ'), 'φ')
+    // 2026-09-27 之后的约定：名字只有**一种**形态 —— ASCII 或 LaTeX 命令。
+    // 于是 `normalizeName` 只 trim，`\phi` 与 `\varphi` 是**两个**名字
+    //（LaTeX 里它们排出来就不是同一个字符），不再归一。
+    eq('`\\varphi` 就是名字本身（不再折成 \\varphi）', normalizeName('\\varphi'), '\\varphi')
+    eq('`\\phi` 同理', normalizeName('\\phi'), '\\phi')
+    eq('`\\Gamma` 也原样', normalizeName('\\Gamma'), '\\Gamma')
     eq('普通名字原样', normalizeName('  f  '), 'f')
-    eq('不认识的宏**不**动它（留给别处报错）', normalizeName('\\foo'), '\\foo')
 
-    ok('`\\phi` 现在是合法名字', checkName('\\phi', []).ok, checkName('\\phi', []).error ?? '')
-    ok('`\\varphi` 也是', checkName('\\varphi', []).ok)
-    ok('`\\foo` 仍然不合法', !checkName('\\foo', []).ok)
-    ok('名字非法时给出希腊字母的写法提示', (checkName('\\foo', []).hint ?? '').includes('\\phi'), checkName('\\foo', []).hint ?? '')
-    // 归一之后的重名判定必须生效（`\phi` 与已有的 `φ` 是同一个名字）
-    ok('`\\phi` 与已占用的 `φ` 判重名', !checkName('\\phi', ['φ']).ok, JSON.stringify(checkName('\\phi', ['φ'])))
+    ok('`\\varphi` 是合法名字（全是 ASCII）', checkName('\\varphi', []).ok, checkName('\\varphi', []).error ?? '')
+    ok('`\\phi` 也是', checkName('\\phi', []).ok)
+    ok('`\\Omega` 也是', checkName('\\Omega', []).ok)
+    ok('带空格的不行', !checkName('a b', []).ok)
+    // 真字符 \\varphi 现在**不能**当名字了 —— 键盘打不出来
+    // 样本用 `\u03c6` 转义写：它**正是**要被拦的那个字符，别被批量替换换掉
+    ok('真字符 φ 不再是合法名字', !checkName('\u03c6', []).ok)
+    ok('而且提示里给可照抄的改法', (checkName('\u03c6', []).hint ?? '').includes('\\varphi'), checkName('\u03c6', []).hint ?? '')
+    // 两个别名是两个名字（不再归一）\\to 彼此不冲突
+    ok('`\\phi` 与 `\\varphi` 互不重名', checkName('\\phi', ['\\varphi']).ok)
+    ok('但同名还是拦', !checkName('\\phi', ['\\phi']).ok)
   }
 
   /* ══ ⑨ 报错：分清「没这功能」与「打错了」 ══════════════ */
 
-  suite('usability · 报错文案（缺口 ⑨）')
+  suite('usability \\cdot 报错文案（缺口 ⑨）')
   {
     const tm = lastLine(['G = S_4', 'M = 极大子群(G)'])
     ok('未支持的操作报「没有名为…的操作」', (tm.error ?? '').includes('没有名为'), tm.error)
-    ok('并猜一个相近的（极大子群 → Sub(G)）', (tm.hint ?? '').includes('Sub(G)'), tm.hint ?? '')
+    ok('并猜一个相近的（极大子群 -> Sub(G)）', (tm.hint ?? '').includes('Sub(G)'), tm.hint ?? '')
 
     const burn = lastLine(['G = D_4', 'A = 共轭作用(G)', 'n = Burnside(A)'])
     ok('Burnside 报「没有这个操作」而不是「群记号认不出」', (burn.error ?? '').includes('没有名为'), burn.error)
@@ -134,41 +139,41 @@ export function run(): void {
     ok('gcd 仍报「没有这个操作」', (gcd.error ?? '').includes('没有名为'), gcd.error)
 
     // `f(K)`：`f` 是个已定义的对象 —— 说清楚，别让用户以为打错了名字
-    const fk = lastLine(['G = C_6', 'H = C_6', 'f = 映射(G, H, a→2)', 'K = 闭包(G, 1)', 'I = f(K)'])
+    const fk = lastLine(['G = C_6', 'H = C_6', 'f = 映射(G, H, a\\to 2)', 'K = 闭包(G, 1)', 'I = f(K)'])
     ok('`f(K)` 报「f 是已定义的对象，不能当函数调用」', (fk.error ?? '').includes('已定义的对象'), fk.error)
     ok('并点明这个功能还没有', (fk.hint ?? '').includes('还没有'), fk.hint ?? '')
 
-    // 真·打错字：保留原来的"无法识别"
+    // 真\\cdot打错字：保留原来的"无法识别"
     const typo = lastLine(['G = S_42x'])
     ok('乱写的记号仍是「无法识别」', (typo.error ?? '').includes('无法识别'), typo.error)
   }
 
   /* ══ ④ 关系行 vs 漏等号 ═════════════════════════════════ */
 
-  suite('usability · 关系行与漏等号（缺口 ④ 的提示）')
+  suite('usability \\cdot 关系行与漏等号（缺口 ④ 的提示）')
   {
-    for (const rel of ['H ⊆ G', 'N ⊴ G', 'A ≅ B']) {
+    for (const rel of ['H \\subseteq G', 'N \\trianglelefteq G', 'A \\cong B']) {
       const s = lastLine(['G = S_4', 'H = 闭包(G, r)', 'N = 正规子群(G)', 'A = C_6', 'B = C_6', rel])
       ok(`「${rel}」报「这是一个关系，不是定义」`, (s.error ?? '').includes('关系'), s.error)
-      // 提示**必须跟着功能走**：U20 之后 `⊆` 已经能写了，老话"还没有对应操作"就成了假话
-      ok(`「${rel}」的提示里说清哪条能写`, (s.hint ?? '').includes('⊆'), s.hint ?? '')
+      // 提示**必须跟着功能走**：U20 之后 `\\subseteq` 已经能写了，老话"还没有对应操作"就成了假话
+      ok(`「${rel}」的提示里说清哪条能写`, (s.hint ?? '').includes('\\subseteq'), s.hint ?? '')
       ok(`「${rel}」不再说"还没有对应操作"`, !(s.hint ?? '').includes('没有对应操作'), s.hint ?? '')
     }
-    // 真的只是漏了等号 → 保持原话
+    // 真的只是漏了等号 \\to 保持原话
     const noEq = lastLine(['G = S_4', 'G S_4'])
     eq('真漏等号仍是「缺少「=」」', noEq.error, '缺少「=」')
   }
 
   /* ══ ③ 子群列表的语义（信息面板那行说明的数据依据） ══════ */
 
-  suite('usability · 子群列表是「共轭类代表」（缺口 ③）')
+  suite('usability \\cdot 子群列表是「共轭类代表」（缺口 ③）')
   {
     // 那个 tab 走 core 的 listCosetStripSubgroups：S₄ 只列 9 条，而真子群有 29 个（不含 G 自身）
     const r = buildLines(['G = S_4'])
     const g = r.objects[0].value
-    ok('S₄ 建出来了', g.type === 'group')
+    ok('S_4 建出来了', g.type === 'group')
     if (g.type === 'group') {
-      eq('|S₄| = 24', g.group.order, 24)
+      eq('|S_4| = 24', g.group.order, 24)
     }
     // 用 `Sub(G)` 的条数作为"全部"的参照（它不含 G 自身）
     const sub = build(['G = S_4', 'S = Sub(G)']).byId('S')
@@ -190,14 +195,14 @@ export function run(): void {
    * 只是没有任何地方往外说。这一套钉住关系层的两条来源与一条纪律：
    *   - 来源决定的（`ker f` 的核必是定义域的正规子群）
    *   - 元素集包含（两个**独立建出来**的群之间也能发现）
-   *   - **假阳性必须为 0**（这是最要紧的：朴素写法会让 `V₄ ≤ D₄` 成立）
+   *   - **假阳性必须为 0**（这是最要紧的：朴素写法会让 `V₄ \\le D₄` 成立）
    */
-  suite('usability · 关系层：它落在哪儿、它对谁正规（缺口 ②）')
+  suite('usability \\cdot 关系层：它落在哪儿、它对谁正规（缺口 ②）')
   {
     const LINES = [
       'G = S_4',
       'H = S_3',
-      'f = 映射(G, H, s12→23, c→13)',
+      'f = 映射(G, H, s12->23, c->13)',
       'K = ker(f)',
       'A = A_4',
       'B = 闭包(G, (12)(34), (13)(24))',
@@ -209,38 +214,38 @@ export function run(): void {
       rel(id).find((r) => r.kind === kind && r.other === other)
 
     // ── 舞台本身要先站得住（这几个数是手算的） ──
-    eq('|S₄| = 24', (objects.find((o) => o.id === 'G')!.value as { group: { order: number } }).group.order, 24)
+    eq('|S_4| = 24', (objects.find((o) => o.id === 'G')!.value as { group: { order: number } }).group.order, 24)
     const kv = objects.find((o) => o.id === 'K')!.value
-    eq('K = ker f 的阶 = 4（V₄）', kv.type === 'group' ? kv.group.order : -1, 4)
+    eq('K = ker f 的阶 = 4（V_4）', kv.type === 'group' ? kv.group.order : -1, 4)
 
     // ── ① 来源决定：核必是定义域的正规子群，指数 = 24/4 = 6 ──
     const ker = find('K', 'kernel', 'f')
     ok('K 有一条「核」关系（K = ker f）', !!ker, JSON.stringify(rel('K').map((r) => r.kind)))
-    ok('那条说了 ⊴ 定义域', (ker?.detail ?? '').includes('⊴ S₄'), ker?.detail ?? '')
+    ok('那条说了 \\trianglelefteq 定义域', (ker?.detail ?? '').includes('\\trianglelefteq S_4'), ker?.detail ?? '')
     ok('指数手算对上了：24 / 4 = 6', (ker?.detail ?? '').includes('24 / 4 = 6'), ker?.detail ?? '')
 
     // ── ② 元素集包含：A₄ 与 K 都是**独立建出来**的，没有任何来源牵连 ──
     const kInA = find('K', 'subgroup', 'A')
-    ok('K ≤ A₄ 被发现了（V₄ ≤ A₄，两者互不是对方的来源）', !!kInA, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
+    ok('K \\le A_4 被发现了（V_4 \\le A_4，两者互不是对方的来源）', !!kInA, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
     ok('指数手算对上了：12 / 4 = 3', (kInA?.detail ?? '').includes('12 / 4 = 3'), kInA?.detail ?? '')
-    ok('并且判出 ⊴ 正规（V₄ ⊴ A₄）', (kInA?.detail ?? '').includes('⊴ 正规'), kInA?.detail ?? '')
+    ok('并且判出 \\trianglelefteq 正规（V_4 \\trianglelefteq A_4）', (kInA?.detail ?? '').includes('\\trianglelefteq 正规'), kInA?.detail ?? '')
 
     const aInG = find('A', 'subgroup', 'G')
-    ok('A₄ ≤ S₄ 被发现了（用户手打的两行独立定义）', !!aInG, JSON.stringify(rel('A').map((r) => `${r.kind}:${r.other}`)))
+    ok('A_4 \\le S_4 被发现了（用户手打的两行独立定义）', !!aInG, JSON.stringify(rel('A').map((r) => `${r.kind}:${r.other}`)))
     ok('指数手算对上了：24 / 12 = 2', (aInG?.detail ?? '').includes('24 / 12 = 2'), aInG?.detail ?? '')
-    ok('A₄ ⊴ S₄（指数 2 的子群必正规）', (aInG?.detail ?? '').includes('⊴ 正规'), aInG?.detail ?? '')
+    ok('A_4 \\trianglelefteq S_4（指数 2 的子群必正规）', (aInG?.detail ?? '').includes('\\trianglelefteq 正规'), aInG?.detail ?? '')
 
     // 反向：G 的信息面板里"我包含谁"
     const gHoldsA = find('G', 'contains', 'A')
-    ok('S₄ 的面板里列出"包含 A₄"', !!gHoldsA, JSON.stringify(rel('G').map((r) => `${r.kind}:${r.other}`)))
+    ok('S_4 的面板里列出"包含 A_4"', !!gHoldsA, JSON.stringify(rel('G').map((r) => `${r.kind}:${r.other}`)))
 
     // ── 指数 1 = 同一个群：`ker f` 与 `闭包(G, …)` 都是 V₄，元素 id 一模一样 ──
     const eq1 = find('K', 'equal', 'B')
-    ok('K 与 B（都是 V₄）被认成「同一个群」', !!eq1, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
+    ok('K 与 B（都是 V_4）被认成「同一个群」', !!eq1, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
     ok('那句话说的是"元素完全相同"', (eq1?.detail ?? '').includes('元素完全相同'), eq1?.detail ?? '')
-    ok('并且没有反过来再报一条 `B ≤ K · 指数 1`', !find('K', 'contains', 'B'))
+    ok('并且没有反过来再报一条 `B \\le K \\cdot 指数 1`', !find('K', 'contains', 'B'))
 
-    // ── 商：Q = G/K 是定义式，且商群良定义（K ⊴ G） ──
+    // ── 商：Q = G/K 是定义式，且商群良定义（K \\trianglelefteq G） ──
     const quo = find('Q', 'quotient', 'G')
     ok('商群有「商」关系 Q = G / K', !!quo, JSON.stringify(rel('Q').map((r) => `${r.kind}:${r.other}`)))
     ok('并给出 |Q| = 24 / 4 = 6', (quo?.detail ?? '').includes('24 / 4 = 6'), quo?.detail ?? '')
@@ -252,27 +257,27 @@ export function run(): void {
     // ── 纪律：假阳性必须为 0 ──
     //  V₄ 的 id 是 `e a b c`、D₄ 的 id 是 `r0…s3`，两者本无关系。
     //  朴素的"id 子集 + core 校验"写法在 D₄ 上会返回**平凡子群**（core 静默丢掉认不得的引用），
-    //  于是得出 `V₄ ≤ D₄`——这条断言就是钉死它的。
+    //  于是得出 `V₄ \\le D₄`——这条断言就是钉死它的。
     const falsePos = buildLines(['V = V_4', 'D = D_4']).objects
     const bogus = relationsFor(falsePos.find((o) => o.id === 'V')!, falsePos).filter(
       (r) => r.kind === 'subgroup' || r.kind === 'contains' || r.kind === 'equal',
     )
-    eq('V₄ 与 D₄ 之间不该有任何包含关系（假阳性）', bogus.length, 0)
+    eq('V_4 与 D_4 之间不该有任何包含关系（假阳性）', bogus.length, 0)
 
-    //  两个各自声明的 `C_6`：元素是同一批 `e0…e5` → 判成"同一个群"是**对的**；
+    //  两个各自声明的 `C_6`：元素是同一批 `e0…e5` \\to 判成"同一个群"是**对的**；
     //  错的是把它说成包含（"互相包含"读起来像两个东西）
     const same = buildLines(['X = C_6', 'Y = C_6']).objects
     const sameRel = relationsFor(same.find((o) => o.id === 'X')!, same)
     ok('两个 `C_6` 判成「同一个群」而不是包含', !sameRel.some((r) => r.kind === 'subgroup' || r.kind === 'contains'), JSON.stringify(sameRel.map((r) => r.kind)))
     ok('那条写着"元素完全相同"', sameRel.some((r) => r.kind === 'equal' && (r.detail ?? '').includes('元素完全相同')), JSON.stringify(sameRel))
 
-    //  C₂ 与 C₄ 的 id 都是 `e0 e1 …`（真子集！），但 C₂ 在 C₄ 里的"嵌入"不封闭 →
+    //  C₂ 与 C₄ 的 id 都是 `e0 e1 …`（真子集！），但 C₂ 在 C₄ 里的"嵌入"不封闭 \\to
     //  core 校验必须挡住它。这比上面的 V₄/D₄ 更阴险：id 真的全部命中。
     const cyc = buildLines(['A = C_2', 'B = C_4']).objects
     const cycRel = relationsFor(cyc.find((o) => o.id === 'A')!, cyc).filter(
       (r) => r.kind === 'subgroup' || r.kind === 'equal',
     )
-    eq('C₂ 不因 id 恰好是 C₄ 的前缀而被判成子群', cycRel.length, 0)
+    eq('C_2 不因 id 恰好是 C_4 的前缀而被判成子群', cycRel.length, 0)
   }
 
   /* ══ ⑤ 第三批：子群像 + 声明包含（U20）═══════════════════ */
@@ -285,26 +290,26 @@ export function run(): void {
    * 这一套钉住两个新操作，以及一条**判据同源**纪律：
    * `包含(H, G)` 用的一定是 U19 那份 `containment()` —— 声明的和算出来的不许有两种说法。
    */
-  suite('usability · 子群像 f(H) 与声明包含 H ⊆ G（缺口 ③④）')
+  suite('usability \\cdot 子群像 f(H) 与声明包含 H \\subseteq G（缺口 ③④）')
   {
-    const STAGE = ['G = S_4', 'H = S_3', 'f = 映射(G, H, s12→23, c→13)', 'K = ker(f)', 'A = A_4']
+    const STAGE = ['G = S_4', 'H = S_3', 'f = 映射(G, H, s12->23, c->13)', 'K = ker(f)', 'A = A_4']
 
     /* ── ① 子群像 ── */
 
-    // f: S₄ ↠ S₃（ker = V₄），A₄ ⊆ S₄。A₄ 的像 = S₃ 里唯一的 3 阶子群 = C₃
-    //（课本说法：A₄/V₄ ≅ C₃ —— 而 A₄ 的像就是 A₄V₄/V₄ = S₃ 的那个 C₃）
+    // f: S₄ \\twoheadrightarrow S₃（ker = V₄），A₄ \\subseteq S₄。A₄ 的像 = S₃ 里唯一的 3 阶子群 = C₃
+    //（课本说法：A₄/V₄ \\cong C₃ —— 而 A₄ 的像就是 A₄V₄/V₄ = S₃ 的那个 C₃）
     const fa = build([...STAGE, 'FA = 像(f, A)'])
     const faV = fa.byId('FA')?.value
-    ok('`像(f, A₄)` 建出来了', faV?.type === 'group', faV?.type)
-    eq('f(A₄) 的阶 = 3（手算：A₄ 的像 ≅ C₃）', faV?.type === 'group' ? faV.group.order : -1, 3)
-    eq('f(A₄) 的符号是 C₃', faV?.type === 'group' ? faV.group.symbol : '', 'C_{3}')
-    eq('来源记了 (f, A₄) 两个', fa.byId('FA')?.sources.join(','), 'f,A')
+    ok('`像(f, A_4)` 建出来了', faV?.type === 'group', faV?.type)
+    eq('f(A_4) 的阶 = 3（手算：A_4 的像 \\cong C_3）', faV?.type === 'group' ? faV.group.order : -1, 3)
+    eq('f(A_4) 的符号是 C_3', faV?.type === 'group' ? faV.group.symbol : '', 'C_{3}')
+    eq('来源记了 (f, A_4) 两个', fa.byId('FA')?.sources.join(','), 'f,A')
     eq('命中 op 是 image', fa.byId('FA')?.opId, 'image')
 
     // 单参形态没被破坏（U14 就有：`im f` 是整个像）
     const whole = build([...STAGE, 'I = 像(f)'])
     const iv = whole.byId('I')?.value
-    eq('`像(f)` 仍是整个像（S₄↠S₃ 满射 → 6 阶）', iv?.type === 'group' ? iv.group.order : -1, 6)
+    eq('`像(f)` 仍是整个像（S_4->>S_3 满射 -> 6 阶）', iv?.type === 'group' ? iv.group.order : -1, 6)
 
     // 两种像的**叙述**不能混：`f(A)` 不是 `im f`
     {
@@ -316,36 +321,36 @@ export function run(): void {
       ok('单参形态仍叙述成「im f」', (one?.text ?? '').includes('im f'), one?.text)
     }
 
-    // 不是定义域的子群 → 拦住
+    // 不是定义域的子群 \\to 拦住
     const notSub = build([...STAGE, 'H2 = 像(f, H)'])
     ok(
-      '`像(f, S₃)` 被拦（S₃ 不是 S₄ 的子群）',
+      '`像(f, S_3)` 被拦（S_3 不是 S_4 的子群）',
       notSub.byId('H2') === undefined,
       describeValue(notSub.byId('H2')?.value),
     )
     const tooBig = build([...STAGE, 'C = C_24', 'X = 像(f, C)'])
     ok(
-      '`像(f, C₂₄)`（比定义域还大）被拦',
+      '`像(f, C_24)`（比定义域还大）被拦',
       tooBig.byId('X') === undefined,
       describeValue(tooBig.byId('X')?.value),
     )
 
     /* ── ② 声明包含：三种写法等价 ── */
 
-    const forms = ['R = A ⊆ G', 'R = A⊆G', 'R = 包含(A, G)']
+    const forms = ['R = A \\subseteq G', 'R = A\\subseteq G', 'R = 包含(A, G)']
     for (const line of forms) {
       const b = build([...STAGE, line])
       const r = b.byId('R')?.value
       ok(`「${line}」建出关系`, r?.type === 'relation', describeValue(r))
       eq(`「${line}」指数 = 24/12 = 2`, r?.type === 'relation' ? r.relation.index : -1, 2)
-      eq(`「${line}」判出正规（A₄ ⊴ S₄）`, r?.type === 'relation' ? r.relation.isNormal : null, true)
-      eq(`「${line}」来源 = (A₄, S₄)`, b.byId('R')?.sources.join(','), 'A,G')
+      eq(`「${line}」判出正规（A_4 \\trianglelefteq S_4）`, r?.type === 'relation' ? r.relation.isNormal : null, true)
+      eq(`「${line}」来源 = (A_4, S_4)`, b.byId('R')?.sources.join(','), 'A,G')
     }
 
     /* ── ③ 判据同源：操作的结果与关系层的判定必须一致 ── */
 
     {
-      const b = build([...STAGE, 'R = A ⊆ G'])
+      const b = build([...STAGE, 'R = A \\subseteq G'])
       const r = b.byId('R')?.value
       const av = b.byId('A')?.value
       const gv = b.byId('G')?.value
@@ -361,47 +366,47 @@ export function run(): void {
     /* ── ④ 假声明全被拦（每一条都给了可读的理由） ── */
 
     const bad: [string, string[]][] = [
-      ['D₄ 不是 S₄ 的子群（id 空间不同）', [...STAGE, 'D = D_4', 'R = D ⊆ G']],
-      ['C₂ 不是 C₄ 的子群（id 是真前缀，但乘法不封闭）', ['X = C_2', 'Y = C_4', 'R = X ⊆ Y']],
-      ['阶更大的不能当子群', ['X = C_4', 'Y = C_2', 'R = X ⊆ Y']],
-      ['同一个对象', ['G = S_4', 'R = G ⊆ G']],
-      ['元素完全相同（两个 C₆）', ['X = C_6', 'Y = C_6', 'R = X ⊆ Y']],
+      ['D_4 不是 S_4 的子群（id 空间不同）', [...STAGE, 'D = D_4', 'R = D \\subseteq G']],
+      ['C_2 不是 C_4 的子群（id 是真前缀，但乘法不封闭）', ['X = C_2', 'Y = C_4', 'R = X \\subseteq Y']],
+      ['阶更大的不能当子群', ['X = C_4', 'Y = C_2', 'R = X \\subseteq Y']],
+      ['同一个对象', ['G = S_4', 'R = G \\subseteq G']],
+      ['元素完全相同（两个 C_6）', ['X = C_6', 'Y = C_6', 'R = X \\subseteq Y']],
     ]
     for (const [name, lines] of bad) {
       const b = build(lines)
       const last = b.lineStates[b.lineStates.length - 1]
-      ok(`${name} → 报错`, !last.ok && b.byId('R') === undefined, JSON.stringify(last.error))
-      ok(`${name} → 报错里说清了理由`, (last.error ?? '').length > 6, last.error)
+      ok(`${name} -> 报错`, !last.ok && b.byId('R') === undefined, JSON.stringify(last.error))
+      ok(`${name} -> 报错里说清了理由`, (last.error ?? '').length > 6, last.error)
     }
 
-    /* ── ⑤ 正规性由工具判定：非正规的画 `↪` 而不是 `⊴` ── */
+    /* ── ⑤ 正规性由工具判定：非正规的画 `\\hookrightarrow` 而不是 `\\trianglelefteq` ── */
 
     {
-      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P ⊆ G'])
+      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P \\subseteq G'])
       const r = b.byId('R')?.value
-      eq('S₃ 里 2 阶子群判为非正规', r?.type === 'relation' ? r.relation.isNormal : null, false)
+      eq('S_3 里 2 阶子群判为非正规', r?.type === 'relation' ? r.relation.isNormal : null, false)
       eq('指数 = 6/2 = 3', r?.type === 'relation' ? r.relation.index : -1, 3)
       const g = deriveCanvas(b.objects)
       const e = g.edges.find((x) => x.kind === 'relation')
       ok('画布上有关系边', !!e, JSON.stringify(g.edges.map((x) => x.kind)))
-      eq('非正规 → 标签是 ↪', e?.label, '↪')
+      eq('非正规 -> 标签是 \\hookrightarrow', e?.label, '\\hookrightarrow')
       ok('关系边可点选（带 objectId）', e?.objectId === 'R', e?.objectId)
     }
 
-    /* ── ⑥ 声明的包含压过自动生成的同向 ↪（不叠两条箭头） ── */
+    /* ── ⑥ 声明的包含压过自动生成的同向 \\hookrightarrow（不叠两条箭头） ── */
 
     {
-      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P ⊆ G'])
+      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P \\subseteq G'])
       const g = deriveCanvas(b.objects)
       const between = g.edges.filter((e) => e.from === 'P' && e.to === 'G')
-      eq('P→G 上只剩一条边', between.length, 1)
+      eq('P->G 上只剩一条边', between.length, 1)
       eq('留下的是声明的那条', between[0]?.kind, 'relation')
     }
 
     /* ── ⑦ 关系不上画布：它是边不是顶点 ── */
 
     {
-      const b = build([...STAGE, 'R = A ⊆ G'])
+      const b = build([...STAGE, 'R = A \\subseteq G'])
       const g = deriveCanvas(b.objects)
       ok('关系不占节点', !g.nodes.some((n) => n.id === 'R'), JSON.stringify(g.nodes.map((n) => n.id)))
       const r = b.byId('R')?.value
@@ -413,14 +418,14 @@ export function run(): void {
 
     {
       // 无等号的关系行（定义表那条路）
-      const s = lastLine(['G = S_4', 'H = S_3', 'H ⊆ G'])
-      ok('`H ⊆ G` 仍是「写的是一个关系」', (s.error ?? '').includes('关系'), s.error)
-      ok('但提示改口了：说清 ⊆ 能写', (s.hint ?? '').includes('⊆'), s.hint ?? '')
+      const s = lastLine(['G = S_4', 'H = S_3', 'H \\subseteq G'])
+      ok('`H \\subseteq G` 仍是「写的是一个关系」', (s.error ?? '').includes('关系'), s.error)
+      ok('但提示改口了：说清 \\subseteq 能写', (s.hint ?? '').includes('\\subseteq'), s.hint ?? '')
       ok('不再说"还没有对应操作"', !(s.hint ?? '').includes('没有对应操作'), s.hint ?? '')
 
-      // `R = A ⊆ K`（K 打错）→ 报"是谁算不出来"，而不是答非所问的关系提示
-      const t = lastLine([...STAGE, 'R = A ⊆ K9'])
-      ok('`A ⊆ K9` 报「K9」算不出来', (t.error ?? '').includes('K9'), t.error)
+      // `R = A \\subseteq K`（K 打错）\\to 报"是谁算不出来"，而不是答非所问的关系提示
+      const t = lastLine([...STAGE, 'R = A \\subseteq K9'])
+      ok('`A \\subseteq K9` 报「K9」算不出来', (t.error ?? '').includes('K9'), t.error)
     }
   }
 
@@ -434,12 +439,12 @@ export function run(): void {
    * 这条纪律逼出了 `ParamType` 的一次拆分（U21）：从前 `subset` 一型两用，
    * 对**子群集列表**一律回 true，而多数 op 其实吃不下它。
    */
-  suite('usability · 拖拽连线的候选与「可做」（缺口 ⑩⑤）')
+  suite('usability \\cdot 拖拽连线的候选与「可做」（缺口 ⑩⑤）')
   {
     const STAGE = [
       'G = S_4',
       'H = S_3',
-      'f = 映射(G, H, s12→23, c→13)',
+      'f = 映射(G, H, s12->23, c->13)',
       'K = ker(f)',
       'A = A_4',
       'Syl = Syl_p(G, 3)',
@@ -450,12 +455,12 @@ export function run(): void {
     const table = new Map(objects.map((o) => [o.id, o]))
     const pair = (x: string, y: string) => pairOps(obj(x).value, obj(y).value)
 
-    /* ── ① 用户的剧本：拖 A₄ 到 f 上 → **唯一候选**（于是直接执行，不弹菜单） ── */
+    /* ── ① 用户的剧本：拖 A₄ 到 f 上 \\to **唯一候选**（于是直接执行，不弹菜单） ── */
 
     const fa = pair('A', 'f')
-    eq('拖 A₄ 到 f 上：只有 1 个候选', fa.length, 1)
+    eq('拖 A_4 到 f 上：只有 1 个候选', fa.length, 1)
     eq('那个候选是「像」', fa[0]?.op.id, 'image')
-    // 拖拽不表达顺序：从 A₄ 起拖，而 `像(f, H)` 的 f 必须在前面 →
+    // 拖拽不表达顺序：从 A₄ 起拖，而 `像(f, H)` 的 f 必须在前面 \\to
     // 候选要自己标出"参数得反过来摆"，否则会拼出 `像(A₄, f)` 而报错
     eq('标了 swapped（参数要反过来摆）', fa[0]?.swapped, true)
     eq('从 f 起拖就不用反（同一个 op，两个方向都认）', pair('f', 'A')[0]?.swapped, false)
@@ -463,7 +468,7 @@ export function run(): void {
     /* ── ② 单对象操作不许混进来 ── */
 
     ok(
-      '拖 A₄ 到 f 上不会冒出「核」（它只用 f 一个对象）',
+      '拖 A_4 到 f 上不会冒出「核」（它只用 f 一个对象）',
       !fa.some((c) => c.op.id === 'kernel'),
       fa.map((c) => c.op.id).join(','),
     )
@@ -471,13 +476,13 @@ export function run(): void {
     /* ── ③ 排序：声明包含在最前 ── */
 
     const ag = pair('A', 'G')
-    eq('拖 A₄ 到 S₄ 上：第一条是「包含」', ag[0]?.op.id, 'contains')
+    eq('拖 A_4 到 S_4 上：第一条是「包含」', ag[0]?.op.id, 'contains')
     // 反着拖也列「包含」——**方向由判据定**（A₄ 才是子群），所以标 swapped
     const ga = pair('G', 'A').find((c) => c.op.id === 'contains')
-    ok('反着拖（S₄ → A₄）也列「包含」', !!ga, pair('G', 'A').map((c) => c.op.id).join(','))
-    eq('而且标了 swapped（参数会摆成 (A₄, S₄)）', ga?.swapped, true)
+    ok('反着拖（S_4 -> A_4）也列「包含」', !!ga, pair('G', 'A').map((c) => c.op.id).join(','))
+    eq('而且标了 swapped（参数会摆成 (A_4, S_4)）', ga?.swapped, true)
     ok(
-      '两个不相干的群之间（S₄ 与 S₃）没有「包含」',
+      '两个不相干的群之间（S_4 与 S_3）没有「包含」',
       !pair('G', 'H').some((c) => c.op.id === 'contains'),
       pair('G', 'H').map((c) => c.op.id).join(','),
     )
@@ -516,13 +521,13 @@ export function run(): void {
             return expr ? evalExpr(expr, table) : null
           }
           const r = mk(picked)
-          // 三种"点下去也没错"的例外：正序通 · 反序通（App 的 dispatchPairOp 会翻过去）·
+          // 三种"点下去也没错"的例外：正序通 \\cdot 反序通（App 的 dispatchPairOp 会翻过去）\\cdot
           // 要进编辑器（映射）或要补标量（补参条）
           const needsMore = c.op.editor === true || c.op.params.some((p) => isScalarParam(p.type))
           const revOk = !!mk([y, x])?.ok
           if (!r?.ok && !needsMore && !revOk) {
             const why = r && !r.ok ? r.error : 'composeCall 拼不出调用'
-            lies.push(`${x}→${y} ${c.op.id}${c.swapped ? '(反)' : ''} :: ${why}`)
+            lies.push(`${x}->${y} ${c.op.id}${c.swapped ? '(反)' : ''} :: ${why}`)
           }
         }
       }
@@ -537,13 +542,13 @@ export function run(): void {
       ok('子群集的「可做」里有 底集', one.includes('underlyingSet'), one.join(','))
 
       // 缺口 ⑤ 的判据：那一步**点得出来**，而且点出来之后下一环真的接得上
-      const chain = build([...STAGE, 'Ω = 底集(Syl)', 'Act = 共轭作用在(G, Ω)'])
-      const omega = chain.byId('Ω')?.value
+      const chain = build([...STAGE, '\\Omega = 底集(Syl)', 'Act = 共轭作用在(G, \\Omega)'])
+      const omega = chain.byId('\\Omega')?.value
       eq('`底集(Syl)` 产出集合', omega?.type, 'set')
-      eq('集合基数 = n₃ = 4（手算）', omega?.type === 'set' ? omega.set.members.length : -1, 4)
-      ok('接着 `共轭作用在(G, Ω)` 能建出来', chain.byId('Act')?.value.type === 'action')
+      eq('集合基数 = n_3 = 4（手算）', omega?.type === 'set' ? omega.set.members.length : -1, 4)
+      ok('接着 `共轭作用在(G, \\Omega)` 能建出来', chain.byId('Act')?.value.type === 'action')
       eq(
-        '作用点集的基数就是 n₃（Sylow III 的主角动作据此算出来）',
+        '作用点集的基数就是 n_3（Sylow III 的主角动作据此算出来）',
         chain.byId('Act')?.value.type === 'action' ? chain.byId('Act')!.value.action.n : -1,
         4,
       )
@@ -556,12 +561,12 @@ export function run(): void {
       eq('子群集列表的成员数 = 4', lst.type === 'subgroups' ? lst.subgroups.length : -1, 4)
       ok('`setlike` 收整个子群集列表', paramAccepts('setlike', lst, []))
       ok('`subset` **不收** 4 个成员的子群集', !paramAccepts('subset', lst, []))
-      ok('`omega` 也不收（Ω 走 omegaArgOf，只要单个数集）', !paramAccepts('omega', lst, []))
+      ok('`omega` 也不收（\\Omega 走 omegaArgOf，只要单个数集）', !paramAccepts('omega', lst, []))
 
-      // A₄ 的 n₂ = 1（V₄ 是唯一的 Sylow 2-子群）→ 这个列表恰好一个成员
+      // A₄ 的 n₂ = 1（V₄ 是唯一的 Sylow 2-子群）\\to 这个列表恰好一个成员
       const single = buildLines(['G = A_4', 'P = Syl_p(G, 2)']).objects.find((o) => o.id === 'P')
       const sv = single?.value
-      eq('`Syl_2(A₄)` 恰好一个成员（n₂ = 1）', sv?.type === 'subgroups' ? sv.subgroups.length : -1, 1)
+      eq('`Syl_2(A_4)` 恰好一个成员（n_2 = 1）', sv?.type === 'subgroups' ? sv.subgroups.length : -1, 1)
       ok(
         '而"恰好一个成员"的子群集当单个数集读（`商(G,N)` 就靠这条）',
         !!sv && paramAccepts('subset', sv, []),

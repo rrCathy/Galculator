@@ -45,7 +45,7 @@ export function eq(name: string, got: string | number | boolean | null | undefin
 }
 
 /**
- * 定义行 → 对象表 / 行状态 的便捷入口。
+ * 定义行 \\to 对象表 / 行状态 的便捷入口。
  *
  * `byId` 找对象（含工具补出来的隐式对象）；`line` 找行状态；`err` 取某行的错误。
  */
@@ -73,7 +73,7 @@ export function summary(): number {
   console.log(`${ctx.pass} PASS / ${ctx.fail} FAIL`)
   if (ctx.fail > 0) {
     console.log('失败项：')
-    for (const f of ctx.fails) console.log(`  · ${f}`)
+    for (const f of ctx.fails) console.log(`  \\cdot ${f}`)
   }
   return ctx.fail
 }

@@ -274,7 +274,7 @@ export function stageInfo(raw: string): StageInfo {
     factors,
     orderUni: factors
       .map((f) => (f.exponent === 1 ? `${f.prime}` : `${f.prime}${superscript(f.exponent)}`))
-      .join('·'),
+      .join('\\cdot '),
     orderTex: factors
       .map((f) => (f.exponent === 1 ? `${f.prime}` : `${f.prime}^{${f.exponent}}`))
       .join(' \\cdot '),
@@ -289,7 +289,7 @@ const bail = (text: string): ProofStep[] => [{ kind: 'claim', text }]
 /* ── 记号的两种形态（TeX / 展示） ───────────────────────── */
 
 /** `pᵏ`（纯文本）。core 只给数字上下标，字母 k 直接用 Unicode 修饰符。 */
-const PK = 'pᵏ'
+const PK = 'p^k'
 /** `n_p`（TeX） */
 const nTex = (p: number) => `n_{${p}}`
 /** `nₚ`（纯文本） */
@@ -402,7 +402,7 @@ function sylowStage(info: StageInfo, p: number): SylowStage | string {
 
   const genTexts = gensOfSubgroup(g, points[0])
   if (!genTexts) {
-    return `Syl_${p}(${info.sym}) 里的子群需要多于 3 个生成元，模板的「闭包(G, g₁, g₂, g₃)」写法接不下`
+    return `Syl_${p}(${info.sym}) 里的子群需要多于 3 个生成元，模板的「闭包(G, g_1, g_2, g_3)」写法接不下`
   }
 
   return {
@@ -480,8 +480,8 @@ const SYLOW_I_DEFAULTS: ProofParams = { group: 'A_4', p: 2 }
  */
 export const SYLOW_I: ProofTemplate = {
   id: 'sylow-1-wielandt',
-  title: 'Sylow I · 存在性（Wielandt 计数证明）',
-  theorem: 'p^k \\mid |G| \\;\\Longrightarrow\\; \\exists H \\le G,\\ |H| = p^k',
+  title: 'Sylow I \\cdot 存在性（Wielandt 计数证明）',
+  theorem: 'p^k \\mid|G| \\;\\Longrightarrow\\; \\exists H \\le G,\ |H| = p^k',
   blurb: '不搜索、不枚举：只数一个模 p 不为 0 的集合',
   defaults: SYLOW_I_DEFAULTS,
   groupChoices: PROOF_GROUP_CHOICES,
@@ -516,7 +516,7 @@ export const SYLOW_I: ProofTemplate = {
     return [
       {
         kind: 'claim',
-        text: `设 G = ${sym}，|G| = ${PK}·m 且 p ∤ m。目标：在 G 里找出一阶为 ${PK} 的子群。`,
+        text: `设 G = ${sym}，|G| = ${PK}\\cdot m 且 p \\nmid m。目标：在 G 里找出一阶为 ${PK} 的子群。`,
         tex: `|G| = p^{k} m, \\qquad p \\nmid m`,
         // claim 步也允许带 `line` —— 建群是"设 G 为……"的具象化，本来就属于这一步
         line: `G = ${info.raw.trim()}`,
@@ -524,21 +524,21 @@ export const SYLOW_I: ProofTemplate = {
       },
       {
         kind: 'compute',
-        text: `${sym} 的阶是 ${order} = ${info.orderUni} ⇒ p = ${pp}，k = ${k}，${PK} = ${pk}，m = ${m}`,
+        text: `${sym} 的阶是 ${order} = ${info.orderUni} \\implies p = ${pp}，k = ${k}，${PK} = ${pk}，m = ${m}`,
         tex: `|${sym}| = ${order} = ${info.orderTex}`,
         line: `n = 分解(${order})`,
       },
       {
         kind: 'claim',
-        text: `构造 X = { A ⊆ G : |A| = ${PK} }（全体 ${PK} 元子集）。下面只数它的大小——不枚举。`,
-        tex: `X = \\{\\, A \\subseteq G : |A| = p^k \\,\\},\\qquad |X| = \\binom{${order}}{${pk}}`,
+        text: `构造 X = { A \\subseteq G : |A| = ${PK} }（全体 ${PK} 元子集）。下面只数它的大小----不枚举。`,
+        tex: `X = \\{\\, A \\subseteq G : |A| = p^k \\,\\},\\qquad|X| = \\binom{${order}}{${pk}}`,
       },
       {
         kind: 'compute',
         text:
           binomShown !== null
-            ? `|X| = C(${order}, ${pk}) = ${binomShown}，而 ${binomShown} mod ${pp} = ${mod} ≠ 0 ⇒ p ∤ |X|`
-            : `|X| = C(${order}, ${pk}) 是个 ${binomText.length} 位数（太大），只算余数：mod ${pp} = ${mod} ≠ 0 ⇒ p ∤ |X|`,
+            ? `|X| = C(${order}, ${pk}) = ${binomShown}，而 ${binomShown} mod ${pp} = ${mod} \\ne 0 \\implies p \\nmid|X|`
+            : `|X| = C(${order}, ${pk}) 是个 ${binomText.length} 位数（太大），只算余数：mod ${pp} = ${mod} \\ne 0 \\implies p \\nmid|X|`,
         tex:
           binomShown !== null
             ? `\\binom{${order}}{${pk}} = ${binomShown} \\equiv ${mod} \\pmod{${pp}}`
@@ -547,55 +547,55 @@ export const SYLOW_I: ProofTemplate = {
       },
       {
         kind: 'claim',
-        text: `G 左乘作用在 X 上。若每个轨道大小都被 p 整除，则 p | |X| —— 与上一步矛盾。所以存在轨道 O 使 p ∤ |O|。`,
-        tex: `p \\nmid |X| \\;\\Longrightarrow\\; \\exists\\, O :\\; p \\nmid |O|`,
+        text: `G 左乘作用在 X 上。若每个轨道大小都被 p 整除，则 p | |X| ---- 与上一步矛盾。所以存在轨道 O 使 p \\nmid|O|。`,
+        tex: `p \\nmid|X| \\;\\Longrightarrow\\; \\exists\\, O :\\; p \\nmid|O|`,
       },
       {
         kind: 'compute',
-        text: `取一个具体的 ${PK} 元子集作实例：P = ⟨${gensLine}⟩（它就是 ${sym} 的 ${pk} 阶子群）`,
-        tex: `P = \\langle ${gensTex} \\rangle,\\qquad |P| = ${pk} = p^k`,
+        text: `取一个具体的 ${PK} 元子集作实例：P = \\langle ${gensLine}\\rangle （它就是 ${sym} 的 ${pk} 阶子群）`,
+        tex: `P = \\langle ${gensTex} \\rangle,\\qquad|P| = ${pk} = p^k`,
         line: `P = 闭包(G, ${gensLine})`,
         highlight: ['P'],
       },
       {
         kind: 'compute',
         text: `G 左乘作用在 P 的左陪集上：共 [G : P] = ${coset.n} 个点`,
-        tex: `G \\curvearrowright G/P,\\qquad |G/P| = [G:P] = ${coset.n}`,
+        tex: `G \\curvearrowright G/P,\\qquad|G/P| = [G:P] = ${coset.n}`,
         line: `A = 陪集作用(G, P)`,
         highlight: ['A'],
       },
       {
         kind: 'compute',
-        text: `左乘作用在陪集上是传递的：轨道就是整个 Ω，|O| = ${orbitSize}；${pp} ∤ ${orbitSize} ✓`,
+        text: `左乘作用在陪集上是传递的：轨道就是整个 \\Omega ，|O| = ${orbitSize}；${pp} \\nmid ${orbitSize} v`,
         tex: `|O(P)| = ${orbitSize},\\qquad ${pp} \\nmid ${orbitSize}`,
         line: `O = 轨道(A, 1)`,
         highlight: ['O'],
       },
       {
         kind: 'compute',
-        text: `稳定子 Stab(P) = P（左乘作用下 gP = P ⟺ g ∈ P），|Stab| = ${stabSize}`,
-        tex: `\\operatorname{Stab}_{G}(P) = P,\\qquad |{\\operatorname{Stab}}| = ${stabSize}`,
+        text: `稳定子 Stab(P) = P（左乘作用下 gP = P \\iff g \\in P），|Stab| = ${stabSize}`,
+        tex: `\\operatorname{Stab}_{G}(P) = P,\\qquad|{\\operatorname{Stab}}| = ${stabSize}`,
         line: `S = 稳定子(A, 1)`,
         highlight: ['S'],
       },
       {
         kind: 'claim',
-        text: `orbit–stabilizer 核对：|G| = |O| · |Stab| = ${orbitSize} × ${stabSize} = ${orbitSize * stabSize}${orbitSize * stabSize === order ? ' ✓' : ' ✗'}`,
+        text: `orbit-stabilizer 核对：|G| = |O| \\cdot|Stab| = ${orbitSize} \\times ${stabSize} = ${orbitSize * stabSize}${orbitSize * stabSize === order ? ' v' : ' x'}`,
         tex: `|G| = |O|\\cdot|{\\operatorname{Stab}}| = ${orbitSize} \\times ${stabSize} = ${orbitSize * stabSize}`,
       },
       {
         kind: 'claim',
-        text: `由 |G| = ${PK}m 与 p ∤ |O| 得 ${PK} | |Stab(A)|，即 |Stab(A)| ≥ ${pk}。`,
-        tex: `p^k \\mid |{\\operatorname{Stab}}(A)| \\;\\Longrightarrow\\; |{\\operatorname{Stab}}(A)| \\ge ${pk}`,
+        text: `由 |G| = ${PK}m 与 p \\nmid|O| 得 ${PK} | |Stab(A)|，即 |Stab(A)| \\ge ${pk}。`,
+        tex: `p^k \\mid|{\\operatorname{Stab}}(A)| \\;\\Longrightarrow\\; |{\\operatorname{Stab}}(A)| \\ge ${pk}`,
       },
       {
         kind: 'claim',
-        text: `另一边：∀a ∈ A 有 Stab(A)·a ⊆ A，于是 |Stab(A)| ≤ |A| = ${PK} = ${pk}。`,
-        tex: `|{\\operatorname{Stab}}(A)| \\le |A| = p^k = ${pk}`,
+        text: `另一边：\\forall a \\in A 有 Stab(A)\\cdot a \\subseteq A，于是 |Stab(A)| \\le|A| = ${PK} = ${pk}。`,
+        tex: `|{\\operatorname{Stab}}(A)| \\le|A| = p^k = ${pk}`,
       },
       {
         kind: 'conclude',
-        text: `${pk} ≤ |Stab(A)| ≤ ${pk} ⇒ |Stab(A)| = ${pk} = ${PK}。Stab(A) 就是所求的 ${PK} 阶子群 ∎`,
+        text: `${pk} \\le|Stab(A)| \\le ${pk} \\implies|Stab(A)| = ${pk} = ${PK}。Stab(A) 就是所求的 ${PK} 阶子群 \\blacksquare`,
         tex: `|{\\operatorname{Stab}}(A)| = p^k = ${pk} \\;\\qed`,
         highlight: ['S'],
       },
@@ -617,7 +617,7 @@ const SYLOW_II_DEFAULTS: ProofParams = { group: 'A_4', p: 3 }
  */
 export const SYLOW_II: ProofTemplate = {
   id: 'sylow-2-conjugate',
-  title: 'Sylow II · 共轭性（G ↷ Syl_p(G) 传递）',
+  title: 'Sylow II \\cdot 共轭性（G \\curvearrowright Syl_p(G) 传递）',
   theorem:
     'P, Q \\in \\operatorname{Syl}_p(G) \\;\\Longrightarrow\\; \\exists\\, g \\in G : Q = gPg^{-1}',
   blurb: '一次作用：G 共轭作用在 Syl_p(G) 上，且只有一个轨道',
@@ -644,7 +644,7 @@ export const SYLOW_II: ProofTemplate = {
     return [
       {
         kind: 'claim',
-        text: `设 G = ${sym}，|G| = ${order} = ${info.orderUni}。取 p = ${pp} ⇒ ${PK} = ${pk}，m = ${m}。`,
+        text: `设 G = ${sym}，|G| = ${order} = ${info.orderUni}。取 p = ${pp} \\implies ${PK} = ${pk}，m = ${m}。`,
         tex: `|G| = ${order} = ${info.orderTex},\\qquad p = ${pp},\\quad p^k = ${pk},\\quad m = ${m}`,
         line: `G = ${info.raw.trim()}`,
         highlight: ['G'],
@@ -658,52 +658,52 @@ export const SYLOW_II: ProofTemplate = {
       },
       {
         kind: 'claim',
-        text: `把子群集「升格为对象」 Ω —— 它才是作用要作用的那个集合（|Ω| = ${n}）。`,
-        tex: `\\Omega = \\operatorname{Syl}_${pp}(${sym}),\\qquad |\\Omega| = ${n}`,
-        line: 'Ω = 底集(S)',
-        highlight: ['Ω'],
+        text: `把子群集「升格为对象」 \\Omega ---- 它才是作用要作用的那个集合（|\\Omega| = ${n}）。`,
+        tex: `\\Omega = \\operatorname{Syl}_${pp}(${sym}),\\qquad|\\Omega| = ${n}`,
+        line: 'Omega = 底集(S)',
+        highlight: ['Omega'],
       },
       {
         kind: 'compute',
-        text: `让 G 通过共轭 g·H·g⁻¹ 作用在 Ω 上 —— Sylow 定理的全部动力都在这一条作用里。`,
+        text: `让 G 通过共轭 g\\cdot H\\cdot g^-^1 作用在 \\Omega 上 ---- Sylow 定理的全部动力都在这一条作用里。`,
         tex: `${sym} \\curvearrowright \\Omega,\\qquad g \\cdot H = gHg^{-1}`,
-        line: 'A = 共轭作用在(G, Ω)',
+        line: 'A = 共轭作用在(G, Omega)',
         highlight: ['A'],
       },
       {
         kind: 'compute',
-        text: `取 Ω 的 1 号点算它的轨道：|O| = ${n} = |Ω| —— 一个轨道就吃下整个 Ω，作用是「传递」的。`,
+        text: `取 \\Omega 的 1 号点算它的轨道：|O| = ${n} = |\\Omega| ---- 一个轨道就吃下整个 \\Omega ，作用是「传递」的。`,
         tex: `|O| = ${n} = |\\Omega|`,
         line: 'O = 轨道(A, 1)',
         highlight: ['O'],
       },
       {
         kind: 'claim',
-        text: `传递 ⟺ 任意两个 Sylow ${pp}-子群都在同一条共轭轨道里，即 ∃g：Q = gPg⁻¹。这就是 Sylow II。`,
+        text: `传递 \\iff 任意两个 Sylow ${pp}-子群都在同一条共轭轨道里，即 \\exists g：Q = gPg^-^1。这就是 Sylow II。`,
         tex: `\\forall\\, P, Q \\in \\Omega\\;\\; \\exists g \\in G : Q = gPg^{-1}`,
       },
       {
         kind: 'compute',
         text: `顺带把稳定子算出来：Stab(1 号点) = N_G(P)，|N_G(P)| = ${stab}`,
-        tex: `\\operatorname{Stab}_{G}(P) = N_{G}(P),\\qquad |N_{G}(P)| = ${stab}`,
+        tex: `\\operatorname{Stab}_{G}(P) = N_{G}(P),\\qquad|N_{G}(P)| = ${stab}`,
         line: 'N = 稳定子(A, 1)',
         highlight: ['N'],
       },
       {
         kind: 'claim',
-        text: `轨道-稳定子核对：|O| · |Stab| = ${n} × ${stab} = ${n * stab}${n * stab === order ? ' ✓' : ' ✗'} = |G|`,
-        tex: `|O| \\cdot |N_{G}(P)| = ${n} \\times ${stab} = ${n * stab} = |G|`,
+        text: `轨道-稳定子核对：|O| \\cdot|Stab| = ${n} \\times ${stab} = ${n * stab}${n * stab === order ? ' v' : ' x'} = |G|`,
+        tex: `|O| \\cdot|N_{G}(P)| = ${n} \\times ${stab} = ${n * stab} = |G|`,
       },
       {
         kind: 'compute',
-        text: `取一个「具体的」 Sylow ${pp}-子群 P = ⟨${gensLine}⟩（Ω 里的第 ${pIdx} 号点）`,
-        tex: `P = \\langle ${gensLine} \\rangle,\\qquad |P| = ${pk}`,
+        text: `取一个「具体的」 Sylow ${pp}-子群 P = \\langle ${gensLine}\\rangle （\\Omega 里的第 ${pIdx} 号点）`,
+        tex: `P = \\langle ${gensLine} \\rangle,\\qquad|P| = ${pk}`,
         line: `P = 闭包(G, ${gensLine})`,
         highlight: ['P'],
       },
       {
         kind: 'conclude',
-        text: `${nUni(pp)} = [G : N_G(P)] = ${order}/${stab} = ${n}；${n} 个 Sylow ${pp}-子群两两共轭 ∎`,
+        text: `${nUni(pp)} = [G : N_G(P)] = ${order}/${stab} = ${n}；${n} 个 Sylow ${pp}-子群两两共轭 \\blacksquare`,
         tex: `${nTex(pp)} = [G : N_{G}(P)] = ${n},\\qquad\\text{${n} 个 } ${pp}\\text{-子群两两共轭} \\;\\qed`,
         highlight: ['P'],
       },
@@ -726,7 +726,7 @@ const SYLOW_III_DEFAULTS: ProofParams = { group: 'A_4', p: 3 }
  */
 export const SYLOW_III: ProofTemplate = {
   id: 'sylow-3-congruence',
-  title: 'Sylow III · n_p ≡ 1 (mod p) 且 n_p | m',
+  title: 'Sylow III \\cdot n_p \\equiv 1 (mod p) 且 n_p | m',
   theorem: 'n_p \\equiv 1 \\pmod{p},\\qquad n_p \\mid m \\quad (|G| = p^k m,\\; p \\nmid m)',
   blurb: '换主角：让 P 自己作用在 Syl_p(G) 上，轨道长全是 p 的幂',
   defaults: SYLOW_III_DEFAULTS,
@@ -750,7 +750,7 @@ export const SYLOW_III: ProofTemplate = {
 
     if (n < 2) {
       return bail(
-        `${nUni(pp)} = 1（${sym} 只有一个 Sylow ${pp}-子群，它是正规的）。Sylow III 靠「P 作用在 Ω 上、除不动点外的轨道都被 p 整除」来论证，n_p = 1 时没有其余轨道可谈——换一个 p 或换一个群。`,
+        `${nUni(pp)} = 1（${sym} 只有一个 Sylow ${pp}-子群，它是正规的）。Sylow III 靠「P 作用在 \\Omega 上、除不动点外的轨道都被 p 整除」来论证，n_p = 1 时没有其余轨道可谈----换一个 p 或换一个群。`,
       )
     }
 
@@ -764,7 +764,7 @@ export const SYLOW_III: ProofTemplate = {
     return [
       {
         kind: 'claim',
-        text: `设 G = ${sym}，|G| = ${PK}m：${order} = ${info.orderUni}，p = ${pp} ⇒ ${PK} = ${pk}，m = ${m}（p ∤ m）。`,
+        text: `设 G = ${sym}，|G| = ${PK}m：${order} = ${info.orderUni}，p = ${pp} \\implies ${PK} = ${pk}，m = ${m}（p \\nmid m）。`,
         tex: `|G| = ${order} = ${info.orderTex},\\qquad p = ${pp},\\quad p^k = ${pk},\\quad m = ${m}`,
         line: `G = ${info.raw.trim()}`,
         highlight: ['G'],
@@ -778,16 +778,16 @@ export const SYLOW_III: ProofTemplate = {
       },
       {
         kind: 'compute',
-        text: `Ω = Syl${subscript(String(pp))}(G) 升格为集合对象（${n} 个点）`,
-        tex: `\\Omega = \\operatorname{Syl}_${pp}(${sym}),\\qquad |\\Omega| = ${n}`,
-        line: 'Ω = 底集(S)',
-        highlight: ['Ω'],
+        text: `\\Omega = Syl${subscript(String(pp))}(G) 升格为集合对象（${n} 个点）`,
+        tex: `\\Omega = \\operatorname{Syl}_${pp}(${sym}),\\qquad|\\Omega| = ${n}`,
+        line: 'Omega = 底集(S)',
+        highlight: ['Omega'],
       },
       {
         kind: 'compute',
-        text: `第一条路：G 通过共轭作用在 Ω 上`,
+        text: `第一条路：G 通过共轭作用在 \\Omega 上`,
         tex: `${sym} \\curvearrowright \\Omega,\\qquad g \\cdot H = gHg^{-1}`,
-        line: 'A = 共轭作用在(G, Ω)',
+        line: 'A = 共轭作用在(G, Omega)',
         highlight: ['A'],
       },
       {
@@ -806,50 +806,50 @@ export const SYLOW_III: ProofTemplate = {
       },
       {
         kind: 'claim',
-        text: `因为 P ⊆ N_G(P)，把 [G:P] = [G:N_G(P)]·[N_G(P):P] 摊开得 ${nUni(pp)} · [N_G(P):P] = m = ${m} ⇒ ${nUni(pp)} | m ✓`,
+        text: `因为 P \\subseteq N_G(P)，把 [G:P] = [G:N_G(P)]\\cdot [N_G(P):P] 摊开得 ${nUni(pp)} \\cdot [N_G(P):P] = m = ${m} \\implies ${nUni(pp)} | m v`,
         tex: `${nTex(pp)} \\mid m = ${m}`,
       },
       {
         kind: 'claim',
-        text: `第二条路（这才是 ${nUni(pp)} ≡ 1 的来源）：「换主角」——让 P 自己通过共轭作用在 Ω 上。`,
+        text: `第二条路（这才是 ${nUni(pp)} \\equiv 1 的来源）：「换主角」----让 P 自己通过共轭作用在 \\Omega 上。`,
         tex: `P \\curvearrowright \\Omega \\quad(\\text{限制 } ${sym} \\text{ 的作用到 } P)`,
       },
       {
         kind: 'compute',
-        text: `取一个具体的 P = ⟨${gensLine}⟩（Ω 的第 ${pIdx} 号点），让它作用`,
-        tex: `P = \\langle ${gensLine} \\rangle,\\qquad |P| = ${pk}`,
+        text: `取一个具体的 P = \\langle ${gensLine}\\rangle （\\Omega 的第 ${pIdx} 号点），让它作用`,
+        tex: `P = \\langle ${gensLine} \\rangle,\\qquad|P| = ${pk}`,
         line: `P = 闭包(G, ${gensLine})`,
         highlight: ['P'],
       },
       {
         kind: 'compute',
-        text: `P 作用在 Ω 上：P ↷ Ω（作用群是子群 P，Ω 的成员仍是母群 ${sym} 的子群）`,
-        tex: `P \\curvearrowright \\Omega,\\qquad |\\Omega| = ${n}`,
-        line: 'B = 共轭作用在(P, Ω)',
+        text: `P 作用在 \\Omega 上：P \\curvearrowright \\Omega （作用群是子群 P，\\Omega 的成员仍是母群 ${sym} 的子群）`,
+        tex: `P \\curvearrowright \\Omega,\\qquad|\\Omega| = ${n}`,
+        line: 'B = 共轭作用在(P, Omega)',
         highlight: ['B'],
       },
       {
         kind: 'compute',
-        text: `P 的不动点只有一个：|Fix| = ${fixed} —— 只有 P 自己被 P 正规化`,
+        text: `P 的不动点只有一个：|Fix| = ${fixed} ---- 只有 P 自己被 P 正规化`,
         tex: `|\\operatorname{Fix}_{P}(\\Omega)| = ${fixed}`,
         line: 'F = 不动点(B)',
         highlight: ['F'],
       },
       {
         kind: 'compute',
-        text: `其余 ${others.length} 条轨道长 ${others.join(' + ')} —— 轨道长整除 |P| = ${pk} 且 > 1，故都被 p = ${pp} 整除`,
-        tex: `\\sum |P \\cdot Q| = ${others.join(' + ')},\\qquad ${pp} \\mid ${restSum}`,
+        text: `其余 ${others.length} 条轨道长 ${others.join(' + ')} ---- 轨道长整除 |P| = ${pk} 且 > 1，故都被 p = ${pp} 整除`,
+        tex: `\\sum|P \\cdot Q| = ${others.join(' + ')},\\qquad ${pp} \\mid ${restSum}`,
         line: `OB = 轨道(B, ${otherIdx})`,
         highlight: ['OB'],
       },
       {
         kind: 'claim',
-        text: `于是 ${n} = |Ω| = ${fixed} + ${restSum} ≡ ${fixed} = 1 (mod ${pp})：${nUni(pp)} ≡ 1 (mod ${pp}) ✓`,
+        text: `于是 ${n} = |\\Omega| = ${fixed} + ${restSum} \\equiv ${fixed} = 1 (mod ${pp})：${nUni(pp)} \\equiv 1 (mod ${pp}) v`,
         tex: `${nTex(pp)} = ${n} \\equiv ${mod} \\pmod{${pp}}`,
       },
       {
         kind: 'conclude',
-        text: `${nUni(pp)} = ${n}：既 ${n} ≡ ${mod} (mod ${pp}) ✓，又 ${n} | m = ${m} ✓。Sylow III 两条都成立 ∎`,
+        text: `${nUni(pp)} = ${n}：既 ${n} \\equiv ${mod} (mod ${pp}) v，又 ${n} | m = ${m} v。Sylow III 两条都成立 \\blacksquare`,
         tex: `${nTex(pp)} = ${n} \\equiv 1 \\pmod{${pp}},\\qquad ${nTex(pp)} \\mid ${m} \\;\\qed`,
         highlight: ['S'],
       },
@@ -862,7 +862,7 @@ export const SYLOW_III: ProofTemplate = {
 const OST_DEFAULTS: ProofParams = { group: 'S_4' }
 
 /** 「点 x」该填什么（面板的占位提示与报错共用一句话）。 */
-const X_HINT = 'Ω = G 自身，填一个元素记号，如 (123)'
+const X_HINT = '\\Omega = G 自身，填一个元素记号，如 (123)'
 
 interface ConjStage {
   g: Group
@@ -891,7 +891,7 @@ function conjStage(info: StageInfo, xRaw: string): ConjStage | string {
   const xLine = (xRaw ?? '').trim()
   if (!xLine) return `还没填点 x（${X_HINT}）`
   const x = resolveElementLoose(g, xLine)
-  if (!x) return `Ω = G = ${info.sym} 里没有元素「${xLine}」`
+  if (!x) return `\\Omega = G = ${info.sym} 里没有元素「${xLine}」`
 
   const perms = computeConjugationPerms(g)
   const { orbits, orbitOf } = computeOrbits(perms, g.order)
@@ -952,9 +952,9 @@ export function suggestPoint(group: string): string {
  */
 export const ORBIT_STABILIZER: ProofTemplate = {
   id: 'orbit-stabilizer',
-  title: '轨道–稳定子定理 · |O| · |Stab| = |G|',
+  title: '轨道-稳定子定理 \\cdot|O| \\cdot|Stab| = |G|',
   theorem:
-    '|O_{x}| = [G : \\operatorname{Stab}(x)],\\qquad |G| = |O_{x}|\\cdot|\\operatorname{Stab}(x)|',
+    '|O_{x}| = [G : \\operatorname{Stab}(x)],\\qquad|G| = |O_{x}|\\cdot|\\operatorname{Stab}(x)|',
   blurb: '一条作用两个数：轨道多大、稳定子多大，乘起来就是群',
   defaults: OST_DEFAULTS,
   groupChoices: PROOF_GROUP_CHOICES,
@@ -975,14 +975,14 @@ export const ORBIT_STABILIZER: ProofTemplate = {
     return [
       {
         kind: 'claim',
-        text: `设 G = ${sym}，|G| = ${order}。取一个具体的点 x = ${xNice} —— 作用的对象就是 G 自身。`,
-        tex: `x = ${xNice} \\in G,\\qquad |G| = ${order}`,
+        text: `设 G = ${sym}，|G| = ${order}。取一个具体的点 x = ${xNice} ---- 作用的对象就是 G 自身。`,
+        tex: `x = ${xNice} \\in G,\\qquad|G| = ${order}`,
         line: `G = ${info.raw.trim()}`,
         highlight: ['G'],
       },
       {
         kind: 'compute',
-        text: `让 G 通过共轭 g·x = gxg⁻¹ 作用在自身：Ω = G，|Ω| = ${order}。`,
+        text: `让 G 通过共轭 g\\cdot x = gxg^-^1 作用在自身：\\Omega = G，|\\Omega| = ${order}。`,
         tex: `G \\curvearrowright G,\\qquad g\\cdot x = gxg^{-1}`,
         line: 'A = 共轭作用(G)',
         highlight: ['A'],
@@ -990,12 +990,12 @@ export const ORBIT_STABILIZER: ProofTemplate = {
       {
         kind: 'compute',
         // 面板把 `text` 当**纯文本**渲染（只有 `tex` 走 KaTeX）—— 一个星号都不会被吃掉
-        text: `x 的轨道就是它的共轭类 x^G = {gxg⁻¹ : g ∈ G}：|O| = ${orbit}。${
+        text: `x 的轨道就是它的共轭类 x^G = {gxg^-^1 : g \\in G}：|O| = ${orbit}。${
           orbit === 1
-            ? '← x 落在中心里（它的共轭类只有它自己），这条定理在它身上退化成 |G| = 1·|G|；想看真轨道就挑一个非中心的 x，或换一个非交换群。'
+            ? '\\leftarrow x 落在中心里（它的共轭类只有它自己），这条定理在它身上退化成 |G| = 1\\cdot|G|；想看真轨道就挑一个非中心的 x，或换一个非交换群。'
             : ''
         }`,
-        tex: `O_{x} = x^{G},\\qquad |O_{x}| = ${orbit}`,
+        tex: `O_{x} = x^{G},\\qquad|O_{x}| = ${orbit}`,
         line: `O = 轨道(A, ${xLine})`,
         highlight: ['O'],
       },
@@ -1003,31 +1003,31 @@ export const ORBIT_STABILIZER: ProofTemplate = {
         kind: 'compute',
         text: `x 的稳定子是中心化子 C_G(x)（与 x 交换的元素全体）：|Stab| = ${stab}${
           cMatch
-            ? `（C_G(x) 从另一条路单独算一遍也是 ${centralizer} ✓）`
-            : ` —— 但中心化子单独算是 ${centralizer}，两者对不上，要查`
+            ? `（C_G(x) 从另一条路单独算一遍也是 ${centralizer} v）`
+            : ` ---- 但中心化子单独算是 ${centralizer}，两者对不上，要查`
         }。`,
-        tex: `\\operatorname{Stab}_{G}(x) = C_{G}(x),\\qquad |C_{G}(x)| = ${stab}`,
+        tex: `\\operatorname{Stab}_{G}(x) = C_{G}(x),\\qquad|C_{G}(x)| = ${stab}`,
         line: `S = 稳定子(A, ${xLine})`,
         highlight: ['S'],
       },
       {
         kind: 'claim',
-        text: 'g·x = h·x ⟺ h⁻¹g ∈ Stab(x) ⟺ gStab(x) = hStab(x)。于是 gStab(x) ↦ g·x 是 G/Stab(x) → O_x 的一一对应。',
+        text: 'g\\cdot x = h\\cdot x \\iff h^-^1g \\in Stab(x) \\iff gStab(x) = hStab(x)。于是 gStab(x) \\mapsto g\\cdot x 是 G/Stab(x) \\to O_x 的一一对应。',
         tex: 'g\\cdot x = h\\cdot x \\iff h^{-1}g \\in \\operatorname{Stab}(x) \\iff g\\operatorname{Stab}(x) = h\\operatorname{Stab}(x)',
       },
       {
         kind: 'claim',
-        text: `两边取元素个数：|O| = [G : Stab(x)] = ${order}/${stab} = ${orbit} ✓`,
+        text: `两边取元素个数：|O| = [G : Stab(x)] = ${order}/${stab} = ${orbit} v`,
         tex: `|O_{x}| = [G : \\operatorname{Stab}(x)] = ${order}/${stab} = ${orbit}`,
       },
       {
         kind: 'claim',
-        text: `换成中心化子说：共轭类大小 = [G : C_G(x)]，所以每个共轭类的大小都整除 |G|（${orbit} | ${order} ✓）。`,
-        tex: `|x^{G}| = [G : C_{G}(x)] \\mid |G|`,
+        text: `换成中心化子说：共轭类大小 = [G : C_G(x)]，所以每个共轭类的大小都整除 |G|（${orbit} | ${order} v）。`,
+        tex: `|x^{G}| = [G : C_{G}(x)] \\mid|G|`,
       },
       {
         kind: 'conclude',
-        text: `|G| = |O| · |Stab| = ${orbit} × ${stab} = ${orbit * stab}${exact ? ' ✓' : ' ✗'} —— 即 |O_x| = [G : Stab(x)] ∎`,
+        text: `|G| = |O| \\cdot|Stab| = ${orbit} \\times ${stab} = ${orbit * stab}${exact ? ' v' : ' x'} ---- 即 |O_x| = [G : Stab(x)] \\blacksquare`,
         tex: `|G| = |O_{x}|\\cdot|\\operatorname{Stab}(x)| = ${orbit} \\times ${stab} = ${orbit * stab} \\;\\qed`,
         highlight: ['S'],
       },
@@ -1040,7 +1040,9 @@ export const ORBIT_STABILIZER: ProofTemplate = {
 const FIRST_ISO_DEFAULTS: ProofParams = { group: 'C_6' }
 
 /** 第一同构模板里映射对象的名字（定义行、highlight 都靠它）。 */
-const ISO_MAP_ID = 'φ'
+// 第一同构自动补出的映射用 `\varphi` 当名字（`NAME_RE` 现在收 LaTeX 命令形态，
+// 而且这正是课本里那条同态的惯用记号）
+const ISO_MAP_ID = '\\varphi'
 
 interface MapStage {
   g: Group
@@ -1077,9 +1079,9 @@ function mapStage(info: StageInfo, targetRaw: string, imagesRaw: string): MapSta
 
   const images = (imagesRaw ?? '').trim()
   if (!images) {
-    return `还没给生成元的像（形如 a→2）。${info.sym} 的生成元是 ${gens
+    return `还没给生成元的像（形如 a\\to 2）。${info.sym} 的生成元是 ${gens
       .map((x) => x.gen.name)
-      .join(', ')} —— 每一对写成「生成元→靶群里的元素」`
+      .join(', ')} ---- 每一对写成「生成元\\to 靶群里的元素」`
   }
 
   const genMapping = new Map<string, string>()
@@ -1087,9 +1089,9 @@ function mapStage(info: StageInfo, targetRaw: string, imagesRaw: string): MapSta
   for (const raw of images.split(',')) {
     const text = raw.trim()
     if (!text) continue
-    const parts = text.split(/→|->|=>/)
+    const parts = text.split(/\\to\s*|->|=>/)
     if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
-      return `像对的写法不对：${text}（应形如 a→2）`
+      return `像对的写法不对：${text}（应形如 a\\to 2）`
     }
     const genName = parts[0].trim()
     const hit = gens.find((x) => x.gen.name === genName)
@@ -1106,7 +1108,7 @@ function mapStage(info: StageInfo, targetRaw: string, imagesRaw: string): MapSta
   const full: HomomorphismMap | null = extendFromGenerators(g, h, genMapping)
   if (!full) return '这组像无法唯一延拓成映射（生成元之间的乘法关系没被保持）'
   const res = verifyHomomorphism(g, h, full)
-  if (!res.isHomomorphism) return '这组像不是同态 —— 换一组像，或换一个靶群'
+  if (!res.isHomomorphism) return '这组像不是同态 ---- 换一组像，或换一个靶群'
 
   const props = getHomomorphismProperties(g, h, res)
   const ker = computeKernelFromMapping(g, full, h.identity.id)
@@ -1116,7 +1118,7 @@ function mapStage(info: StageInfo, targetRaw: string, imagesRaw: string): MapSta
     g,
     h,
     hSym: tInfo.sym,
-    images: pairs.map((p) => `${p.gen}→${p.image}`).join(', '),
+    images: pairs.map((p) => `${p.gen}\\to ${p.image}`).join(', '),
     kerOrder: ker.length,
     imOrder: im.length,
     quotient: g.order / Math.max(1, ker.length),
@@ -1169,7 +1171,7 @@ export function suggestImages(source: string, target: string): string {
       }
     }
     const pick = bestImage ?? surjective
-    if (pick) return `${genName}→${elemText(h, pick)}`
+    if (pick) return `${genName}\\to ${elemText(h, pick)}`
   }
 
   /* ── ② 源与靶群是同一个群：给**恒等映射**（生成元 ↦ 它自己）──
@@ -1187,7 +1189,7 @@ export function suggestImages(source: string, target: string): string {
     }
     const full = extendFromGenerators(g, h, mapping)
     if (full && verifyHomomorphism(g, h, full).isHomomorphism) {
-      return pairs.map((p) => `${p.gen}→${p.image}`).join(', ')
+      return pairs.map((p) => `${p.gen}\\to ${p.image}`).join(', ')
     }
   }
 
@@ -1209,9 +1211,9 @@ export function suggestImages(source: string, target: string): string {
  */
 export const FIRST_ISO: ProofTemplate = {
   id: 'first-isomorphism',
-  title: '第一同构定理 · G/ker φ ≅ im φ',
+  title: '第一同构定理 \\cdot G/ker \\varphi \\cong im \\varphi',
   theorem: 'G / \\ker \\varphi \\;\\cong\\; \\operatorname{im}\\varphi',
-  blurb: '画出 φ 这一条线，剩下两条由工具补出来',
+  blurb: '画出 \\varphi 这一条线，剩下两条由工具补出来',
   defaults: FIRST_ISO_DEFAULTS,
   groupChoices: PROOF_GROUP_CHOICES,
   slots: [
@@ -1235,14 +1237,14 @@ export const FIRST_ISO: ProofTemplate = {
 
     if (kerOrder >= order || imOrder <= 1) {
       return bail(
-        `核 = G（像平凡）：这个映射把整个 ${sym} 都打到单位元上，商群平凡、图形退化成一条线。换一组像 —— 让像真落在靶群里。`,
+        `核 = G（像平凡）：这个映射把整个 ${sym} 都打到单位元上，商群平凡、图形退化成一条线。换一组像 ---- 让像真落在靶群里。`,
       )
     }
 
     const steps: ProofStep[] = [
       {
         kind: 'claim',
-        text: `设 φ : G → H 是一个群同态。取 G = ${sym}（|G| = ${order}），靶群待定。`,
+        text: `设 \\varphi : G \\to H 是一个群同态。取 G = ${sym}（|G| = ${order}），靶群待定。`,
         tex: `\\varphi : ${sym} \\longrightarrow H`,
         line: `G = ${info.raw.trim()}`,
         highlight: ['G'],
@@ -1256,26 +1258,26 @@ export const FIRST_ISO: ProofTemplate = {
       },
       {
         kind: 'compute',
-        text: `由生成元的像定出 φ：${st.images}（同态由生成元的像唯一决定）。`,
-        tex: `\\varphi :\\; ${st.images.replace(/→/g, ' \\mapsto ')}`,
+        text: `由生成元的像定出 \\varphi ：${st.images}（同态由生成元的像唯一决定）。`,
+        tex: `\\varphi :\\; ${st.images.replace(/\\to /g, ' \\mapsto')}`,
         line: `${ISO_MAP_ID} = 映射(G, H, ${st.images})`,
         highlight: [ISO_MAP_ID],
       },
       {
         kind: 'claim',
-        text: `核 ker φ = {g ∈ G : φ(g) = e} 是 G 的正规子群，它的阶是 |ker φ| = ${kerOrder}。`,
-        tex: `\\ker\\varphi \\trianglelefteq G,\\qquad |\\ker\\varphi| = ${kerOrder}`,
+        text: `核 ker \\varphi = {g \\in G : \\varphi (g) = e} 是 G 的正规子群，它的阶是 |ker \\varphi| = ${kerOrder}。`,
+        tex: `\\ker\\varphi \\trianglelefteq G,\\qquad|\\ker\\varphi| = ${kerOrder}`,
       },
       {
         kind: 'claim',
-        text: `像 im φ = {φ(g) : g ∈ G} ≤ H，它的阶是 |im φ| = ${imOrder}${
-          isSurjective ? '（φ 是满射，im φ = H —— 靶群顶点已经在画布上了）' : ''
+        text: `像 im \\varphi = {\\varphi (g) : g \\in G} \\le H，它的阶是 |im \\varphi| = ${imOrder}${
+          isSurjective ? '（\\varphi 是满射，im \\varphi = H ---- 靶群顶点已经在画布上了）' : ''
         }。`,
-        tex: `\\operatorname{im}\\varphi \\le H,\\qquad |\\operatorname{im}\\varphi| = ${imOrder}`,
+        tex: `\\operatorname{im}\\varphi \\le H,\\qquad|\\operatorname{im}\\varphi| = ${imOrder}`,
       },
       {
         kind: 'compute',
-        text: `商群 G/ker φ 有 |G|/|ker φ| = ${order}/${kerOrder} = ${quotient} 个元素 —— 工具自动补出这个顶点。`,
+        text: `商群 G/ker \\varphi 有 |G|/|ker \\varphi| = ${order}/${kerOrder} = ${quotient} 个元素 ---- 工具自动补出这个顶点。`,
         tex: `|G/\\ker\\varphi| = ${quotient}`,
         highlight: [`${ISO_MAP_ID}/ker`],
       },
@@ -1284,8 +1286,8 @@ export const FIRST_ISO: ProofTemplate = {
     if (!isSurjective) {
       steps.push({
         kind: 'compute',
-        text: 'φ 不是满射，像真落在 H 内部，于是它也是一个独立顶点（补出来 —— 不补的话右下角是空的）。',
-        tex: `\\operatorname{im}\\varphi \\subsetneq ${hSym}`,
+        text: '\\varphi 不是满射，像真落在 H 内部，于是它也是一个独立顶点（补出来 ---- 不补的话右下角是空的）。',
+        tex: `\\operatorname{im}\\varphi \\subset neq ${hSym}`,
         highlight: [`${ISO_MAP_ID}/im`],
       })
     }
@@ -1293,22 +1295,22 @@ export const FIRST_ISO: ProofTemplate = {
     steps.push(
       {
         kind: 'claim',
-        text: '定义 Φ : G/ker φ → im φ，gKer φ ↦ φ(g)。良定义：gKer = hKer ⟺ h⁻¹g ∈ ker φ ⟹ φ(g) = φ(h)。',
+        text: '定义 \\Phi : G/ker \\varphi \\to im \\varphi ，gKer \\varphi \\mapsto \\varphi (g)。良定义：gKer = hKer \\iff h^-^1g \\in ker \\varphi \\implies \\varphi (g) = \\varphi (h)。',
         tex: '\\Phi(g\\ker\\varphi) = \\varphi(g)',
       },
       {
         kind: 'claim',
-        text: 'Φ 单射：Φ(gKer) = e ⟹ φ(g) = e ⟹ g ∈ ker φ ⟹ gKer = ker φ（只有一个陪集打到单位元）。',
+        text: '\\Phi 单射：\\Phi (gKer) = e \\implies \\varphi (g) = e \\implies g \\in ker \\varphi \\implies gKer = ker \\varphi （只有一个陪集打到单位元）。',
         tex: '\\Phi(g\\ker\\varphi) = e \\;\\Longrightarrow\\; g\\ker\\varphi = \\ker\\varphi',
       },
       {
         kind: 'claim',
-        text: 'Φ 满射：任取 y ∈ im φ，有 y = φ(g)，于是 y = Φ(gKer φ)。',
+        text: '\\Phi 满射：任取 y \\in im \\varphi ，有 y = \\varphi (g)，于是 y = \\Phi (gKer \\varphi)。',
         tex: '\\forall y \\in \\operatorname{im}\\varphi\\;\\; \\exists g : y = \\Phi(g\\ker\\varphi)',
       },
       {
         kind: 'conclude',
-        text: `Φ 既单又满，是同构：G/ker φ ≅ im φ。核对阶：|G/ker φ| = ${quotient} = |im φ| = ${imOrder} ✓ ∎`,
+        text: `\\Phi 既单又满，是同构：G/ker \\varphi \\cong im \\varphi。核对阶：|G/ker \\varphi| = ${quotient} = |im \\varphi| = ${imOrder} v \\blacksquare`,
         tex: `G/\\ker\\varphi \\;\\cong\\; \\operatorname{im}\\varphi \\qquad (${quotient} = ${imOrder}) \\;\\qed`,
         highlight: [`${ISO_MAP_ID}/im`],
       },
@@ -1348,7 +1350,15 @@ export function instanceLabel(
     if (!v) continue
     parts.push(s.kind === 'gens' ? v : `${s.kind === 'group' ? 'H' : s.key} = ${v}`)
   }
-  return parts.join(' · ')
+  /**
+   * 分隔符用**中文逗号**。
+   *
+   * 这里原本是 `·`（一个列表分隔点）。2026-09-27 的批量替换把它换成了 `\cdot` ——
+   * 那个记号在数学里的意思是"乘法"，当列表分隔用是**语义错位**；而且
+   * `.proof-instance` 是纯文本容器，用户会直接读到一串 `\cdot` 字面量。
+   * 中文逗号在中文句子里读得通，也不违反"只用键盘打得出的字符"。
+   */
+  return parts.join('，')
 }
 
 /**
