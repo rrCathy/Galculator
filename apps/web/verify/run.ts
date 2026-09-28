@@ -17,6 +17,7 @@ import { run as notation } from './suites/notation'
 import { run as proof } from './suites/proof'
 import { run as usability } from './suites/usability'
 import { run as structural } from './suites/structural'
+import { run as structure } from './suites/structure'
 import { run as grid } from './suites/grid'
 import { run as interaction } from './suites/interaction'
 
@@ -28,6 +29,7 @@ notation()
 proof()
 usability()
 structural()
+structure()
 grid()
 interaction()
 

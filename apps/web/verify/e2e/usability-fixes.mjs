@@ -192,11 +192,17 @@ await page.screenshot({ path: '../../docs/assets/u23-greek-phi.png' })
 
 /* ══ ⑨ 报错分清「没这功能」与「打错了」 ═══════════════════ */
 
-await typeExpr('极大子群(G)')
+// 2026-09-28（U27）起 `极大子群(G)` 已接线 —— 换仍在缺口清单里的 `Hall子群(G)` 当样本
+await typeExpr('Hall子群(G)')
 const s1 = await status()
-ok('`极大子群(G)` 报「没有名为…的操作」', s1.text.includes('没有名为'), `${s1.cls} :: ${s1.text}`)
+ok('`Hall子群(G)` 报「没有名为…的操作」', s1.text.includes('没有名为'), `${s1.cls} :: ${s1.text}`)
 ok('并给了相近操作（Sub(G)）', s1.text.includes('Sub(G)'), s1.text)
 ok('不再说"可用的群记号"', !s1.text.includes('群记号'), s1.text)
+
+// U27 接线之后的正面判据：`gcd` / `极大子群(G)` / `Inn(G)` 都跑得通
+await typeExpr('gcd(12, 18)')
+const sGcd = await status()
+ok('`gcd(12, 18)` 通过校验且预览出值', !sGcd.cls.includes('bad') && sGcd.text.includes('6'), `${sGcd.cls} :: ${sGcd.text}`)
 
 // 关系行是在**输入框**里打的 \\to 走 evalExpr（不是 buildLines），所以这里验的是 preview 那句话。
 // 注意 U20 之后 `\\subseteq` 已经是**真操作**了：这里不再甩"写的是一个关系"，

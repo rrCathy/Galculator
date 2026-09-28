@@ -3,6 +3,7 @@ import {
   buildSubgroupGroup,
   closeUnderMultiply,
   commutatorClosure,
+  computeBurnsideCount,
   computeConjugationPerms,
   computeCosetActionPerms,
   computeFixedPoints,
@@ -12,15 +13,18 @@ import {
   computeOrbits,
   computeQuotientGroup,
   computeStabilizers,
+  computeSubgroupLattice,
   conjugateSubgroup,
   createAutomorphismGroup,
   createDirectProduct,
   elementOrder,
+  ENUMERATION_LIMIT,
   extendFromGenerators,
   factorizeOrder,
   findAllNormalSubgroups,
   findAllPSubgroups,
   findAllSubgroups,
+  findMinimalGenerators,
   findSylowSubgroups,
   getCentralizer,
   getGeneratorElements,
@@ -43,6 +47,7 @@ import { prettySymbol, subscript, superscript } from './pretty'
 // 关系，与面板里"算出来"的关系永远一致，不会出现两种说法
 import { containment } from './relations'
 import {
+  normalizeSubgroup,
   normalizeSubgroups,
   type GalAction,
   type GalMap,
@@ -480,6 +485,18 @@ function chooseExact(n: number, k: number): bigint {
   let r = 1n
   for (let i = 1; i <= k; i++) r = (r * BigInt(n - k + i)) / BigInt(i)
   return r
+}
+
+/** 最大公因数（欧几里得；非负入参由调用方保证）。 */
+function gcdInt(a: number, b: number): number {
+  let x = a
+  let y = b
+  while (y !== 0) {
+    const t = x % y
+    x = y
+    y = t
+  }
+  return x
 }
 
 /* ── 作用取值辅助 ──────────────────────────────────────── */
@@ -1382,6 +1399,44 @@ export const OPS: OpDef[] = [
     },
   },
   {
+    id: 'innerAutomorphismGroup',
+    notation: 'Inn(G)',
+    mechanism: 'action',
+    primitive: false,
+    doc: '内自同构群：共轭作用给出的自同构全体，Inn(G) \\cong G / Z(G)（第一同构定理）',
+    recipe: '商( G, Z(G) )（第一同构定理：G/Z(G) \\cong Inn(G)）',
+    impl: 'getGroupCenter \\to computeQuotientGroup',
+    call: ['Inn', '内自同构群', 'innerAutomorphisms'],
+    params: [{ name: 'G', type: 'group' }],
+    arity: 1,
+    result: 'group',
+    run: (a) => {
+      const G = groupOf(a[0])
+      if (!G) return fail('Inn(\\cdot) 需要一个群')
+      /**
+       * 走**第一同构定理**这条经典路径：`G → Aut(G), g ↦ conj_g` 的核是 Z(G)，
+       * 所以 `Inn(G) ≅ G/Z(G)`——这也是课本上唯一"算得动"的算法。
+       * 产出的群对象元素就是陪集，面板的结论层会把它识别成具体的同构类。
+       */
+      const Z = getGroupCenter(G)
+      const sub: Subgroup = {
+        elements: Z,
+        order: Z.length,
+        index: G.order / Z.length,
+        generators: [],
+        isNormal: true,
+      }
+      const Q = computeQuotientGroup(G, sub)
+      if (!Q) return fail(`${refText(a[0])} 商掉中心算不出来`)
+      return {
+        ok: true,
+        value: { type: 'group', group: Q },
+        label: `Inn(${refText(a[0])})`,
+        sub: `|Inn| = ${Q.order} = |G| / |Z| = ${G.order} / ${Z.length}`,
+      }
+    },
+  },
+  {
     id: 'centralizer',
     notation: 'C_G(S)',
     mechanism: 'action',
@@ -1569,6 +1624,41 @@ export const OPS: OpDef[] = [
         value: { type: 'elements', group: A.group, elements: els },
         label: `Fix_${act}`,
         sub: `|Fix| = ${pts.length}`,
+      }
+    },
+  },
+  {
+    id: 'orbitCount',
+    notation: '轨道数(A)',
+    mechanism: 'action',
+    primitive: false,
+    doc: '轨道条数：直接数 = Burnside 引理的平均 (1/|G|) \\cdot \\sum |Fix(g)|（两条路当场互相核对）',
+    recipe: '(1/|G|) \\cdot \\sum_{g \\in G} |Fix(g)|（Burnside 引理）',
+    impl: 'computeOrbits + computeBurnsideCount',
+    call: ['轨道数', 'burnside', 'Burnside', 'orbitCount'],
+    params: [{ name: 'A', type: 'action' }],
+    arity: 1,
+    result: 'number',
+    run: (a) => {
+      const A = actionOf(a[0])
+      if (!A) return fail('轨道数(\\cdot) 需要一个作用', '先用 共轭作用(G) / 正则作用(G) 造一个')
+      const { orbits } = computeOrbits(A.perms, A.n)
+      const direct = orbits.length
+      /**
+       * Burnside 引理的另一条路：`(1/|G|)·Σ|Fix(g)|`。
+       *
+       * 两条路**互相核对**——直接数轨道是本系统自己算的，Burnside 平均值走的
+       * 是 core 的定理实现；两边对不上一定是哪里错了（这正是 U12 那条教训：
+       * "概率性正确"最危险，得有一条会叫的线）。
+       */
+      const average = computeBurnsideCount(A.perms, A.n)
+      const sum = average * A.group.order
+      const okMark = Math.abs(average - direct) < 1e-9 ? 'v' : 'x'
+      return {
+        ok: true,
+        value: { type: 'number', label: `${direct}`, value: direct },
+        label: `轨道数(${refText(a[0])})`,
+        sub: `= ${direct}（Burnside: ${sum} / ${A.group.order} = ${average} ${okMark}）`,
       }
     },
   },
@@ -1773,6 +1863,59 @@ export const OPS: OpDef[] = [
         value: { type: 'subgroups', group: G, subgroups: subs },
         label: `Sub(${refText(a[0])})`,
         sub: `${subs.length} 个子群`,
+      }
+    },
+  },
+  {
+    id: 'maximalSubgroups',
+    notation: '极大子群(G)',
+    mechanism: 'enumerate',
+    primitive: false,
+    doc: '极大子群：不能落在任何更大的真子群里的真子群（子群格上 G 的直接下层）',
+    recipe: '筛( 格(G) 的覆盖边, 上端 = G )',
+    impl: 'computeSubgroupLattice',
+    call: ['极大子群', 'maximalSubgroups', 'maxSub'],
+    params: [{ name: 'G', type: 'group' }],
+    arity: 1,
+    result: 'subgroups',
+    run: (a) => {
+      const G = groupOf(a[0])
+      if (!G) return fail('极大子群(\\cdot) 需要一个群')
+      /**
+       * 守卫必须**自己**判：core 的 `computeSubgroupLattice` 超限时不报错，
+       * 而是退化成"{e} 与 G 两个节点"（实测 216 阶群）——照单全收会把**平凡子群**
+       * 当成 G 的极大子群，正是最该避开的那类静默错误。
+       */
+      if (G.order > ENUMERATION_LIMIT) {
+        return fail(
+          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}，极大子群本地算不了`,
+          '待后端 GAP 通道',
+        )
+      }
+      const { nodes, edges } = computeSubgroupLattice(G)
+      const full = nodes.find((n) => n.order === G.order)
+      // 格边的方向：小的在 `from`、大的在 `to`（自下而上）——极大子群 = 指向 G 的覆盖边
+      const targets = full ? edges.filter((e) => nodes[e.to] === full).map((e) => nodes[e.from]) : []
+      const subs = targets.map((n) => {
+        const ids = new Set(n.elementIds)
+        const elements = G.elements.filter((e) => ids.has(e.id))
+        return normalizeSubgroup(
+          {
+            elements,
+            order: n.order,
+            index: n.index,
+            generators: findMinimalGenerators(elements, G),
+            isNormal: n.isNormal,
+          },
+          G,
+        )
+      })
+      subs.sort((x, y) => y.order - x.order)
+      return {
+        ok: true,
+        value: { type: 'subgroups', group: G, subgroups: subs },
+        label: `极大子群(${refText(a[0])})`,
+        sub: subs.length > 0 ? `${subs.length} 个，最大阶 ${subs[0].order}` : '没有真子群（G 本身平凡）',
       }
     },
   },
@@ -2070,6 +2213,87 @@ export const OPS: OpDef[] = [
       }
     },
   },
+  {
+    id: 'gcd',
+    notation: 'gcd(a, b)',
+    mechanism: 'arithmetic',
+    primitive: false,
+    doc: '最大公因数（`闭包(G, r6, r4)` 那类"生成元的合成"里天天用到的那一步）',
+    impl: '本地（欧几里得）',
+    call: ['gcd', '最大公因数', '最大公约数'],
+    params: [
+      { name: 'a', type: 'int' },
+      { name: 'b', type: 'int' },
+    ],
+    arity: 2,
+    result: 'number',
+    run: (a) => {
+      const x = intOf(a[0])
+      const y = intOf(a[1])
+      if (x === null || y === null) return fail('gcd(\\cdot) 需要两个整数')
+      if (x < 0 || y < 0) return fail('gcd(\\cdot) 只接受非负整数')
+      const v = gcdInt(x, y)
+      return {
+        ok: true,
+        value: { type: 'number', label: `${v}`, value: v },
+        label: `gcd(${x}, ${y})`,
+        sub: `= ${v}`,
+      }
+    },
+  },
+  {
+    id: 'lcm',
+    notation: 'lcm(a, b)',
+    mechanism: 'arithmetic',
+    primitive: false,
+    doc: '最小公倍数（`a \\cdot b = gcd \\cdot lcm`）',
+    impl: '本地（gcd \\to lcm）',
+    call: ['lcm', '最小公倍数'],
+    params: [
+      { name: 'a', type: 'int' },
+      { name: 'b', type: 'int' },
+    ],
+    arity: 2,
+    result: 'number',
+    run: (a) => {
+      const x = intOf(a[0])
+      const y = intOf(a[1])
+      if (x === null || y === null) return fail('lcm(\\cdot) 需要两个整数')
+      if (x < 0 || y < 0) return fail('lcm(\\cdot) 只接受非负整数')
+      const v = x === 0 || y === 0 ? 0 : (x / gcdInt(x, y)) * y
+      return {
+        ok: true,
+        value: { type: 'number', label: `${v}`, value: v },
+        label: `lcm(${x}, ${y})`,
+        sub: `= ${v}`,
+      }
+    },
+  },
+  {
+    id: 'eulerPhi',
+    notation: '\\varphi(n)',
+    mechanism: 'arithmetic',
+    primitive: false,
+    doc: '欧拉函数：1 \\le k \\le n 里与 n 互素的 k 的个数（= n \\cdot \\prod (1 - 1/p)）',
+    impl: '本地（走 factorizeOrder）',
+    call: ['phi', '欧拉函数', 'eulerPhi'],
+    params: [{ name: 'n', type: 'int' }],
+    arity: 1,
+    result: 'number',
+    run: (a) => {
+      const n = intOf(a[0])
+      if (n === null) return fail('\\varphi(\\cdot) 需要一个整数')
+      if (n < 1) return fail('\\varphi(\\cdot) 只接受正整数')
+      let v = n
+      for (const f of factorizeOrder(n)) v = (v / f.prime) * (f.prime - 1)
+      return {
+        ok: true,
+        value: { type: 'number', label: `${v}`, value: v },
+        label: `\\varphi(${n})`,
+        sub: `= ${v}`,
+      }
+    },
+  },
 ]
 
 /* ── 索引 ─────────────────────────────────────────────── */
@@ -2242,9 +2466,12 @@ const TEMPLATES: Record<string, string> = {
   orbits: '轨道(A, e)',
   stabilizers: '稳定子(A, e)',
   fixedPoints: '不动点(A)',
+  orbitCount: '轨道数(A)',
   kernel: 'ker(f)',
   image: 'im(f)',
   subgroups: 'Sub(G)',
+  maximalSubgroups: '极大子群(G)',
+  innerAutomorphismGroup: 'Inn(G)',
   pSubgroups: 'pSub(G, 2)',
   sylow: 'Syl(G, 2)',
   normalSubgroups: '正规子群(G)',
@@ -2254,6 +2481,9 @@ const TEMPLATES: Record<string, string> = {
   factorize: '分解(12)',
   binomial: 'C(12, 4)',
   binomialMod: 'Cmod(12, 4, 2)',
+  gcd: 'gcd(12, 18)',
+  lcm: 'lcm(4, 6)',
+  eulerPhi: 'phi(12)',
 }
 
 export function opTemplate(op: OpDef): string {

@@ -137,7 +137,7 @@ export function run(): void {
     eq('拿 opsFor 筛多对象操作 -> 恒空（这就是 U2 栽的地方）', viaOpsFor.length, 0)
     ok('而 multiOps 给得出', multi.length > 0)
 
-    ok('注册表就是这 32 条（多了少了都说明有人动过菜单的面）', OPS.length === 32, `${OPS.length}`)
+    ok('注册表就是这 38 条（多了少了都说明有人动过菜单的面）', OPS.length === 38, `${OPS.length}`)
   }
 
   /* ══ ④ canPick：pending 时哪些节点点得动 ════════════════ */

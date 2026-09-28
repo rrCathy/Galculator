@@ -868,6 +868,30 @@ body {
   color: var(--text-faint);
 }
 
+/* ── 「结构」节（U27）：合成列 / 导来列 / 半直积分解 ──────────
+   值的下面挂一行小字附注（因子说明 / 重建验证 / 候选数）——
+   附注是**纯文本**，走查读它比读 KaTeX 渲染后的文本稳。 */
+.structure {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.insp-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.insp-sub-note {
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .insp-tags {
   display: flex;
   flex-wrap: wrap;

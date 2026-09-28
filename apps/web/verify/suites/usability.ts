@@ -125,18 +125,24 @@ export function run(): void {
 
   suite('usability \\cdot 报错文案（缺口 ⑨）')
   {
-    const tm = lastLine(['G = S_4', 'M = 极大子群(G)'])
+    // 2026-09-28（U27）起 `极大子群(G)` / `Burnside(A)` 都已接线 —— 换 `Hall子群(G)` 当
+    // "没这功能"的样本（它仍在 `TASKS.md` 的缺口清单里）
+    const tm = lastLine(['G = S_4', 'M = Hall子群(G)'])
     ok('未支持的操作报「没有名为…的操作」', (tm.error ?? '').includes('没有名为'), tm.error)
-    ok('并猜一个相近的（极大子群 -> Sub(G)）', (tm.hint ?? '').includes('Sub(G)'), tm.hint ?? '')
+    ok('并猜一个相近的（Hall子群 -> Sub(G)）', (tm.hint ?? '').includes('Sub(G)'), tm.hint ?? '')
 
-    const burn = lastLine(['G = D_4', 'A = 共轭作用(G)', 'n = Burnside(A)'])
-    ok('Burnside 报「没有这个操作」而不是「群记号认不出」', (burn.error ?? '').includes('没有名为'), burn.error)
-    ok('不再把操作名当群记号（提示里没有"可用的群记号"）', !(burn.hint ?? '').includes('群记号'), burn.hint ?? '')
+    const comp = lastLine(['G = D_4', 'A = 共轭作用(G)', 'n = 着色数(A)'])
+    ok('着色数 报「没有这个操作」而不是「群记号认不出」', (comp.error ?? '').includes('没有名为'), comp.error)
+    ok('不再把操作名当群记号（提示里没有"可用的群记号"）', !(comp.hint ?? '').includes('群记号'), comp.hint ?? '')
 
-    // 单字母别名 `c`（组合数）曾让 `gcd` 匹配出"是不是想用 C(n,k)"这种驴唇不对马嘴的提示
+    // 单字母别名 `c`（组合数）曾让含 c 的未知名字匹配出"是不是想用 C(n,k)"这种驴唇不对马嘴的提示
+    const hcf = lastLine(['n = hcf(12, 18)'])
+    ok('hcf 不再误推荐 C(n,k)', !(hcf.hint ?? '').includes('C(n, k)'), hcf.hint ?? '')
+    ok('hcf 仍报「没有这个操作」', (hcf.error ?? '').includes('没有名为'), hcf.error)
+
+    // U27 接线之后的正面判据：`gcd` 真能算（在 suites/structure.ts 里逐值核对）
     const gcd = lastLine(['n = gcd(12, 18)'])
-    ok('gcd 不再误推荐 C(n,k)', !(gcd.hint ?? '').includes('C(n, k)'), gcd.hint ?? '')
-    ok('gcd 仍报「没有这个操作」', (gcd.error ?? '').includes('没有名为'), gcd.error)
+    ok('gcd 现在跑得通', gcd.ok === true, gcd.error ?? '')
 
     // `f(K)`：`f` 是个已定义的对象 —— 说清楚，别让用户以为打错了名字
     const fk = lastLine(['G = C_6', 'H = C_6', 'f = 映射(G, H, a\\to 2)', 'K = 闭包(G, 1)', 'I = f(K)'])

@@ -5,8 +5,14 @@
 
 ## 1. 遗留（详单在 ROADMAP）
 - **可用性缺口**（`docs/USABILITY.md` §6，状态列在表里）：**①–⑩ 全部修完**（U18–U21 + U26）；
-  剩 **⑪** core 缺失项（极大子群 / Inn / Hall / 合成列 / Burnside / φ(n) / gcd / ⋊）——
-  core 已有**合成列**（`computeSubgroupSeries`）与**半直积分解**（`findSemidirectDecompositions`），是接线不是重写。
+  **⑪ 第一部分也已接线（U27）**—— Inn / 极大子群 / 合成列 / 半直积分解 / Burnside / φ(n) / gcd / lcm
+  全部可用。**剩**：Hall 子群（core 没有，要新写）· 子群格图（有列表没图）· 自定义作用编辑器。
+- **U27 的接线口径（2026-09-28）**：判定与结构一类的"打字打得出、系统答不出"**先查 core 有没有原语**
+  （`computeSubgroupSeries` / `findSemidirectDecompositions` / `computeBurnsideCount` / 子群格 / `isPerfect`）。
+  落点两条：**操作**（`gcd` / `lcm` / `phi` / `轨道数(A)` / `极大子群(G)` / `Inn(G)`）与
+  **信息面板「基本」→「结构」节**（`gal/structure.ts`：完美 · 合成列 · 导来列 · 分解，`|G| ≤ 60` 自动算 + 缓存）。
+  两条守卫：超限**明说没算**；`computeSubgroupLattice` 超限会**静默退化成 {e} 与 G 两点**（要自己拦）。
+  回归 `suites/structure.ts`(107) + `e2e/structure-ops.mjs`(47)。
 - **伴生边的语义身份（U26，2026-09-28）**：画布上 `π`/`π₁`/`↪`/`=`/`≅` 可点了 ——
   `StructuralEdge`（kind+两端+账）挂在 `GalEdge.structural`，焦点前缀 `struct:<边id>`（`edgeFocusId` 三分支），
   **不升级为一等对象**（不进对象表 / 不挂球，列 `ker` 就是撒谎）；账走 `containment()` 判据同源；

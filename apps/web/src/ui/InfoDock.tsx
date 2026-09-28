@@ -13,6 +13,8 @@ import { RELATION_LABEL, relationsFor, type Relation } from '../gal/relations'
 import { STRUCTURAL_LABEL } from '../gal/derive'
 import { menuLabel } from '../gal/interaction'
 import { opTemplate, type OpDef } from '../gal/ops'
+import { prettySymbol } from '../gal/pretty'
+import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/structure'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
@@ -321,6 +323,7 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
           <span>{info.nilpotent ? '是' : '否'}</span>
         </Row>
       )}
+      <StructureSection group={group} />
       {node.sources.length > 0 && (
         <Row k="来源">
           <span>{node.sources.join(' , ')}</span>
@@ -332,6 +335,105 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
         </Row>
       )}
     </>
+  )
+}
+
+/**
+ * 「结构」节（U27）—— 完美 / 合成列 / 导来列 / 半直积分解。
+ *
+ * 这四件事 `docs/TASKS.md` 的缺口清单里都有（②③④⑤⑥⑧），而在 core 里**全是现成原语**
+ * （`computeSubgroupSeries` / `findSemidirectDecompositions` / `isPerfect`）——缺的只是接线。
+ * 接在这里而不是结论层/操作的原因有两条：
+ *
+ *   ① **它是"属性"不是"一眼"**：结论层一条一行说"同构于谁"，而这里是一节四行 + 附注；
+ *   ② **成本要自己兜住**：半直积分解要枚举子群（实测 S₅ 3 秒、A₅ 70ms、C₃³ 217ms）——
+ *      结论层在选中对象的瞬间计算，扛不住；放在「基本」tab 里、自己带阶上限（`STRUCTURE_CAP`）
+ *      并缓存（key 带元素 id 指纹，U26 的纪律），才既不卡操作、又不假装算得完。
+ *
+ * 超限时**明说没算**（`data-structure="capped"`），不显示半截答案。
+ */
+function StructureSection({ group }: { group: Group }) {
+  const facts = useMemo(() => structureFacts(group), [group])
+
+  if (!facts) {
+    return (
+      <div className="insp-line dim" data-structure="capped">
+        |G| &gt; {STRUCTURE_CAP}：合成列 / 结构分解未自动计算（子群枚举代价高）
+      </div>
+    )
+  }
+
+  const comp = facts.composition
+  const der = facts.derived
+  const dec = facts.decomposition
+
+  return (
+    <div className="structure" data-structure="facts">
+      <div className="rel-head">结构</div>
+
+      <Row k="完美">
+        <span data-perfect={facts.perfect ? '1' : '0'}>
+          {facts.perfect ? '是（G = [G, G]）' : '否'}
+        </span>
+      </Row>
+
+      {comp && comp.factors.length > 0 && (
+        <Row k="合成列">
+          <span className="insp-stack">
+            {/* `data-factors` 放**原始形态**（断言的锚点）；DOM 文本是 KaTeX 渲染后的 */}
+            <span data-factors={factorsText(comp.factors)}>
+              <Tex tex={comp.factors.join(' \\cdot ')} />
+            </span>
+            <span className="insp-sub-note">
+              {comp.alternativeCount > 1
+                ? `合成列不唯一：本例共 ${comp.alternativeCount} 条，但因子多重集唯一（若尔当-赫尔德）`
+                : `因子多重集唯一（若尔当-赫尔德）：合成列只有这一条`}
+            </span>
+          </span>
+        </Row>
+      )}
+
+      {der && (
+        <Row k="导来列">
+          <span className="insp-stack">
+            <span data-derived={chainText(der.orders)}>
+              <Tex tex={der.orders.join(' \\triangleright ')} />
+            </span>
+            <span className="insp-sub-note">
+              {der.reachesTrivial ? '降到底 {e}：这就是「可解」' : '没有降到底（不可解）'}
+            </span>
+          </span>
+        </Row>
+      )}
+
+      {dec && (
+        <Row k="分解">
+          <span className="insp-stack">
+            <span
+              data-decomp={`${prettySymbol(dec.normal)} ${dec.trivialAction ? '\\times' : '\\rtimes'} ${prettySymbol(dec.acting)}`}
+              data-decomp-kind={dec.kind}
+            >
+              <Tex
+                tex={`${dec.normal} \\${dec.trivialAction ? 'times' : 'rtimes'} ${dec.acting}`}
+              />
+            </span>
+            <span className="insp-sub-note">
+              已重建验证（得到 {prettySymbol(dec.rebuilt)}）
+              {dec.otherVerified > 0 ? `；同类候选另有 ${dec.otherVerified} 条` : ''}
+            </span>
+          </span>
+        </Row>
+      )}
+
+      {!dec && facts.indecomposableReason && (
+        <Row k="分解">
+          <span className="insp-stack" data-decomp="none">
+            <span>不可分解</span>
+            <span className="insp-sub-note">{facts.indecomposableReason}</span>
+          </span>
+        </Row>
+      )}
+    </div>
   )
 }
 

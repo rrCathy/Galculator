@@ -290,9 +290,10 @@ for (const id of ['G', 'K', '\\varphi']) {
 
 /* ── 报错面：写一行错的 ── */
 {
-  await addLine('X', '极大子群(G)')
+  // 2026-09-28（U27）起 `极大子群(G)` 已接线 —— 换仍在缺口清单里的 `Hall子群(G)`
+  await addLine('X', 'Hall子群(G)')
   const st = await status()
-  ok('「极大子群」报「没有这个操作」', st.text.includes('没有名为'), st.text)
+  ok('「Hall子群」报「没有这个操作」', st.text.includes('没有名为'), st.text)
   await checkVisible('输入框报错（没有这个操作）')
   ok('这条提示里没有键盘打不出的字符', badChars(st.text).length === 0, badChars(st.text).join(''))
   await page.keyboard.press('Escape')

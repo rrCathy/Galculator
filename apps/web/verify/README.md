@@ -41,6 +41,7 @@ node verify/e2e/grid-drag.mjs         # 格点 / 拖动吸附 / 平移 / 缩放 
 node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）
 node verify/e2e/copy-label.mjs        # 把画布上的记号抄回去：三条复制路径（U24）
 node verify/e2e/structural-edges.mjs  # 结构伴生边可点：π/↪/=/≅ 的账与三条纪律（U26）
+node verify/e2e/structure-ops.mjs     # gcd/lcm/phi · Burnside · 极大子群 · Inn · 「结构」节（U27）
 node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来的字符（U25，输入 + 显示两半）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
