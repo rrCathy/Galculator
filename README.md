@@ -468,12 +468,18 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器几何走查（读 DOM �
   出处见 [USABILITY §6.18](docs/USABILITY.md)。验证：断言 **1347/1347** · 走查 **612/612**（21 套）。
 - **U35 已完成（第十五批：商群的商群 / 第三同构，2026-09-29）**：用户说「同构第三定理做不了，
   不能做商群的商群」——core 给**不同母群**的元素起 label 的口径不一致（同一批陪集成员，
-  在 A₄ 的商里是 `(234)`、在 S₄ 的商里是 `234`），而陪集只留 label 不留在 id，语义键对不上。
+  在 A₄ 的商里是 `(234)`、在 S₄ 的商里是 `234`），而陪集只留 label 不留 id，语义键对不上。
   新增 `gal/semantic.ts#canonicalMemberLabel`（置换记号化成唯一写法）并把 `elementSemanticKey`
   收敛成一份；`relations.containment` 第①关升级为**语义键对齐**（普通元素退化成 id 比对，行为不变）。
   实测：`F = (G/N)/(H/N)` 直接算出 **C₂ = `G/H`**；`A₄/V₄ ≤ S₄/V₄`（正规、指数 2）判得出来；
   `KN ↪ GN` 的标签随之从 `↪` 变 `⊴`（现场判定的）。
   出处见 [USABILITY §6.19](docs/USABILITY.md)。验证：断言 **1356/1356** · 走查 **615/615**（21 套）。
+- **U36 已完成（第十六批：第三同构的结论自动成边，2026-09-29）**：U35 之后还剩一件 ——
+  算得出来却**看不见结论**：`F = B/A` 与 `D = G/H` 都识别成 C₂，图上却没有那条 `≅`。
+  新增 `derive.ts#thirdIsoPartner`：`商(商(G,N), 商(K,N))` 与画布上的 `商(G,K)` 自动连一条
+  `≅`（判据是**结构对应**——只看操作 id 与实参 id，不看文本；且**必须是同一个 `N` 对象**，
+  因为 `商(G,N₁)/商(K,N₂)` 只同阶、不同构）。`G/K` 不在画布上就**不画**（不替用户造顶点）。
+  出处见 [USABILITY §6.20](docs/USABILITY.md)。验证：断言 **1358/1358** · 走查 **617/617**（21 套）。
 - 更后面：**Cayley 定理**（舞台现成 `正则作用(G)`，缺"G ↪ Sym(Ω)"在画布上的落点）·
   **U8** 工具条（雏形已随 U10 落地）+ 群目录 + 查表（「零门槛入口」）·
   `ui/MapBuilder` 的走查（`§7` 里最后一块没线的地方）· 交换图画布打磨 ·
@@ -594,5 +600,5 @@ _（`G / Z` 带 `G →(π) Q`、`Z(G)` 带 `Z ↪ G`；实线 = 映射，淡虚�
 | [docs/TASKS.md](docs/TASKS.md) | **群论常见计算 / 证明清单**——每行给可粘贴的输入 + 实测结果，照着就能逐条核（输入视角）|
 | [docs/USABILITY.md](docs/USABILITY.md) | **可用性审计**（动作视角）：用户想做某件事时**最可能的动作**是什么、那条路通不通 + 可点性地图 + 20 条缺口（①–⑳ 全部修完 + `f(H)` 入口接入，逐批账在 §6）|
 | [docs/PROOF_SPEC.md](docs/PROOF_SPEC.md) | Proof Spec 规范（模板 schema + Sylow I 实例）· **§2.5 落地形态（M1 已实现）** |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 规划：UI 重构线 U0–U35 + 里程碑 M0–M4 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 规划：UI 重构线 U0–U36 + 里程碑 M0–M4 |
 | [docs/archive/](docs/archive/) | 已完成使命的历史文档（交接 prompt / 早期规划稿）|

@@ -86,3 +86,54 @@
 - **列序规则（U20 换掉）**：水平边当约束图 → **分量内穷举列序，取"两端之间夹着别的组"的边数最少者**；
   **并列只接受严格更优**（布局稳，多一条边不重排）；分量 > 7 保持原序**不猜**。
   换掉的是"夹在中间的组挪到行尾"——它在**两条水平边共用一个端点**时自相打架。
+
+## 7. 参考：文本与记号（细则）
+- `toTex()` 四步**有序**：上下标 → 运算符 / 希腊 → 函数名 → 中文。**`prettySymbol` 不认的宏会掉进"去反斜杠"兜底**
+  → 希腊字母表 + `\mathrm/\mathbb/\operatorname` 展开必须齐。
+- **面板把文本当纯文本渲染**（只有 `tex` 走 KaTeX）：`**强调**` 会原样显示两颗星。要强调用「」。
+- **循环群里的单字母一律视作那个生成元**（`resolveElementLoose` 第 ③ 级）。
+- **`S_4` 的生成元叫 `s12, c`**（不是 `(12)`）：`映射(G, H, s12->23, c->13)` 才对（见 `e2e/relation-ops.mjs`）。
+- **轨道的值类型随 Ω 变**：Ω = G 自身 → `elements`；Ω 是集合 → `set`。
+- **文本形态 = 简化 LaTeX，全 ASCII**（U25 定案，细则 `DIAGRAM_SPEC §1.7`）：展示串一律 `S_4` / `\varphi`，
+  **显示靠 KaTeX**，输入只认 ASCII。⚠️ `prettySymbol` 里**空格不能删**（命令分隔符）；**渲染后 `textContent`
+  里没有空格** → **断言读 `data-*` 原始形态**；**纯文本面**（状态行 / 按钮 / 菜单 / 报错语）**不写 LaTeX 命令**。
+  回归 `e2e/no-unicode-leak.mjs`（43 条）。
+- **批量替换 LaTeX 记号的坑全在"字符边界"**（U25 一轮踩四个）：① 命令与后随字母**粘连**（`\timesC_2`）——
+  扫它的脚本**别用带备选分支的正则配 lookahead**，先抠出「反斜杠 + 字母串」再判；② 源码里**单反斜杠被 JS 当转义**；
+  ③ **`\uXXXX` 被改成双反斜杠** → `NAME_RE` 静默拒收中文名；④ **分隔点 `·` 被换成 `\cdot`**（那是乘法）。
+
+## 8. 参考：走查与工具链（细则 · 本机沙箱）
+- **全套走查别用递归 spawn 的 wrapper**（2026-09-29 实测）：`node -e "execFileSync(process.execPath,…)"` 与
+  `.tmp-probe/e2e-count.cjs` 都报 `spawnSync … EBUSY`（孙进程起不来）→ **21 套全 0 PASS / 0 FAIL**，
+  看着像"dev server 没起"。**正解：在 shell 里逐个当直接子进程跑**
+  `for x in verify/e2e/*.mjs; do node "$x" > log 2>&1; tail -1 log; done`。
+- **dev server**：`localhost` 在 Node 18+ 解析成 `::1` → 连 `127.0.0.1` 会 `ERR_CONNECTION_REFUSED`
+  （`vite.config.ts` 已写死 `server.host`）。**Bash 里 `(npx vite &)` 起的服务会随调用结束而死** → 用 `run_in_background`；
+  **跑 e2e 前先 ping 5273**（会被环境回收，19–25 分钟不等）。
+- **别写恒真断言**（U36 抓到的实例）：输入球是"预览不 ok 就不提交" ⇒ 失败的行**进不了对象表** ⇒ **`.row-err` 恒为空**；
+  拿它判"这一整段求值成功"，全挂也报 PASS（真发生了）。要读**画布节点** + 点开看识别。
+- **走查里名字不能重绑**（`G = S_4` 在已有 `G` 时报"名字重复定义"）→ 换场景要么换名、要么 `page.goto(URL)` 重开画布。
+- **走查的场地有两份入场**：`/` **自带示例定义**（`G = S_4` + Sylow 链），`?empty=1` 才是空画布。
+- **走查点画布上的边 / 节点要派发事件**（`.gedge-hit`/`.gnode-hit` 是 `transparent`，Playwright 判 not visible →
+  白等 30s）：`el.dispatchEvent(new MouseEvent('click',{bubbles:true}))`（React 18 监听在根容器）。
+- **判据别用"节点数 +1"**：`build.ts` 的隐式补点会被显式定义**取代** → 比 **id 列表**。**画布几何走查用 `getBBox()`**。
+- **几何判据要成对**：只判"竖直不穿行"会让"水平穿行"藏很久（实测藏了 7 天）。
+- **走查结尾必须 `browser.close()`**；**断言里不许 `JSON.stringify(值)`**（`generators[].inverse` 是环 → 整份回归崩在那行，写 `describeValue()`）。
+- **画布文字要 `user-select: none`**，否则拖过标签会被判"选文本" → `pointercancel` 掐断手势。
+- **`CanvasView` 的"没有图就早点 return 占位"分支 → 新 hook 必须放在它之前**，否则 React 抛错并**卸载整棵子树**（白屏）。
+- **空画布时整条 `.canvas-toolbar` 不渲染**（占位分支早 return）→ 空画布上够得着的入口要放进 `.canvas-empty`。
+- **手写的派生行 origin 是 `derived`** → 进「操作」抽屉；判"图变了没有"读 `g.gnode[data-id]`。
+- **通知类浮层要 `pointer-events: none`**：`.notice` 与底部输入球同在 `bottom:12px` 中央而 z-index 更高 ⇒ 提示一出现输入球就点不动。
+- **跑中文输出的回归要防 PowerShell 乱码**：先设 `[Console]::OutputEncoding = [Text.Encoding]::UTF8`，或让探针
+  `fs.writeFileSync(path, text, 'utf8')` 落盘。
+- **"键盘打不出来"的判据要看"有没有这个键"**：换行是回车敲的 → `\n\r\t` 必须放行。
+- **`verify/README.md`** 还收着：块注释不许有"星号+斜杠" · rolldown 对模板串换行转义 + 多字节与 U+2500 报错 →
+  输出装饰一律 ASCII · 回归失败先判"bug 还是期望值写错" · **缓存 key 要带身份指纹**（containment 只看 symbol#order 会串，42 号）。
+
+## 9. 参考：操作与输入（细则）
+- 集合运算 `∩`/`·` 结果若确是子群则**升级**为真群对象；∪/∖ 不升级。`stabilizers` 的产出是 G 的子群 → `result:'group'`。
+- `闭包` 的上下文群形态是 `if (G0 && a.length > 1)`——单个群参数走"取它的元素当种子"，否则返回平凡群。
+- **`⟨⟩` 归一**只在**顶层（括号外）**改写（`normalizeExpr(s, angle=false)`）。
+- **Ω 上的点怎么寻址看 Ω 是什么**（`ops.omegaIndexOf`）：Ω 是**集合**（成员是子群 / 陪集）→ **1 起数字下标**；
+  Ω = **G 自身** → **元素记号**。⚠️ **C₆ 上 `轨道(A, 1)` 会侥幸成功**（真有元素 `1`），S₄ 上才暴露。
+- **`Ω` 的另外两处**：`omegaArgOf` 管"参数是不是 Ω"（`ParamType.omega`）；轨道的值类型随 Ω 变（Ω = G 自身 → `elements`；Ω 是集合 → `set`）。

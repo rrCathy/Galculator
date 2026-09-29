@@ -192,6 +192,40 @@ function inclusionLabel(H: Group, G: Group): string {
   return containment(H, G)?.normal === true ? '\\trianglelefteq' : '\\hookrightarrow'
 }
 
+/**
+ * **第三同构定理** `(G/N)/(K/N) ≅ G/K` 的配对（U36）。
+ *
+ * 给一个商对象 `Q`，若它长成 `商(X, Y)`、而 `X = 商(G, N)`、`Y = 商(K, N)`
+ * （**同一个 N 对象**），就返回画布上 `商(G, K)` 那个节点的 id。
+ *
+ * 判据只看**对象结构**（`opId` + 实参 id），不看文本 —— 于是 `A/B`、`商(A, B)`、
+ * 手点出来的商群一视同仁。
+ *
+ * 为什么必须"同一个 `N` 对象"：第三同构的前提是 `N ⊴ K ⊴ G` 里那**一个** `N`。
+ * 换成 `商(G, N₁) / 商(K, N₂)`（两个不同的正规子群）两边仍然同**阶**，但**不同构** ——
+ * 只按阶/结构符号去猜就会画出一条错的 `≅`。这一条是**结构对应**，不是数值巧合。
+ */
+function thirdIsoPartner(objects: GalObject[], q: GalObject): string | null {
+  if (q.opId !== 'quotient' || q.sources.length < 2) return null
+  const byId = new Map(objects.map((o) => [o.id, o]))
+  const x = byId.get(q.sources[0])
+  const y = byId.get(q.sources[1])
+  if (x?.opId !== 'quotient' || y?.opId !== 'quotient') return null
+  if (x.sources.length < 2 || y.sources.length < 2) return null
+  const [g, n1] = x.sources
+  const [k, n2] = y.sources
+  if (n1 !== n2) return null
+  const partner = objects.find(
+    (o) =>
+      o.id !== q.id &&
+      o.opId === 'quotient' &&
+      o.value.type === 'group' &&
+      o.sources[0] === g &&
+      o.sources[1] === k,
+  )
+  return partner?.id ?? null
+}
+
 /** 结构伴生边（U3）——**操作 = 结果对象 + 结构伴生**：
  * 一个操作在长出结果节点的同时，也长出了它和旧对象之间的那条**映射箭头**。
  *
@@ -302,6 +336,40 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
             from: labelOf(second.id),
             to: labelOf(g.id),
             facts: inclusionFacts(second.value.group, g.group, labelOf(second.id), labelOf(g.id)),
+          },
+        })
+      }
+      // **第三同构**：`(G/N)/(K/N)` 与 `G/K` 之间自动连一条 `≅`（U36）。
+      // 从前这条路算得出来却**看不见结论**：两个顶点都识别成 `C₂`，
+      // 图上却没有那条线 —— 用户只能自己声明 `R = F ≅ D`。
+      // 判据在 `thirdIsoPartner`（结构对应，不是"同阶就算"）。
+      const iso3 = thirdIsoPartner(objects, o)
+      if (iso3 && nodeIds.has(iso3)) {
+        const po = objects.find((x) => x.id === iso3)
+        const partnerOrder = po?.value.type === 'group' ? po.value.group.order : null
+        edges.push({
+          id: `${o.id}->${iso3}:iso3`,
+          kind: 'map',
+          from: o.id,
+          to: iso3,
+          label: '\\cong',
+          arrow: 'iso',
+          structural: {
+            kind: 'isomorphism',
+            doc: '第三同构定理：两层商塌成一层商（先商 N、再商 K/N，等于直接商 K）',
+            from: labelOf(o.id),
+            to: labelOf(iso3),
+            facts: [
+              ...(Q && partnerOrder !== null
+                ? [
+                    {
+                      k: '两边同阶',
+                      v: `|${labelOf(o.id)}| = ${Q.order} = |${labelOf(iso3)}| = ${partnerOrder}`,
+                    },
+                  ]
+                : []),
+              { k: '同构', v: '\\cong（既单又满）' },
+            ],
           },
         })
       }

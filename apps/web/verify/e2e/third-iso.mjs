@@ -165,6 +165,24 @@ await page.waitForTimeout(450)
   ok('`F = B/A` 被识别为 2 阶循环群（C_2）', isC2(fIns), fIns.slice(0, 200))
   const dIns = await identifyOf('D')
   ok('`D = G/H` 也识别为 C_2（第三同构：两边同构）', isC2(dIns), dIns.slice(0, 200))
+
+  // ── 结论要**自己画出来**（U36）：`(G/N)/(K/N) ≅ G/K` 那条 `≅` 自动长在图上 ──
+  const iso = await page.evaluate(() => {
+    const g = document.querySelector('g.gedge[data-edge-id="F->D:iso3"]')
+    if (!g) return null
+    const p = g.querySelector('path:not(.gedge-hit)')
+    return {
+      label: g.dataset.label ?? '',
+      start: p?.getAttribute('marker-start') ?? '',
+      end: p?.getAttribute('marker-end') ?? '',
+    }
+  })
+  ok('图上自动长出 `F ≅ D` 那条边', !!iso, '没有 data-edge-id="F->D:iso3" 的边')
+  ok(
+    '它画成 ≅（`\\cong`，两端都带箭头）',
+    !!iso && iso.label === '\\cong' && /-head/.test(iso.start) && /-head/.test(iso.end),
+    iso ? `${iso.label} start=${iso.start} end=${iso.end}` : '（上一条已判失败）',
+  )
 }
 
 await page.screenshot({ path: '../../docs/assets/u35-third-iso-quotient.png', clip: (await page.locator('svg.canvas').boundingBox()) ?? undefined })

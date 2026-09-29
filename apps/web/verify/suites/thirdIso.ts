@@ -167,6 +167,19 @@ export function run(): void {
       eq('指数 [B:A] = 2', c.index, 2)
       eq('而且是正规子群', c.normal, true)
     }
+
+    // ── 第三同构的**结论**要自己画出来（U36）──
+    //    定理说的是同构，所以图上该有一条自动的 `≅`（从前得用户自己声明 `R = F ≅ D`）。
+    const edges = deriveCanvas(b.objects).edges.map((e) => `${e.from} -${e.label ?? '\\varnothing'}-> ${e.to} [${e.kind}:${e.arrow}]`)
+    ok('图上自动长出 `F ≅ D` 那条边', edges.includes('F -\\cong-> D [map:iso]'), edges.join(' | '))
+  }
+
+  // ── 边界：**没有 `G/K` 这个顶点就不凭空画** ──
+  //    `(G/N)/(K/N)` 算得出来，但画布上没有 `G/K`，就无从连那条 `≅`（不替用户造顶点）。
+  {
+    const b = build(['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'])
+    const iso = deriveCanvas(b.objects).edges.filter((e) => e.label === '\\cong')
+    ok('`G/K` 不在画布上 → 不画那条 `≅`', iso.length === 0, iso.map((e) => `${e.from}->${e.to}`).join(' | '))
   }
 }
 
