@@ -633,13 +633,14 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
     })
   }
 
-  // ⑤ **用户声明的包含**（U20）：`R = A ⊆ B` → 画布上一条 `A ↪ B`（正规则 `⊴`）
+  // ⑤ **用户声明的关系**（U20 包含 / 缺口 ⑰ 同构）：`R = A ⊆ B` / `R = A ≅ B`
   //
   // 与 ④ 同一待遇：带 `objectId` ⇒ **可点选**（点这条箭头就能看这条关系的信息），
   // 且**不画来源线**（关系自己就是那条线，再叠一条淡虚线是画蛇添足）。
   for (const o of objects) {
     if (o.value.type !== 'relation') continue
     const R = o.value.relation
+    const iso = R.kind === 'isomorphic'
     const from = groupNodeId(objects, R.from)
     const to = groupNodeId(objects, R.to)
     if (!from || !to || from === to || !ids.has(from) || !ids.has(to)) continue
@@ -648,18 +649,22 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       kind: 'relation',
       from,
       to,
-      // 正规是**算出来**的：`⊴` 与 `↪` 的区别一眼可见
-      label: R.isNormal ? '\\trianglelefteq' : '\\hookrightarrow',
+      // 正规是**算出来**的：`⊴` 与 `↪` 的区别一眼可见；
+      // 同构是双射 ⇒ **两端都有箭头**（`arrow: 'iso'`，与第一同构那条 ≅ 同款）
+      label: iso ? '\\cong' : R.isNormal ? '\\trianglelefteq' : '\\hookrightarrow',
       objectId: o.id,
-      arrow: 'injective',
+      arrow: iso ? 'iso' : 'injective',
     })
   }
 
   // 去重（同一 from→to 只留一条；结构伴生优先于来源线）
   //
-  // 先让**声明的包含**压过**自动生成的**同向包含箭头：`P = 闭包(G, (12))` 会自动
+  // 先让**声明的关系**压过**自动生成的**同向箭头：`P = 闭包(G, (12))` 会自动
   // 长一条 `P ↪ G`，用户再声明 `R = P ⊆ G` 就叠成两条同向箭头。留声明那条 ——
   // 它可点选、可删、正规时还是 `⊴`，信息严格更多。
+  //
+  // `≅` 同理（缺口 ⑰）：第一同构定理自动铺的那条 `G/ker φ ≅ im φ` 与用户自己声明的
+  // `R = G/K ≅ im` 画在同一对节点上会叠成两条 —— 留着用户那条（他能点、能删、能改名）。
   const declaredPairs = new Set(
     edges.filter((e) => e.kind === 'relation').map((e) => `${e.from}->${e.to}`),
   )
@@ -668,7 +673,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       !(
         e.kind === 'map' &&
         !e.objectId &&
-        e.label === '\\hookrightarrow' &&
+        (e.label === '\\hookrightarrow' || e.label === '\\cong') &&
         declaredPairs.has(`${e.from}->${e.to}`)
       ),
   )

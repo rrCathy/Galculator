@@ -29,12 +29,18 @@ export function ComposerOrb({
   open,
   onToggle,
   objects,
+  editing = null,
   onAdd,
   minLeft = 0,
 }: {
   open: boolean
   onToggle: () => void
   objects: GalObject[]
+  /**
+   * 正在**改的旧行**（缺口 ⑱）：非空时输入球预填它，提交走 `onAdd`
+   * （App 那边据 `editing` 决定"替换"而不是"追加"）。
+   */
+  editing?: { index: number; name: string; expr: string } | null
   onAdd: (line: string) => void
   /** 左下数值面板的右边界；球不能被它压住 */
   minLeft?: number
@@ -46,7 +52,26 @@ export function ComposerOrb({
   const usedNames = useMemo(() => objects.map((o) => o.id), [objects])
   const byId = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects])
   const autoName = useMemo(() => nextAutoName(usedNames), [usedNames])
-  const nameCheck = useMemo(() => checkName(nameDraft, usedNames), [nameDraft, usedNames])
+  /**
+   * 体检用的名字表要**排掉正在改的这一个**——否则改名表单会对着自己报
+   * 「名字已被占用」，`canSubmit` 永远为假（用户在改动不了自己的行）。
+   */
+  const nameCheck = useMemo(
+    () =>
+      checkName(
+        nameDraft,
+        editing ? usedNames.filter((n) => n !== editing.name) : usedNames,
+      ),
+    [nameDraft, usedNames, editing],
+  )
+
+  /** 进编辑态：把旧行填回来，焦点落在表达式框 */
+  useEffect(() => {
+    if (!editing) return
+    setNameDraft(editing.name)
+    setExprDraft(editing.expr)
+    exprRef.current?.focus()
+  }, [editing])
 
   const expr = exprDraft.trim()
   const inline = useMemo(() => splitInline(expr), [expr])
@@ -58,7 +83,7 @@ export function ComposerOrb({
   const canSubmit = !!inline.rhs && !!preview?.ok && !nameCheck.error
   const submit = () => {
     if (!canSubmit) return
-    // 名字过一遍 LaTeX 别名：用户敲 `\phi`，存进去的是 φ（敲回去也认得）
+    // 名字形态全 ASCII（2026-09-27 定案）：`\varphi` 存进去就是 `\varphi`，没有第二套写法
     const typed = nameDraft.trim() || inline.name
     onAdd(`${typed ? normalizeName(typed) : autoName} = ${inline.rhs}`)
     setNameDraft('')
@@ -90,6 +115,11 @@ export function ComposerOrb({
       </button>
       {open && (
         <div className="composer-card">
+          {editing && (
+            <div className="composer-editing">
+              正在改这一行，左边那半改了就是改名，别处的引用会自动跟着改
+            </div>
+          )}
           <div className="composer-row">
             <input
               className="composer-name"
@@ -113,7 +143,7 @@ export function ComposerOrb({
               autoComplete="off"
             />
             <button onClick={submit} disabled={!canSubmit}>
-              添加
+              {editing ? '替换' : '添加'}
             </button>
           </div>
           <ComposerStatus

@@ -11,6 +11,7 @@ import {
   type Subgroup,
 } from '@groupviz/core'
 import { prettySymbol, superscript } from './pretty'
+import { groupFingerprint } from './identity'
 import type { GalAction, GalMap } from './value'
 import type { GalObject } from './types'
 
@@ -102,7 +103,9 @@ function smallGroupEntry(order: number, iso: string): { order: number; index: nu
  * 但对**超出识别范围**的群（阶太大 / 库外结构）会返回 null——不猜。
  */
 export function identifyGroup(group: Group): string | null {
-  const key = `${group.symbol}#${group.order}`
+  // 缓存 key 用**群身份指纹**（含元素 id），不是 `symbol#order`——后者会串
+  // （同符号同阶的两个群可能是不同结构，见 `identity.groupFingerprint` 的说明）
+  const key = groupFingerprint(group)
   const hit = isoCache.get(key)
   if (hit !== undefined) return hit
   let out: string | null = null
@@ -119,6 +122,25 @@ export function identifyGroup(group: Group): string | null {
 /** 识别符号的纯文本形态（Unicode 近似，用于混排文本）。 */
 export function isoText(iso: string): string {
   return prettySymbol(iso)
+}
+
+/**
+ * 两个群**是否同构** —— 三态，判据与信息面板那句「同构于 …」**同源**。
+ *
+ * 为什么是三态而不是布尔：本地同构识别按不变量匹配小群库（`identifyGroup`），
+ * 超出识别范围（阶太大 / 库外结构）时它返回 `null`。那时**不猜**——
+ * `'unknown'` 交给调用方（`同构` 操作会照实说"未判定"，`pairOps` 才敢把它列进候选）。
+ *
+ * 快速否定那一关不用识别：**阶不同必不同构**（Lagrange 的直接推论）。
+ */
+export function isomorphismOf(a: Group, b: Group): 'yes' | 'no' | 'unknown' {
+  if (a === b) return 'yes'
+  if (a.order !== b.order) return 'no'
+  const ia = identifyGroup(a)
+  const ib = identifyGroup(b)
+  // 任一侧识别不出 → 不下结论（不许拿"看起来一样"当同构）
+  if (!ia || !ib) return 'unknown'
+  return canonSymbol(ia) === canonSymbol(ib) ? 'yes' : 'no'
 }
 
 /* ── 结论 ─────────────────────────────────────────────── */

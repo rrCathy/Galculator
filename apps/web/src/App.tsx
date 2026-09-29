@@ -3,7 +3,7 @@ import { buildLines } from './gal/build'
 import { deriveCanvas, STRUCT_PREFIX } from './gal/derive'
 import { evalExpr } from './gal/evalDef'
 import { opById, type OpDef } from './gal/ops'
-import { composeCall, objectArity, scalarDefault, scalarSlots } from './gal/compose'
+import { composeCall, maxObjectArity, objectArity, scalarDefault, scalarSlots } from './gal/compose'
 import {
   activeOpId,
   canPick,
@@ -20,10 +20,13 @@ import {
   type PairCandidate,
 } from './gal/interaction'
 import { computedNumbers, type NumericEntry } from './gal/numeric'
-import { nextAutoName } from './gal/naming'
+import { renameRefs, nextAutoName } from './gal/naming'
+import { findExistingObject } from './gal/identity'
+import { parseSnapshot, serializeSnapshot, SNAPSHOT_VERSION } from './gal/snapshot'
+import { SnapshotCard } from './ui/SnapshotCard'
 import { opTemplate } from './gal/ops'
 import { proofHighlight, proofLines, type ProofParams, type ProofTemplate } from './gal/proof'
-import { CanvasView, type NodeAnchor } from './ui/CanvasView'
+import { CanvasView, type CanvasHandle, type NodeAnchor } from './ui/CanvasView'
 import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
 import { MultiOrb } from './ui/MultiOrb'
 import { ComposerOrb } from './ui/ComposerOrb'
@@ -51,6 +54,35 @@ const DEFAULT_LINES = [
   'O = 轨道(A, 1)',
   'N = 稳定子(A, 1)',
 ]
+
+/* ── 设置（缺口 ⑭）：本地持久化，跟钉住位置同一个待遇 ───────────── */
+
+const SETTINGS_KEY = 'galculator.settings:v1'
+
+/**
+ * 「定义同态后自动补第一同构定理的顶点」——**默认开**。
+ *
+ * 默认开是因为**证明模板依赖它**（M2 只写 φ 那一行，正方形其余顶点由它铺出来）；
+ * 手工搭图的人可以关掉（用户实测的原话："自动构图第一同构定理，其实没什么必要"）。
+ */
+export function loadAutoFirstIso(): boolean {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return true
+    const parsed = JSON.parse(raw) as { autoFirstIso?: unknown }
+    return parsed?.autoFirstIso === false ? false : true
+  } catch {
+    return true
+  }
+}
+
+function saveAutoFirstIso(v: boolean) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ autoFirstIso: v }))
+  } catch {
+    /* 隐私模式下写不了——不影响本次会话 */
+  }
+}
 
 /**
  * 应用外壳（UI v3）。
@@ -91,6 +123,26 @@ export default function App() {
   const [infoTab, setInfoTab] = useState<InfoTab>('basic')
   const [dragged, setDragged] = useState<NumericEntry[]>([])
   const [composerOpen, setComposerOpen] = useState(false)
+  /**
+   * 正在**编辑的旧定义行**（缺口 ⑱：对象不能改名/改定义，只能删了重打）。
+   *
+   * 复用的是底部那个输入球：点行上的「改」→ 输入球展开并预填这一行 →
+   * 提交时**替换**该行而不是追加。于是改名与改定义是同一条路（改名就是改左边那半）。
+   */
+  const [editing, setEditing] = useState<{ index: number; name: string; expr: string } | null>(null)
+  /**
+   * 设置：定义同态后是否自动补第一同构定理的两个顶点（缺口 ⑭，默认开）。
+   * 关掉之后，`φ` 那一行只长出它自己 —— 手工搭图的人不被"自动构图"打扰。
+   */
+  const [autoFirstIso, setAutoFirstIso] = useState(() =>
+    typeof location !== 'undefined' && location.search.includes('empty')
+      ? true
+      : loadAutoFirstIso(),
+  )
+  useEffect(() => {
+    if (typeof location === 'undefined' || location.search.includes('empty')) return
+    saveAutoFirstIso(autoFirstIso)
+  }, [autoFirstIso])
 
   /* ── 证明（M1）：step-through = 替用户一行行写定义 ─────────
    *
@@ -120,7 +172,10 @@ export default function App() {
     [proofRun],
   )
 
-  const { lineStates, objects } = useMemo(() => buildLines(lines), [lines])
+  const { lineStates, objects } = useMemo(
+    () => buildLines(lines, { autoFirstIso }),
+    [lines, autoFirstIso],
+  )
   const graph = useMemo(() => deriveCanvas(objects), [objects])
   const byId = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects])
   const valuesById = useMemo(() => new Map(objects.map((o) => [o.id, o.value])), [objects])
@@ -221,11 +276,117 @@ export default function App() {
     setNotice(null)
   }, [])
 
+  /* ── 视图快照（缺口 ⑫）─────────────────────────────────
+   *
+   * 用户的实测反馈："可以把视图保存起来，下次打开网站还能导入视图"。
+   * 一份快照 = **定义行 + 画布上的钉住位置 + 视口**，压成一段文本。
+   *
+   * 为什么读画布要用 `canvasRef` 而不是让画布上报：钉住与视口本来就只属于画布，
+   * 而导出要的是"按下按钮那一刻"的它们 —— 上报会变成每帧一次 setState。
+   */
+  const canvasRef = useRef<CanvasHandle | null>(null)
+  const [snapshotOpen, setSnapshotOpen] = useState(false)
+  const [snapshotText, setSnapshotText] = useState('')
+  const [snapshotErr, setSnapshotErr] = useState<string | null>(null)
+
+  /** 导出：取画布当下的钉住 + 视口，连同定义行写成一段文本。 */
+  const exportSnapshot = useCallback(() => {
+    const vs = canvasRef.current?.getViewState() ?? { pins: {}, view: null }
+    setSnapshotText(
+      serializeSnapshot({ v: SNAPSHOT_VERSION, lines, pins: vs.pins, view: vs.view, autoFirstIso }),
+    )
+    setSnapshotErr(null)
+    setNotice({
+      text: `快照已写进框里：${lines.length} 行定义，${Object.keys(vs.pins).length} 个钉住的位置`,
+      hint: '复制走收好；下次贴回来点「应用快照」',
+    })
+  }, [lines, autoFirstIso])
+
+  /** 导入：照文本重建视图。**坏快照只报错，不动当前的图**。 */
+  const applySnapshot = useCallback(() => {
+    const r = parseSnapshot(snapshotText)
+    if (!r.ok) {
+      setSnapshotErr(r.error)
+      return
+    }
+    const s = r.snapshot
+    setLines(s.lines)
+    reset()
+    setEditing(null)
+    setSnapshotErr(null)
+    if (typeof s.autoFirstIso === 'boolean') setAutoFirstIso(s.autoFirstIso)
+    // 图还没重渲染也不碍事：钉不住的 id 会被布局忽略
+    canvasRef.current?.applyViewState({ pins: s.pins, view: s.view })
+    setNotice({
+      text: `已导入视图：${s.lines.length} 行定义，${Object.keys(s.pins).length} 个钉住的位置`,
+    })
+  }, [snapshotText, reset])
+
   const removeLine = useCallback((index: number) => {
     setLines((p) => p.filter((_, k) => k !== index))
     setInter(IDLE)
     setOrbStage('closed')
+    setEditing((e) => (e && e.index === index ? null : e))
   }, [])
+
+  /**
+   * 点行上的「改」= 把这一行装进底部输入球（缺口 ⑱）。
+   *
+   * 改名与改定义走同一条路：左边那半改了就是改名（并且**同步改写别处的引用**），
+   * 右边那半改了就是改定义。
+   */
+  const startEdit = useCallback(
+    (index: number) => {
+      const raw = lines[index]
+      if (raw === undefined) return
+      const eq = raw.indexOf('=')
+      if (eq < 0) {
+        setEditing({ index, name: '', expr: raw.trim() })
+      } else {
+        setEditing({ index, name: raw.slice(0, eq).trim(), expr: raw.slice(eq + 1).trim() })
+      }
+      setComposerOpen(true)
+      setNotice(null)
+    },
+    [lines],
+  )
+
+  /** 编辑提交：替换那一行；改了名就连带把别处的引用一起改（面板会说清改了几行）。 */
+  const replaceLine = useCallback(
+    (index: number, line: string) => {
+      const eq = line.indexOf('=')
+      if (eq <= 0) return
+      const newName = line.slice(0, eq).trim()
+      const oldRaw = lines[index] ?? ''
+      const oldEq = oldRaw.indexOf('=')
+      const oldName = oldEq > 0 ? oldRaw.slice(0, oldEq).trim() : ''
+      // 名字撞车就地拦下（别让用户提交完才发现整行报红）
+      if (newName && newName !== oldName && usedNames.includes(newName)) {
+        setNotice({ text: `名字「${newName}」已被占用`, hint: '换一个名字，或先删掉重名的那一行' })
+        return
+      }
+      const withLine = lines.map((l, i) => (i === index ? line : l))
+      let next = withLine
+      let touched = 0
+      if (oldName && newName && oldName !== newName) {
+        const r = renameRefs(withLine, index, oldName, newName)
+        next = r.lines
+        touched = r.touched.length
+      }
+      setLines(next)
+      setNotice(
+        touched > 0
+          ? {
+              text: `已改名：${oldName} 到 ${newName}`,
+              hint: `另有 ${touched} 行引用了它，已一并改写`,
+            }
+          : null,
+      )
+      setInter(IDLE)
+      setEditing(null)
+    },
+    [lines, usedNames],
+  )
 
   /** 面板里点对象行 = 选中它：画布高亮 + 对象球出现 + 信息面板打开（信息都在那边看） */
   const selectFromDock = useCallback((id: string) => {
@@ -326,12 +487,19 @@ export default function App() {
         setNotice({ text: check.error, hint: check.hint })
         return
       }
-      // 已经算过的同一个东西就不重复添行，直接选中它
-      const dup = objects.find((o) => o.def === expr && o.label === check.label)
+      // 已经算过的**同一个东西**就不重复添行，直接选中它（缺口 ⑯：判据看"同一次推导"）
+      const dup = findExistingObject(objects, {
+        callKey: check.callKey,
+        def: expr,
+        label: check.label,
+      })
       if (dup) {
         setInter({ kind: 'selected', target: dup.id })
         setOrbStage('closed')
-        setNotice(null)
+        setNotice({
+          text: `${dup.id} 已经是这个对象了（${dup.def}）`,
+          hint: '同一次推导只会有一个对象，已替你选中它',
+        })
         return
       }
       const name = nextAutoName(usedNames)
@@ -358,7 +526,11 @@ export default function App() {
         return
       }
       const slots = scalarSlots(op)
-      if (objectArity(op) > picked.length) {
+      // 停下来的判据用 `maxObjectArity`（**含可选对象位**）：`像(f, H)` 选满 f
+      // 之后不是直接算，而是进 pending 等一个**可选**的 H —— 用户点它就变
+      // `f(H)`，不点（点条上的「不填 H，直接执行」/ 回车）就还是 `im f`。
+      // 需要"还差一个对象"的 op（`商` 这种）行为不变。
+      if (maxObjectArity(op) > picked.length) {
         setInter({ kind: 'pending', opId: op.id, picked })
         setOrbStage('closed')
         return
@@ -459,10 +631,14 @@ export default function App() {
         setNotice({ text: check.error, hint: check.hint })
         return
       }
-      const dup = objects.find((o) => o.def === expr && o.label === check.label)
+      const dup = findExistingObject(objects, {
+        callKey: check.callKey,
+        def: expr,
+        label: check.label,
+      })
       if (dup) {
         setInter({ kind: 'selected', target: dup.id })
-        setNotice(null)
+        setNotice({ text: `${dup.id} 已经是这个对象了（${dup.def}）` })
         return
       }
       setLines((p) => [...p, line])
@@ -489,7 +665,9 @@ export default function App() {
       setNotice(null)
       if (inter.kind === 'pending' && pendOp) {
         const picked = [...inter.picked, id]
-        if (picked.length < objectArity(pendOp)) {
+        // 上界是 `maxObjectArity`（含可选对象位）：`像(f, ·)` 停在 pending 时，
+        // 再点一个群 = 把可选位 H 填上（点满就执行）；不点就走条上的"直接执行"。
+        if (picked.length < maxObjectArity(pendOp)) {
           setInter({ kind: 'pending', opId: pendOp.id, picked })
           return
         }
@@ -520,6 +698,23 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      /**
+       * 「选够了就回车」：pending 里必需位已满、只剩可选对象位时（`像(f, ·)`），
+       * 回车 = 直接执行（`im f`）。**打字时不抢**——输入框里的回车归输入框。
+       */
+      const t = e.target as HTMLElement | null
+      const typing =
+        !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable === true)
+      if (!typing && e.key === 'Enter' && inter.kind === 'pending' && pendOp) {
+        if (
+          inter.picked.length >= objectArity(pendOp) &&
+          inter.picked.length < maxObjectArity(pendOp)
+        ) {
+          e.preventDefault()
+          runOp(pendOp, inter.picked)
+          return
+        }
+      }
       if (e.key !== 'Escape') return
       if (inter.kind === 'pending' || inter.kind === 'fill' || inter.kind === 'editor') reset()
       // 连线菜单最先关：它是"刚松手"的那一层，不该连带把选中也取消掉
@@ -534,7 +729,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [inter, orbStage, multiOpen, composerOpen, connectMenu, reset])
+  }, [inter, pendOp, runOp, orbStage, multiOpen, composerOpen, connectMenu, reset])
 
   /* ── 数值区 ────────────────────────────────────────── */
 
@@ -565,6 +760,10 @@ export default function App() {
   const banner = (() => {
     if (!pendOp) return null
     if (inter.kind === 'pending') {
+      // 必需位已满、只剩**可选**对象位（`像(f, ·)` 的 H）：给一个"直接执行"的出口 ——
+      // 没有它，进到这一步的用户会以为卡住了（Esc 之外无路可走）。
+      const optionalSlot =
+        inter.picked.length >= objectArity(pendOp) && inter.picked.length < maxObjectArity(pendOp)
       return (
         <div className="pending-bar">
           <span className="pending-hint">{pendingHint(pendOp, inter.picked.length)}</span>
@@ -573,6 +772,15 @@ export default function App() {
             <span className="pending-picked">
               已选 {inter.picked.map((id) => byId.get(id)?.label ?? id).join(' , ')}
             </span>
+          )}
+          {optionalSlot && (
+            <button
+              className="pending-btn primary"
+              title={pendOp.doc}
+              onClick={() => runOp(pendOp, inter.picked)}
+            >
+              不填 {pendOp.params[inter.picked.length]?.name}，直接执行
+            </button>
           )}
           <button className="pending-btn" onClick={reset}>
             Esc 取消
@@ -645,6 +853,7 @@ export default function App() {
   return (
     <div className="app">
       <CanvasView
+        ref={canvasRef}
         graph={graph}
         objects={objects}
         selectedId={busy ? null : focus}
@@ -657,6 +866,9 @@ export default function App() {
         pickedIds={markedIds}
         pickableIds={pickableIds}
         onConnect={onConnect}
+        autoFirstIso={autoFirstIso}
+        onToggleAutoFirstIso={() => setAutoFirstIso((v) => !v)}
+        onOpenSnapshot={() => setSnapshotOpen(true)}
       />
 
       {/*
@@ -729,6 +941,7 @@ export default function App() {
             onToggle={() => setOpenObjects((v) => !v)}
             lineStates={lineStates}
             onRemove={removeLine}
+            onEdit={startEdit}
             onSelect={selectFromDock}
           />
           <OpDock
@@ -736,6 +949,7 @@ export default function App() {
             onToggle={() => setOpenOps((v) => !v)}
             lineStates={lineStates}
             onRemove={removeLine}
+            onEdit={startEdit}
             onSelect={selectFromDock}
           />
         </div>
@@ -780,9 +994,14 @@ export default function App() {
 
       <ComposerOrb
         open={composerOpen}
-        onToggle={() => setComposerOpen((v) => !v)}
+        onToggle={() => {
+          setComposerOpen((v) => !v)
+          // 收起输入球 = 放弃这次编辑（否则下次展开会莫名其妙预填旧行）
+          setEditing(null)
+        }}
         objects={objects}
-        onAdd={(l) => setLines((p) => [...p, l])}
+        editing={editing}
+        onAdd={(l) => (editing ? replaceLine(editing.index, l) : setLines((p) => [...p, l]))}
         minLeft={barriers.bottom}
       />
 
@@ -806,6 +1025,20 @@ export default function App() {
           objects={objects}
           onSubmit={submitEditorLine}
           onCancel={reset}
+        />
+      )}
+
+      {snapshotOpen && (
+        <SnapshotCard
+          text={snapshotText}
+          error={snapshotErr}
+          onText={(v) => {
+            setSnapshotText(v)
+            setSnapshotErr(null)
+          }}
+          onExport={exportSnapshot}
+          onApply={applySnapshot}
+          onClose={() => setSnapshotOpen(false)}
         />
       )}
 

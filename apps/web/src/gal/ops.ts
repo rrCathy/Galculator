@@ -43,9 +43,13 @@ import {
   type Subgroup,
 } from '@groupviz/core'
 import { prettySymbol, subscript, superscript } from './pretty'
+import { idsComparable, rememberParent, rootOf, sameGroup } from './parents'
+import { elementSemanticKey } from './semantic'
 // 包含判据与信息面板的「关系」层（U19）**共用同一份** —— `包含(H, G)` 声明出来的
 // 关系，与面板里"算出来"的关系永远一致，不会出现两种说法
 import { containment } from './relations'
+// 同构判据同理（缺口 ⑰）：声明的 `A \cong B` 与面板那句"同构于 …"同源
+import { identifyGroup, isomorphismOf } from './insights'
 import {
   normalizeSubgroup,
   normalizeSubgroups,
@@ -170,6 +174,18 @@ export type OpOutcome =
   | { ok: true; value: GalValue; label: string; sub?: string; note?: string }
   | { ok: false; error: string; hint?: string }
 
+/**
+ * 求值时能看到的**画布上下文**（U34）。
+ *
+ * 只放"跟这次计算无关、但可能用得上的**已有对象**" —— 目前是画布上的群：
+ * 集合运算找不到共同母群时，会拿它们当候选（`交(C_3, C_7)` 在 F₂₁ 摆着的时候
+ * 就该算出 {e}，而不是逼用户去写 `闭包(F, a)`——用户原话："我还得弄闭包……"）。
+ */
+export interface OpContext {
+  /** 画布上的群对象（带引用名，报错与披露里用） */
+  groups: { ref: string; group: Group }[]
+}
+
 export interface OpDef {
   /** 注册表 id —— Proof Spec 的 `compute.op` 引用的就是它 */
   id: string
@@ -208,7 +224,7 @@ export interface OpDef {
   optional?: number
   /** 产出值类型 */
   result: ValueType
-  run: (args: OpArg[]) => OpOutcome
+  run: (args: OpArg[], ctx?: OpContext) => OpOutcome
 }
 
 /* ── 参数辅助 ──────────────────────────────────────────── */
@@ -264,6 +280,27 @@ function textOf(a: OpArg | undefined): string {
 function refText(a: OpArg | undefined): string {
   if (!a) return ''
   return a.kind === 'object' ? (a.ref ?? a.text) : a.text
+}
+
+/**
+ * 展示用的参数文本 —— **对象取它的数学标签**（缺口 ⑱）。
+ *
+ * `refText` 给的是**变量名**（`A`、`K`），它适合写进"定义行的写法"（可照抄回输入框），
+ * 但用户看画布节点时想看的是数学：`A / K` 应该显示成 `S_4 / ker(\varphi)`。
+ *
+ * 两条边界：
+ *   · **映射 / 作用** 仍走 `refText` —— 它们的标签是 `S_4 \to S_3` 这种长串，
+ *     塞进圆形节点会撑破；引用名（`\varphi`）本来就是课本里的写法。
+ *   · 散字（元素记号、素数）原样返回。
+ */
+function labelText(a: OpArg | undefined): string {
+  if (!a) return ''
+  if (a.kind === 'object' && a.value) {
+    const t = a.value.type
+    if (t === 'map' || t === 'action') return refText(a)
+    return a.text || refText(a)
+  }
+  return a.text
 }
 
 /** 素数校验：恰好一个素因子 ⇔ 素数的幂；这里要求 p 本身是素数。 */
@@ -387,12 +424,6 @@ function elementSetArgOf(
   return el ? { group: G, elements: [el] } : null
 }
 
-/** 两个集合是否来自同一个群：引用相等最快，否则看符号 + 阶（重建的 `A_4` 视作同群）。 */
-function sameGroup(a: Group, b: Group): boolean {
-  if (a === b) return true
-  return a.symbol === b.symbol && a.order === b.order
-}
-
 /** 子群的结构符号（`C_2×C_2` / `S_3`）展示形态；识别不出返回 null。 */
 function structureHint(parent: Group, elements: GroupElement[]): string | null {
   const s = subgroupStructureSymbol(
@@ -416,13 +447,16 @@ function structSuffix(parent: Group, elements: GroupElement[]): string {
  * 元素沿用母群对象（id 一致），故子群判定 / 商群 / 集合运算仍能对齐。
  */
 function subgroupGroupOf(parent: Group, elements: GroupElement[], fallbackLabel: string): Group {
-  return buildSubgroupGroup(
-    parent,
-    elements,
-    subgroupStructureSymbol(
+  return rememberParent(
+    buildSubgroupGroup(
       parent,
-      elements.map((e) => e.id),
-    ) ?? fallbackLabel,
+      elements,
+      subgroupStructureSymbol(
+        parent,
+        elements.map((e) => e.id),
+      ) ?? fallbackLabel,
+    ),
+    parent,
   )
 }
 
@@ -445,23 +479,6 @@ function asCoreSubgroup(group: Group, elements: GroupElement[]): Subgroup | null
 }
 
 /**
- * 元素在**语义上**的键（G4）。
- *
- * 群元素 id 只在**它自己的母群里**有意义——core 的商群元素 id 是
- * `qcoset-<i>`，`i` 是它**在自己母群里的陪集序**（按陪集内最小元素 id 的字典序排）。
- * 于是 `K/N` 的第 i 个陪集与 `G/N` 的第 i 个陪集**通常不是同一个陪集**，
- * id 同名纯属两边各自编号的巧合。
- *
- * 所以跨母群比较**不能用 id**，要用陪集的**成员集合**——core 在商群元素上留了
- * `cosetMemberLabels`，正好是这个语义。普通元素退回 id 本身。
- */
-function elementSemanticKey(e: GroupElement): string {
-  const cl = e.cosetMemberLabels
-  if (cl && cl.length > 0) return `coset:${[...cl].sort().join(',')}`
-  return `elt:${e.id}`
-}
-
-/**
  * 把一个元素集**翻译**到目标群里的对应元素（G4：第三同构定理 `(G/N)/(K/N)`）。
  *
  * 全部命中才返回——有一项对不上就 `null`。**不猜、不部分匹配**：
@@ -477,6 +494,203 @@ function alignElementSet(target: Group, els: GroupElement[]): GroupElement[] | n
     out.push(hit)
   }
   return out
+}
+
+/* ── 跨群元素表示的分诊（2026-09-29）─────────────────────── */
+
+/**
+ * 「两边元素表示不通」的分诊 —— 与「真的不是子群」**必须分开报**。
+ *
+ * 用户实测：`Q = A_4 / V_4` 报「V4 不是 A4 的子群，要求含单位元且乘法封闭」，
+ * 可这句话**在数学上是错的**（A₄ 里确实有一个 Klein 子群，而且正规）。
+ * 真相是 `A_4` 与 `V_4` 是**各自独立构造**的两个群：前者元素 id 是置换
+ * （`1,2,3,4`…），后者是抽象记号（`e a b c`）——`V_4` 的元素**根本不在**
+ * `A_4` 的元素表里，所以既谈不上"是子群"，也不该被说成"不是子群"。
+ *
+ * 判据与 `containment` 第①关同源（**只看 id**）：`S` 的元素 id 是否全落在 `G` 里。
+ * 全在 → 交给 core 判，那时"不是子群"才是实话；有一个不在 → 走这条分诊。
+ *
+ * 分诊**不只是改措辞**：还要给出路。同一个母群里"长得像"的子群往往不止一种
+ * 造法，用户手里那个（`V_4`）常常就是想用这里面的某一个 —— 所以顺手在 `G` 里
+ * 找同构的子群：**恰好一个**时给出可照抄的 `闭包(...)`（唯一性由数学保证，
+ * 不是猜），多个 / 都不是正规（`requireNormal`）时照实说为什么没法唯一。
+ *
+ * `requireNormal` 是**商**这类只认正规子群的路传进来的筛子（积集 / 陪集作用不传）。
+ */
+function foreignSubgroupFail(
+  gRef: string,
+  G: Group,
+  hRef: string,
+  S: { group: Group; elements: GroupElement[] },
+  requireNormal: boolean,
+): OpOutcome | null {
+  const gIds = new Set(G.elements.map((e) => e.id))
+  if (S.elements.every((e) => gIds.has(e.id))) return null
+  return fail(
+    `${hRef} 的元素不在 ${gRef} 里，两者不是同一个群里的子群`,
+    isoSubgroupHint(G, S, gRef, hRef, requireNormal) ??
+      `${hRef} 是独立构造的群，元素和 ${gRef} 对不上；想用 ${gRef} 里的子群，请从它构造（如 闭包(${gRef}, 生成元)）`,
+  )
+}
+
+/** 元素表里有没有**陪集元素**（商群的元素）。跨"层级"的翻译靠它守。 */
+function hasCosetElements(g: Group): boolean {
+  return g.elements.some((e) => (e.cosetMemberLabels?.length ?? 0) > 0)
+}
+
+/**
+ * 「两边根本不在同一个**世界**」的统一诊断（2026-09-29，记号串号那笔账）。
+ *
+ * `foreignSubgroupFail` 管的是"元素 id 根本不在 `G` 里"；这一条管**更阴的那半**：
+ * id 全都在、却是**另一个群**的元素（`C_3` 的 `e0 e1 e2` 与 `C_7` 的 `e0…e6` 撞号），
+ * 而且两边各造各的、没有共同母群。措辞必须点破"记号碰巧重合"——
+ * 说"元素不在里面"是假话，说"不是子群"又像在讲"同一个群里挑错了子集"。
+ */
+function crossWorldFail(
+  gRef: string,
+  G: Group,
+  hRef: string,
+  S: { group: Group; elements: GroupElement[] },
+  requireNormal: boolean,
+): OpOutcome {
+  return fail(
+    `${hRef} 与 ${gRef} 是两个各自构造的群，元素记号碰巧重合，不是同一个群里的子群`,
+    isoSubgroupHint(G, S, gRef, hRef, requireNormal) ??
+      `想用 ${gRef} 里的子群，先从它构造（如 闭包(${gRef}, 生成元)）`,
+  )
+}
+
+/**
+ * 一条统一的「不是子群」分诊：三个分支按**从具体到笼统**排 ——
+ *   ① id 全在但**世界不同**（记号串号）→ `crossWorldFail`（说破碰巧重合）；
+ *   ② id 有缺 → `foreignSubgroupFail`（"元素不在 G 里" + 唯一的同构子群配方）；
+ *   ③ 都齐（真在同一个世界里挑错了子集）→ 调用方给"不是子群/不封闭"的实话。
+ */
+function subgroupMisdiagnosis(
+  gRef: string,
+  G: Group,
+  hRef: string,
+  S: { group: Group; elements: GroupElement[] },
+  requireNormal: boolean,
+): OpOutcome | null {
+  const gIds = new Set(G.elements.map((e) => e.id))
+  const idsAllIn = S.elements.every((e) => gIds.has(e.id))
+  if (idsAllIn && !idsComparable(S.group, G)) return crossWorldFail(gRef, G, hRef, S, requireNormal)
+  return foreignSubgroupFail(gRef, G, hRef, S, requireNormal)
+}
+
+/**
+ * 在 `G` 里找与 `S` 同构（同阶 + 同结构符号）的子群。
+ *
+ * 三道守卫任一不满足就返回 `null`（调用方退回中性措辞，不硬编建议）：
+ * 阶超枚举上限 / 结构符号算不出 / 枚举抛错。只在**报错与翻译**路径上调用。
+ *
+ * 结构符号跨母群**形式一致**（实测：`V_4` 自身与 `A_4` 的那个 Klein 子群
+ * 都算出 `C_{2}\times C_{2}`），所以可以直接比字符串。
+ */
+function isomorphicSubgroupsIn(
+  G: Group,
+  S: { group: Group; elements: GroupElement[] },
+): Subgroup[] | null {
+  if (G.order > ENUM_LIMIT || S.elements.length === 0) return null
+  let want: string | null
+  try {
+    want = subgroupStructureSymbol(S.group, S.elements.map((e) => e.id))
+    if (!want) return null
+    const out = findAllSubgroups(G).filter(
+      (h) =>
+        h.order === S.elements.length &&
+        subgroupStructureSymbol(G, h.elements.map((e) => e.id)) === want,
+    )
+    /**
+     * `findAllSubgroups` **不含 G 自身** —— 而"与 S 同构的子群"完全可能就是 G 自己：
+     * `商(V_4, 独立 V_4)`（→ 平凡商）、`Klein × 独立 V_4`（↔ V₄ 整个映到它）都要它。
+     * 补进候选：`G ⊴ G` 恒正规，生成元取声明的那组。
+     */
+    if (
+      G.order === S.elements.length &&
+      subgroupStructureSymbol(G, G.elements.map((e) => e.id)) === want
+    ) {
+      out.push({
+        elements: G.elements,
+        order: G.order,
+        index: 1,
+        generators: getGeneratorElements(G).map((x) => x.el),
+        isNormal: true,
+      })
+    }
+    return out
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 子群的**可照抄**写法：`闭包(G, g_1, g_2)`（生成元走 `prettySymbol`；
+ * 平凡子群写成 `闭包(G)`）。错误语 / 状态行都是**纯文本面**，这里不带 LaTeX 命令。
+ */
+function subgroupRecipe(G: Group, gRef: string, h: Subgroup): string {
+  const gens = h.generators
+    .filter((g) => g.id !== G.identity.id)
+    .map((g) => prettySymbol(g.label))
+  return `闭包(${gRef}${gens.length > 0 ? `, ${gens.join(', ')}` : ''})`
+}
+
+/**
+ * 唯一时**自动翻译**：`S` 是独立构造的群（元素和 `G` 对不上），但 `G` 里与它
+ * 同构的子群（`requireNormal` 时还要正规）**恰好一个** —— 直接拿它当分母。
+ *
+ * 为什么敢替用户拿主意：候选唯一时这个选择是**数学逼出来的**，不是猜。
+ * 用户实测的 `S_4 / V_4` 就是标本：S₄ 有 4 个 Klein 子群，但求商只认正规的，
+ * 4 个里正规的**只有 1 个** —— 让人"从 4 个里选一个"既没人可选、
+ * 也没必要选（另外 3 个点中了也还是不正规）。
+ *
+ * 两道边界：
+ *   · **只认普通元素**：任一边带着陪集元素（商群）就停 —— 否则
+ *     `商(G/N, K)` 这种"层级错了"的行会被静默翻译成另一个问题
+ *     （第三同构的反例钉着这条：要求它继续报错）；
+ *   · 超限 / 结构符号算不出 → `null`（`isomorphicSubgroupsIn` 的守卫），退回报错。
+ */
+function autoTranslatedSubgroup(
+  G: Group,
+  S: { group: Group; elements: GroupElement[] },
+  requireNormal: boolean,
+): Subgroup | null {
+  if (hasCosetElements(G) || hasCosetElements(S.group)) return null
+  const subs = isomorphicSubgroupsIn(G, S)
+  if (!subs) return null
+  const cands = requireNormal ? subs.filter((h) => h.isNormal) : subs
+  return cands.length === 1 ? cands[0] : null
+}
+
+/**
+ * 报错时的出路：在 `G` 里找与 `S` 同构的子群，给**可照抄**的 `闭包(...)` 写法。
+ *
+ * `requireNormal` = 调用方（商）只认正规子群：候选先按正规性筛一遍，
+ * 筛空时**照实说**「有 N 个同构的，但都不是正规子群」—— 别让人去挑一个
+ * 挑中了也点不动的候选（S₄ 的 9 个 C₂ 就是这么回事）。
+ * 多个候选时把配方也列出来 ——「指明一个」得**真能指明**。
+ */
+function isoSubgroupHint(
+  G: Group,
+  S: { group: Group; elements: GroupElement[] },
+  gRef: string,
+  hRef: string,
+  requireNormal: boolean,
+): string | null {
+  const subs = isomorphicSubgroupsIn(G, S)
+  if (!subs || subs.length === 0) return null
+  const cands = requireNormal ? subs.filter((h) => h.isNormal) : subs
+  if (cands.length === 0) {
+    return `${gRef} 里与 ${hRef} 同构的子群有 ${subs.length} 个，但没有一个是正规子群（商群要求 N 正规）`
+  }
+  if (cands.length === 1) {
+    return requireNormal
+      ? `${gRef} 里与 ${hRef} 同构的正规子群恰有一个：${subgroupRecipe(G, gRef, cands[0])}`
+      : `${gRef} 里恰有一个这样的子群：${subgroupRecipe(G, gRef, cands[0])}`
+  }
+  const shown = cands.slice(0, 3).map((h) => subgroupRecipe(G, gRef, h))
+  return `${gRef} 里有 ${cands.length} 个${requireNormal ? '正规' : ''}这样的子群，指明一个即可：${shown.join('、')}${cands.length > 3 ? ' 等' : ''}`
 }
 
 /** 精确组合数（BigInt，避免 n 到 2000 量级时溢出）。 */
@@ -750,7 +964,8 @@ type SetOpKind = '\\cap' | '\\cup' | '\\' | '\\cdot'
 
 /**
  * 集合运算的母群推断：只有 `elements` / `subgroups` 值携带**真正的母群**；
- * 群对象（子群升级而来）的 `group` 是它自己，符号是子群的结构符号，不作数。
+ * 群对象（子群升级而来）的 `group` 是它自己 —— 它的母群去 `parents.ts` 的
+ * **母群指针**里找（`rootOf`），别拿它自己当上下文群。
  */
 function parentGroupOf(a: OpArg | undefined): Group | null {
   if (!a || a.kind !== 'object') return null
@@ -759,57 +974,218 @@ function parentGroupOf(a: OpArg | undefined): Group | null {
 }
 
 /**
+ * 把一边在候选上下文群 `g` 里的**全部落点**列出来（U34 起返回数组）：
+ *   · 能**原位**放下（id 直接对着读 + 都对得上）→ 就一个落点：原样；
+ *   · 否则给出 `g` 里所有与它同构的子群 —— **不在这里定夺**，
+ *     由调用方看"这些落点算出来的结果是否相同"：相同 = 没有选择这回事（直接算），
+ *     不同 = 真歧义（停下让用户指明）。
+ * 一个落点都没有 → `null`（这个候选"家"不成立）。
+ */
+function alignSetSideAll(
+  side: { group: Group; elements: GroupElement[] },
+  g: Group,
+): GroupElement[][] | null {
+  const gIds = new Set(g.elements.map((e) => e.id))
+  if (idsComparable(side.group, g) && side.elements.every((e) => gIds.has(e.id))) {
+    return [side.elements]
+  }
+  if (hasCosetElements(g) || hasCosetElements(side.group)) return null
+  const subs = isomorphicSubgroupsIn(g, side)
+  if (!subs || subs.length === 0) return null
+  return subs.map((h) => h.elements)
+}
+
+/** 集合运算的**核心算式**：给定同一个群里的两边元素，算出结果元素（按 id 去重）。 */
+function computeSetEls(
+  kind: SetOpKind,
+  group: Group,
+  elsA: GroupElement[],
+  elsB: GroupElement[],
+): GroupElement[] {
+  const idsA = new Set(elsA.map((e) => e.id))
+  const idsB = new Set(elsB.map((e) => e.id))
+  switch (kind) {
+    case '\\cap':
+      return elsA.filter((e) => idsB.has(e.id))
+    case '\\cup':
+      return [...elsA, ...elsB.filter((e) => !idsA.has(e.id))]
+    case '\\':
+      return elsA.filter((e) => !idsB.has(e.id))
+    case '\\cdot': {
+      // 积集走**上下文群的乘法**。对齐已经保证两边的元素都在 `group` 里 ——
+      // core 的乘法在查不到元素时会静默回退成单位元（U29 的教训），这里没有那个窗口了。
+      const seen = new Set<string>()
+      const out: GroupElement[] = []
+      for (const x of elsA) {
+        for (const y of elsB) {
+          const p = group.multiply(x, y)
+          if (seen.has(p.id)) continue
+          seen.add(p.id)
+          out.push(p)
+        }
+      }
+      return out
+    }
+  }
+}
+
+const idSetKey = (els: GroupElement[]) => els.map((e) => e.id).sort().join('|')
+
+/**
  * 交 / 并 / 差 / 积集（架构 §5.2）。机制归「原子构造」——由给定集合直接算出新集合。
  *
- * 两条约束：
- * - 两边若都带着母群，必须是同一个群（否则 id 相同也不是同一个元素，会静默算错）；
- * - 积集走**母群乘法**，所以也要求母群可知（都不可知时退回元素 id 去重）。
+ * **先对齐，再算**（2026-09-29 重写）。从前这里只按元素 id 相交 / 相乘，三条病征：
+ *   - `A_4 ∩ 独立 V_4` 静默给**空集**（id 空间不通，看着像真的，用户实测）；
+ *   - `闭包(G,(12)) · 闭包(G,(34))` 误报"不是同一个群"（拿 K₁ 当上下文群去乘 K₂ 的元素）；
+ *   - 独立构造的 `V_4` 参与运算时好时坏（母群只能猜一边，反序就死）。
  *
- * 产出 `elements`（不是群）：**固化出来的集合不自动升级**（决策 ⑤）——
- * 若它恰好是子群，再由用户用 `⟨S⟩` 或升级入口认可。
+ * 现在的规则一句话：**候选上下文群逐个试，第一个"两边都能对齐、且结果说得清"的赢**。
+ * 候选按"最像用户正在工作的那个家"排序：显式母群 → 子群对象的**根** → 两边各自的群 →
+ * **画布上的其它群**（U34：`交(C_3, C_7)` 在 F₂₁ 摆着时就该算出 {e}，不该逼人写闭包）。
+ *
+ * 一边对不上时允许**翻译**过去，分寸拿两条：
+ *   · 同构子群**恰好一个** → 直接翻译（唯一性由数学保证，不是猜），并写进 `sub`；
+ *   · **多个但算出来的结果都一样** → 也直接算（结果与选哪个无关 = 没有选择这回事，
+ *     用户原话："只要拉两个子群箭头就应该能猜对"）——`sub` 里写明"N 个候选结果相同"；
+ *   · 多个且结果不同 → 停下，让用户指明（那是真歧义）。
+ *
+ * 全失败时挑"最有料"的报错（带候选配方的 > 只说"对不上"的）——
+ * **宁可停下，也不静默给空集 / 给怪结果**。
  */
-function setOp(a: OpArg[], kind: SetOpKind): OpOutcome {
+function setOp(a: OpArg[], kind: SetOpKind, ctx?: OpContext): OpOutcome {
   const A = subgroupArgOf(a[0])
   const B = subgroupArgOf(a[1])
   if (!A || !B) {
     return fail(`${kind} 需要两个集合`, '可传元素集、恰含一个子群的子群集，或子群群对象')
   }
+  const aRef = refText(a[0])
+  const bRef = refText(a[1])
   const pa = parentGroupOf(a[0])
   const pb = parentGroupOf(a[1])
   if (pa && pb && !sameGroup(pa, pb)) {
     return fail(`${kind} 的两边来自不同的群`, `${prettySymbol(pa.symbol)} 与 ${prettySymbol(pb.symbol)}`)
   }
-  const group = pa ?? pb ?? A.group
-  const idsA = new Set(A.elements.map((e) => e.id))
-  const idsB = new Set(B.elements.map((e) => e.id))
 
-  let els: GroupElement[]
-  switch (kind) {
-    case '\\cap':
-      els = A.elements.filter((e) => idsB.has(e.id))
-      break
-    case '\\cup':
-      els = [...A.elements, ...B.elements.filter((e) => !idsA.has(e.id))]
-      break
-    case '\\':
-      els = A.elements.filter((e) => !idsB.has(e.id))
-      break
-    case '\\cdot': {
-      const seen = new Set<string>()
-      els = []
-      for (const x of A.elements) {
-        for (const y of B.elements) {
-          const p = group.multiply(x, y)
-          if (seen.has(p.id)) continue
-          seen.add(p.id)
-          els.push(p)
+  const cands: Group[] = []
+  const push = (g: Group | null | undefined) => {
+    if (g && !cands.some((c) => sameGroup(c, g))) cands.push(g)
+  }
+  push(pa)
+  push(pb)
+  push(rootOf(A.group))
+  push(rootOf(B.group))
+  push(A.group)
+  push(B.group)
+  // 画布上的其它群（U34）：排在"由运算对象推出来的家"之后，绝不让它顶掉前者
+  for (const g of ctx?.groups ?? []) push(g.group)
+
+  /** 候选家的**名字**：运算对象自己的群 / 画布上的群用引用名，否则退回数学符号。 */
+  const nameOf = (g: Group) =>
+    g === A.group
+      ? aRef
+      : g === B.group
+        ? bRef
+        : (ctx?.groups.find((x) => x.group === g)?.ref ?? prettySymbol(g.symbol))
+
+  let chosen: { group: Group; els: GroupElement[]; said: string } | null = null
+  let best: { score: number; out: OpOutcome } | null = null
+
+  for (const g of cands) {
+    const ra = alignSetSideAll(A, g)
+    const rb = alignSetSideAll(B, g)
+    if (ra && rb) {
+      // 枚举所有落点组合，看结果是否**全部相同**
+      const outcomes: GroupElement[][] = []
+      for (const ea of ra) for (const eb of rb) outcomes.push(computeSetEls(kind, g, ea, eb))
+      if (new Set(outcomes.map(idSetKey)).size !== 1) {
+        // 真歧义：指谁都不对（结果不同）——停，并把候选配方给上
+        const n = ra.length > 1 ? ra.length : rb.length
+        const which = ra.length > 1 ? aRef : bRef
+        const out = fail(
+          `${which} 在 ${nameOf(g)} 里有 ${n} 个同构的子群，算出来的结果不一样，得指明一个`,
+          isoSubgroupHint(
+            g,
+            ra.length > 1 ? A : B,
+            nameOf(g),
+            which,
+            false,
+          ) ?? undefined,
+        )
+        if (!best || best.score < 3) best = { score: 3, out }
+        continue
+      }
+      // 结果与选择无关：把"翻译过"说出来（唯一 / 多候选结果相同，两种措辞）
+      const name = nameOf(g)
+      const named = g === A.group || g === B.group || ctx?.groups.some((x) => x.group === g)
+      const said: string[] = []
+      const saySide = (ref: string, all: GroupElement[][], side: { group: Group; elements: GroupElement[] }) => {
+        if (idsComparable(side.group, g) && side.elements.every((e) => new Set(g.elements.map((x) => x.id)).has(e.id))) {
+          return
+        }
+        if (all.length === 1) {
+          const h = isomorphicSubgroupsIn(g, side)?.[0]
+          said.push(
+            `${ref} 自动取 ${name} 里唯一与它同构的子群${named && h ? ` ${subgroupRecipe(g, name, h)}` : ''}`,
+          )
+        } else {
+          said.push(`${ref} 取 ${name} 里与它同构的子群（${all.length} 个候选，结果相同）`)
         }
       }
+      saySide(aRef, ra, A)
+      saySide(bRef, rb, B)
+      chosen = { group: g, els: outcomes[0], said: said.join('；') }
       break
     }
+    // 失败诊断：缺席的那一边说清楚；每个候选都记分，最后取"最有料"的那条。
+    // **记分只认"可操作的"**：另一边已经**原位**站住了，这条提示照着做才有意义 ——
+    // 否则会出现"去 A_4 里指明 K3 的位置"这种指了也没用的建议（C_7 照样塞不进 A_4）。
+    const sideIn = (side: { group: Group; elements: GroupElement[] }) => {
+      if (!idsComparable(side.group, g)) return false
+      const gIds = new Set(g.elements.map((e) => e.id))
+      return side.elements.every((e) => gIds.has(e.id))
+    }
+    const aIn = sideIn(A)
+    const bIn = sideIn(B)
+    const foreign = aIn ? { ref: bRef, side: B } : { ref: aRef, side: A }
+    const out = foreignSubgroupFail(nameOf(g), g, foreign.ref, foreign.side, false)
+    if (out && !out.ok) {
+      const actionable = aIn || bIn
+      const score = actionable ? ((out.hint ?? '').includes('指明一个即可') ? 2 : 1) : 1
+      if (!best || score > best.score) best = { score, out }
+    }
+  }
+  if (!chosen) {
+    /**
+     * 全失败。挑报错分两档：
+     *   · 有"带候选配方"的诊断（真歧义 / "指明一个即可"）→ 用最具体的那条；
+     *   · 否则如果两边的**根**就不是同一个群（各造各的，比如 `C_3` 与 `C_7`）→
+     *     说清"没有共同的母群"，并指路（先建共同的大群，再从里面取子群）。
+     */
+    if (!best || best.score <= 1) {
+      const aRoot = rootOf(A.group)
+      const bRoot = rootOf(B.group)
+      const canvasHint = (ctx?.groups ?? []).some((x) => x.group !== A.group && x.group !== B.group)
+      if (!sameGroup(aRoot, bRoot)) {
+        return fail(
+          `${aRef} 与 ${bRef} 不在同一个群里（两者没有共同的母群）`,
+          canvasHint
+            ? '画布上现成的群都装不下这两边；先建它们共同的大群，再从里面取子群（如 闭包(大群, 生成元)）'
+            : '先把两边放进共同的大群再算：比如 闭包(大群, 生成元)；或从大群的子群列表里取',
+        )
+      }
+    }
+    return (
+      best?.out ??
+      fail(
+        `${kind} 的两边不在同一个群里`,
+        '把两边先放进同一个群里（如 闭包(母群, 生成元)），或从子群列表里取',
+      )
+    )
   }
 
-  const label = `${refText(a[0])} ${kind} ${refText(a[1])}`
+  const { group, els } = chosen
+  const label = `${aRef} ${kind} ${bRef}`
+  const said = chosen.said ? `，${chosen.said}` : ''
 
   // **「交」的结果是子群，这是定理不是猜测** —— 所以升级为真群对象：
   // 它才能继续参与 `H/(H∩N)`、也才能在画布上画出 `H∩N ↪ H` 的包含箭头。
@@ -825,7 +1201,8 @@ function setOp(a: OpArg[], kind: SetOpKind): OpOutcome {
       ok: true,
       value: { type: 'group', group: subgroupGroupOf(group, els, label) },
       label,
-      sub: `|\\cdot| = ${els.length}${structSuffix(group, els)}`,
+      sub: `|\\cdot| = ${els.length}${structSuffix(group, els)}${said}`,
+      note: chosen.said || undefined,
     }
   }
 
@@ -833,7 +1210,8 @@ function setOp(a: OpArg[], kind: SetOpKind): OpOutcome {
     ok: true,
     value: { type: 'elements', group, elements: els },
     label,
-    sub: `|\\cdot| = ${els.length}`,
+    sub: `|\\cdot| = ${els.length}${said}`,
+    note: chosen.said || undefined,
   }
 }
 
@@ -891,28 +1269,63 @@ export const OPS: OpDef[] = [
       if (!G) return fail('商需要第一个参数是群')
       const S = subgroupArgOf(a[1])
       if (!S) return fail('商需要第二个参数是子群', '可传元素集、恰含一个子群的子群集，或已是群对象的子群')
+      const gRef = refText(a[0])
+      const hRef = refText(a[1])
       // **跨商群对齐**（G4）：第二个参数是另一个商群时（`(G/N)/(K/N)`），
       // 它的元素 id 是**那个商群母群**的编号，不能直接拿来在 G 里查——
       // 实测直接查会"侥幸命中另一个陪集"（静默算错）或判定失败。
       // 先在语义层（陪集成员集合）翻译成 G 的元素，再判定。
-      const aligned = alignElementSet(G, S.elements)
+      // 额外一道（2026-09-29）：**陪集层**（跨商群，G4）走语义键对齐；普通元素还要求
+      // 两边的 id 能**直接对着读**（同一条母群链，或都是自证式 id 的置换群）——
+      // 记号群的 id 跨群会串（`C_3` 的 `e0 e1 e2` 在 `C_7` 里"也有"），
+      // 只看 id 会把 `商(C_7, C_3)` 当成"子群判定失败"，而真相是两边没有共同母群。
+      const cosetLevel = hasCosetElements(S.group)
+      const aligned =
+        !cosetLevel && !idsComparable(S.group, G) ? null : alignElementSet(G, S.elements)
       if (!aligned) {
-        return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的子群`, '要求含单位元且乘法封闭')
+        // `D` 是**独立构造**的群（元素和 G 对不上）时，先在 G 里找与它同构的正规子群：
+        // 唯一 → 直接翻译过去当分母（求商只认正规子群，唯一性由数学保证，
+        // 见 `autoTranslatedSubgroup` 的说明）；否则走分诊：措辞分开 + 给出路。
+        const auto = autoTranslatedSubgroup(G, S, true)
+        if (auto) {
+          const Q = computeQuotientGroup(G, auto)
+          if (Q) {
+            const translated = `N 自动取 ${gRef} 里唯一与 ${hRef} 同构的正规子群 ${subgroupRecipe(G, gRef, auto)}`
+            return {
+              ok: true,
+              value: { type: 'group', group: Q },
+              label: `${labelText(a[0])} / ${labelText(a[1])}`,
+              sub: `|G/N| = ${Q.order}，${translated}`,
+              note: translated,
+            }
+          }
+        }
+        // 分诊：id 全在但世界不同（记号串号）→ 说破；有 id 不在 G 里 → "元素不在同一个群里"；
+        // 都齐（同一世界里挑错了子集）→ 才是"不是子群"的实话。
+        return (
+          subgroupMisdiagnosis(gRef, G, hRef, S, true) ??
+          fail(`${hRef} 不是 ${gRef} 的子群`, '要求含单位元且乘法封闭')
+        )
       }
       // 用 G 作母群校验：元素不在 G 里 / 不封闭 / 无单位元 → null
       const sub = asCoreSubgroup(G, aligned)
-      if (!sub) return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的子群`, '要求含单位元且乘法封闭')
+      if (!sub) return fail(`${hRef} 不是 ${gRef} 的子群`, '要求含单位元且乘法封闭')
       if (!sub.isNormal) {
-        return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的正规子群`, '商群 G/N 要求 N \\trianglelefteq G')
+        return fail(`${hRef} 不是 ${gRef} 的正规子群`, '商群 G/N 要求 N \\trianglelefteq G')
       }
       const Q = computeQuotientGroup(G, sub)
       if (!Q) return fail('商群构造失败')
-      // label 用**引用名**（`H / I`）而不是 core 的结构符号：
-      // core 的 symbol 是从母群拼的（`H/I` 会显示成 `C₄/N`），读起来对不上。
+      /**
+       * label 用**参数的数学标签**（缺口 ⑱）：`A / K` 显示成 `S_4 / ker(\varphi)`。
+       *
+       * 从前用 `refText`（引用名），于是用户输入 `A/D` 就只能看到 `A/D` ——
+       * 名字是系统自动起的，用户要认的是数学。
+       * 也不用 core 的结构符号：它是从母群拼的（`H/I` 会显示成 `C₄/N`），读起来对不上。
+       */
       return {
         ok: true,
         value: { type: 'group', group: Q },
-        label: `${refText(a[0])} / ${refText(a[1])}`,
+        label: `${labelText(a[0])} / ${labelText(a[1])}`,
         sub: `|G/N| = ${Q.order}`,
       }
     },
@@ -1195,10 +1608,25 @@ export const OPS: OpDef[] = [
       if (!G) return fail('陪集作用(\\cdot) 的第一个参数必须是群', '如 陪集作用(G, P)')
       const S = subgroupArgOf(a[1])
       if (!S) return fail('陪集作用(\\cdot) 的第二个参数必须是子群')
-      // 与 `商` 同一条对齐规则：跨商群拿来的元素要按陪集语义翻译（G4）
-      const aligned = alignElementSet(G, S.elements)
-      const sub = aligned ? asCoreSubgroup(G, aligned) : null
-      if (!sub) return fail(`${refText(a[1])} 不是 ${refText(a[0])} 的子群`, '要求含单位元且乘法封闭')
+      const gRef = refText(a[0])
+      const hRef = refText(a[1])
+      // 与 `商` 同一条对齐规则 + 同一道"id 能不能对着读"的检查（普通元素才要；陪集层走语义键）
+      const cosetLevel = hasCosetElements(S.group)
+      const aligned =
+        !cosetLevel && !idsComparable(S.group, G) ? null : alignElementSet(G, S.elements)
+      // 独立构造的 H：唯一同构的子群就直接翻译过去（陪集作用**不要求正规性**，
+      // 与 `商` 的筛子不同，见 `autoTranslatedSubgroup`）
+      const auto = aligned ? null : autoTranslatedSubgroup(G, S, false)
+      const sub = aligned ? asCoreSubgroup(G, aligned) : auto
+      const translated = auto
+        ? `H 自动取 ${gRef} 里唯一与 ${hRef} 同构的子群 ${subgroupRecipe(G, gRef, auto)}`
+        : null
+      if (!sub) {
+        return (
+          subgroupMisdiagnosis(gRef, G, hRef, S, false) ??
+          fail(`${hRef} 不是 ${gRef} 的子群`, '要求含单位元且乘法封闭')
+        )
+      }
       if (G.order > ENUM_LIMIT) {
         return fail(`${prettySymbol(G.symbol)} 太大（阶 ${G.order}），陪集置换算不动`, `上限 ${ENUM_LIMIT}`)
       }
@@ -1214,7 +1642,7 @@ export const OPS: OpDef[] = [
         setLabels,
         omega: {
           group: G,
-          label: `陪集(${refText(a[0])}/${refText(a[1])})`,
+          label: `陪集(${gRef}/${hRef})`,
           members: setLabels.map((l) => ({ label: l })),
         },
         omegaBase: 'object',
@@ -1222,8 +1650,9 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'action', action },
-        label: `陪集作用(${refText(a[0])}, ${refText(a[1])})`,
-        sub: `|\\Omega| = ${n} = [G : H]`,
+        label: `陪集作用(${gRef}, ${hRef})`,
+        sub: `|\\Omega| = ${n} = [G : H]${translated ? `，${translated}` : ''}`,
+        note: translated ?? undefined,
       }
     },
   },
@@ -1267,7 +1696,7 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
-    run: (a) => setOp(a, '\\cap'),
+    run: (a, ctx) => setOp(a, '\\cap', ctx),
   },
   {
     id: 'union',
@@ -1284,7 +1713,7 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
-    run: (a) => setOp(a, '\\cup'),
+    run: (a, ctx) => setOp(a, '\\cup', ctx),
   },
   {
     id: 'difference',
@@ -1303,7 +1732,7 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
-    run: (a) => setOp(a, '\\'),
+    run: (a, ctx) => setOp(a, '\\', ctx),
   },
   {
     id: 'productSet',
@@ -1320,7 +1749,7 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
-    run: (a) => setOp(a, '\\cdot'),
+    run: (a, ctx) => setOp(a, '\\cdot', ctx),
   },
 
   {
@@ -1713,6 +2142,19 @@ export const OPS: OpDef[] = [
 
       // ── 两参形态：`像(f, H) = f(H)`（U20）──
       const S = groupOf(a[1])
+      /**
+       * 第二位**给了、却不是群**：明确报出来，别静默当成没给。
+       *
+       * 会撞上的场景：从「像 f(H)」进 pending 后误点了别的对象（映射 / 集合）——
+       * 那时用户明明点了一下，系统却一声不吭地算成 `im f`（"点了跟没点一样"最费解）。
+       * 空第二参（`像(f, )` 这种留空写法）仍按"没给"处理。
+       */
+      if (a[1] && !S && textOf(a[1]).trim() !== '') {
+        return fail(
+          `像的第二个参数得是群（H 是定义域的子群），收到的是「${refText(a[1])}」`,
+          'H 要从定义域里取（如 闭包(定义域, 生成元)）；不给 H 就直接算整个像 im f',
+        )
+      }
       if (S) {
         const dom = M.domain
         // 三关：阶不能超 → id 全覆盖 → 真的封闭（前两关只是快速筛，判据交给 core）
@@ -1722,13 +2164,15 @@ export const OPS: OpDef[] = [
             `子群像要求 H \\le ${prettySymbol(dom.symbol)}`,
           )
         }
-        const domIds = new Set(dom.elements.map((e) => e.id))
-        if (!S.elements.every((e) => domIds.has(e.id))) {
-          return fail(
-            `「${refText(a[1])}」的元素不在 ${prettySymbol(dom.symbol)} 里`,
-            `子群像要求 H \\le 定义域 ${prettySymbol(dom.symbol)}（元素得是同一批）`,
-          )
-        }
+        // 表示不通的两态（跨世界 / id 不在）统一走分诊；都在才谈得上"封闭不封闭"
+        const bad = subgroupMisdiagnosis(
+          prettySymbol(dom.symbol),
+          dom,
+          refText(a[1]),
+          { group: S, elements: S.elements },
+          false,
+        )
+        if (bad) return bad
         const checked = subgroupFromElementIds(dom, S.elements.map((e) => e.id))
         if (!checked || checked.order !== S.order) {
           return fail(
@@ -1804,6 +2248,14 @@ export const OPS: OpDef[] = [
       // 于是"声明出来的关系"和"算出来的关系"永远一致，不会出现两种说法
       const c = containment(H, G)
       if (!c) {
+        /**
+         * 分诊三态（与 `商` 同一套）：
+         *   · 世界不同（`D = V_4` 独立构造、或记号串号）→ "元素记号碰巧重合"；
+         *   · 有 id 不在 G 里 → "元素不在同一个群里"；
+         *   · 都齐（同一世界里挑错了子集）→ 才是"不是子集 / 不封闭"的实话。
+         */
+        const out = subgroupMisdiagnosis(gn, G, hn, { group: H, elements: H.elements }, false)
+        if (out) return out
         return fail(
           `「${hn}」不是「${gn}」的子群`,
           `${prettySymbol(H.symbol)} 的元素不是 ${prettySymbol(G.symbol)} 的子集，或对乘法不封闭`,
@@ -1829,7 +2281,7 @@ export const OPS: OpDef[] = [
             normalUnknown: c.normal === null,
           },
         },
-        label: `${hn} ${c.normal === true ? '\\trianglelefteq' : '\\subseteq'} ${gn}`,
+        label: `${labelText(a[0])} ${c.normal === true ? '\\trianglelefteq' : '\\subseteq'} ${labelText(a[1])}`,
         sub: `|H| = ${H.order} \\cdot [G:H] = ${c.index}`,
         note:
           c.normal === true
@@ -1837,6 +2289,74 @@ export const OPS: OpDef[] = [
             : c.normal === null
               ? '正规性超出可判定范围（群太大，未枚举）'
               : '非正规子群',
+      }
+    },
+  },
+  {
+    id: 'isomorphism',
+    notation: '同构(A, B) / A \\cong B',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '声明 A 与 B 同构----画布上长出一条双向箭头（同构判据与信息面板那句「同构于」同源）',
+    recipe: '同构识别（阶 \\to 结构不变量）\\to 一条关系边',
+    impl: 'insights.isomorphismOf（与信息面板「同构」结论同一判据）',
+    infix: ['\\cong'],
+    call: ['同构', 'isomorphic', 'iso'],
+    params: [
+      { name: 'A', type: 'group' },
+      { name: 'B', type: 'group' },
+    ],
+    arity: 2,
+    result: 'relation',
+    run: (a) => {
+      const A = groupOf(a[0])
+      const B = groupOf(a[1])
+      if (!A || !B) return fail('同构(\\cdot, \\cdot) 需要两个群对象', '形如 A \\cong B')
+      const an = labelText(a[0])
+      const bn = labelText(a[1])
+      if (A === B) return fail('两边是同一个对象', '同构要两个不同的群')
+      // **第一关不用识别**：阶不同必不同构（Lagrange 的直接推论）——这一关永远判得出来
+      if (A.order !== B.order) {
+        return fail(
+          `|${an}| = ${A.order} \\ne |${bn}| = ${B.order}，阶不同不可能同构`,
+          '同构必保阶',
+        )
+      }
+      const verdict = isomorphismOf(A, B)
+      if (verdict === 'no') {
+        const ia = identifyGroup(A)
+        const ib = identifyGroup(B)
+        return fail(
+          `${an} 与 ${bn} 阶相同但不同构`,
+          ia && ib ? `识别为 ${prettySymbol(ia)} 与 ${prettySymbol(ib)}` : '结构不变量不同',
+        )
+      }
+      /**
+       * `unknown` 也**收下**这条声明 —— 识别不出不等于不同构，用户可能自己证得出来。
+       * 但账上照实说"未判定"，不许拿'阶相同'冒充结论（与 `containment` 超限时的口径一致）。
+       */
+      const iso = verdict === 'yes' ? identifyGroup(A) : null
+      return {
+        ok: true,
+        value: {
+          type: 'relation',
+          relation: {
+            kind: 'isomorphic',
+            from: A,
+            to: B,
+            index: 1,
+            isNormal: false,
+            isoSymbol: iso ?? null,
+          },
+        },
+        label: `${an} \\cong ${bn}`,
+        sub: iso
+          ? `都 \\cong ${prettySymbol(iso)}`
+          : `阶相同（${A.order}），同构类未识别出`,
+        note:
+          verdict === 'yes'
+            ? '同构（判出来的：同构类识别一致）'
+            : '超出本地识别范围，未判定，这条声明是你下的，不是工具证的',
       }
     },
   },

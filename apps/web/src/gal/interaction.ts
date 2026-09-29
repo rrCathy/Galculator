@@ -6,9 +6,11 @@ import {
   type OpDef,
   type ParamType,
 } from './ops'
-import { objectArity } from './compose'
+import { maxObjectArity, objectArity } from './compose'
 // 包含判据与信息面板的「关系」层（U19）**共用同一份**
 import { containment } from './relations'
+// 同构判据同源（缺口 ⑰）
+import { isomorphismOf } from './insights'
 import type { GalValue } from './value'
 
 /**
@@ -88,9 +90,13 @@ export function singleOpsFor(value: GalValue): OpDef[] {
  * 这里**不能**用 `opsFor` 去筛——它的语义是"选中的值能把参数填满"，
  * 而"多对象操作"恰恰是"参数还没填满"的那些，用 `opsFor` 筛必然为空。
  * （U2 就是栽在这儿：菜单里的「造」类恒空。）
+ *
+ * 判据用 `maxObjectArity`（**含可选对象参数**）：`像(f, H)` 必需位只有 1 个
+ * （f），但第二位 H 是"可以再点一个对象"的 —— 它得在这里出现，
+ * 否则 `f(H)` 除了拖拽 / 打字就没有入口（用户实测的正是这条）。
  */
 export function multiOps(): OpDef[] {
-  return OPS.filter((op) => objectArity(op) > 1)
+  return OPS.filter((op) => maxObjectArity(op) > 1)
 }
 
 /**
@@ -129,6 +135,7 @@ const MENU_LABEL: Record<string, string> = {
   elementOrder: '元素阶 ord',
   map: '映射 f: G -> H',
   contains: '包含',
+  isomorphism: '同构',
 }
 
 export function menuLabel(op: OpDef): string {
@@ -159,7 +166,12 @@ export function needsEditor(op: OpDef): boolean {
 export function pendingHint(op: OpDef, pickedCount: number): string {
   const p = op.params[pickedCount]
   if (!p) return '选择参数'
-  return `选择「${p.name}」（${PARAM_LABEL[p.type]}），第 ${pickedCount + 1} / ${objectArity(op)} 个对象`
+  // 必需位**已经选满**、还剩可选对象位（`像(f, ·)` 的 H）：这不是"还差一个"，
+  // 而是"可以再点一个"——措辞得让"不选也行"一眼可见，否则用户以为卡住了。
+  if (pickedCount >= objectArity(op)) {
+    return `可选：「${p.name}」（${PARAM_LABEL[p.type]}）----不选就直接执行`
+  }
+  return `选择「${p.name}」（${PARAM_LABEL[p.type]}），第 ${pickedCount + 1} / ${maxObjectArity(op)} 个对象`
 }
 
 /**
@@ -201,6 +213,7 @@ export interface PairCandidate {
  */
 const PAIR_PRIORITY = [
   'contains',
+  'isomorphism',
   'quotient',
   'image',
   'directProduct',
@@ -252,6 +265,24 @@ export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
       const ba = containment(b.group, a.group)
       if (ab && ab.index > 1) out.push({ op, swapped: false })
       else if (ba && ba.index > 1) out.push({ op, swapped: true })
+      continue
+    }
+
+    /**
+     * **`同构` 也单独走一遍实判**（缺口 ⑰）——理由与 `包含` 同款：
+     * 两个 `group` 参数类型上永远"填得上"，所以必须用真判据决定它是否该出现在候选里
+     * （菜单不撒谎：列出来的点了就得成）。
+     *
+     * 判据是**三态**（`isomorphismOf`）：
+     *   · `no`（阶不同，或阶同而识别出不同的同构类）→ **不列**，点了必然报错；
+     *   · `yes` → 列，点一下直接长出一条 `≅`；
+     *   · `unknown`（超出本地识别范围）→ 也列 —— 操作本身收下这条声明（面板照实说"未判定"），
+     *     不存在"点了必然报错"的情形。
+     */
+    if (op.id === 'isomorphism') {
+      if (a.type !== 'group' || b.type !== 'group') continue
+      if (a.group === b.group) continue
+      if (isomorphismOf(a.group, b.group) !== 'no') out.push({ op, swapped: false })
       continue
     }
 

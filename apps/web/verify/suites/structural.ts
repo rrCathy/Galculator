@@ -43,7 +43,7 @@ export function run(): void {
     eq('商群给一条 \\pi', pis.length, 1)
     const pi = pis[0]
     ok('\\pi 的身份是 naturalProjection', pi.info?.kind === 'naturalProjection', pi.info?.kind)
-    ok('\\pi 两端是 G 与 Q', `${pi.info?.from} -> ${pi.info?.to}` === 'S_4 -> G / N', `${pi.info?.from} -> ${pi.info?.to}`)
+    ok('\\pi 两端是 G 与 Q', `${pi.info?.from} -> ${pi.info?.to}` === 'S_4 -> S_4 / A_4', `${pi.info?.from} -> ${pi.info?.to}`)
     ok('\\pi 的核是 N（A_4）', factOf(pi.info, '核') === '\\ker \\pi = A_4', factOf(pi.info, '核'))
     ok('\\pi 的阶写着 24 / 12 = 2（手算）', factOf(pi.info, '阶').includes('24 / 12 = 2'), factOf(pi.info, '阶'))
     ok('\\pi 恒满射', factOf(pi.info, '满射').includes('是'), factOf(pi.info, '满射'))

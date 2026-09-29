@@ -44,12 +44,15 @@ page.on('pageerror', (e) => logs.push('pageerror: ' + e.message))
 /* ══ 判据：什么是"键盘打不出来的字符" ══════════════════════════ */
 
 /**
- * 放行：ASCII · 中文 · 中文标点 · 中文引号。
+ * 放行：ASCII · 中文 · 中文标点 · 中文引号 · **空白（含换行）**。
  *
  * 破折号 / 省略号（— … –）**不放行** —— 它们在美国键盘上敲不出来，
  * 而界面文案里用中文逗号/顿号表达完全一样清楚。
+ *
+ * 换行也要放行：`\\n` 是回车键敲出来的（视图快照那种多行文本就住在 textarea 里）。
+ * 判据只管"这个字符键盘上有没有键"，不管它排版好不好看。
  */
-const ALLOWED = /[\x20-\x7E\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF\u2018-\u201D]/
+const ALLOWED = /[\x20-\x7E\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF\u2018-\u201D\n\r\t]/
 const badChars = (s) => [...new Set([...String(s ?? '')].filter((c) => !ALLOWED.test(c)))]
 
 /** 页面上**除 KaTeX 渲染之外**的全部可见文本（含 title / placeholder）。 */

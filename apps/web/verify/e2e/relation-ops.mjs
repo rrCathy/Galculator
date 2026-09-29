@@ -11,6 +11,11 @@
  *   - 点那条边 \\to 信息面板给出「关系」的账（指数 24/12 = 2）
  *   - 假声明（D₄ \\subseteq S₄）被拦在行里
  *
+ * U31 增补：`f(H)` 的**菜单入口**（从前只有拖拽 / 打字两条路，用户"找不到入口"）——
+ *   ① 点箭头 f \\to 信息面板「可做」\\to 像 f(H) \\to 条上停在"可选 H"（有"不填，直接执行"）
+ *      \\to 再点 A₄ = `像(f, A)`（命中已有的 FA）；
+ *   ② ⊕ 球 \\to 像 f(H) \\to 先点箭头 f \\to 点"不填 H，直接执行" \\to 长出 `im f`（6 阶）。
+ *
  * 跑法（先起 dev server 5273）：`node verify/e2e/relation-ops.mjs`
  */
 const PW = 'file:///C:/newproject/GroupViz/node_modules/playwright/index.mjs'
@@ -204,6 +209,89 @@ ok('拦的理由是"不是子群"', st.includes('不是') && st.includes('子群
 ok('对象表里没有多出任何求值失败的行', (await rowErrs()).length === 0)
 
 await page.screenshot({ path: '../../docs/assets/u20-subgroup-image.png' })
+
+/* ══ U31：f(H) 的**菜单入口**（箭头旁 / ⊕ 球）——不再只能拖拽或打字 ═══════ */
+
+const nodeIds = () =>
+  page.evaluate(() => [...document.querySelectorAll('g.gnode')].map((g) => g.dataset.id))
+const barText = () =>
+  page.evaluate(() =>
+    document.querySelector('.pending-bar')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+  )
+const mapHit = 'g.gedge-map[data-object-id="f"] .gedge-hit'
+
+/* ── ① 箭头旁：点 f → 信息面板「可做」→ 像 f(H) → 条上停在"可选 H" ── */
+
+await page.keyboard.press('Escape')
+await page.waitForTimeout(260)
+ok('点得中 f 这条箭头', await clickSvg(mapHit))
+await page.waitForTimeout(420)
+{
+  const btn = page.locator('.info-ops .info-op', { hasText: '像' }).first()
+  ok('信息面板的「可做」里有「像 f(H)」', (await btn.count()) > 0)
+  await btn.click()
+  await page.waitForTimeout(340)
+  const bar = await barText()
+  ok(
+    '进入 pending：说的是"可选 H"、并点明"不选就直接执行"',
+    bar.includes('可选') && bar.includes('不选就直接执行'),
+    bar,
+  )
+  const skip = await page.locator('.pending-bar .pending-btn.primary').textContent()
+  ok('条上有「不填 H，直接执行」', (skip ?? '').includes('不填 H'), skip ?? '')
+  await page.screenshot({ path: '../../docs/assets/u31-image-entry.png' })
+
+  // 再点 A₄ = 把可选位 H 填上 → 组装出 `像(f, A)` → 命中已有的 FA（同一次推导只留一个对象）
+  const before = await nodeIds()
+  ok('点得中 A₄ 顶点', await clickSvg('g.gnode[data-id="A"] .gnode-hit'))
+  await page.waitForTimeout(440)
+  const after = await nodeIds()
+  ok('选 H 后没有新节点（FA 已经是这个对象）', after.length === before.length, `${before.length} -> ${after.length}`)
+  const notice = await page.evaluate(() =>
+    document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+  )
+  ok(
+    '提示说"FA 已经是这个对象"（证明组装出来的就是 像(f, A)）',
+    notice.includes('FA') && notice.includes('已经是这个对象'),
+    notice,
+  )
+}
+
+/* ── ② ⊕ 球：像 f(H) → 先点 f → "不填 H，直接执行" = im f（新顶点，6 阶） ── */
+
+await page.keyboard.press('Escape')
+await page.waitForTimeout(300)
+await page.click('.multi-orb .orb-center')
+await page.waitForTimeout(300)
+{
+  const item = page.locator('.orb-center-panel .orb-op', { hasText: '像 f(H)' }).first()
+  ok('⊕ 多对象菜单里有「像 f(H)」', (await item.count()) > 0)
+  await item.click()
+  await page.waitForTimeout(320)
+  const bar1 = await barText()
+  ok('先要 f：「选择「f」（映射），第 1 / 2 个对象」', bar1.includes('第 1 / 2 个对象'), bar1)
+
+  ok('挑选 f：点得中箭头', await clickSvg(mapHit))
+  await page.waitForTimeout(360)
+  const bar2 = await barText()
+  ok('选满 f 后条上说"可选 H"', bar2.includes('可选'), bar2)
+
+  const before = await nodeIds()
+  await page.locator('.pending-bar .pending-btn.primary').click()
+  await page.waitForTimeout(460)
+  const fresh = (await nodeIds()).filter((x) => !before.includes(x))
+  ok('跳过 H 直接执行：长出 im f 顶点', fresh.length === 1, `fresh=${JSON.stringify(fresh)}`)
+  if (fresh.length === 1) {
+    ok('点得中新顶点', await clickSvg(`g.gnode[data-id="${fresh[0]}"] .gnode-hit`))
+    await page.waitForTimeout(420)
+    const ii = await infoState()
+    ok(
+      'im f 的阶 = 6（S_4 ->> S_3 满射）',
+      ii.vals.some((v) => v.includes('|G| = 6')),
+      JSON.stringify(ii.vals),
+    )
+  }
+}
 
 ok('控制台零错误', logs.length === 0, logs.join(' | '))
 console.log('')

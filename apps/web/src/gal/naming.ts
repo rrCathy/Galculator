@@ -129,6 +129,42 @@ export function nextAutoName(used: Iterable<string>): string {
   return `A${subscript('101')}` // 兜底：2600 个候选都用完（实际到不了）
 }
 
+/**
+ * 改名时**同步改写别的定义行里对它的引用**（缺口 ⑱）。
+ *
+ * 为什么必须有这一步：定义行之间是**按名字**引用的（`J = A / K`）。
+ * 只改左边那半，右边那些引用会立刻变成"算不出来"——用户看到一堆红行，
+ * 还得自己去一行行找。改名的语义是"A 从今天起叫 S_4"，那就该全局生效。
+ *
+ * 判据是**独立标识符**：两侧都不能是 `[A-Za-z0-9_\\]`。
+ *   · `\Alpha` 不动（前面是反斜杠 ⇒ 那是个命令名，不是引用）
+ *   · `AB` / `A_1` 不动（那是**另外的名字**，标识符字符连着）
+ *   · `A/K`、`包含(A, G)` 里的 `A` 会被改
+ *
+ * 返回改动过的行下标（面板上可以说清"连带改了几行"——静默改写才是坏文明）。
+ */
+export function renameRefs(
+  lines: string[],
+  skipIndex: number,
+  oldName: string,
+  newName: string,
+): { lines: string[]; touched: number[] } {
+  const esc = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(?<![A-Za-z0-9_\\\\])${esc}(?![A-Za-z0-9_\\\\])`, 'g')
+  const touched: number[] = []
+  const out = lines.map((raw, i) => {
+    if (i === skipIndex) return raw
+    const eq = raw.indexOf('=')
+    if (eq < 0) return raw
+    const rhs = raw.slice(eq + 1)
+    if (!re.test(rhs)) return raw
+    re.lastIndex = 0
+    touched.push(i)
+    return `${raw.slice(0, eq + 1)}${rhs.replace(re, newName)}`
+  })
+  return { lines: out, touched }
+}
+
 /** 自动命名的候选序列（展示用，例如设置里的说明文案）。 */
 export function autoNamePreview(used: Iterable<string>, count = 5): string[] {
   const out: string[] = []

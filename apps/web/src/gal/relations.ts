@@ -3,8 +3,11 @@ import {
   subgroupFromElementIds,
   subgroupSetKey,
   type Group,
+  type GroupElement,
 } from '@groupviz/core'
 import { prettySymbol } from './pretty'
+import { groupFingerprint } from './identity'
+import { elementSemanticKey } from './semantic'
 import { toTex } from './tex'
 import type { GalObject } from './types'
 import type { GalValue } from './value'
@@ -36,28 +39,13 @@ const ENUM_CAP = 144
 
 /* ── 正规性：同群只算一次 ──────────────────────────────── */
 
-/**
- * 缓存 key 的元素指纹。
- *
- * **只看 `symbol#order` 会串**（2026-09-28，缺口 ⑧ 逼出来的真 bug）：
- * 两个 `C_2` —— 一个从记号建（元素 `e0 e1`）、一个是从 `C_4` 里摘出来的子群
- * （元素 `e0 e2`）—— 记号与阶一模一样，但一个是"不是 C₄ 的子群"、一个"是"。
- * 更险的是 `V_4` 与 `C_4`：core 给它们的元素 id 都是 `e0 e1 e2 e3`，
- * 所以指纹还得连着**记号**一起算。
- *
- * 从前不显眼：`containment` 只在**用户点开面板**时才被调用，一次会话里
- * 撞上的概率低。缺口 ⑧ 让画布派生（`deriveCanvas`）也要问包含关系
- * （伴生边要写指数与正规性），调用面一宽就露了。
- */
-const fingerprint = (g: Group) => `${g.symbol}#${g.order}#${g.elements.map((e) => e.id).join(',')}`
-
 const normalKeysCache = new Map<string, Set<string> | null>()
 
 /**
  * 群 G 的全部正规子群的「集合键」。超枚举守卫 / 算不动 → `null`（= 不判定，不是"不正规"）。
  */
 function normalKeys(G: Group): Set<string> | null {
-  const key = fingerprint(G)
+  const key = groupFingerprint(G)
   const hit = normalKeysCache.get(key)
   if (hit !== undefined) return hit
   let out: Set<string> | null = null
@@ -86,7 +74,7 @@ export interface Containment {
 /**
  * H 是不是 G 的子群 —— **三道关，缺一不可**：
  *
- *   ① H 的每个元素 id 都能在 G 里找到（id 空间一致）
+ *   ① H 的每个元素在 G 里都找得到（**对齐**：普通元素按 id、陪集元素按语义键）
  *   ② core 的 `subgroupFromElementIds(G, ids)` 认可（含单位元 + 乘法封闭）
  *   ③ 校验出来的子群阶 = |H|
  *
@@ -96,20 +84,30 @@ export interface Containment {
  * （V₄ 的 id 是 `e a b c`，D₄ 的 id 是 `r0…s3`，本不该有任何关系）。
  * 加第 ① ③ 两道关后，同一批测试群上只剩 `A₄ ≤ S₄` 一条——恰好是真的那条。
  *
- * 另一个理由：判据只认 id，**不认符号**。符号相同的两个群（比如两处都写了 `S_4`）
+ * 另一个理由：判据只认元素、**不认符号**。符号相同的两个群（比如两处都写了 `S_4`）
  * 不会因为"名字一样"就被判成包含。
+ *
+ * 第 ① 关在 2026-09-29（第三同构那轮）升级成**语义对齐**：商群元素的 id 是
+ * `qcoset-<i>`，**跨母群会撞号**（`(A₄/V₄)` 与 `(S₄/V₄)` 的第 i 个陪集不是同一个）——
+ * 按 id 比会给出假的包含（"`S₄/A₄` 是 `S₄/V₄` 的子群：指数 3"这种），
+ * 而真的包含（`A₄/V₄ ≤ S₄/V₄`）反而被判"不封闭"。对齐走 `semantic.ts` 的语义键：
+ * **普通元素退化成 id 比对（行为与从前一致）**，陪集按成员集合比。
  */
 export function containment(H: Group, G: Group): Containment | null {
-  const key = `${fingerprint(H)}<-${fingerprint(G)}`
+  const key = `${groupFingerprint(H)}<-${groupFingerprint(G)}`
   const hit = containmentCache.get(key)
   if (hit !== undefined) return hit
 
   let out: Containment | null = null
   if (H.order > 0 && H.order <= G.order) {
-    const gids = new Set(G.elements.map((e) => e.id))
-    const ids = H.elements.map((e) => e.id)
-    if (ids.every((id) => gids.has(id))) {
-      const sub = subgroupFromElementIds(G, ids)
+    const byKey = new Map<string, GroupElement>()
+    for (const e of G.elements) byKey.set(elementSemanticKey(e), e)
+    const aligned = H.elements.map((e) => byKey.get(elementSemanticKey(e)))
+    if (aligned.every((x): x is GroupElement => !!x)) {
+      const sub = subgroupFromElementIds(
+        G,
+        aligned.map((e) => e.id),
+      )
       if (sub && sub.order === H.order) {
         const keys = normalKeys(G)
         out = {
@@ -358,13 +356,15 @@ function derivedRelations(node: GalObject, table: GalObject[], push: (r: Relatio
       const g = G?.value.type === 'group' ? G.value.group : null
       const k = N?.value.type === 'group' ? N.value.group : null
       if (g && k) {
+        // 分母是**自动翻译**来的（`D` 与 `G` 的元素表对不上，见 ops 的 `autoTranslatedSubgroup`）
+        // 时，第一句换成分诊的说明 —— 不能再声称「D 自己 ⊴ G」，那句话在这里是不成立的。
         push({
           kind: 'quotient',
           other: gn,
           tex: `${toTex(node.id)} = ${toTex(gn)} / ${toTex(nn)}`,
           text: `${node.id} = ${gn} / ${nn}`,
           detail:
-            `N = ${nn} \\trianglelefteq ${gn}（商群良定义）` +
+            (node.note ?? `N = ${nn} \\trianglelefteq ${gn}（商群良定义）`) +
             ` \\cdot|Q| = |G| / |N| = ${g.order} / ${k.order} = ${g.order / k.order}`,
         })
       }

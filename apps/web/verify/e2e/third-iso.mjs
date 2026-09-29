@@ -112,7 +112,62 @@ if (GN && KN && Q) {
   ok('GN / KN / Q 齐备', false)
 }
 
+/* ── 用户实测那条（2026-09-29）：「不能做商群的商群」──
+   分母 `N` 用**独立构造**的 `V_4`：`H/N`、`G/N` 各自自动翻译，`B/A` 是商群的商。
+
+   **必须重开一张空画布**，且必须是 `G = S_4`：
+   · 上面那段已经把 `G` 绑成 `D_4`（重定义会被拒 —— 名字重复）；
+   · 更关键的是**翻译唯一性**：S₄ 里与 V₄ 同构的子群恰 1 个且正规 ⇒ 自动翻译无歧义；
+     D₄ 里有 2 个（都正规）⇒ 那种情况系统**应该**停下来问，是另一个场景（语义层
+     `suites/thirdIso.ts` 的反例钉着），不该混进这条链。 ── */
 await page.screenshot({ path: '../../docs/assets/u11-third-iso.png', clip: (await page.locator('svg.canvas').boundingBox()) ?? undefined })
+await page.goto(URL, { waitUntil: 'load' })
+await page.waitForTimeout(1200)
+await page.click('.composer-orb .orb')
+for (const line of ['G = S_4', 'H = A_4', 'N = V_4', 'A = H/N', 'B = G/N', 'D = G/H', 'F = B/A']) {
+  await page.fill('.composer-expr', line)
+  await page.press('.composer-expr', 'Enter')
+  await page.waitForTimeout(300)
+}
+await page.keyboard.press('Escape')
+await page.waitForTimeout(450)
+{
+  /**
+   * 判据读**画布节点**，不读 `.row-err` —— 输入球的路是"预览不 ok 就不提交"，
+   * 失败的行根本进不了对象表（这也正是从前这条走查**看着全过**的原因：
+   * `row-err` 恒为空 ⇒ 那是条恒真断言）。
+   */
+  const nodeIds2 = () => page.evaluate(() => [...document.querySelectorAll('g.gnode')].map((g) => g.dataset.id))
+  const got = await nodeIds2()
+  ok(
+    '七行全部落地（G/N、H/N、G/H、商群的商 B/A）',
+    ['G', 'H', 'N', 'A', 'B', 'D', 'F'].every((x) => got.includes(x)),
+    got.join(','),
+  )
+
+  /** 点画布节点看识别（`.gnode-hit` 是透明的，只能派发事件）。 */
+  const identifyOf = async (id) => {
+    await page.evaluate((x) => {
+      document
+        .querySelector(`g.gnode[data-id="${x}"] .gnode-hit`)
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    }, id)
+    await page.waitForTimeout(440)
+    return page.evaluate(() =>
+      [...document.querySelectorAll('.insight-body')].map((e) => e.textContent.replace(/\s+/g, ' ').trim()).join(' | '),
+    )
+  }
+
+  // F ≅ D ≅ C_2（第三同构的结论）：两边都点开看识别。
+  // 判据读的是**渲染后**的文本，KaTeX 把 `C_2` 的下划线吃掉 → 这里同时认三种写法。
+  const isC2 = (s) => /C₂|C_2|C2/.test(s)
+  const fIns = await identifyOf('F')
+  ok('`F = B/A` 被识别为 2 阶循环群（C_2）', isC2(fIns), fIns.slice(0, 200))
+  const dIns = await identifyOf('D')
+  ok('`D = G/H` 也识别为 C_2（第三同构：两边同构）', isC2(dIns), dIns.slice(0, 200))
+}
+
+await page.screenshot({ path: '../../docs/assets/u35-third-iso-quotient.png', clip: (await page.locator('svg.canvas').boundingBox()) ?? undefined })
 console.log('')
 console.log(`ERRORS: ${logs.length ? logs.join(' | ') : 'none'}`)
 console.log(`${pass} PASS / ${fail} FAIL`)

@@ -218,16 +218,27 @@ export interface GalAction {
  * 所以那句"声明正规子群"是多余的，也无从撒谎。
  */
 export interface GalRelation {
-  /** 小的那个（子群方） */
+  /**
+   * 关系种类：`contains`（H ⊆ G）或 `isomorphic`（A ≅ B，缺口 ⑰）。
+   *
+   * 缺省视为 `contains` —— 旧调用与旧快照不必逐个补字段。
+   */
+  kind?: 'contains' | 'isomorphic'
+  /** 小的那个（子群方）；同构时是左边那个 */
   from: Group
-  /** 大的那个（母群方） */
+  /** 大的那个（母群方）；同构时是右边那个 */
   to: Group
-  /** 指数 [G:H] = |G| / |H| */
+  /** 指数 [G:H] = |G| / |H|；同构没有指数，恒为 1 */
   index: number
-  /** H ⊴ G？（判不出来时为 false，附注里会说明） */
+  /** H ⊴ G？（判不出来时为 false，附注里会说明）；同构恒 false */
   isNormal: boolean
   /** `containment()` 判不出来正规性（超枚举守卫）——面板要据此换措辞 */
   normalUnknown?: boolean
+  /**
+   * 同构的账（`isomorphic` 专用）：识别出的同构类符号。
+   * `null` = 超出本地识别范围 —— 面板照实说"未判定"，**不猜**。
+   */
+  isoSymbol?: string | null
 }
 
 /* ── 集合（Ω 的载体）───────────────────────────────────────── */

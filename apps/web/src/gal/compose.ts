@@ -24,6 +24,18 @@ export function objectArity(op: OpDef): number {
 }
 
 /**
+ * 对象参数位的**总数（含可选）**——决定"还差一个对象要选"要不要停下来等。
+ *
+ * 与 `objectArity` 的差就是「可选对象参数」的存在（目前只有 `像(f, H)` 的 H）：
+ * 必需参数选满后，**可选位留着让用户再点一个对象**（点不到就直接执行）。
+ * 从前 `multiOps` / `dispatchOp` 都只看 `objectArity`，于是 `f(H)` 在菜单里
+ * 根本没有路（用户实测："把 f(H) 功能做了然后接入"）。
+ */
+export function maxObjectArity(op: OpDef): number {
+  return op.params.filter((p) => !isScalarParam(p.type)).length
+}
+
+/**
  * 必需参数里"只能靠文本补"的位置（标量）。
  *
  * 注册表有断言保证标量参数只出现在末尾、且必需参数都在 `arity` 之内，
@@ -50,6 +62,8 @@ export function composeCall(op: OpDef, args: (string | null)[]): string | null {
   const vals = args.map((s) => (s ?? '').trim())
   if (vals.length < op.arity) return null
   if (vals.slice(0, op.arity).some((v) => !v)) return null
+  // 可选参数**留空 = 不填它**：别把空尾巴拼进表达式（`像(f)` 不该写成 `im(f, )`）
+  while (vals.length > op.arity && !vals[vals.length - 1]) vals.pop()
 
   if (op.infix?.length && vals.length === 2) {
     return `${vals[0]} ${op.infix[0]} ${vals[1]}`

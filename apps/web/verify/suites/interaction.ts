@@ -11,7 +11,7 @@
  * 不是从某次运行的输出抄的。
  */
 import { buildLines } from '../../src/gal/build'
-import { objectArity } from '../../src/gal/compose'
+import { composeCall, maxObjectArity, objectArity } from '../../src/gal/compose'
 import {
   activeOpId,
   canPick,
@@ -117,9 +117,9 @@ export function run(): void {
     const multi = multiOps()
     ok('多对象操作非空', multi.length > 0, `${multi.length}`)
     ok(
-      '每一条都需要不止一个对象',
-      multi.every((op) => objectArity(op) > 1),
-      multi.map((o) => `${o.id}:${objectArity(o)}`).join(','),
+      '每一条都至少要填两个对象参数位（含可选 —— `像 f(H)` 的可选位也算）',
+      multi.every((op) => maxObjectArity(op) > 1),
+      multi.map((o) => `${o.id}:${objectArity(o)}/${maxObjectArity(o)}`).join(','),
     )
     ok(
       '两条主力的都在（直积 / 包含）',
@@ -137,7 +137,8 @@ export function run(): void {
     eq('拿 opsFor 筛多对象操作 -> 恒空（这就是 U2 栽的地方）', viaOpsFor.length, 0)
     ok('而 multiOps 给得出', multi.length > 0)
 
-    ok('注册表就是这 38 条（多了少了都说明有人动过菜单的面）', OPS.length === 38, `${OPS.length}`)
+    // 2026-09-29（缺口 ⑰）：`同构` 进表 → 38 变 39
+    ok('注册表就是这 39 条（多了少了都说明有人动过菜单的面）', OPS.length === 39, `${OPS.length}`)
   }
 
   /* ══ ④ canPick：pending 时哪些节点点得动 ════════════════ */
@@ -209,6 +210,44 @@ export function run(): void {
     // 一定要每个 op 都拿得到标签（空标签 = 球上一个看不见的按钮）
     const blank = OPS.filter((op) => menuLabel(op).trim().length === 0)
     eq('没有哪个操作的标签是空的', blank.length, 0)
+  }
+
+  /* ══ ⑥2 「像 f(H)」的接线：可选第二参进得了菜单、停得下 pending ═══ */
+
+  suite('interaction \\cdot 「像 f(H)」的接线（可选第二参）')
+  {
+    const img = opOf('image')
+
+    // 必需位只有 1 个（f）；可选的 H 是"可以再点一个"的那一位
+    eq('image 的必需对象位 = 1（f）', objectArity(img), 1)
+    eq('image 的对象位总数（含可选）= 2（f + H）', maxObjectArity(img), 2)
+    ok('「像 f(H)」在多对象菜单里（⊕ 球：先点 f、再点 H）', multiOps().some((o) => o.id === 'image'))
+    ok(
+      '而「核」不进多对象菜单（一个必需位、没有可选位）',
+      !multiOps().some((o) => o.id === 'kernel'),
+    )
+
+    // pending 里的可点判据：第 0 位收映射，第 1 位（可选）收群
+    ok('第 0 位收得下映射 f', canPick(img, 0, [], F))
+    eq('第 0 位收不下群', canPick(img, 0, [], G), false)
+    ok('第 1 位（可选 H）收得下群', canPick(img, 1, [F], A))
+    eq('第 1 位收不下另一个映射', canPick(img, 1, [F], F), false)
+
+    // 提示条：必需位选满后说的是"可选、不选也能走"
+    ok('选满 f 之后提示的是可选位', pendingHint(img, 1).includes('可选'), pendingHint(img, 1))
+    ok(
+      '并且点明"不选就直接执行"',
+      pendingHint(img, 1).includes('不选就直接执行'),
+      pendingHint(img, 1),
+    )
+
+    /**
+     * 组装：可选位**留空 = 不填**。`im(f, )` 这种空尾巴既难看、也容易在解析层翻车
+     * （U31 接入时特意钉住：跳过 H 走的就是这条一参路径）。
+     */
+    eq('两参：im(f, A)', composeCall(img, ['f', 'A']), 'im(f, A)')
+    eq('一参：im(f)（不留空尾巴）', composeCall(img, ['f', null]), 'im(f)')
+    eq('一参（空串同义）', composeCall(img, ['f', '']), 'im(f)')
   }
 
   /* ══ ⑦ pairOps：拖拽连线的候选与顺序 ═══════════════════ */

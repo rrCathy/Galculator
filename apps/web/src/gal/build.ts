@@ -8,6 +8,7 @@ import {
 import { evalExpr, looksLikeRelation } from './evalDef'
 import { checkName, normalizeName } from './naming'
 import { prettySymbol } from './pretty'
+import { rememberParent } from './parents'
 import type { GalObject } from './types'
 
 export interface LineState {
@@ -25,8 +26,18 @@ export interface LineState {
  *
  * 对象表是 lines 的**纯函数**——改一行、删一行，整张画布自动重派生。
  * 每行按顺序求值，且只能引用**前面**已定义的名字（`byId` 逐步累积）。
+ *
+ * `opts.autoFirstIso`（缺口 ⑭，**默认开**）：定义同态后要不要**自动补**
+ * 第一同构定理的两个顶点（`G/ker φ` 与 `im φ`）。
+ *   · 默认开，是因为**证明模板依赖它**：M2 的模板只写 `φ` 那一行，
+ *     正方形剩下两个顶点与三条边都由它铺出来（见 proof.ts 顶部那段说明）；
+ *   · 手工搭图的人**可以关掉** —— 用户实测的原话是"自动构图第一同构定理，
+ *     其实没什么必要（或者说可以放开）"。开关在画布右下工具条上。
  */
-export function buildLines(lines: string[]): {
+export function buildLines(
+  lines: string[],
+  opts: { autoFirstIso?: boolean } = {},
+): {
   lineStates: LineState[]
   objects: GalObject[]
 } {
@@ -51,7 +62,9 @@ export function buildLines(lines: string[]): {
         name: '',
         ok: false,
         error: rel ? '这行写的是一个关系，不是定义' : '缺少「=」',
-        hint: rel ? '包含可以声明：写成 `R = A \\subseteq B`；要建对象就写成「名字 = 表达式」' : undefined,
+        hint: rel
+          ? '关系可以声明：包含写成 `R = A \\subseteq B`，同构写成 `R = A \\cong B`'
+          : undefined,
       })
       return
     }
@@ -99,13 +112,14 @@ export function buildLines(lines: string[]): {
       opId: r.opId,
       recipe: r.recipe,
       note: r.note,
+      callKey: r.callKey,
     }
     objects.push(object)
     byId.set(name, object)
     lineStates.push({ index, raw, name, ok: true, object })
   })
 
-  const implicit = firstIsoObjects(objects)
+  const implicit = opts.autoFirstIso === false ? [] : firstIsoObjects(objects)
   return { lineStates, objects: [...objects, ...implicit] }
 }
 
@@ -198,7 +212,8 @@ function firstIsoObjects(objects: GalObject[]): GalObject[] {
         sources: [o.id],
         value: {
           type: 'group',
-          group: buildSubgroupGroup(m.codomain, im, symbol ?? `im ${o.id}`),
+          // 记母群指针（`im φ` 是靶群里的子群）——集合运算 / 上下文群推断靠它
+          group: rememberParent(buildSubgroupGroup(m.codomain, im, symbol ?? `im ${o.id}`), m.codomain),
         },
         opId: 'firstIsoImage',
         recipe: '第一同构定理：G/ker \\varphi \\cong im \\varphi',

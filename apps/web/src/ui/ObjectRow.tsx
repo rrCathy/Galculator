@@ -12,10 +12,13 @@ import { TexOrText } from './Tex'
 export function ObjectRow({
   state,
   onRemove,
+  onEdit,
   onSelect,
 }: {
   state: LineState
   onRemove: (index: number) => void
+  /** 改这一行（缺口 ⑱）：改名 / 改定义——装进底部输入球再提交 */
+  onEdit?: (index: number) => void
   /** 点行 = 选中对象（画布高亮 + 信息面板打开） */
   onSelect?: (id: string) => void
 }) {
@@ -38,6 +41,18 @@ export function ObjectRow({
       <span className="row-def">
         <TexOrText text={o.def} />
       </span>
+      {onEdit && (
+        <button
+          className="edit"
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit(state.index)
+          }}
+          title="改这一行（改名 / 改定义），在底部输入球里改完回车"
+        >
+          改
+        </button>
+      )}
       <button
         className="x"
         onClick={(e) => {

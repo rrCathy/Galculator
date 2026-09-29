@@ -341,6 +341,20 @@ export function run(): void {
       describeValue(tooBig.byId('X')?.value),
     )
 
+    // U31（接入时补的诚实报错）：第二位给了、却是**非群**（从"选 H"的 pending
+    // 里误点一个映射就会这样）—— 不许静默当没给、算成 `im f`（"点了跟没点一样"）
+    const wrong = build([...STAGE, 'W = 像(f, f)'])
+    ok('`像(f, f)`（第二参不是群）被拦', wrong.byId('W') === undefined, describeValue(wrong.byId('W')?.value))
+    ok(
+      '  报错点明第二参得是群',
+      (wrong.line('W')?.error ?? '').includes('第二个参数得是群'),
+      wrong.line('W')?.error,
+    )
+    // 空第二参（留空写法）仍按"没给"处理 —— 那是"跳过 H"的组装形态
+    const blank = build([...STAGE, 'B2 = 像(f, )'])
+    const bv = blank.byId('B2')?.value
+    eq('`像(f, )`（空第二参）仍算整个像（6 阶）', bv?.type === 'group' ? bv.group.order : -1, 6)
+
     /* ── ② 声明包含：三种写法等价 ── */
 
     const forms = ['R = A \\subseteq G', 'R = A\\subseteq G', 'R = 包含(A, G)']

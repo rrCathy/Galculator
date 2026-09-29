@@ -1,5 +1,13 @@
-import { createGroupFromSymbol, parseGroupNotation } from '@groupviz/core'
-import { INFIX_SYMBOLS, INFIX_TABLE, OPS, opByCall, type OpArg, type OpDef } from './ops'
+import { createGroupFromSymbol, parseGroupNotation, type Group } from '@groupviz/core'
+import {
+  INFIX_SYMBOLS,
+  INFIX_TABLE,
+  OPS,
+  opByCall,
+  type OpArg,
+  type OpContext,
+  type OpDef,
+} from './ops'
 import { asciiClean, prettySymbol, scanNotAscii } from './pretty'
 import type { GalValue } from './value'
 import type { GalObject } from './types'
@@ -18,6 +26,8 @@ export interface EvalSuccess {
   /** 命中的操作 id（指向 ops.ts 注册表） */
   opId?: string
   recipe?: string
+  /** **同一次推导**的指纹（缺口 ⑯）——操作 id + 规范化实参，见 types.ts 的 `callKey` */
+  callKey?: string
 }
 
 export type EvalResult = ({ ok: true } & EvalSuccess) | { ok: false; error: string; hint?: string }
@@ -242,7 +252,42 @@ export function resolveArg(raw: string, objects: Map<string, GalObject>): OpArg 
 
 /* ── 分发 ─────────────────────────────────────────────── */
 
-function runOp(op: OpDef, args: OpArg[]): EvalResult {
+/**
+ * **同一次推导的指纹**（缺口 ⑯）：操作 id + 规范化实参。
+ *
+ * 规范化做两件事，正好对上用户撞上的那两个岔路：
+ *   · **对象参数取"引用名"**（`a.ref`）而不是它当时写出来的文本 ——
+ *     于是 `像(\phi)` 与 `im(\phi)`、`商(A, K)` 与 `A / K` 归一成同一个指纹；
+ *   · 标量参数取原文并 trim（`pSub(G, 2)` 与 `pSub(G, 3)` 必须是两个对象）。
+ *
+ * 无引用的实参（内联表达式，如 `Z(G)` 当参数）退回它的展示标签 ——
+ * 同一个表达式编出来的标签相同，仍然归得掉；不同表达式恰好标签相同的概率极低。
+ */
+function callKeyOf(op: OpDef, args: OpArg[]): string {
+  const parts = args.map((a) => (a.kind === 'object' ? `@${a.ref ?? a.text}` : a.text.trim()))
+  return `${op.id}::${parts.join('::')}`
+}
+
+/**
+ * 画布上下文（U34）：把**已有对象里的群**整理成候选母群，交给 `op.run` 的第二参。
+ *
+ * 只放群值（按定义顺序、去重）—— 目前只有集合运算用它：找不到共同母群时，
+ * 画布上摆着的那个大群就是最可能的"家"（`交(C_3, C_7)` 在 F₂₁ 旁边不该失败）。
+ */
+function opContextOf(objects: Map<string, GalObject>): OpContext {
+  const groups: { ref: string; group: Group }[] = []
+  const seen = new Set<Group>()
+  for (const o of objects.values()) {
+    if (o.value.type !== 'group') continue
+    const g = o.value.group
+    if (seen.has(g)) continue
+    seen.add(g)
+    groups.push({ ref: o.id, group: g })
+  }
+  return { groups }
+}
+
+function runOp(op: OpDef, args: OpArg[], objects: Map<string, GalObject>): EvalResult {
   // 可变参数（如映射的「生成元→像」对）不限个数，所以上界只在没有 variadic 时才管用
   const max = op.variadic ? Number.POSITIVE_INFINITY : op.arity + (op.optional ?? 0)
   if (args.length < op.arity || args.length > max) {
@@ -253,7 +298,7 @@ function runOp(op: OpDef, args: OpArg[]): EvalResult {
       hint: op.doc,
     }
   }
-  const out = op.run(args)
+  const out = op.run(args, opContextOf(objects))
   if (!out.ok) return { ok: false, error: out.error, hint: out.hint ?? op.doc }
   return {
     ok: true,
@@ -265,6 +310,7 @@ function runOp(op: OpDef, args: OpArg[]): EvalResult {
     sources: [...new Set(args.flatMap((a) => a.sources))],
     opId: op.id,
     recipe: op.recipe,
+    callKey: callKeyOf(op, args),
   }
 }
 
@@ -385,7 +431,7 @@ export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResu
     const op = opByCall(call.name)
     if (op) {
       const args = call.args.map((a) => resolveArg(a, objects))
-      return runOp(op, args)
+      return runOp(op, args, objects)
     }
     unknownOp = call.name
   }
@@ -402,23 +448,26 @@ export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResu
       // 只有两侧都求得出值才当中缀运算；否则整体交给记号解析
       // （`C_2 x C_2` 是直积记号，不是"两个不存在的对象做积"）
       if (a.ok && b.ok) {
-        return runOp(entry.op, [argFromResult(left, objects, a), argFromResult(right, objects, b)])
+        return runOp(entry.op, [argFromResult(left, objects, a), argFromResult(right, objects, b)], objects)
       }
       /**
-       * `⊆` 绝不会出现在任何群记号里 —— 所以它这一支**可以放心报"是谁算不出来"**。
+       * `⊆` / `≅` 绝不会出现在任何群记号里 —— 所以这两支**可以放心报"是谁算不出来"**。
        *
        * 不特判的话，`R = A ⊆ K`（K 打错）会一路掉到记号解析、最后报
        * "这行写的是一个关系，不是定义" —— 用户明明写了等号，提示却答非所问。
        * 直积的 `x` 就不能这么干：`C_2 x C_2` 的某一侧"不成立"是常态，得安静地
        * 交给记号解析。
        */
-      if (hit.sym === '\\subseteq') {
+      if (hit.sym === '\\subseteq' || hit.sym === '\\cong') {
         const bad = !a.ok ? { side: left, err: a } : { side: right, err: b }
         if (!bad.err.ok) {
           return {
             ok: false,
             error: `「${bad.side}」算不出来：${bad.err.error}`,
-            hint: '包含要写成 `R = A \\subseteq B`，两侧都得是已定义的对象',
+            hint:
+              hit.sym === '\\cong'
+                ? '同构要写成 `R = A \\cong B`，两侧都得是已定义的对象'
+                : '包含要写成 `R = A \\subseteq B`，两侧都得是已定义的对象',
           }
         }
       }
@@ -438,9 +487,8 @@ export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResu
         ok: false,
         error: '这行写的是一个关系，不是定义',
         hint:
-          '包含可以声明：写成 `R = A \\subseteq B`。' +
-          '「正规」不用声明，那是工具算出来的（声明了包含，面板会告诉你正不正规）；' +
-          '「同构」这类还没对应操作。',
+          '关系可以声明：包含写成 `R = A \\subseteq B`，同构写成 `R = A \\cong B`。' +
+          '「正规」不用声明，那是工具算出来的（声明了包含，面板会告诉你正不正规）。',
       }
     }
     // core 的报错文案里带 `·`（列表分隔点）与 `\times`，`·` 键盘打不出来 → 过一道

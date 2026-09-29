@@ -20,6 +20,9 @@ import { run as structural } from './suites/structural'
 import { run as structure } from './suites/structure'
 import { run as grid } from './suites/grid'
 import { run as interaction } from './suites/interaction'
+import { run as batch8 } from './suites/batch8'
+import { run as snapshot } from './suites/snapshot'
+import { run as idspace } from './suites/idspace'
 
 diagram()
 firstIso()
@@ -32,6 +35,9 @@ structural()
 structure()
 grid()
 interaction()
+batch8()
+snapshot()
+idspace()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1

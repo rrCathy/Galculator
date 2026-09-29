@@ -11,7 +11,12 @@
  * 所以本 suite 特意挑了一组"编号错位"的案例（C₁₂ 那两条）。
  */
 import { deriveCanvas } from '../../src/gal/derive'
+import { identifyGroup } from '../../src/gal/insights'
+import { containment } from '../../src/gal/relations'
 import { build, eq, ok, suite } from '../harness'
+
+/** 容错比较同构符号（`C_{2}` / `C_2` / `C2` 一律等同）。 */
+const flat = (s: string | null) => (s ?? '').replace(/[{}\s_\\]/g, '')
 
 /** 商群元素（陪集）的语义键：成员标签排序。 */
 function cosetKey(group: { elements: { id: string; cosetMemberLabels?: string[] }[] }, i: number): string {
@@ -120,7 +125,9 @@ export function run(): void {
       'Q = 商(GN, KN)',
     ])
     const edges = deriveCanvas(b.objects).edges.map((e) => `${e.from} -${e.label ?? '\\varnothing'}-> ${e.to} [${e.kind}:${e.arrow}]`)
-    ok('KN -> GN（K/N 是 G/N 的子群）', edges.includes('KN -\\hookrightarrow-> GN [map:injective]'))
+    // 标签是**现场判定**的：这组里 K ⊴ G（指数 2）⇒ K/N ⊴ G/N —— 所以是 `\\trianglelefteq`
+    // （从前按 id 判包含判不动，一律退成 `\\hookrightarrow`；2026-09-29 语义对齐后判得出来了）
+    ok('KN -> GN（K/N 是 G/N 的正规子群，这里指数 2）', edges.includes('KN -\\trianglelefteq-> GN [map:injective]'), edges.join(' | '))
     ok('G ->\\pi-> GN', edges.includes('G -\\pi-> GN [map:surjective]'))
     ok('GN ->\\pi-> (G/N)/(K/N)', edges.includes('GN -\\pi-> Q [map:surjective]'))
     ok('K ->\\pi-> K/N', edges.includes('K -\\pi-> KN [map:surjective]'))
@@ -132,4 +139,41 @@ export function run(): void {
     ok('拿 G 的子群去商 G/N -> 报错', b.err('Q') !== null, `err=${b.err('Q')}`)
     ok('错误信息说明了原因', (b.err('Q') ?? '').includes('不是'), `err=${b.err('Q')}`)
   }
+
+  // ── 用户实测的第三同构（2026-09-29）：分母 N 用**独立构造**的 V₄ ──
+  //    "同构第三定理做不了，不能做商群的商群" —— 三个点：
+  //    ① `H/N`、`G/N` 各自自动翻译（U30）；② `B/A`（商群的商）要对得上陪集；
+  //    ③ `A ≤ B` 这条包含也要判得出来（`K/N ⊴ G/N`）。
+  {
+    const b = build(['G = S_4', 'H = A_4', 'N = V_4', 'A = H/N', 'B = G/N', 'D = G/H', 'F = B/A'])
+    const gv = (id: string) => {
+      const v = b.byId(id)?.value
+      return v?.type === 'group' ? v.group : null
+    }
+    ok('`H/N`（N 独立构造）建出来了', !!gv('A'), b.line('A')?.error)
+    ok('`G/N` 建出来了', !!gv('B'), b.line('B')?.error)
+    const f = gv('F')
+    ok('**商群的商** `B/A` 算得出来（用户报的那条）', !!f, b.line('F')?.error)
+    if (f) {
+      eq('|(G/N)/(H/N)| = 2（手算 6 / 3）', f.order, 2)
+      eq('它就是 C_2', flat(identifyGroup(f)), 'C2')
+    }
+    eq('`G/H` 也是 C_2（第三同构：两边同构）', gv('D') ? flat(identifyGroup(gv('D')!)) : '-', 'C2')
+
+    // `A ≤ B`（K/N 是 G/N 的子群）—— 从前按 id 比会判错，现在按陪集语义对齐
+    const c = A_B_containment(b)
+    ok('`A ≤ B` 判得出来（K/N ⊴ G/N）', !!c, JSON.stringify(c))
+    if (c) {
+      eq('指数 [B:A] = 2', c.index, 2)
+      eq('而且是正规子群', c.normal, true)
+    }
+  }
+}
+
+/** 借 `relations.containment` 判一把（与画布上的伴生边同源）。 */
+function A_B_containment(b: ReturnType<typeof build>) {
+  const A = b.byId('A')?.value
+  const B = b.byId('B')?.value
+  if (A?.type !== 'group' || B?.type !== 'group') return null
+  return containment(A.group, B.group)
 }

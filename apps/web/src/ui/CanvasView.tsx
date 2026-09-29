@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react'
 import { computeLatticeLayout } from '@groupviz/core'
 import type { CanvasGraph, CanvasNode, GalEdge, GalObject } from '../gal/types'
 import { edgeFocusId } from '../gal/derive'
-import { gridOf, gridSpec, quantize, snapToGrid, visibleGridPoints, type GridSpec } from '../gal/grid'
+import { gridKey, gridOf, gridSpec, quantize, snapToGrid, visibleGridPoints, type GridSpec } from '../gal/grid'
 import { pairOps } from '../gal/interaction'
 import type { GalValue } from '../gal/value'
 import { labelTexHtml, measureTex } from './Tex'
@@ -214,7 +214,25 @@ function edgeAnchor(p: Pt, b: Box, target: Pt): Pt {
   return { x: p.x + ux * t, y: p.y + uy * t }
 }
 
+/**
+ * 画布交给宿主（App）的**命令式把手**（缺口 ⑫）。
+ *
+ * 钉住位置与视口都是这个组件自己的 state（它们本来就只属于画布），
+ * 而"导出视图"要的是**按下按钮那一刻**的它们 —— 逐个上报会变成每帧一次 setState。
+ * 所以这里给的是按需读写的两个方法：读 = 导出，写 = 导入。
+ */
+export interface CanvasHandle {
+  getViewState: () => CanvasViewState
+  applyViewState: (s: CanvasViewState) => void
+}
+
+export interface CanvasViewState {
+  pins: Record<string, { x: number; y: number }>
+  view: View | null
+}
+
 export function CanvasView({
+  ref,
   graph,
   objects = [],
   selectedId,
@@ -224,7 +242,12 @@ export function CanvasView({
   pickedIds,
   pickableIds,
   onConnect,
+  autoFirstIso = true,
+  onToggleAutoFirstIso,
+  onOpenSnapshot,
 }: {
+  /** 命令式把手（缺口 ⑫）：导出视图时读钉住与视口，导入时写回去 */
+  ref?: Ref<CanvasHandle>
   graph: CanvasGraph
   /**
    * 全量对象表。**连线手势要它**——映射 / 关系**不占节点只画边**，
@@ -246,6 +269,11 @@ export function CanvasView({
    * `at` 是**容器像素坐标**（弹出的菜单按它定位）。
    */
   onConnect?: (from: string, to: string, at: { x: number; y: number }) => void
+  /** 「自动补第一同构顶点」开着没有（缺口 ⑭）——只用来给工具条那个开关上色 */
+  autoFirstIso?: boolean
+  onToggleAutoFirstIso?: () => void
+  /** 打开「视图快照」卡片（缺口 ⑫）——卡片归 App 管，它才拿得到定义行 */
+  onOpenSnapshot?: () => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -270,6 +298,26 @@ export function CanvasView({
   useEffect(() => {
     if (persistPins()) savePins(pinned)
   }, [pinned])
+
+  /**
+   * 命令式把手（缺口 ⑫）：导出 = 读这一对 state；导入 = 整个换掉。
+   *
+   * 导入要把 `drag` 一并清掉 —— 快照换的是"图"，还留着半个拖动中的偏移
+   * 会让新图的某个节点莫名其妙偏一截。
+   */
+  useImperativeHandle(
+    ref,
+    () => ({
+      getViewState: () => ({ pins: pinned, view: userView }),
+      applyViewState: (s) => {
+        setPinned(s.pins ?? {})
+        setDrag(null)
+        dragRef.current = null
+        setUserView(s.view ?? null)
+      },
+    }),
+    [pinned, userView],
+  )
 
   /**
    * 指针手势的起点（viewBox 坐标）。节点拖动 / 画布平移 / **连线**共用一条通路。
@@ -378,9 +426,15 @@ export function CanvasView({
     const isVerticalConstraint = (e: GalEdge): boolean =>
       // **作用线**也算：课本里 `G ↷ Ω` 本来就是往下画的（DIAGRAM_SPEC §5.2 的三层结构）
       e.kind === 'action' ||
-      // **声明的包含**（U20）也算：自动生成的 `↪` 是竖直的，用户声明的那条
-      // 若画成斜线，同一张图上两种包含就会长得不一样。
-      e.kind === 'relation' ||
+      /**
+       * **声明的包含**（U20）也算：自动生成的 `↪` 是竖直的，用户声明的那条
+       * 若画成斜线，同一张图上两种包含就会长得不一样。
+       *
+       * ⚠️ **声明的同构除外**（缺口 ⑰）：`≅` 在课本里是斜的 / 水平的
+       * （第一同构定理那个正方形的对角线）。把它当竖直约束会把两端拽进同一列，
+       * 顺手把不相干的节点传染过去 —— 与 `≅` 当年传染 `C₆ / C₃` 那一坑同款。
+       */
+      (e.kind === 'relation' && e.arrow !== 'iso') ||
       (!e.objectId && !!e.label && VERTICAL_LABELS.has(e.label))
 
     const uf = Array.from({ length: n }, (_, i) => i)
@@ -733,9 +787,30 @@ export function CanvasView({
     //
     // 布局照常算（被钉住的节点仍占着它原来的行列），最后一步才把坐标换成用户放的位置。
     // 这样拖走一个节点**不会引起别的节点重排**。
+    //
+    // ⚠️ 网格是**由布局推出来的**（原点 + 中位步长）——加一个对象就可能整条挪一截。
+    // 不重新对齐的话，用户会看到"钉住的那些慢慢从格点上漂走"（缺口 ⑮ 的第一种症状）。
+    // 所以两趟走：
+    //   ① 钉住的节点先各自**对齐到当前网格**（先到先得，后面让位）；
+    //   ② 自动布局的节点若落点被占了（钉住的 / 别的自动节点），让位到最近的空格点。
+    const taken = new Set<string>()
     for (let i = 0; i < n; i++) {
       const pin = pinned[graph.nodes[i].id]
-      if (pin) pos[i] = { x: pin.x, y: pin.y }
+      if (!pin) continue
+      const hit = snapToGrid(pin.x, pin.y, spec, taken)
+      taken.add(gridKey(hit.col, hit.row))
+      pos[i] = { x: hit.x, y: hit.y }
+    }
+    for (let i = 0; i < n; i++) {
+      if (pinned[graph.nodes[i].id]) continue
+      const key = gridOf(pos[i].x, pos[i].y, spec)
+      if (!taken.has(key)) {
+        taken.add(key)
+        continue
+      }
+      const hit = snapToGrid(pos[i].x, pos[i].y, spec, taken)
+      taken.add(gridKey(hit.col, hit.row))
+      pos[i] = { x: hit.x, y: hit.y }
     }
     if (drag) {
       const di = graph.nodes.findIndex((nd) => nd.id === drag.id)
@@ -959,6 +1034,11 @@ export function CanvasView({
         <div className="canvas-empty">
           <p>点下方的 * 输入一行定义，画布长出第一个对象</p>
           <code>G = D_4</code>
+          {/* 空画布时**整条工具条都不渲染**（那些开关都是"对着一张图"的操作）——
+              但「视图快照」在最空的时候反而最有用（贴一份快照就能开工），所以这里留个入口。 */}
+          <button className="ct-btn" onClick={() => onOpenSnapshot?.()}>
+            视图快照
+          </button>
         </div>
       </div>
     )
@@ -1038,8 +1118,21 @@ export function CanvasView({
     }
 
     const wantsConnect = connectMode || e.shiftKey
-    const startId = id ?? (wantsConnect ? edgeStartId(e) : null)
-    if (startId && wantsConnect) {
+    /**
+     * **连线把手**（缺口 ⑬）：节点 hover 时长在它右侧的小圆点。
+     *
+     * 用户的实测反馈是"连线操作有点麻烦，还得去右下角点连线按钮才能拉关系"——
+     * 底栏那个开关与 Shift 都是"先按住再说"，界面上没有任何提示。
+     * 把手把这条路变成**看得见、摸得着**的一个点：从它拖 = 连线，
+     * 从节点本体拖 = 摆位置（U10 那套钉住 + 吸附一个像素都不动）。
+     */
+    const handleFor = (e: React.PointerEvent<SVGSVGElement>): string | null => {
+      const h = (e.target as Element).closest?.('.gnode-handle') as SVGGElement | null
+      return h?.getAttribute('data-conn-from') ?? null
+    }
+    const handleId = handleFor(e)
+    const startId = handleId ?? id ?? (wantsConnect ? edgeStartId(e) : null)
+    if (startId && (handleId || wantsConnect)) {
       gesture.current = { mode: 'connect', from: startId, x: p.x, y: p.y, moved: false }
       connectHover.current = null
       setConnect({ from: startId, at: p, hover: null })
@@ -1564,6 +1657,20 @@ export function CanvasView({
                       要数字去信息面板看 */}
                 </div>
               </foreignObject>
+              {/* 连线把手（缺口 ⑬）：节点右侧那颗小圆点 —— **从它拖 = 连线**。
+                  hover 时出现（CSS 控制），连线模式开着时**常驻**（那是显式的连线状态）。
+                  用户的实测反馈是"连线还得去右下角点按钮才拉得出来"：
+                  把手把那条路变成看得见、摸得着的一个点，从节点本体拖仍然是摆位置。 */}
+              <g className="gnode-handle" data-conn-from={n.id}>
+                {/* 透明的抓取区：小圆点本身只有 4.6，直接按它太考准头 */}
+                <circle cx={p.x + b.hw + 10} cy={p.y} r={12} fill="transparent" />
+                <circle
+                  className="gnode-handle-dot"
+                  cx={p.x + b.hw + 10}
+                  cy={p.y}
+                  r={4.6}
+                />
+              </g>
             </g>
           )
         })}
@@ -1578,15 +1685,32 @@ export function CanvasView({
         <span className="canvas-zoom" title="滚轮缩放 -空白处拖动平移 -双击空白适应窗口">
           {zoomPct}%
         </span>
+        {/* 连线的第三个入口（缺口 ⑬）在节点上（右侧那颗小圆点）——
+            这里写一行字把它说出来：工具条上的按钮与 Shift 都是"先按住再说"，没人猜得到 */}
+        <span className="ct-hint">拖节点右侧圆点连线</span>
         <button
           className={`ct-btn${connectMode ? ' on' : ''}`}
           onClick={() => {
             setConnectMode((v) => !v)
             setConnect(null)
           }}
-          title="连线模式：在对象上按下、拖到另一个对象上松手 ---- 这两个能做的事会列出来（按住 Shift 拖也是连线，不必开这个开关）"
+          title="连线模式：在对象上按下、拖到另一个对象上松手 ---- 这两个能做的事会列出来（拖节点右侧的圆点、或按住 Shift 拖，都是连线，不必开这个开关）"
         >
           连线{connectMode ? ' v' : ''}
+        </button>
+        <button
+          className={`ct-btn${autoFirstIso ? ' on' : ''}`}
+          onClick={() => onToggleAutoFirstIso?.()}
+          title="定义同态后自动补出第一同构定理的 G/ker 与 im 两个顶点（开着时画布自己把定理铺出来；手工搭图可以关掉它）"
+        >
+          自动补第一同构{autoFirstIso ? ' v' : ''}
+        </button>
+        <button
+          className="ct-btn"
+          onClick={() => onOpenSnapshot?.()}
+          title="把当前视图存成一段文本（定义行 + 钉住的位置 + 视口），复制出去收好，下次贴回来就是这张图"
+        >
+          视图快照
         </button>
         <button
           className="ct-btn"

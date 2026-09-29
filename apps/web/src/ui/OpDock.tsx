@@ -13,12 +13,15 @@ export function OpDock({
   onToggle,
   lineStates,
   onRemove,
+  onEdit,
   onSelect,
 }: {
   open: boolean
   onToggle: () => void
   lineStates: LineState[]
   onRemove: (index: number) => void
+  /** 改这一行（改名 / 改定义） */
+  onEdit?: (index: number) => void
   /** 点行 = 选中对象，信息在「信息」面板看 */
   onSelect: (id: string) => void
 }) {
@@ -30,7 +33,7 @@ export function OpDock({
     <DockPanel title="操作" count={rows.length} open={open} onToggle={onToggle}>
       {rows.length === 0 && <div className="empty">运算产生的对象会落在这里</div>}
       {rows.map((s) => (
-        <ObjectRow key={s.index} state={s} onRemove={onRemove} onSelect={onSelect} />
+        <ObjectRow key={s.index} state={s} onRemove={onRemove} onEdit={onEdit} onSelect={onSelect} />
       ))}
     </DockPanel>
   )

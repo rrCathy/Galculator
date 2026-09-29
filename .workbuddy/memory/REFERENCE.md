@@ -44,11 +44,16 @@
   `c` 是 4-循环 → 像的阶只能整除 4 → S₃ 里就是对换，所以"`c ↦ 3-循环`"永远报不是同态；两像相同则退化成符号映射（ker = A₄）。
 
 ## 6. 参考：代码落点（apps/web/src/）
-- **回归线**（U27 收口后）：`verify/run.ts` 串 **11** 个套件（含 `suites/grid.ts` 48 · `suites/interaction.ts` 81 ·
-  `suites/structure.ts` 107）· `verify:e2e` 串 **19** 个走查（含 `grid-drag.mjs` 42 · `radial-menu.mjs` 51 ·
-  `structure-ops.mjs` 47）—— 语义 **1169** / 走查 **546**。
-- `gal/`：`value`(8 值类型 + `sortOf`) `ops`(注册表 **38 条**：mechanism/call/infix/params/arity/optional/variadic/
-  editor/result/run + `opsFor`/`paramAccepts`) `naming` `compose` `interaction`(idle→selected→menu→pending/fill)
+- **回归线**（U34 收口后）：`verify/run.ts` 串 **14** 个套件（含 `suites/structure.ts` 107 ·
+  `suites/interaction.ts` 94 · `suites/idspace.ts` 92）· `verify:e2e` 串 **21** 个走查（含 `proof-m3.mjs` 60 ·
+  `radial-menu.mjs` 51 · `structure-ops.mjs` 47 · `relation-ops.mjs` 37）—— 语义 **1347** / 走查 **612**。
+- `gal/`：`value`(8 值类型 + `sortOf`) `ops`(注册表 **39 条**：mechanism/call/infix/params/arity/optional/variadic/
+  editor/result/run + `opsFor`/`paramAccepts`；跨群分诊与**唯一时自动翻译** = `foreignSubgroupFail` / `isoSubgroupHint` /
+  `autoTranslatedSubgroup`（U29/U30）；**可选对象参数**（`像(f, ·)`）的入口判据 = `compose.ts#maxObjectArity`（U31）；
+  **母群指针** = `parents.ts`（U32：`rememberParent` / `rootOf`，集合运算的对齐在 `setOp`；
+  U33 起还有 **`idsComparable`**——"id 能不能直接对着读"：同一个世界 **或** 自证式 id；
+  U34 起 `setOp` 还吃 **`OpContext`**（第二参，画布上的群当候选母群））
+  `naming` `compose` `interaction`(idle→selected→menu→pending/fill)
   `evalDef` `build`(`firstIsoObjects` 隐式补点) `derive`(`arrowOf`/`alongsideEdges`/`computeLevels`) `insights`
   `relations` `structure`(U27：`structureFacts` 上限 60 + 指纹缓存；`factorsText`/`chainText` 供 `data-*`)
   `tex` `pretty` `numeric` `grid` `proof` · `ui/`：`CanvasView` `DockPanel`（**收起时 body 不渲染**）
