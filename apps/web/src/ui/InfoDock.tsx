@@ -9,12 +9,10 @@ import {
   subgroupStructureSymbol,
   type Group,
 } from '@groupviz/core'
-import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type NormalizedSubgroup } from '../gal/value'
+import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalMap, type NormalizedSubgroup } from '../gal/value'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
-import { RELATION_LABEL, relationsFor, type Relation } from '../gal/relations'
 import { STRUCTURAL_LABEL } from '../gal/derive'
-import { menuLabel } from '../gal/interaction'
-import { elementNotation, opTemplate, type OpDef } from '../gal/ops'
+import { elementNotation } from '../gal/ops'
 import { prettySymbol } from '../gal/pretty'
 import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/structure'
 import { Tex, TexList, TexOrText } from './Tex'
@@ -26,15 +24,53 @@ const ENUM_CAP = 144
 
 export type InfoTab = 'basic' | 'elements' | 'subgroups'
 
-export const INFO_TABS: { id: InfoTab; label: string }[] = [
+export const INFO_SECTIONS: { id: InfoTab; label: string }[] = [
   { id: 'basic', label: '基本' },
   { id: 'elements', label: '元素' },
   { id: 'subgroups', label: '子群' },
 ]
 
 /**
- * 信息区面板（UI v3）：画布上那三个按钮（基本 / 元素 / 子群）**共用这一个面板**，
- * 点哪个按钮就切到哪个 tab。
+ * 「子群」标题行上那个数字的**成本闸门**（U45，2026-10-01）。
+ *
+ * 实测一次 `listCosetStripSubgroups`：S₄ 7ms · A₅ 61ms · **C₂⁵ 472ms** · S₅ 2.1s。
+ * 成本跟着**子群个数**走，不跟阶走 —— 阶数当阈值分不开 A₅（60 阶 61ms）和
+ * C₂⁵（32 阶 472ms）。库群也没有免费路：`getPrecomputed` 按符号精确匹配，
+ * `C_2^4` 这种照样 MISS。
+ *
+ * 于是两道防线：
+ *   ① **60 阶上限**（与 `gal/structure.ts` 的 `STRUCTURE_CAP` 同源，那儿也是实测
+ *      「60 阶（A₅）一次约 250ms」）；超限就不报数字，标题行只留标签。
+ *   ② 计算**放到当前任务之后**（`setTimeout` 0），让面板先画出来再枚举 ——
+ *      点一个群不该为了一个折叠标题卡住。
+ *
+ * 结果缓存进 `WeakMap`（按对象身份，与 `gal/identity.ts` 同纪律）：同一个群反复
+ * 聚焦只算一次。
+ */
+const SUB_COUNT_CAP = 60
+const subCountCache = new WeakMap<Group, number>()
+
+function subgroupClassCount(group: Group): number {
+  const hit = subCountCache.get(group)
+  if (hit !== undefined) return hit
+  // 与 `SubgroupsTab` **同一个表达式**（`structKey`），标题与正文的数字不许打架
+  const subs = listCosetStripSubgroups(group)
+  const n = new Set(subs.map((s) => s.structure ?? `阶 ${s.order}`)).size
+  subCountCache.set(group, n)
+  return n
+}
+
+/**
+ * 信息区面板（UI v3）：三个「看」入口（基本 / 元素 / 子群）**共用这一个面板**。
+ *
+ * U45（2026-10-01）把 tab 条换成**可折叠分区**。用户原话：
+ * 「重点还是不够突出，基本/元素/子群 tab 明显可以折叠起来不是吗」——
+ * tab 条是"永远有一块内容被摊开"，折叠分区是"想看的才摊开"。
+ *
+ * 三条定案（用户拍的）：**单开**（展开一个自动收其余）· **默认全收** ·
+ * 标题行**带一行摘要**（基本 = 阶 + 交换性 / 元素 = 元素个数 / 子群 = 同构类数）。
+ *
+ * 悬浮球那三个入口照旧可用：点「元素」= 打开面板 + 展开「元素」这一节。
  */
 export function InfoDock({
   open,
@@ -43,28 +79,23 @@ export function InfoDock({
   onTab,
   node,
   edge,
-  table,
   onExtract,
-  onCorrespond,
-  singleOps = [],
-  onRunOp,
 }: {
   open: boolean
   onToggle: () => void
-  tab: InfoTab
-  onTab: (t: InfoTab) => void
+  /** 当前**展开**的那一节；`null` = 全收（默认） */
+  tab: InfoTab | null
+  /** 切换展开项（传 `null` 收起全部）；面板内部按"点同一节 = 收起"调用 */
+  onTab: (t: InfoTab | null) => void
   /** 焦点**对象**——不限于节点：映射只画箭头，但同样有信息可看 */
   node: GalObject | null
   /**
    * 焦点是一条**结构伴生边**（缺口 ⑧）——`π` / `π_1` / `↪` / `=` / `≅`。
    *
    * 与 `node` **互斥**：一条边要么背后有对象（那是 `node`），要么只有结构身份
-   * （那是这里）。它只回答"这条箭头是什么、账是多少"——不列可做的操作
-   * （它不是对象，列出来的按钮点了必然报错）。
+   * （那是这里）。它只回答"这条箭头是什么、账是多少"。
    */
   edge?: { edge: GalEdge; info: StructuralEdge } | null
-  /** 当前对象表（关系层要在里面找"谁包含我 / 我包含谁"）*/
-  table: GalObject[]
   /**
    * 「取出为对象」：把列表里的一个成员变成一行定义。
    *
@@ -72,24 +103,29 @@ export function InfoDock({
    * "能作为某个映射的源或靶的，才配当顶点"，而子群集里的每一项**本身**就是子群。
    */
   onExtract?: (sub: NormalizedSubgroup) => void
-  /**
-   * 「看对应」：把这个**正规**子群与商群的对应定理（第四同构定理）摆到浮层上。
-   *
-   * 入口必须挂在这里 —— 用户在子群列表里看到 `V₄ ⊴ S₄` 这一行，"它和商群怎么对应"
-   * 就是下一个自然的问题，而这一行正是他目光所在。
-   */
-  onCorrespond?: (nIds: string[]) => void
-  /**
-   * 「可做」那一行（第四批，缺口 ⑤）。
-   *
-   * **不上画布的对象没有悬浮球**（球挂在节点/箭头上）——于是 `Syl_p(G)` 这种
-   * 子群集**根本点不出操作**，`Syl → 底集 → 共轭作用在` 那条链中间只能打字。
-   * 把单对象操作摆在信息面板里，就补上了这个入口（同一个 `singleOpsFor`，零新机制）。
-   */
-  singleOps?: OpDef[]
-  onRunOp?: (op: OpDef) => void
 }) {
   const group = node && node.value.type === 'group' ? node.value.group : null
+
+  /**
+   * 「子群」标题行的数字（U45）。**不许卡住渲染** —— 见 `SUB_COUNT_CAP` 那段注释：
+   * 枚举放到当前任务之后，面板先画出来，数字随后补上。
+   */
+  const [subCount, setSubCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!group || group.order > SUB_COUNT_CAP) {
+      setSubCount(null)
+      return
+    }
+    let alive = true
+    const id = setTimeout(() => {
+      if (!alive) return
+      setSubCount(subgroupClassCount(group))
+    }, 0)
+    return () => {
+      alive = false
+      clearTimeout(id)
+    }
+  }, [group])
 
   // 结论层：这个对象"所以呢"——同构于什么 / 第一同构定理在这里具体是什么
   const insights = useMemo<Insight[]>(() => {
@@ -102,9 +138,6 @@ export function InfoDock({
     if (v.type === 'action') return actionInsights(v.action)
     return []
   }, [node])
-
-  // 关系层：它落在哪个群里 / 它包含谁 / 它对谁正规 / 谁由它而来
-  const relations = useMemo<Relation[]>(() => (node ? relationsFor(node, table) : []), [node, table])
 
   return (
     <DockPanel
@@ -121,18 +154,27 @@ export function InfoDock({
       {node && (
         <>
           {/*
-            摘要区（对象 / 结论 / 关系 / 可做）与 tab 区**上下分区**。
-            —— 2026-09-30 用户第三次报元素列表：「你不会不知道信息栏有限高吧，
-            关系条目太多给元素列表挤没了不知道？」
+            摘要区 = **身份 + 结论**，就这两块（U44，2026-10-01）。
 
-            实测（1500×950，点 S₄ 的 A₄）：面板高 540px，摘要区一路吃到底 ——
-            info-target 19 + 结论 129 + **关系 199（2 条）** + 可做 95 = 442，
-            「元素 / 子群」两个 tab 的按钮落到 top 502，元素表只剩 **38px** 可视
-            （还被 flex 压扁，不是裁切）。分区之后：摘要区封顶 240px 自己滚，
-            tab 区 **flex: 1 0 auto**（不许被压缩）拿剩下的全部，tabs 钉在区顶。
+            用户原话：「信息栏现状就是信息塞太满了，让用户找不到重点……
+            至于目前面板上的什么关系，什么可做操作，说实话，我都不看。」
 
-            之前只想治"表太宽"（24 行折成 5 行）是治错了地方 —— 表本身没问题，
-            是**它够不到的可视高度**被上面的东西吃光了。
+            砍掉的两块各有出处：
+              · **关系**（核/像/商/同一/子群/包含/派生）—— 它是把对象表里
+                所有沾边的对象**罗列一遍**。那些关系画布上的箭头已经画了，
+                面板里再抄一遍就成了 wiki；用户在面板里要的是"这个对象是什么"，
+                不是"它和表里哪些行有关系"。
+              · **可做**（≤8 个操作按钮）—— 操作本来该在画布上（悬浮球 / 拖拽）。
+                它当初存在的唯一理由是"不上画布的对象没有悬浮球"，那个缺口
+                现在由「操作」抽屉的列表型行补（见 `ui/OpDock.tsx`）。
+
+            于是摘要区只剩：对象身份（19px 上下）+ 结论（同构 / 第一同构定理 /
+            轨道分解）。这既是"计算器给的那个结果"，也是用户排在第一位的诉求
+            ——「这个群和哪个常见群同构？」。
+
+            U45 起底下不再是 tab 条，而是**可折叠分区**（单开 / 默认全收）。
+            U42 那条"分区里容器高度必须确定"的规矩随之改写：全收时面板本来就该矮，
+            所以高度回到**内容驱动 + max-height 封顶**，由 `.info-acc` 自己滚。
           */}
           <div className="info-brief">
             <div className="info-target">
@@ -150,7 +192,9 @@ export function InfoDock({
             {insights.length > 0 && (
               <div className="insights">
                 {insights.map((ins, i) => (
-                  <div key={i} className={`insight insight-${ins.tone}`}>
+                  /* 第一条 = **头条**（U46）：识别 / 第一同构定理 / 轨道分解 本来就是
+                     结论层的第一个答案，字号要比其余结论再大一档 —— 见 `.insight-lead` */
+                  <div key={i} className={`insight insight-${ins.tone}${i === 0 ? ' insight-lead' : ''}`}>
                     <span className="insight-label">{ins.label}</span>
                     <div className="insight-body">
                       <Tex tex={ins.tex} />
@@ -160,99 +204,47 @@ export function InfoDock({
                 ))}
               </div>
             )}
-
-            {relations.length > 0 && (
-              <div className="relations">
-                <div className="rel-head">关系</div>
-                {relations.map((r, i) => (
-                  <div key={i} className={`rel rel-${r.kind}`}>
-                    <span className="rel-tag">{RELATION_LABEL[r.kind]}</span>
-                    <div className="rel-body">
-                      {r.tex ? (
-                        <Tex tex={r.tex} />
-                      ) : (
-                        <span className="rel-text">
-                          <TexOrText text={r.text} />
-                        </span>
-                      )}
-                      {r.detail && (
-                        <div
-                          className="rel-detail"
-                          // 原始形态（`\trianglelefteq S_4 \cdot 指数[S_4:K] = 24/4=6`）——
-                          // 走查与断言读它（DOM 文本是 KaTeX **渲染后**的，比不了源码串）
-                          data-detail={r.detail}
-                        >
-                          <TexOrText text={r.detail} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {/*
-                  这句话是 U18 那条教训的延伸：子群列表只列**共轭类代表**会被读成"全部"，
-                  关系层只列**表里已经建出来的对象**同样会被读成"全部关系"。
-                  边界写清楚，比多列两行更有用。
-                */}
-                {relations.some((r) => r.kind === 'subgroup' || r.kind === 'contains' || r.kind === 'equal') && (
-                  <div className="rel-note">
-                    只列「已经建出来」的对象之间能确定的关系；要看全部子群 / 正规子群，用「子群」tab 或
-                    Sub(G) / 正规子群(G)。
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 「可做」：这个对象能立刻做的单对象操作。**不上画布的对象只有这一条入口** */}
-            {onRunOp && singleOps.length > 0 && (
-              <div className="info-ops">
-                <span className="info-ops-head">可做</span>
-                {singleOps.slice(0, 8).map((op) => (
-                  <button
-                    key={op.id}
-                    type="button"
-                    className="info-op"
-                    title={`${op.notation} ---- ${op.doc}`}
-                    onClick={() => onRunOp(op)}
-                  >
-                    {menuLabel(op)}
-                  </button>
-                ))}
-                {singleOps.length > 8 && (
-                  <span className="info-ops-more">...还有 {singleOps.length - 8} 个（点对象旁的球看全部）</span>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* tab 区：tab 头钉住，内容自己滚 */}
-          <div className="info-panel">
-            {group ? (
-              <>
-                <div className="info-tabs">
-                  {INFO_TABS.map((t) => (
+          {group ? (
+            <div className="info-acc">
+              {INFO_SECTIONS.map((t) => {
+                const openSec = tab === t.id
+                return (
+                  <section key={t.id} className="info-sec" data-sec={t.id}>
                     <button
-                      key={t.id}
-                      className={`info-tab${tab === t.id ? ' on' : ''}`}
-                      onClick={() => onTab(t.id)}
+                      type="button"
+                      className={`info-sec-head${openSec ? ' on' : ''}`}
+                      data-sec={t.id}
+                      aria-expanded={openSec}
+                      title={openSec ? `收起「${t.label}」` : `展开「${t.label}」`}
+                      onClick={() => onTab(openSec ? null : t.id)}
                     >
-                      {t.label}
+                      <span className="info-sec-label">{t.label}</span>
+                      <span className="info-sec-sum">{sectionSummary(t.id, group, subCount)}</span>
+                      {/* 展开三角用**内联 SVG** —— `▾` 键盘打不出来（no-unicode-leak 会抓） */}
+                      <svg className="info-sec-caret" viewBox="0 0 8 6" aria-hidden="true">
+                        <path d="M0.6 0.8 L7.4 0.8 L4 5.2 Z" fill="currentColor" />
+                      </svg>
                     </button>
-                  ))}
-                </div>
-                <div className="info-panel-body">
-                  {tab === 'basic' && <BasicTab group={group} node={node} />}
-                  {tab === 'elements' && <ElementsTable group={group} />}
-                  {tab === 'subgroups' && (
-                    <SubgroupsTab group={group} onCorrespond={onCorrespond} />
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="info-panel-body">
+                    {openSec && (
+                      <div className="info-sec-body">
+                        {t.id === 'basic' && <BasicTab group={group} node={node} />}
+                        {t.id === 'elements' && <ElementsTable group={group} />}
+                        {t.id === 'subgroups' && <SubgroupsTab group={group} />}
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="info-acc">
+              <div className="info-sec-body">
                 <OtherTab node={node} onExtract={onExtract} />
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </>
       )}
     </DockPanel>
@@ -486,13 +478,7 @@ type CosetSub = ReturnType<typeof listCosetStripSubgroups>[number] & {
   structKey: string
 }
 
-function SubgroupsTab({
-  group,
-  onCorrespond,
-}: {
-  group: Group
-  onCorrespond?: (nIds: string[]) => void
-}) {
+function SubgroupsTab({ group }: { group: Group }) {
   /**
    * 共轭类代表那一行里"**它是谁**"（生成元）—— 2026-09-30 用户反馈：
    * "3、群的子群列表里，重复的子群太多了吧。"
@@ -613,7 +599,7 @@ function SubgroupsTab({
             {open && (
               <div className="insp-subs insp-isogroup-body">
                 {g.rows.map((s) => (
-                  <SubgroupRow key={s.key} sub={s} onCorrespond={onCorrespond} />
+                  <SubgroupRow key={s.key} sub={s} />
                 ))}
               </div>
             )}
@@ -624,20 +610,13 @@ function SubgroupsTab({
       <div className="insp-note dim">
         这一屏里有 {normalCount} 个正规（共轭类口径）。要看全部子群 / 全部正规子群：
         用「操作」抽屉里的 Sub(G) 与 正规子群(G)（正规子群会把平凡群与 G 自身也算进来）。
-        正规那一行右边的「对应定理」：看它和商群 G/N 的子群怎么一一对应（对应定理）。
       </div>
     </div>
   )
 }
 
 /** 「子群」tab 里的一行 = **一个共轭类**（同构类里的一项）。 */
-function SubgroupRow({
-  sub,
-  onCorrespond,
-}: {
-  sub: CosetSub
-  onCorrespond?: (nIds: string[]) => void
-}) {
+function SubgroupRow({ sub }: { sub: CosetSub }) {
   return (
     <div
       className="insp-sub"
@@ -658,30 +637,7 @@ function SubgroupRow({
         |H|={sub.order} -[G:H]={sub.index}
         {sub.orbitSize > 1 ? ` -x${sub.orbitSize}` : ''}
       </span>
-      {sub.isNormal && (
-        <CorrespondButton
-          title="看这个正规子群与商群 G/N 的对应定理（第四同构定理）"
-          onClick={() => onCorrespond?.(sub.elementIds)}
-        />
-      )}
     </div>
-  )
-}
-
-/**
- * 「对应定理」的入口按钮。
- *
- * 2026-09-30 用户反馈：「2、这就是你说的对应定理？」—— 卡片是能做出来的
- * （见 `ui/CorrespondenceCard.tsx`，实测 `S_4/V_4` 两侧 6↔6、覆盖边 8/8、正规 3/3），
- * 问题是它**藏在一个灰色小字按钮里**，用户根本没找到，于是在画布上手搭
- * `A_4 ⊴ S_4`、`V_4 ↪ S_4`、`S_4/V_4` 想自己把对应摆出来。
- * 所以这一轮把入口提到"一眼看得见"：**主色描边 + 写全「对应定理」**。
- */
-function CorrespondButton({ title, onClick }: { title: string; onClick: () => void }) {
-  return (
-    <button type="button" className="insp-sub-corr" title={title} onClick={onClick}>
-      对应定理
-    </button>
   )
 }
 
@@ -789,6 +745,57 @@ function SubgroupTag({
   )
 }
 
+/**
+ * 「元素送到哪里去了」（U44，2026-10-01）—— 映射该吐出来的那个**结果**。
+ *
+ * 用户点名要看这个（"元素送到哪里去了？（映射信息）"）。从前映射这一栏只有
+ * `|ker| / |im|` 两个数字加上生成元的像，等于没回答"每个元素落到哪"。
+ *
+ * `GalMap.mapping` 本来就是**完整映射表**（域元素 id → 靶元素 id），
+ * 逐行铺出来就是答案。列头写「元素 / 像」而不是「x / f(x)」——
+ * 这一列在 298px 面板里放得下，也不必再渲染一次 KaTeX 公式。
+ */
+function MapCorrespondence({ map }: { map: GalMap }) {
+  const m = map.mapping
+  if (!m || m.size === 0) return null
+  const byId = new Map(map.codomain.elements.map((e) => [e.id, e]))
+  const rows = map.domain.elements
+  const CAP = 60
+  return (
+    <div className="map-corr">
+      <div className="rel-head">元素送到哪里去</div>
+      <div className="etable-wrap">
+        <table className="etable map-corr-table">
+          <thead>
+            <tr>
+              <th>元素</th>
+              <th>像</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, CAP).map((e) => {
+              const t = byId.get(m.get(e.id) ?? '')
+              return (
+                <tr key={e.id} data-src={e.id} data-dst={t?.id ?? ''}>
+                  <td>
+                    <TexOrText text={e.label} />
+                  </td>
+                  <td>
+                    <TexOrText text={t?.label ?? '--'} />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > CAP && (
+        <div className="insp-line dim">...共 {rows.length} 个元素（这里只列前 {CAP} 个）</div>
+      )}
+    </div>
+  )
+}
+
 function OtherTab({
   node,
   onExtract,
@@ -796,6 +803,7 @@ function OtherTab({
   node: GalObject
   onExtract?: (sub: NormalizedSubgroup) => void
 }) {
+
   const v = node.value
   switch (v.type) {
     case 'elements':
@@ -911,6 +919,7 @@ function OtherTab({
               </span>
             </Row>
           )}
+          <MapCorrespondence map={v.map} />
         </>
       )
     case 'relation': {
@@ -958,6 +967,26 @@ function OtherTab({
       )
     default:
       return null
+  }
+}
+
+/**
+ * 折叠标题行右边那行摘要（U45）——「不点开也看得到的关键数字」。
+ *
+ * 全是**免费**的量：阶与交换性是现成字段；元素个数就是阶；子群类数走
+ * `subgroupClassCount`（延迟 + 上限 + 缓存，见 `SUB_COUNT_CAP`），拿不到就留空
+ * ——**宁可没有数字，也不写个猜的**。
+ *
+ * 分隔一律用 ASCII `-`：`·` 键盘打不出来（`no-unicode-leak` 判据）。
+ */
+function sectionSummary(id: InfoTab, group: Group, subCount: number | null): string {
+  switch (id) {
+    case 'basic':
+      return `|G| = ${group.order} - ${group.isAbelian ? '交换' : '非交换'}`
+    case 'elements':
+      return `${group.order} 个元素`
+    case 'subgroups':
+      return subCount === null ? '' : `${subCount} 类`
   }
 }
 

@@ -5,35 +5,25 @@ import {
   type Group,
   type GroupElement,
 } from '@groupviz/core'
-import { prettySymbol } from './pretty'
 import { groupFingerprint } from './identity'
 import { elementSemanticKey } from './semantic'
 import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
-import { toTex } from './tex'
-import type { GalObject } from './types'
-import type { GalValue } from './value'
 
 /**
- * 关系层（U19）—— **"它在哪儿"**。
+ * 包含判定（U19 起）—— **"H 是不是 G 的子群"**，以及它在 G 里正不正规。
  *
- * 信息面板原来回答"这个对象长什么样"（分区）与"所以呢"（结论层），
- * 但**没有地方说关系**：`K ⊴ S₄`、`K ⊆ A₄`、`K = ker f`、`[G:K] = 6`
- * 这些"两个对象之间的事"全都无处安放（`docs/USABILITY.md` §2 的第 ② 条缺口）。
+ * 这个文件从前还带一个"关系层"（把 `H ≤ G`、`K = ker f`、`Q = G/N` 这些
+ * **两个对象之间的话**罗列到信息面板上）。那段在 U44（2026-10-01）整块删掉了：
+ * 用户原话「至于目前面板上的什么关系……说实话，我都不看」——
+ * 关系在画布上已经画成箭头，面板里再抄一遍只是 wiki。留下的只有**计算**：
+ * 判定逻辑被画布（`derive`）、拖拽连线（`interaction`）、集合运算（`ops`）
+ * 共用，一条都不能少。
  *
- * ## 关系从哪来（只有两条路，都不猜）
+ * ## 判定从哪来（两关，都不猜）
  *
- * **① 来源决定的**（`node.sources` + `node.opId`）——系统自己记得这个对象是怎么造的：
- *   `ker f` 的核必是 `f` 的定义域的正规子群；`im f` 的像必落在靶群里；
- *   `Z(G)` / `N_G(H)` / `⟨S⟩` / `A ∩ B` 这些产物必是来源群的子群。
- *
- * **② 元素集包含**（严格判据，见 `containment`）——两个**各自独立建出来**的群之间，
- *   只要元素 id 空间一致且子集关系经 core 校验成立，就是真的包含。
- *   用户手打 `A_4` 与 `S_4` 两条独立定义，正是靠这条路发现 `A₄ ≤ S₄`。
- *
- * ## 顺手给的一层：派生（谁由我而来）
- *
- * 点画布上的箭头 `f` → 立刻看到 `K = ker f`、`im f` 在哪儿。这是"反向的来源"，
- * 对映射最有用（映射本身不占节点，只有一条边，看不到它长出了什么）。
+ * **第一关 · 字面包含（元素集）** —— 元素 id 空间一致时走这条。
+ * **第二关 · 嵌入** —— 元素 id 根本对不上时走这条：G 里**有没有与 H 同构的子群**。
+ *   用户手打 `A_4` 与 `S_4` 两条独立定义，靠第二关发现 `A₄ ≤ S₄`。
  */
 
 const ENUM_CAP = 144
@@ -103,8 +93,8 @@ export interface Containment {
  * ## 两条路的边界（U38 定的）
  *
  * 第二关**只认严格包含**（`|H| < |G|`）：两个各自造出来的同阶群互为同构，
- * 但它们是**两个对象**，说成"同一个群"是假话（`containment` 的指数 1 档在
- * 关系层被读成「同一」，那是第一关的语义，不能借第二关混进来）。
+ * 但它们是**两个对象**，说成"同一个群"是假话（指数 1 那一档属于第一关的语义，
+ * 不能借第二关混进来）。
  */
 export function containment(H: Group, G: Group): Containment | null {
   const key = `${groupFingerprint(H)}<-${groupFingerprint(G)}`
@@ -189,273 +179,4 @@ export function embeddingSearchBlocked(H: Group, G: Group): boolean {
   if (G.order % H.order !== 0) return false
   if (hasCosetElements(H)) return true
   return G.order > ENUM_LIMIT
-}
-
-/* ── 关系 ──────────────────────────────────────────────── */
-
-export type RelationKind =
-  /** K ≤ G */
-  | 'subgroup'
-  /** K ⊇ H（我包含谁） */
-  | 'contains'
-  /** K = H（元素完全相同——同一个子群，只是两种造法） */
-  | 'equal'
-  /** K = ker f */
-  | 'kernel'
-  /** K = im f */
-  | 'image'
-  /** Q = G/N */
-  | 'quotient'
-  /** 表里哪些对象以我为源 */
-  | 'derived'
-
-export const RELATION_LABEL: Record<RelationKind, string> = {
-  subgroup: '子群',
-  contains: '包含',
-  equal: '同一',
-  kernel: '核',
-  image: '像',
-  quotient: '商',
-  derived: '派生',
-}
-
-export interface Relation {
-  kind: RelationKind
-  /** 对方对象的 id（`derived` 的溢出行为空串） */
-  other: string
-  /** 一句话（TeX） */
-  tex: string
-  /** 一句话（纯文本） */
-  text: string
-  /** 附注：正规 / 指数 / 记号对照 */
-  detail?: string
-}
-
-/** 关系行的排序权重（越靠前越"是重点"）。 */
-const KIND_ORDER: Record<RelationKind, number> = {
-  kernel: 0,
-  image: 1,
-  quotient: 2,
-  equal: 3,
-  subgroup: 4,
-  contains: 5,
-  derived: 6,
-}
-
-/** 每一类最多列几条（面板高度有限，多了就不是"一眼看出"了）。 */
-const CAPS: Record<RelationKind, number> = {
-  kernel: 2,
-  image: 2,
-  quotient: 2,
-  equal: 4,
-  subgroup: 5,
-  contains: 5,
-  derived: 6,
-}
-
-const indexText = (hi: string, lo: string, h: number, g: number, i: number) =>
-  `指数 [${hi}:${lo}] = ${g} / ${h} = ${i}`
-
-/**
- * 焦点对象的全部关系。`table` 是当前对象表（画布上所有对象）。
- */
-export function relationsFor(node: GalObject, table: GalObject[]): Relation[] {
-  const out: Relation[] = []
-  const seen = new Set<string>()
-  /** 每类已放几条 + 被截掉几条 */
-  const used: Record<string, number> = {}
-  const dropped: Record<string, number> = {}
-
-  const push = (r: Relation) => {
-    const key = `${r.kind}#${r.other}`
-    if (seen.has(key)) return
-    const cap = CAPS[r.kind] ?? 99
-    if ((used[r.kind] ?? 0) >= cap) {
-      dropped[r.kind] = (dropped[r.kind] ?? 0) + 1
-      return
-    }
-    seen.add(key)
-    used[r.kind] = (used[r.kind] ?? 0) + 1
-    out.push(r)
-  }
-
-  /** 已经被"核 / 像"行说过的群（避免再报一条平淡的 `≤`） */
-  const superseded = new Set<string>()
-  const byId = new Map(table.map((o) => [o.id, o]))
-
-  if (node.value.type === 'group') {
-    const K = node.value.group
-
-    // ── ① 来源决定的关系 ──
-    for (const sid of node.sources) {
-      const src = byId.get(sid)
-      if (!src) continue
-      const sv: GalValue = src.value
-
-      if (node.opId === 'kernel' && sv.type === 'map') {
-        const G = sv.map.domain
-        superseded.add(`${G.symbol}#${G.order}`)
-        const c = containment(K, G)
-        push({
-          kind: 'kernel',
-          other: src.id,
-          tex: `${toTex(node.id)} = \\ker ${toTex(src.id)}`,
-          text: `${node.id} = ker ${src.id}`,
-          detail:
-            `核必是定义域的正规子群：\\trianglelefteq ${prettySymbol(G.symbol)}` +
-            (c ? ` \\cdot ${indexText(prettySymbol(G.symbol), node.id, K.order, G.order, c.index)}` : ''),
-        })
-        continue
-      }
-
-      if (node.opId === 'image' && sv.type === 'map') {
-        const H = sv.map.codomain
-        superseded.add(`${H.symbol}#${H.order}`)
-        const c = containment(K, H)
-        /**
-         * `像` 现在有**两个形态**（U20）：`像(f)` 是整个像、`像(f, H)` 是子群的像。
-         * 从前这里一律写 `= im f`，于是 `f(A₄)` 的面板会自称 `FA = im f` —— 名称对不上。
-         * 判据：来源里有没有**群对象**（`像(f, H)` 的第二参）。
-         */
-        const hArg = node.sources.map((s) => byId.get(s)).find((o) => o?.value.type === 'group')
-        push({
-          kind: 'image',
-          other: src.id,
-          tex: hArg
-            ? `${toTex(node.id)} = ${toTex(src.id)}(${toTex(hArg.id)})`
-            : `${toTex(node.id)} = \\operatorname{im} ${toTex(src.id)}`,
-          text: hArg ? `${node.id} = ${src.id}(${hArg.id})` : `${node.id} = im ${src.id}`,
-          detail: hArg
-            ? `${hArg.id} 在 ${src.id} 下的像，落在靶群 ${prettySymbol(H.symbol)} 里` +
-              (c ? ` \\cdot ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}` : '')
-            : c
-              ? `像落在靶群里 \\cdot ${indexText(prettySymbol(H.symbol), node.id, K.order, H.order, c.index)}`
-              : `像落在靶群 ${prettySymbol(H.symbol)} 里`,
-        })
-        continue
-      }
-
-      // 来源是群 / 作用是群 → 提名一条"子群"，**判定仍走严格判据**
-      const g: Group | null =
-        sv.type === 'group' ? sv.group : sv.type === 'action' ? sv.action.group : null
-      if (!g) continue
-      const c = containment(K, g)
-      if (!c) continue
-      push(subgroupRow(node.id, K, src, g, c))
-    }
-
-    // ── ② 元素集包含（两个独立建出来的群之间也能发现）──
-    for (const o of table) {
-      if (o.id === node.id || o.value.type !== 'group') continue
-      const G = o.value.group
-
-      if (!superseded.has(`${G.symbol}#${G.order}`)) {
-        const c = containment(K, G)
-        if (c) push(subgroupRow(node.id, K, o, G, c))
-      }
-
-      // 反向：我包含谁。指数 1 是"同一个子群"，正向已经说成 `=` 了，别再说一遍
-      const cBack = containment(G, K)
-      if (cBack && cBack.index !== 1) {
-        push({
-          kind: 'contains',
-          other: o.id,
-          tex: `${toTex(o.id)} \\le ${toTex(node.id)}`,
-          text: `${o.id} \\le ${node.id}`,
-          detail:
-            `${prettySymbol(G.symbol)} \\le ${prettySymbol(K.symbol)}` +
-            ` \\cdot ${cBack.normal === true ? '\\trianglelefteq 正规' : cBack.normal === false ? '非正规' : '正规性未判定'}` +
-            ` \\cdot ${indexText(node.id, o.id, G.order, K.order, cBack.index)}`,
-        })
-      }
-    }
-  }
-
-  // ── ③ 派生：表里以我为源的对象 ──
-  derivedRelations(node, table, push)
-
-  const sorted = out.sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
-  for (const [kind, n] of Object.entries(dropped)) {
-    sorted.push({
-      kind: kind as RelationKind,
-      other: '',
-      tex: '',
-      text: `...还有 ${n} 个同类关系`,
-    })
-  }
-  return sorted
-}
-
-/**
- * 一条"K 与 G 的包含关系"。
- *
- * **指数 1 单列**：`[G:K] = 1` 意味着两边元素完全相同——那是**同一个群**，
- * 只是两种造法（实测：`ker f` 与 `闭包(G, (12)(34), (13)(24))` 都是 V₄，
- * 元素 id 一模一样；两个各自声明的 `C_6` 也一样，元素是同一批 `e0…e5`）。
- * 写成 `K ≤ B · 指数 1` 加 `B ≤ K · 指数 1` 会让人以为
- * 是两个互相包含的群；写成 `K = B · 元素完全相同` 才是用户想知道的。
- */
-function subgroupRow(name: string, K: Group, src: GalObject, G: Group, c: Containment): Relation {
-  const same = c.index === 1
-  return {
-    kind: same ? 'equal' : 'subgroup',
-    other: src.id,
-    tex: same
-      ? `${toTex(name)} = ${toTex(src.id)}`
-      : `${toTex(name)} \\le ${toTex(src.id)}`,
-    text: same ? `${name} = ${src.id}` : `${name} \\le ${src.id}`,
-    detail: same
-      ? `${prettySymbol(K.symbol)} ---- 元素完全相同，就是同一个群（两种造法）`
-      : `${prettySymbol(K.symbol)} \\le ${prettySymbol(G.symbol)}` +
-        ` \\cdot ${c.normal === true ? '\\trianglelefteq 正规' : c.normal === false ? '非正规' : '正规性未判定'}` +
-        ` \\cdot ${indexText(src.id, name, K.order, G.order, c.index)}`,
-  }
-}
-
-/** 最多列几条派生（多了面板塞不下，剩下的只说个数）。 */
-const DERIVED_CAP = 6
-
-function derivedRelations(node: GalObject, table: GalObject[], push: (r: Relation) => void): void {
-  // 商群：`Q = G/N` 是它的定义式，也是它唯一说得清的关系（元素是陪集，落不进任何群）
-  if (node.value.type === 'group' && node.opId === 'quotient') {
-    const [gn, nn] = node.sources
-    if (gn && nn) {
-      const G = table.find((o) => o.id === gn)
-      const N = table.find((o) => o.id === nn)
-      const g = G?.value.type === 'group' ? G.value.group : null
-      const k = N?.value.type === 'group' ? N.value.group : null
-      if (g && k) {
-        // 分母是**自动翻译**来的（`D` 与 `G` 的元素表对不上，见 ops 的 `autoTranslatedSubgroup`）
-        // 时，第一句换成分诊的说明 —— 不能再声称「D 自己 ⊴ G」，那句话在这里是不成立的。
-        push({
-          kind: 'quotient',
-          other: gn,
-          tex: `${toTex(node.id)} = ${toTex(gn)} / ${toTex(nn)}`,
-          text: `${node.id} = ${gn} / ${nn}`,
-          detail:
-            (node.note ?? `N = ${nn} \\trianglelefteq ${gn}（商群良定义）`) +
-            ` \\cdot|Q| = |G| / |N| = ${g.order} / ${k.order} = ${g.order / k.order}`,
-        })
-      }
-    }
-  }
-
-  const kids = table.filter((o) => o.id !== node.id && o.sources.includes(node.id))
-  for (const k of kids.slice(0, DERIVED_CAP)) {
-    push({
-      kind: 'derived',
-      other: k.id,
-      tex: `${toTex(k.id)} = ${toTex(k.def)}`,
-      text: `${k.id} = ${k.def}`,
-      detail: k.opId ? `由它算出（${k.opId}）` : undefined,
-    })
-  }
-  if (kids.length > DERIVED_CAP) {
-    push({
-      kind: 'derived',
-      other: '',
-      tex: '',
-      text: `...还有 ${kids.length - DERIVED_CAP} 个以它为源的对象`,
-    })
-  }
 }

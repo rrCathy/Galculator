@@ -26,7 +26,6 @@ import { findExistingObject } from './gal/identity'
 import { parseSnapshot, serializeSnapshot, SNAPSHOT_VERSION } from './gal/snapshot'
 import { boardDisabled, loadBoardLines, saveBoardLines } from './gal/board'
 import { SnapshotCard } from './ui/SnapshotCard'
-import { CorrespondenceCard } from './ui/CorrespondenceCard'
 import type { Group } from '@groupviz/core'
 import { opTemplate } from './gal/ops'
 import { proofHighlight, proofLines, type ProofParams, type ProofTemplate } from './gal/proof'
@@ -135,7 +134,11 @@ export default function App() {
   const [openOps, setOpenOps] = useState(false)
   const [openInfo, setOpenInfo] = useState(false)
   const [openNumeric, setOpenNumeric] = useState(true)
-  const [infoTab, setInfoTab] = useState<InfoTab>('basic')
+  /**
+   * 信息面板**展开的那一节**（U45 起是手风琴，不再是 tab）。
+   * `null` = 全收 —— 默认状态就是它：不点开，面板只剩摘要 + 三行标题。
+   */
+  const [infoTab, setInfoTab] = useState<InfoTab | null>(null)
   const [dragged, setDragged] = useState<NumericEntry[]>([])
   const [composerOpen, setComposerOpen] = useState(false)
   /**
@@ -337,12 +340,6 @@ export default function App() {
   const [snapshotOpen, setSnapshotOpen] = useState(false)
   const [snapshotText, setSnapshotText] = useState('')
   const [snapshotErr, setSnapshotErr] = useState<string | null>(null)
-
-  /**
-   * 对应定理卡片：从子群列表里某个**正规**子群点「对应」打开。
-   * 存的是 G 与 N 的元素 id 快照 —— 之后焦点换到别处也不影响这张卡。
-   */
-  const [corr, setCorr] = useState<{ G: Group; nIds: string[] } | null>(null)
 
   /** 导出：取画布当下的钉住 + 视口，连同定义行写成一段文本。 */
   const exportSnapshot = useCallback(() => {
@@ -1033,6 +1030,8 @@ export default function App() {
             onRemove={removeLine}
             onEdit={startEdit}
             onSelect={selectFromDock}
+            // 不上画布的对象（子群集）只有这条路能跑操作 —— 它们没有悬浮球
+            onRunOp={(op, id) => startOp(op, id)}
           />
         </div>
         <InfoDock
@@ -1043,14 +1042,7 @@ export default function App() {
           node={busy ? null : focusedObj}
           // 焦点也可能是一条**结构伴生边**（缺口 ⑧）——它与 `node` 互斥
           edge={busy ? null : focusedEdge}
-          table={objects}
           onExtract={extractSubgroup}
-          onCorrespond={(nIds) => {
-            const v = focusedObj?.value
-            if (v && v.type === 'group') setCorr({ G: v.group, nIds })
-          }}
-          singleOps={singleOps}
-          onRunOp={(op) => focusedObj && startOp(op, focusedObj.id)}
         />
       </div>
 
@@ -1112,10 +1104,6 @@ export default function App() {
           onSubmit={submitEditorLine}
           onCancel={reset}
         />
-      )}
-
-      {corr && (
-        <CorrespondenceCard G={corr.G} nIds={corr.nIds} onClose={() => setCorr(null)} />
       )}
 
       {snapshotOpen && (

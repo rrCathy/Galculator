@@ -169,7 +169,7 @@ console.log('== 面板里给的记号也抄得回去 ==')
   //（状态行、提示语），它们必须自己就是 ASCII。
   const plainChrome = await page.evaluate(() =>
     [
-      ...document.querySelectorAll('.row-name, .insp-label, .rel-tag, .proof-kind, .dock-tab'),
+      ...document.querySelectorAll('.row-name, .insp-label, .proof-kind, .dock-tab'),
     ]
       .map((e) => e.textContent ?? '')
       .join(' '),

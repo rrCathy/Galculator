@@ -94,30 +94,31 @@ const clickRow = async (id) => {
     return !!h
   }, id)
 }
+/**
+ * 展开信息面板的第 `name` 节 —— **幂等**（U45 起标题行是**开关**，不是 tab）。
+ *
+ * 从前这里直接 `.click()`，在 tab 模型下"点=切过去"是幂等的；换成手风琴之后
+ * 再点同一节就是**收起** —— 走查里第二次 `openTab('元素')` 于是把表收没了
+ * （`rows=0`）。助手要的是"保证它开着"，所以先看 `on` 再决定点不点。
+ */
 const openTab = async (name) => {
   await page.evaluate((n) => {
-    ;[...document.querySelectorAll('.info-tab')].find((b) => b.textContent.trim() === n)?.click()
+    const h = [...document.querySelectorAll('.info-sec-head')].find(
+      (b) => b.querySelector('.info-sec-label')?.textContent.trim() === n,
+    )
+    if (h && !h.classList.contains('on')) h.click()
   }, name)
   await page.waitForTimeout(360)
 }
 /**
- * 元素表的行数与元素总数。
+ * 元素表的**行数**。
  *
- * ⚠️ 2026-09-30 起元素表**按共轭类折叠**（用户："元素列表现在都看不了了"——
- * 24 行 × 6 列塞进 298px 面板，右边两列被裁）。所以 `tr` 的条数**不再是群的阶**：
- * 它是**共轭类个数**。要验"这个群多大"就得把每一类的 `data-size` 加起来
- * —— 只数行数会让下面几条断言在"类数恰好等于阶"的群上**假 PASS**。
+ * 2026-10-01 起元素表是**逐元素一行**（v3.2 曾按共轭类折成 5 行，被用户否掉：
+ * 「元素列表你按共轭类收起来是什么意思？……连单个元素信息都看不了了。」）。
+ * 所以 `tr` 条数**就是群的阶**。
  */
 const tableRows = () =>
-  page.evaluate(() => {
-    const rows = [...document.querySelectorAll('.etable tbody tr')].filter((r) =>
-      r.querySelector('.etable-cls'),
-    )
-    return {
-      classes: rows.length,
-      elements: rows.reduce((s, r) => s + Number(r.dataset.size ?? 1), 0),
-    }
-  })
+  page.evaluate(() => document.querySelectorAll('.etable tbody tr[data-el]').length)
 
 /* ── ①② 两个独立构造的群：积集停下、商直接翻译 ───────── */
 
@@ -143,9 +144,9 @@ ok('点得中 P 这一行', await clickRow('P'))
 await openTab('元素')
 const mulRows = await tableRows()
 ok(
-  '积集结果的元素表：4 个共轭类 / 12 个元素（就是 A_4：1+3+4+4）',
-  mulRows.classes === 4 && mulRows.elements === 12,
-  JSON.stringify(mulRows),
+  '积集结果的元素表：12 行（就是 A_4 的 12 个元素）',
+  mulRows === 12,
+  `rows=${mulRows}`,
 )
 
 // 交：从前**静默给空集**（id 空间不通），现在对齐后是 A_4 里那个 Klein
@@ -154,9 +155,9 @@ ok('点得中 I 这一行', await clickRow('I'))
 await openTab('元素')
 const capRows = await tableRows()
 ok(
-  '交的结果：4 个共轭类 / 4 个元素（A_4 ∩ V_4 = Klein，交换群每类一个）',
-  capRows.classes === 4 && capRows.elements === 4,
-  JSON.stringify(capRows),
+  '交的结果：4 行（A_4 ∩ V_4 = Klein 的 4 个元素）',
+  capRows === 4,
+  `rows=${capRows}`,
 )
 
 await page.screenshot({ path: '../../docs/assets/u32-setops.png' })
@@ -195,7 +196,7 @@ ok('Q0 = A / V 提交', await addLine('Q0', 'A / V'))
 ok('点得中 Q0 这一行', await clickRow('Q0'))
 await openTab('元素')
 const rows = await tableRows()
-ok('|A_4 / V_4| = 3（手算 12 / 4）', rows.classes === 3 && rows.elements === 3, JSON.stringify(rows))
+ok('|A_4 / V_4| = 3（手算 12 / 4）', rows === 3, `rows=${rows}`)
 
 // 没有正规候选时照实说：A_4 的 3 个 C_2 全不正规
 ok('C = C_2 提交', await addLine('C', 'C_2'))
@@ -210,7 +211,7 @@ ok('Q = A / K 提交', await addLine('Q', 'A / K'))
 ok('点得中 Q 这一行', await clickRow('Q'))
 await openTab('元素')
 const rowsManual = await tableRows()
-ok('照抄出来的那条路也算得对：3 个元素', rowsManual.classes === 3 && rowsManual.elements === 3, JSON.stringify(rowsManual))
+ok('照抄出来的那条路也算得对：3 个元素', rowsManual === 3, `rows=${rowsManual}`)
 
 await page.screenshot({ path: '../../docs/assets/u30-quotient-auto.png' })
 

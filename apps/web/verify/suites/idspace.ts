@@ -36,7 +36,6 @@ function mk(s: string) {
 }
 import { groupFingerprint } from '../../src/gal/identity'
 import { identifyGroup } from '../../src/gal/insights'
-import { relationsFor } from '../../src/gal/relations'
 import { build, eq, ok, suite } from '../harness'
 
 /** 容错比较同构符号（`S_{3}` / `S_3` / `S3` 一律等同）。 */
@@ -203,21 +202,7 @@ export function run(): void {
     ok('同样写清分母是自动翻译来的', (x?.sub ?? '').includes('自动取'), x?.sub)
   }
 
-  // ── ⑪ 关系面板不撒谎：翻译来的商，详情不能说「D 自己 ⊴ A」──
-  {
-    const b = build(['A = S_4', 'D = V_4', 'Q = 商(A, D)'])
-    const node = b.byId('Q')
-    ok('Q 建出来了', !!node, b.line('Q')?.error)
-    if (node) {
-      const rel = relationsFor(node, b.objects)
-      const quo = rel.find((r) => r.kind === 'quotient')
-      ok('「商」关系还在', !!quo, JSON.stringify(rel.map((r) => r.kind)))
-      ok('详情不再声称「D ⊴ A」（翻译场景下不成立）', !(quo?.detail ?? '').includes('\\trianglelefteq'), quo?.detail)
-      ok('详情写的是自动翻译那句', (quo?.detail ?? '').includes('自动取'), quo?.detail)
-    }
-  }
-
-  // ── ⑫ 集合运算（∩ ∪ ∖ ·）的对齐：独立构造的 V_4 不再静默给空集 / 怪结果 ──
+  // ── ⑪ 集合运算（∩ ∪ ∖ ·）的对齐：独立构造的 V_4 不再静默给空集 / 怪结果 ──
   // 用户实测（2026-09-29 第三轮）：「A=S4, B=A4, D=V4，创建不了 B 和 D 的积集，
   // 我连子群的积集都创建不了，怎么做同构第二定理？」——这一节把四种运算全钉住。
   {

@@ -34,9 +34,8 @@ node verify/e2e/proof-sylow3.mjs      # Sylow III 的 14 步与孤点判据（M2
 node verify/e2e/proof-params.mjs      # 证明模板的入参界面（U15）
 node verify/e2e/proof-m3.mjs          # 轨道–稳定子 / 第一同构的参数槽与正方形（M3）
 node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报错分清（U18）
-node verify/e2e/relations.mjs         # 关系层：用户的 S₄↠S₃ 剧本（U19）
 node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G（U20）
-node verify/e2e/connect.mjs           # 拖拽连线 + 面板「可做」（U21，真鼠标拖）
+node verify/e2e/connect.mjs           # 拖拽连线 + 对象列表「操作」（U21，真鼠标拖；U44 入口从面板挪到行上）
 node verify/e2e/grid-drag.mjs         # 格点 / 拖动吸附 / 平移 / 缩放 / 复位（U10 的补线，U22）
 node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）
 node verify/e2e/copy-label.mjs        # 把画布上的记号抄回去：三条复制路径（U24）
@@ -80,7 +79,7 @@ node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来
 16. **点左栏的行要按 `.row-name` 里的 id 匹配，不要按文本包含**：行里渲染的是**原始定义**（`S = S_4`），而 `S₄` 是 `prettySymbol` 之后的展示形态。拿展示形态匹配永远匹不上，而信息面板会**停在上一个被选中的对象**上 —— 于是失败原因看起来像"说明没渲染"（U18 走查的真实误判）。
 17. **`subgroupFromElementIds` 对认不得的元素引用是静默的**：`subgroupFromElementIds(D_4, ['e','a','b','c'])` **不报错**，它把不认识的引用一丢了之、返回**平凡子群**。于是"id 子集 + core 校验"的朴素包含判定会得出 `V₄ ≤ D₄`（V₄ 的 id 是 `e a b c`，D₄ 的是 `r0…s3`）。判包含必须**另加两道关**：id 全覆盖 + 校验出的子群阶 = `|H|`（见 `gal/relations.ts` 的 `containment()`）。
 18. **判包含不能只看 id 前缀**：`C₂` 的 id 是 `e0 e1`、`C₄` 的是 `e0 e1 e2 e3` —— **真子集**，第 ① 关会通过。挡住它的是"乘法封闭"（`e1 + e1 = e2 ∉ {e0,e1}`）。凡是按 id 判结构关系的地方，都要拿**群运算**兜一次。
-19. **KaTeX 渲染后的文本要抹零宽字符再比**：`.rel-body` 里是 KaTeX（`K ≤ A` 会带上 `\u200b` 之类），断言前先 `replace(/[\u200b\u2061\u2062]/g,'').replace(/\s+/g,'')` 再 `includes`（`e2e/relations.mjs` 的 `relState`）。**附注那行是纯文本**（`.rel-detail`），比它更稳——优先断言它。
+19. **KaTeX 渲染后的文本要抹零宽字符再比**：`<Tex>` 出来的 `textContent` 会带上 `\u200b` 之类（`K ≤ A` 就会），断言前先 `replace(/[\u200b\u2061\u2062]/g,'').replace(/\s+/g,'')` 再 `includes`。**优先断言纯文本面**（状态行 / `title` / `data-*` 原始形态）——它们不过 KaTeX，比渲染面稳。（~~`e2e/relations.mjs` 的 `relState` / `.rel-body` / `.rel-detail`~~ 那套是 U19 的关系层，**U44 已整块删除**，本条作为通用坑保留。）
 20. **PowerShell 里跑中文输出的回归会变乱码**：`node … | Out-File -Encoding utf8` 会先按控制台代码页（GBK）解码 node 的 UTF-8 输出。跑前先设 `$OutputEncoding = [Text.Encoding]::UTF8; [Console]::OutputEncoding = [Text.Encoding]::UTF8`。更稳的写法是让探针自己用 `fs.writeFileSync(..., 'utf8')` 落盘（`.tmp-probe/*.ts` 都这么做）。
 21. **走查里点画布上的边/节点要派发事件，不能用 `page.click`**：`.gedge-hit` / `.gnode-hit` 的 `stroke`/`fill` 是 `transparent`，Playwright 的动作性检查判它 "not visible"（截图里它确实什么都不画），会白等 30s 再 `TimeoutError`。改用 `el.dispatchEvent(new MouseEvent('click', { bubbles: true }))`（React 18 的监听挂在根容器上，冒泡能到）。`e2e/relation-ops.mjs` 的 `clickSvg` 就是这个。
 22. **断言"值"时不要 `JSON.stringify(值)`**：`Group` 里有 `generators[].inverse` 指回生成元自己（环），一 stringify 就抛 `Converting circular structure to JSON`，**而且是在整份回归跑到那一行时崩掉**（不是只失败一条）。写个 `describeValue()` 只摘 `symbol/order/index/isNormal` 那几项（`suites/usability.ts` 顶部）。
@@ -194,12 +193,15 @@ node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来
     `document.elementFromPoint(x, y)` 看返回的是不是目标（`closest('g.gnode')` / `el === button`），
     别拿两块 `getBoundingClientRect` 比大小就当验过了。修法：窄屏 `@media (max-width: 1080px)`
     两块各占一半宽。回归 `e2e/narrow-docks.mjs`（691×886）。
-47. **面板里做"折叠"之后，`tr` 的条数不再是群的阶**（2026-09-30）。元素表改成按共轭类折叠后，
+47. **面板里做"折叠"之后，`tr` 的条数不再是群的阶**（2026-09-30，**~~U41~~ U43 已撤回折叠**）。元素表改成按共轭类折叠后，
     `document.querySelectorAll('.etable tbody tr').length` 给的是**共轭类个数**（S₄ = 5），
     不是 24。旧断言 `|A₄/V₄| = 3` 恰好还成立（C₃ 每类一个元素）—— **这种"碰巧过"最危险**。
     处置：行上带 `data-size`，走查算 `{classes, elements}` 两个量，断言同时钉住。
     **纪律**：改了列表的呈现粒度，先 grep 一遍所有"数行数"的断言，逐个问"它原本想验的是行数，
     还是行数恰好等于的那个数学量"。
+    ⚠️ **U43 已把折叠撤回**（用户："元素列表你按共轭类收起来是什么意思？"）—— 元素表回到**逐元素 24 行**，
+    所以"`tr` 条数 = 阶"这条又**变回成立**了。**这条坑的教训照旧，但当前事实已反转**：
+    呈现粒度每次改，这类"数行数"的断言都要跟着重算。
 48. **`title` 是纯文本面，塞 LaTeX 原串就是泄漏**（2026-09-30）。`title={\`${g.symbol} 的子群……\`}`
     里 `g.symbol` 是 `C_{2}\times C_{2}`，直接显示成那样。`no-unicode-leak` 走查会抓
     （它把 `[title] / [placeholder] / [aria-label]` 一起扫）。`title` 这个面**没有 KaTeX** ——
@@ -216,13 +218,51 @@ node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来
     修法：分区布局里容器高度必须**确定**（`height: min(62vh, 540px)`）—— 之后摘要 240 /
     tab 区 279 / 元素表 127。**判据**：改了 flex 分配，先量**容器自己**的高度，再看子项，
     只量子项会以为分配逻辑没生效。回归 `e2e/info-split.mjs`。
+    **U45 反转了这条**：下半区从 tab 换成**折叠分区**之后，"全收时面板就该矮"成了需求本身，
+    容器高度回到**内容驱动 + `max-height` 封顶**，`flex-grow` 不再需要余量（滚动交给 `.info-acc`）。
+    教训要连着看：**"容器高度必须确定"是有前提的 —— 前提是那一层要"吃满剩余"。**
 50. **"被挤没了"要分清是"被裁"还是"被压扁"**（2026-09-30）。`.etable-wrap` 是 flex column 的子项，
     `flex-shrink: 1` 是默认值 —— 它自己的 `max-height: 300px` 只是**上限**，挡不住压缩。
     实测表格 38px 时 `max-height` 仍是 300，而 `getBoundingClientRect().height` 是 38。
     "不许压" = `flex: none` 或放进**独立滚动区**；"封顶可滚" = `max-height + overflow-y: auto`。
     两件事，别混。**走查判据**：不要只判"元素在容器内"，还要判**它自己需不需要内滚**
     （`el.scrollHeight <= el.clientHeight + 1`）—— 前者过了它仍可能被压成一条缝。
-51. **切 tab 时"按钮位置不动"是可以钉的，而且值得钉**（2026-09-30）。面板高度随内容变
-    （子群 tab 486px vs 元素 tab 156px）会让整条 tab 栏每切一次上下跳。把高度钉死之后
+51. **切页签时"按钮位置不动"是可以钉的，而且值得钉**（2026-09-30）。面板高度随内容变
+    （子群 486px vs 元素 156px）会让整条页签栏每切一次上下跳。把高度钉死之后
     加一条断言 `tabs.top` 前后相等，比截图更能守住。**副作用要认**：底部会留空白 ——
     位置稳定比"少留白"值钱。
+    **U45 作废**：换成折叠分区之后，"高度随内容变"**正是要的效果**（全收 264 / 展开 540），
+    这条断言连同 `e2e/info-split.mjs` 旧判据一起删掉了 —— 断言要跟着**当下想要的行为**走。
+52. **砍一段 UI ≠ 砍一个判据；而"删一个入口"要先问"它是不是唯一入口"**（2026-10-01，U44）。
+    ① 信息面板砍「关系」段时，`gal/relations.ts` 里其实是**两层**：展示层（`relationsFor`/`Relation`…）
+    和**判定层**（`containment`）。展示层只被面板与回归引用 ⇒ 可删；判定层被画布 `derive` /
+    拖拽 `interaction` / 集合运算 `ops` **三处**吃 ⇒ 删了就塌。**判据：删前 grep 谁在 import 它。**
+    ② 砍「可做」行之前要意识到它是**不上画布的对象（`sortOf === 'list'`，子群 / 集合）的唯一操作入口**
+    —— 直接砍会丢掉「`Syl_p(G)` → 底集 → 共轭作用」这条链。所以先把入口下移到**对象列表的行**上
+    （`ui/ObjectRow` 的「操作」按钮 + `ui/OpDock` 判 `sortOf`），再砍面板那一行。
+    **纪律：删 UI 之前，先问"这个面上有没有别处给不了的东西"。**
+    配套：`e2e/info-split.mjs` 的判据从"关系条目数"改成 `wikiBlocks === 0`
+    （`.relations, .info-ops` 在 DOM 里归零）—— 断言要钉**删除本身**，别钉"还剩几条"。
+53. **"切到某一页"与"保证某一页开着"是两回事 —— tab 是幂等的，手风琴不是**（2026-10-01，U45）。
+    信息面板的 tab 条换成可折叠分区之后，**再点同一节 = 收起**。走查里的
+    `openTab(name)` 助手从前直接 `.click()`（tab 模型下点=切过去，幂等），
+    第二次调用就把「元素」那一节收没了 ⇒ 两处 `rows=0` 假 FAIL。
+    **助手要的是"保证它开着"**：先看 `.on` 再决定点不点。
+    推论：**把手风琴的标题当按钮点的任何走查，都要先想"它现在开着吗"**。
+54. **换 DOM 结构时，选择器会连带炸掉一批"按文本找按钮"的断言**（2026-10-01，U45）。
+    `.info-tab` 消失之后：`batch10.mjs` 用 `textContent.trim() === '子群'` 找按钮 —— 标题行现在
+    是「子群 + 摘要 + SVG」，**精确相等**直接失配。改按 `.info-sec-label` 找。
+    另一头：`tex-render.mjs` 断言「生成元」栏，而那栏住在「基本」这一节里 ——
+    **默认全收之后它不渲染**，于是先点开再断言。
+    **纪律：动了默认展示状态（全收/全展开），挨个问一遍"哪些断言依赖某块内容默认可见"。**
+55. **改字号 = 改宽度，必须重新量**（2026-10-01，U46）。元素表 12.5 → 13px 看着只差 0.5，
+    实测表宽 **278 > 容器 276**（多 2px）就出横向滚动条了 —— 6 列 / 298px 面板一点余量都没有。
+    判据用 **`wrap.scrollWidth > wrap.clientWidth`**，别用"看着没出框"；
+    A/B 一行就能确诊（`addStyleTag` 覆盖 `font-size` 再量）。
+    **凡"挤在固定宽度里的多列表格"调字号，都要过一遍这条。**
+56. **字号层级的守卫，守"层级"不守具体 px**（2026-10-01，U46）。U46 把信息面板排成
+    三档（头条 20 / 对象名 15.5 / 附注 13.5），断言写的是 **`lead >= 18` + 三档严格递减**，
+    不是 `=== 20px` —— 以后调数值不会误报，但"结果又变回和正文一样大"一定会红。
+    **测的是关系（谁比谁大），不是快照（具体多少）。**
+    推论：**改父级字号/字重，先问子级谁在继承** —— `.insight-detail` 住在 `.insight-body`
+    里，头条的 `font-weight: 600` 会被它白捡过去一起变粗（U46 补 `400` 挡回）。

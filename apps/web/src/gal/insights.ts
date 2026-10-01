@@ -63,11 +63,19 @@ function canonSymbol(s: string): string {
  * 结构记号的**惯用名**——用户嘴里说的是这个。
  *
  * `K = ker(f)` 的符号本来就是 `C_{2}\times C_{2}`，但人想问的是"这是不是 V₄"。
+ *
+ * 2026-10-01（U44）：用户说信息面板里第一想看的就是「**这个群和哪个常见群同构？**」，
+ * 于是把常用的几个补齐 —— 这一条现在会给「识别」当答案的第二行。
  */
 const ISO_COMMON_NAME: Record<string, string> = {
   'C_{2}\\times C_{2}': '也写作 V_4（Klein 四元群）',
   'C_{2}\\times C_{2}\\times C_{2}': '初等交换 2-群（每元阶 \\le 2）',
   'S_{3}': '最小的非交换群（也是 D_3）',
+  'S_{4}': '4 元对称群',
+  'A_{4}': '4 元交错群（最小的非交换可解群）',
+  'A_{5}': '最小的非交换单群（60 阶）',
+  'D_{4}': '正方形的对称群（8 阶二面体群）',
+  'Q_{8}': '四元数群（8 阶；每个子群都正规）',
 }
 
 /** 小群库里的条目（`SmallGroup(阶, 编号)`）——识别结果的"坐标"。 */
@@ -159,44 +167,66 @@ export interface Insight {
 }
 
 /**
- * 群对象的结论：同构识别 + 阶的分解。
+ * 群对象的结论：**识别（这是哪个常见群）** + 阶的分解。
  *
- * ## "要不要说同构"的判据（2026-09-25 修正）
+ * ## 识别这一条永远排第一，而且是 `key`（2026-10-01，U44）
  *
- * 旧判据是"识别结果 ≠ 自身符号才说"——那是为**用户手写的群**设计的
- * （`G = S₄` 说"同构于 S₄"确实是废话）。但**由操作构造出来的**群符号本身就是
- * 结构记号（`ker f` 的符号是 `C_{2}\times C_{2}`、`闭包(G,r)` 的是 `C_{4}`），
- * 于是自己跟自己比**永远相等** → 永远沉默。
+ * 用户点名信息面板第一想看的就是「**这个群和哪个常见群同构？**」。
+ * 从前它是**摘要区的一行小字**，而且对**手写的群**（`G = S₄`）干脆被抑制掉
+ * —— 正好把用户最想要的那句答案吞了。现在它常驻头条。
  *
- * 实测：`K = ker(f)` 的信息面板里只剩一条"阶"，用户问"K 是什么"**没有任何地方能回答**。
+ * ## 说不说，分三种情形（都不说废话）
  *
- * 新判据看**这个对象是怎么来的**（`node.opId`）：
- *   - 手写的群记号（无 `opId`）→ 符号即答案，不重复说
- *   - **由操作构造的**（`ker` / `im` / `商` / `闭包` / 子群…）→ **一律说**，
- *     连 SmallGroup 编号与惯用名一起给（那是"它在分类里的位置"）
+ *   - **构造出来的**（有 `opId`）→ 一律说。它的符号本身就是结构记号
+ *     （`ker f` 的符号是 `C_{2}`、`闭包(G,r)` 的是 `C_{4}`），不说不回答"K 是什么"。
+ *   - **手写但库里有惯用名**（`C_2 x C_2` → V₄）→ 说，把惯用名当答案。
+ *   - **手写且再没别的可说**（`G = C_6`）→ 闭嘴（`C₆ = C₆` 是废话）。
+ *
+ * ## ⚠️ 手写的群不给 `SmallGroup(阶, 编号)`
+ *
+ * 2026-10-01 实测：**这个库的小群目录不是 GAP 那套编号** —— 它 0 起、且顺序自定
+ * （`getAllSmallGroups()` 里 8 阶是 `0=C₈ 1=C₄×C₂ 2=C₂³ 3=D₄ 4=Q₈`，
+ * S₄ 落在 `24#11`，而 GAP 里 S₄ 是 `SmallGroup(24,12)`）。
+ * 把这么一个**看着像标准 ID 的数**摆在手写的 `G = S₄` 旁边，会把人引到另一个群上去 ——
+ * 所以手写的群只给**惯用名**。**构造物**（`ker f`）与**真同构**（`F ≅ C₂`）另说：
+ * 那里的符号是副产品、"这是哪个群"本就未知，于是补 `SmallGroup(阶, 编号)` 当坐标。
  */
 export function groupInsights(group: Group, node?: GalObject): Insight[] {
   const out: Insight[] = []
 
-  // ① 同构于什么 / 它在分类里的位置
+  // ① 识别 / 同构 —— **头条**
   const iso = identifyGroup(group)
   if (iso) {
     const same = canonSymbol(iso) === canonSymbol(group.symbol)
-    // 归一后相同 → 只有"构造出来的"才值得说（否则是重复符号）
-    if (!same || !!node?.opId) {
-      const entry = smallGroupEntry(group.order, iso)
-      const parts = [
-        entry ? `SmallGroup(${entry.order}, ${entry.index})` : null,
-        ISO_COMMON_NAME[iso] ?? null,
-      ].filter((x): x is string => !!x)
+    const entry = smallGroupEntry(group.order, iso)
+    const common = ISO_COMMON_NAME[iso] ?? null
+    if (!same || !!node?.opId || !!common) {
+      const coord = entry ? `SmallGroup(${entry.order}, ${entry.index})` : null
+      /*
+       * 附注给什么，看"符号是谁给的"：
+       *   - **手写的群**（`G = S₄`）：符号就是用户自己敲的答案，只补**惯用名**
+       *     （`→ 4 元对称群`）。**不给库里编号** —— 见函数头那段注：这个库的编号
+       *     不是 GAP 那套，摆出来会把人引到别的群上。
+       *   - **构造物**（`ker f` / `闭包(…)`）：符号是**副产品**，用户本来就不知道
+       *     "这是哪个群"，所以补**库内坐标** `SmallGroup(阶, 编号)`。
+       *   - **真同构**（`!same`，如 `F ≅ C₂`）：同前，坐标是"它落在库里哪儿"。
+       */
+      const parts = same
+        ? node?.opId
+          ? [coord, common]
+          : [common]
+        : [coord, common]
+      const detail =
+        parts.filter((x): x is string => !!x).join('，') ||
+        '结构与它完全一样，只是产生方式不同'
       out.push({
         label: same ? '识别' : '同构',
-        tone: same ? 'note' : 'key',
-        tex: `${group.symbol} \\;\\cong\\; ${iso}`,
-        text: `${prettySymbol(group.symbol)} \\cong ${prettySymbol(iso)}`,
-        detail: parts.length
-          ? parts.join('，')
-          : '结构与它完全一样，只是产生方式不同',
+        tone: 'key',
+        tex: same ? group.symbol : `${group.symbol} \\;\\cong\\; ${iso}`,
+        text: same
+          ? prettySymbol(group.symbol)
+          : `${prettySymbol(group.symbol)} \\cong ${prettySymbol(iso)}`,
+        detail,
       })
     }
   }

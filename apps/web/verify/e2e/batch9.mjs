@@ -269,7 +269,7 @@ console.log('== ④ 子群列表 ==')
   await page.waitForTimeout(1300)
   await addLine('G', 'D_4')
   await selectNode('G')
-  await page.locator('.info-tab', { hasText: '子群' }).click()
+  await page.locator('.info-sec-head[data-sec="subgroups"]').click()
   await page.waitForTimeout(420)
 
   const st = await ui()

@@ -12,7 +12,7 @@
  *   - D₄ \\subseteq S₄ 现在建得出来（U38 嵌入判定：指数 3、非正规 \\to 单射钩）
  *
  * U31 增补：`f(H)` 的**菜单入口**（从前只有拖拽 / 打字两条路，用户"找不到入口"）——
- *   ① 点箭头 f \\to 信息面板「可做」\\to 像 f(H) \\to 条上停在"可选 H"（有"不填，直接执行"）
+ *   ① 点箭头 f → 悬浮球「im」（U44 起：信息面板那行「可做」已砍，改走同一条 singleOps）→ 条上停在"可选 H"（有"不填，直接执行"）
  *      \\to 再点 A₄ = `像(f, A)`（命中已有的 FA）；
  *   ② ⊕ 球 \\to 像 f(H) \\to 先点箭头 f \\to 点"不填 H，直接执行" \\to 长出 `im f`（6 阶）。
  *
@@ -125,8 +125,21 @@ const canvasState = () =>
     return { nodes, edges }
   })
 
-const infoState = () =>
-  page.evaluate(() => ({
+/**
+ * U45：信息面板默认**全收**，而「阶」「生成元」这些属性栏住在「基本」这一节里 ——
+ * 读数前先保证它开着（**幂等**：已经开着就不要再点，手风琴里再点一下是收起）。
+ */
+const ensureBasic = async () => {
+  await page.evaluate(() => {
+    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    if (h && !h.classList.contains('on')) h.click()
+  })
+  await page.waitForTimeout(240)
+}
+
+const infoState = async () => {
+  await ensureBasic()
+  return page.evaluate(() => ({
     chip: document.querySelector('.info-target .chip')?.textContent?.trim() ?? '',
     head: document.querySelector('.info-target')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
     keys: [...document.querySelectorAll('.insp-row .insp-k')].map((e) => e.textContent.trim()),
@@ -134,6 +147,7 @@ const infoState = () =>
       e.textContent.replace(/[\u200b\u2061\u2062]/g, '').replace(/\s+/g, ' ').trim(),
     ),
   }))
+}
 
 /* ══ 剧本 ═══════════════════════════════════════════════ */
 
@@ -237,16 +251,28 @@ const barText = () =>
   )
 const mapHit = 'g.gedge-map[data-object-id="f"] .gedge-hit'
 
-/* ── ① 箭头旁：点 f → 信息面板「可做」→ 像 f(H) → 条上停在"可选 H" ── */
+/* ── ① 悬浮球：点 f 这条箭头 → 球 → 「im」→ 条上停在"可选 H" ── */
 
 await page.keyboard.press('Escape')
 await page.waitForTimeout(260)
 ok('点得中 f 这条箭头', await clickSvg(mapHit))
 await page.waitForTimeout(420)
 {
-  const btn = page.locator('.info-ops .info-op', { hasText: '像' }).first()
-  ok('信息面板的「可做」里有「像 f(H)」', (await btn.count()) > 0)
-  await btn.click()
+  /* U44 起映射的操作走**悬浮球**（信息面板那一行「可做」已砍）。
+     映射的单对象操作 ≤3 条，球面直接把它们铺出来（`ringItems` 的规矩）——
+     标签取 `op.call[0]`，`像` 这条的别名首项是 `im`。
+     ⚠️ 选择器要 `:not(.orb-center)` —— `ComposerOrb` / `MultiOrb` 也渲染 `.orb`
+     按钮（带 `.orb-center`），光用 `.orb` 会命中好几个。对象球的 `.orb` 没有那个类。 */
+  ok('点箭头后球出来了', (await page.locator('.orb:not(.orb-center)').count()) === 1)
+  await page.evaluate(() => document.querySelector('.orb:not(.orb-center)')?.click())
+  await page.waitForTimeout(300)
+  const found = await page.evaluate(() => {
+    const b = [...document.querySelectorAll('.orb-sat')].find((x) => x.textContent?.trim() === 'im')
+    if (!b) return false
+    b.click()
+    return true
+  })
+  ok('球上有「im」这颗（映射的单对象操作铺开）', found)
   await page.waitForTimeout(340)
   const bar = await barText()
   ok(

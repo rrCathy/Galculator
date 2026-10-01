@@ -14,7 +14,7 @@
  *   ② 拖 C₃ → S₄：同样能拉出来
  *   ③ 拖 C₃ → V₄：**不该**列出包含（3 ∤ 4），但菜单里要说清"为什么"
  *   ④ 手打 `包含(V_4, S_4)` 也成；`包含(C_3, V_4)` 报拉格朗日
- *   ⑤ 信息面板的关系层同步（V₄ 那一侧看得见 ≤ S₄，指数手算 6）
+ *   ⑤ 信息面板的「子群」折叠节：同构类分组 + ⊴ 渲染 + 文案不泄漏
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/batch10.mjs`
  */
@@ -161,17 +161,6 @@ const openDock = async (title) => {
 const rowIds = () =>
   page.evaluate(() => [...document.querySelectorAll('.row-name')].map((e) => e.textContent.trim()))
 
-/**
- * 关系层那几条的**原始形态**（`data-detail`）。
- *
- * ⚠️ 必须读 `data-detail` 而不是 `textContent` —— 面板里的公式走 KaTeX 渲染，
- * DOM 文本是渲染结果（`指数[S4:V]=24/4=6` 那种带上下标的），比不了源码串。
- */
-const relDetails = () =>
-  page.evaluate(() =>
-    [...document.querySelectorAll('.relations .rel-detail')].map((e) => e.getAttribute('data-detail') ?? ''),
-  )
-
 /* ══ 场景：S₄ + V₄ + C₃ + A₄ ═══════════════════════════ */
 
 await addLine('S4', 'S_4')
@@ -311,28 +300,10 @@ console.log('== ④ 手打的声明包含 ==')
   await page.waitForTimeout(300)
 }
 
-/* ── ⑤ 信息面板的关系层同步 ── */
+/* ── ⑤ 子群列表的渲染与文案（2026-09-30 修的两个毛病；U45 起住折叠节里）── */
 
 console.log('')
-console.log('== ⑤ 信息面板的关系层 ==')
-{
-  // 点画布上的 V₄ 节点
-  await page.evaluate(() => {
-    const hit = document.querySelector('svg.canvas g.gnode[data-id="V"] .gnode-hit')
-    hit?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
-  await page.waitForTimeout(500)
-  const raw = (await relDetails()).join(' ;; ')
-  ok('选中 V₄ 后关系层有内容', raw.length > 0, raw.slice(0, 120))
-  ok('关系层列出 V₄ ⩽ S₄', raw.includes('V_4 \\le S_4') || raw.includes('\\le S_4'), raw.slice(0, 200))
-  ok('指数手算对上了（24 / 4 = 6）', raw.includes('24 / 4 = 6'), raw.slice(0, 200))
-  ok('正规性照实说"未判定"（不猜 `⊴`）', raw.includes('正规性未判定'), raw.slice(0, 200))
-}
-
-/* ── ⑥ 子群列表的渲染与文案（2026-09-30 修的两个毛病）── */
-
-console.log('')
-console.log('== ⑥ 子群 tab：⊴ 渲染 + 文案不泄漏 ==')
+console.log('== ⑤ 信息面板「子群」这一节：⊴ 渲染 + 文案不泄漏 ==')
 {
   const picked = await page.evaluate(() => {
     const g = document.querySelector('svg.canvas g.gnode[data-id="S4"] .gnode-hit')
@@ -343,13 +314,16 @@ console.log('== ⑥ 子群 tab：⊴ 渲染 + 文案不泄漏 ==')
   ok('点得中 S₄ 节点', picked, '画布上只有 S4/V/C 三个节点')
   await page.waitForTimeout(400)
 
+  /* U45：标题行是折叠开关，`textContent` 现在是「子群 + 摘要」，按**标签**找 */
   const opened = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === '子群')
+    const b = [...document.querySelectorAll('.info-sec-head')].find(
+      (x) => x.querySelector('.info-sec-label')?.textContent.trim() === '子群',
+    )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('开得了「子群」tab', opened)
+  ok('开得了「子群」这一节', opened)
   await page.waitForTimeout(400)
 
   const dom = await page.evaluate(() => {

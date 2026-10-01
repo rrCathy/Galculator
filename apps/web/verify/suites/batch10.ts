@@ -14,7 +14,7 @@
  * 期望值全部**手算**给出，不从运行结果抄。
  */
 import { buildLines } from '../../src/gal/build'
-import { containment, embeddingSearchBlocked, relationsFor } from '../../src/gal/relations'
+import { containment, embeddingSearchBlocked } from '../../src/gal/relations'
 import { pairMissHint, pairOps } from '../../src/gal/interaction'
 import { eq, ok, suite } from '../harness'
 import { computeQuotientGroup, findAllSubgroups, type Group } from '@groupviz/core'
@@ -242,27 +242,7 @@ export function run(): void {
     eq('映射 + 群：不给解释（原因太杂）', pairMissHint(f, s4), null)
   }
 
-  /* ══ ⑦ 关系层：面板里也看得见（判据同源）═══════════════════ */
-
-  suite('batch10 \\cdot U38 信息面板「关系」层同步')
-  {
-    const objs = buildLines(['H = V_4', 'G = S_4']).objects
-    const V = objs.find((o) => o.id === 'H')!
-    const G = objs.find((o) => o.id === 'G')!
-
-    const relsV = relationsFor(V, objs)
-    const sub = relsV.find((r) => r.kind === 'subgroup' && r.other === 'G')
-    ok('V₄ 的面板里列出 "V₄ ≤ S₄"', !!sub, JSON.stringify(relsV.map((r) => `${r.kind}:${r.other}`)))
-    ok('指数手算对上了：24 / 4 = 6', (sub?.detail ?? '').includes('24 / 4 = 6'), sub?.detail)
-    ok('正规性照实说"未判定"（4 个嵌入里只有 1 个正规）', (sub?.detail ?? '').includes('正规性未判定'), sub?.detail)
-
-    const relsG = relationsFor(G, objs)
-    const holds = relsG.find((r) => r.kind === 'contains' && r.other === 'H')
-    ok('S₄ 的面板里列出 "包含 V₄"（反向）', !!holds, JSON.stringify(relsG.map((r) => `${r.kind}:${r.other}`)))
-    ok('没有反过来再报一条 `S₄ ≤ V₄`（阶不够）', !relsG.some((r) => r.kind === 'subgroup' && r.other === 'H'))
-  }
-
-  /* ══ ⑧ 商群的子群（对应定理）：陪集层不是禁区 ═══════════════ */
+  /* ══ ⑦ 商群的子群（对应定理）：陪集层不是禁区 ═══════════════ */
 
   /**
    * **第四同构定理（对应定理）**：`N ⊴ G` 时，`{H : N ≤ H ≤ G}` 与 `{S : S ≤ G/N}`

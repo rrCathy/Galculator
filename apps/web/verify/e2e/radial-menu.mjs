@@ -75,7 +75,7 @@ const ui = () =>
       pending: document.querySelectorAll('.pending-bar').length,
       hint: document.querySelector('.pending-hint')?.textContent?.trim() ?? null,
       fillFields: document.querySelectorAll('.fill-field input').length,
-      infoTab: document.querySelector('.info-tab.on')?.textContent?.trim() ?? null,
+      infoTab: document.querySelector('.info-sec-head.on .info-sec-label')?.textContent?.trim() ?? null,
       infoOpen: document.querySelectorAll('.insights').length > 0,
       nodes: [...document.querySelectorAll('svg.canvas g.gnode')].map((g) => g.dataset.id),
       dim: document.querySelectorAll('g.gnode.dim').length,

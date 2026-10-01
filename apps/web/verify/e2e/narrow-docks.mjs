@@ -94,70 +94,64 @@ const hit = await page.evaluate(() => {
 ok('画布上的对象点得中（没被证明面板挡住）', hit?.hitId === 'G', JSON.stringify(hit))
 await page.mouse.click(hit.x, hit.y)
 await page.waitForTimeout(500)
-ok('点完之后信息面板起来了', (await page.locator('.info-tab').count()) === 3)
+ok('点完之后信息面板起来了', (await page.locator('.info-sec-head').count()) === 3)
 
-/* ── ③ 信息面板的三个 tab 都点得动 ───────────────────── */
+/* ── ③ 信息面板的三个折叠标题都点得动（U45 起 tab 条改手风琴）──── */
 const tabsHit = await page.evaluate(() =>
-  [...document.querySelectorAll('.info-tab')].map((b) => {
+  [...document.querySelectorAll('.info-sec-head')].map((b) => {
     const r = b.getBoundingClientRect()
     const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
-    return { label: b.textContent.trim(), reachable: el === b || b.contains(el) }
+    return { label: b.querySelector('.info-sec-label')?.textContent.trim(), reachable: el === b || b.contains(el) }
   }),
 )
 ok(
-  '三个 tab 都点得中（没被证明面板盖住）',
+  '三个折叠标题都点得中（没被证明面板盖住）',
   tabsHit.length === 3 && tabsHit.every((t) => t.reachable),
   JSON.stringify(tabsHit),
 )
 
 /* ── ④ 用户报的那条：元素表看不看得全 ─────────────────── */
-await page.locator('.info-tab', { hasText: '元素' }).click({ timeout: 8000 })
+await page.locator('.info-sec-head[data-sec="elements"]').click({ timeout: 8000 })
 await page.waitForTimeout(600)
 const el = await page.evaluate(() => {
   const wrap = document.querySelector('.etable-wrap')
   const table = wrap?.querySelector('table')
-  const body = document.querySelector('.info-tabs')?.closest('.dock-body')
+  const body = document.querySelector('.info-acc')?.closest('.dock-body')
   if (!wrap || !table || !body) return null
   const br = body.getBoundingClientRect()
   const tr = table.getBoundingClientRect()
+  const rows = [...document.querySelectorAll('.etable tbody tr[data-el]')]
+  const scroller = document.querySelector('.info-acc')
   return {
-    classes: document.querySelectorAll('.etable tbody tr[data-size]').length,
-    elements: [...document.querySelectorAll('.etable tbody tr[data-size]')].reduce(
-      (s, r) => s + Number(r.dataset.size ?? 1),
-      0,
-    ),
+    rows: rows.length,
+    firstRow: rows[0] ? rows[0].textContent.replace(/\s+/g, ' ').trim() : null,
+    // 24 行在 298px 面板里不可能全露出来 —— 要看的是**滚得到**（内滚量 > 0），
+    // 不是"一屏看完"（那是 v3.2 折叠想解决的，代价是把单个元素藏起来了）
+    scrollable: scroller ? scroller.scrollHeight > scroller.clientHeight : false,
     heads: [...document.querySelectorAll('.etable thead th')].map((t) => t.textContent.replace(/\s+/g, '')),
     tableOverflows: Math.round(tr.right - br.right),
   }
 })
-ok('元素表按共轭类折叠（S_4 是 5 类）', el?.classes === 5, JSON.stringify(el))
-ok('折叠后元素总数仍然是 24（没丢元素）', el?.elements === 24, JSON.stringify(el))
+ok('元素表逐元素一行（S_4 是 24 行，不再折成 5 个共轭类）', el?.rows === 24, JSON.stringify(el))
+ok('每一行行首就是那个元素（单个元素信息看得见）', !!el?.firstRow, el?.firstRow)
+ok('24 行能滚得完（表格不横向出面板；纵向交给折叠区滚）', el?.scrollable === true, JSON.stringify(el))
 ok(
-  '五列一列不少（共轭类 / 阶 / inZ / 类大小 / 中心化子）',
-  el?.heads.length === 5,
+  '六列一列不少（元素 / 阶 / inZ / 共轭类 / 类大小 / 中心化子）',
+  el?.heads.length === 6,
   JSON.stringify(el?.heads),
 )
 ok(
-  '表格不再横向越出面板（右边两列从前就是这么被裁掉的）',
+  '表格不横向越出面板（右边两列从前就是这么被裁掉的）',
   (el?.tableOverflows ?? 99) <= 1,
   `越出 ${el?.tableOverflows}px`,
 )
-await page.screenshot({ path: '../../docs/assets/u41-narrow-elements.png' })
+await page.screenshot({ path: '../../docs/assets/u43-narrow-elements.png' })
 
-/* 展开一个共轭类：能看该类全部元素 */
-await page.evaluate(() => document.querySelectorAll('.etable-cls')[1]?.click())
-await page.waitForTimeout(400)
-const expanded = await page.evaluate(() => {
-  const td = document.querySelector('.etable-expand td')
-  return td ? td.textContent.replace(/\s+/g, ' ').trim() : null
-})
-ok('点得开共轭类看该类全部元素（换位类 6 个）', (expanded?.split('·').length ?? 0) === 6, expanded)
-
-/* ── ⑤ 子群 tab 的组头也点得动 ───────────────────────── */
-await page.locator('.info-tab', { hasText: '子群' }).click({ timeout: 8000 })
+/* ── ⑤ 「子群」这一节里的组头也点得动 ───────────────────── */
+await page.locator('.info-sec-head[data-sec="subgroups"]').click({ timeout: 8000 })
 await page.waitForTimeout(500)
 const subHeads = await page.evaluate(() => {
-  const body = document.querySelector('.info-tabs')?.closest('.dock-body')
+  const body = document.querySelector('.info-acc')?.closest('.dock-body')
   const br = body?.getBoundingClientRect()
   return [...document.querySelectorAll('.sub-group-head')].map((b) => {
     const r = b.getBoundingClientRect()
@@ -168,7 +162,7 @@ const subHeads = await page.evaluate(() => {
     return { count: b.dataset.count, visible, reachable: !visible || el === b || b.contains(el) }
   })
 })
-ok('子群 tab 有 7 个同构类组头', subHeads.length === 7, JSON.stringify(subHeads))
+ok('「子群」这一节有 7 个同构类组头', subHeads.length === 7, JSON.stringify(subHeads))
 ok(
   '可视区内的组头都点得中',
   subHeads.filter((h) => h.visible).length > 0 && subHeads.every((h) => h.reachable),

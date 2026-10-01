@@ -120,9 +120,22 @@ const expandSubgroupGroups = async () => {
   await page.waitForTimeout(360)
 }
 
+/**
+ * U45：信息面板默认**全收**，而「结构」节（合成列 / 导来列 / 分解）住在「基本」里 ——
+ * 读数前先保证它开着（**幂等**：已经开着就不要再点，手风琴里再点一下是收起）。
+ */
+const ensureBasic = async () => {
+  await page.evaluate(() => {
+    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    if (h && !h.classList.contains('on')) h.click()
+  })
+  await page.waitForTimeout(240)
+}
+
 /** 信息面板的读数。 */
-const infoState = () =>
-  page.evaluate(() => ({
+const infoState = async () => {
+  await ensureBasic()
+  return page.evaluate(() => ({
     chip: document.querySelector('.info-target .chip')?.textContent?.trim() ?? '',
     label: document.querySelector('.info-target strong')?.textContent?.trim() ?? '',
     def: document.querySelector('.info-def')?.textContent?.trim() ?? '',
@@ -140,6 +153,7 @@ const infoState = () =>
     perfect: document.querySelector('[data-perfect]')?.getAttribute('data-perfect') ?? '',
     notes: [...document.querySelectorAll('.insp-sub-note, .insp-line')].map((n) => (n.textContent ?? '').trim()),
   }))
+}
 
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(900)

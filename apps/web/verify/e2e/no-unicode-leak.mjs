@@ -239,9 +239,9 @@ for (const id of ['G', 'K', '\\varphi']) {
   await clickRow(id)
   await page.waitForTimeout(360)
   await checkVisible(`信息面板：${id}`)
-  const tabs = await page.locator('.info-tab, .dock-tab').count()
+  const tabs = await page.locator('.info-sec-head, .dock-tab').count()
   for (let i = 0; i < Math.min(tabs, 5); i++) {
-    const t = page.locator('.info-tab, .dock-tab').nth(i)
+    const t = page.locator('.info-sec-head, .dock-tab').nth(i)
     if (await t.isVisible()) {
       await t.click()
       await page.waitForTimeout(260)

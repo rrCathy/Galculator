@@ -75,6 +75,9 @@ const rowCount = await page.locator('.row-click').count()
 ok('对象行出现', rowCount >= 1, `rows=${rowCount}`)
 await page.locator('.row-click').first().click()
 await page.waitForTimeout(500)
+/* U45：信息面板默认**全收**，属性栏住在「基本」这一节里 —— 得先点开它 */
+await page.click('.info-sec-head[data-sec="basic"]')
+await page.waitForTimeout(500)
 
 const rows = async () =>
   page.evaluate(() =>
@@ -97,7 +100,7 @@ ok('生成元栏排版出希腊字母（不是裸字面量 alpha）', /\u03b1/.t
 await page.screenshot({ path: '../../docs/assets/u14-panel-tex.png' })
 
 // ── 3. 元素 tab：一屏元素记号 ──
-await page.click('.info-tab:has-text("元素")')
+await page.click('.info-sec-head[data-sec="elements"]')
 await page.waitForTimeout(500)
 const elems = await page.evaluate(() => {
   const t = document.querySelector('.etable')
@@ -112,7 +115,7 @@ ok('元素表行首是数学排版', elems.katex > 0, `katex=${elems.katex}`)
 ok('元素表排版出 α1（α 后跟下标 1）', /\u03b1\s*1/.test(elems.head), elems.head)
 
 // ── 4. 子群 tab ──
-await page.click('.info-tab:has-text("子群")')
+await page.click('.info-sec-head[data-sec="subgroups"]')
 await page.waitForTimeout(500)
 const subs = await page.evaluate(() =>
   [...document.querySelectorAll('.insp-subs .insp-sub')].map((x) => x.textContent.trim()).join(' | '),
@@ -120,7 +123,7 @@ const subs = await page.evaluate(() =>
 ok('子群列表不含反斜杠', clean(subs), subs.slice(0, 80))
 
 // ── 5. 解析失败时，提示串是给用户抄的 \\to 必须可读 ──
-await page.click('.info-tab:has-text("基本")')
+await page.click('.info-sec-head[data-sec="basic"]')
 const bad = await declare('ord(A, zzz)')
 // 提示串现在**就是** ASCII LaTeX（`\alpha_1`）——反斜杠是"能照样敲回去"的保证，
 // 不再是要消灭的东西；要消灭的是"键盘打不出来的字符"

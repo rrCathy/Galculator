@@ -15,7 +15,7 @@ import { isScalarParam, paramAccepts } from '../../src/gal/ops'
 import { composeCall } from '../../src/gal/compose'
 import { pairOps, singleOpsFor } from '../../src/gal/interaction'
 import { checkName, normalizeName } from '../../src/gal/naming'
-import { containment, relationsFor } from '../../src/gal/relations'
+import { containment } from '../../src/gal/relations'
 import { contextGroup, sortOf } from '../../src/gal/value'
 import { build, eq, ok, suite } from '../harness'
 
@@ -60,18 +60,30 @@ export function run(): void {
 
   suite('usability \\cdot 结论区的判据（缺口 ①）')
   {
-    // 手写的群记号 = 符号即答案，不重复说"同构于 S₄"
-    eq('手写 `G = S_4` 只说 1 条（阶）', groupInsOf(['G = S_4']).labels.length, 1)
-    eq('那一条是「阶」', groupInsOf(['G = S_4']).labels[0], '阶')
+    // 手写的群：**不写 `S₄ ≅ S₄` 那种废话**；有惯用名时它常驻头条（U44）
+    const s4 = groupInsOf(['G = S_4'])
+    eq('手写 `G = S_4` 给两条（识别 + 阶）', s4.labels.length, 2)
+    eq('头条是「识别」', s4.labels[0], '识别')
+    eq('识别那条的 tone 是 key（它是"结果"，不是小字附注）', s4.insights[0].tone, 'key')
+    ok('不写 `G ≅ G` 的废话', !s4.insights[0].tex.includes('\\cong'), s4.insights[0].tex)
+    ok(
+      '给的是惯用名（回答"这是哪个常见群"）',
+      (s4.insights[0].detail ?? '').includes('对称群'),
+      s4.insights[0].detail,
+    )
+    eq('第二条是「阶」', s4.labels[1], '阶')
+
+    // 手写且**没有惯用名可说** → 仍然闭嘴（`C₆ = C₆` 是废话）
+    eq('手写 `G = C_6`（无惯用名）仍只说 1 条（阶）', groupInsOf(['G = C_6']).labels.length, 1)
 
     // 由操作构造出来的群：即使符号与识别结果**归一后相同**，也要说
-    //（`ker f` 的符号本来就是 `C_{2}`，不说的话信息面板里只剩一个"阶"）
+    //（`ker f` 的符号本来就是 `C_{6}`，不说的话信息面板里只剩一个"阶"）
     const ker = groupInsOf(['G = C_6', 'H = C_6', 'f = 映射(G, H, a\\to 2)', 'K = ker(f)'])
     ok('`K = ker(f)` 有「识别」条（不再沉默）', ker.labels.includes('识别'), ker.labels.join(','))
     ok(
-      '「识别」条给出了 SmallGroup 坐标',
-      ker.insights.some((i) => (i.detail ?? '').includes('SmallGroup')),
-      ker.insights.map((i) => i.detail).join(' | '),
+      '识别条把符号（ker f = C_2）当答案',
+      ker.insights.some((i) => i.text.includes('C_2')),
+      ker.insights.map((i) => `${i.text} :: ${i.detail}`).join(' | '),
     )
 
     // 归一：`C_{2}^{2}`（幂写法）与 `C_{2}\times C_{2}`（乘法写法）是同一个群，
@@ -192,73 +204,39 @@ export function run(): void {
     ok('两个操作的定义域确实不同（29 vs 4）', total !== normals)
   }
 
-  /* ══ ④ 关系层（U19）══════════════════════════════════════ */
+  /* ══ ④ 包含判定（U19；U44 起与信息面板脱钩）════════════ */
 
   /**
    * 用户的原话："我想拉个箭头表示 A₄ 和 K 的包含关系，但做不到"。
    *
    * 那件事的**数据**其实一直在手上（`isNormal` / 元素 id 空间 / 指数），
-   * 只是没有任何地方往外说。这一套钉住关系层的两条来源与一条纪律：
+   * 只是没有任何地方往外说。这一套钉住两条来源与一条纪律：
    *   - 来源决定的（`ker f` 的核必是定义域的正规子群）
    *   - 元素集包含（两个**独立建出来**的群之间也能发现）
    *   - **假阳性必须为 0**（这是最要紧的：朴素写法会让 `V₄ \\le D₄` 成立）
+   *
+   * ⚠️ U44（2026-10-01）：信息面板的「关系」层整块砍了（用户"我都不看"），
+   * 这一套不再经过 `relationsFor`，直接钉 `containment`。判据一个字没改
+   * —— 画布（`derive`）、拖拽连线（`interaction`）、集合运算（`ops`）共用同一份。
    */
-  suite('usability \\cdot 关系层：它落在哪儿、它对谁正规（缺口 ②）')
+  suite('usability \\cdot 包含判定：谁是谁的子群、正不正规（缺口 ②）')
   {
-    const LINES = [
-      'G = S_4',
-      'H = S_3',
-      'f = 映射(G, H, s12->23, c->13)',
-      'K = ker(f)',
-      'A = A_4',
-      'B = 闭包(G, (12)(34), (13)(24))',
-      'Q = 商(G, K)',
-    ]
-    const { objects } = buildLines(LINES)
-    const rel = (id: string) => relationsFor(objects.find((o) => o.id === id)!, objects)
-    const find = (id: string, kind: string, other: string) =>
-      rel(id).find((r) => r.kind === kind && r.other === other)
-
-    // ── 舞台本身要先站得住（这几个数是手算的） ──
-    eq('|S_4| = 24', (objects.find((o) => o.id === 'G')!.value as { group: { order: number } }).group.order, 24)
-    const kv = objects.find((o) => o.id === 'K')!.value
-    eq('K = ker f 的阶 = 4（V_4）', kv.type === 'group' ? kv.group.order : -1, 4)
-
-    // ── ① 来源决定：核必是定义域的正规子群，指数 = 24/4 = 6 ──
-    const ker = find('K', 'kernel', 'f')
-    ok('K 有一条「核」关系（K = ker f）', !!ker, JSON.stringify(rel('K').map((r) => r.kind)))
-    ok('那条说了 \\trianglelefteq 定义域', (ker?.detail ?? '').includes('\\trianglelefteq S_4'), ker?.detail ?? '')
-    ok('指数手算对上了：24 / 4 = 6', (ker?.detail ?? '').includes('24 / 4 = 6'), ker?.detail ?? '')
-
-    // ── ② 元素集包含：A₄ 与 K 都是**独立建出来**的，没有任何来源牵连 ──
-    const kInA = find('K', 'subgroup', 'A')
-    ok('K \\le A_4 被发现了（V_4 \\le A_4，两者互不是对方的来源）', !!kInA, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
-    ok('指数手算对上了：12 / 4 = 3', (kInA?.detail ?? '').includes('12 / 4 = 3'), kInA?.detail ?? '')
-    ok('并且判出 \\trianglelefteq 正规（V_4 \\trianglelefteq A_4）', (kInA?.detail ?? '').includes('\\trianglelefteq 正规'), kInA?.detail ?? '')
-
-    const aInG = find('A', 'subgroup', 'G')
-    ok('A_4 \\le S_4 被发现了（用户手打的两行独立定义）', !!aInG, JSON.stringify(rel('A').map((r) => `${r.kind}:${r.other}`)))
-    ok('指数手算对上了：24 / 12 = 2', (aInG?.detail ?? '').includes('24 / 12 = 2'), aInG?.detail ?? '')
-    ok('A_4 \\trianglelefteq S_4（指数 2 的子群必正规）', (aInG?.detail ?? '').includes('\\trianglelefteq 正规'), aInG?.detail ?? '')
-
-    // 反向：G 的信息面板里"我包含谁"
-    const gHoldsA = find('G', 'contains', 'A')
-    ok('S_4 的面板里列出"包含 A_4"', !!gHoldsA, JSON.stringify(rel('G').map((r) => `${r.kind}:${r.other}`)))
-
-    // ── 指数 1 = 同一个群：`ker f` 与 `闭包(G, …)` 都是 V₄，元素 id 一模一样 ──
-    const eq1 = find('K', 'equal', 'B')
-    ok('K 与 B（都是 V_4）被认成「同一个群」', !!eq1, JSON.stringify(rel('K').map((r) => `${r.kind}:${r.other}`)))
-    ok('那句话说的是"元素完全相同"', (eq1?.detail ?? '').includes('元素完全相同'), eq1?.detail ?? '')
-    ok('并且没有反过来再报一条 `B \\le K \\cdot 指数 1`', !find('K', 'contains', 'B'))
-
-    // ── 商：Q = G/K 是定义式，且商群良定义（K \\trianglelefteq G） ──
-    const quo = find('Q', 'quotient', 'G')
-    ok('商群有「商」关系 Q = G / K', !!quo, JSON.stringify(rel('Q').map((r) => `${r.kind}:${r.other}`)))
-    ok('并给出 |Q| = 24 / 4 = 6', (quo?.detail ?? '').includes('24 / 4 = 6'), quo?.detail ?? '')
-
-    // ── 派生：点箭头 f 能看到它长出了核 ──
-    const derived = find('f', 'derived', 'K')
-    ok('映射 f 的面板里列出派生出的 K', !!derived, JSON.stringify(rel('f').map((r) => `${r.kind}:${r.other}`)))
+    // ── 来源决定：核必是定义域的正规子群，指数 = 24/4 = 6 ──
+    {
+      const objs = buildLines([
+        'G = S_4',
+        'H = S_3',
+        'f = 映射(G, H, s12->23, c->13)',
+        'K = ker(f)',
+      ]).objects
+      const gv = objs.find((o) => o.id === 'G')!.value
+      const kv = objs.find((o) => o.id === 'K')!.value
+      eq('|S_4| = 24', gv.type === 'group' ? gv.group.order : -1, 24)
+      eq('K = ker f 的阶 = 4（V_4）', kv.type === 'group' ? kv.group.order : -1, 4)
+      const c = gv.type === 'group' && kv.type === 'group' ? containment(kv.group, gv.group) : null
+      eq('核落在定义域里：指数 24 / 4 = 6', c?.index, 6)
+      eq('并且判出正规（第一同构定理：核必正规）', c?.normal, true)
+    }
 
     /**
      * ── 纪律：**core 静默返回平凡子群**这条假路必须还是死的 ──
@@ -282,11 +260,6 @@ export function run(): void {
       eq('指数 = 8 / 4 = 2', c?.index, 2)
       eq('指数 2 ⇒ 正规', c?.normal, true)
 
-      const rows = relationsFor(objs.find((o) => o.id === 'V')!, objs).filter(
-        (r) => r.kind === 'subgroup' || r.kind === 'contains' || r.kind === 'equal',
-      )
-      ok('关系层报出这条真包含（D₄ 里真有 Klein）', rows.length > 0, JSON.stringify(rows.map((r) => r.kind)))
-      ok('没有误报成「同一个群」（阶不同，绝不可能是同一个）', !rows.some((r) => r.kind === 'equal'))
     }
 
     /* ── 对照组：第二关**搜过、确实没有** ⇒ 必须还是 `null` ── */
@@ -302,12 +275,14 @@ export function run(): void {
       eq(`${h} 与 ${g} 真的没有包含（${why}）`, c, null)
     }
 
-    //  两个各自声明的 `C_6`：元素是同一批 `e0…e5` \\to 判成"同一个群"是**对的**；
-    //  错的是把它说成包含（"互相包含"读起来像两个东西）
-    const same = buildLines(['X = C_6', 'Y = C_6']).objects
-    const sameRel = relationsFor(same.find((o) => o.id === 'X')!, same)
-    ok('两个 `C_6` 判成「同一个群」而不是包含', !sameRel.some((r) => r.kind === 'subgroup' || r.kind === 'contains'), JSON.stringify(sameRel.map((r) => r.kind)))
-    ok('那条写着"元素完全相同"', sameRel.some((r) => r.kind === 'equal' && (r.detail ?? '').includes('元素完全相同')), JSON.stringify(sameRel))
+    //  两个各自声明的 `C_6`：元素是同一批 `e0…e5` \\to 指数 1（元素完全相同，就是同一个群）
+    {
+      const objs = buildLines(['X = C_6', 'Y = C_6']).objects
+      const xv = objs.find((o) => o.id === 'X')!.value
+      const yv = objs.find((o) => o.id === 'Y')!.value
+      const cc = xv.type === 'group' && yv.type === 'group' ? containment(xv.group, yv.group) : null
+      eq('两个各自声明的 C_6：指数 1（元素完全相同，就是同一个群）', cc?.index, 1)
+    }
 
     //  C₂ 与 C₄ 的 id 都是 `e0 e1 …`：`{e0,e1}` 在 C₄ 里**不封闭**（`e1 * e1 = e2` 不在里面），
     //  所以"按 id 前缀当子集"这条假路仍然是死的（core 的封闭性校验拦下它）。
@@ -353,16 +328,6 @@ export function run(): void {
     const whole = build([...STAGE, 'I = 像(f)'])
     const iv = whole.byId('I')?.value
     eq('`像(f)` 仍是整个像（S_4->>S_3 满射 -> 6 阶）', iv?.type === 'group' ? iv.group.order : -1, 6)
-
-    // 两种像的**叙述**不能混：`f(A)` 不是 `im f`
-    {
-      const two = relationsFor(fa.byId('FA')!, fa.objects).find((r) => r.kind === 'image')
-      ok('两参形态叙述成「f(A)」，不叫 im f', (two?.text ?? '').includes('f(A)'), two?.text)
-      ok('并且点出是 A 的像', (two?.detail ?? '').includes('A 在 f 下的像'), two?.detail)
-
-      const one = relationsFor(whole.byId('I')!, whole.objects).find((r) => r.kind === 'image')
-      ok('单参形态仍叙述成「im f」', (one?.text ?? '').includes('im f'), one?.text)
-    }
 
     // 不是定义域的子群 \\to 拦住
     const notSub = build([...STAGE, 'H2 = 像(f, H)'])

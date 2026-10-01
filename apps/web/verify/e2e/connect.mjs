@@ -1,5 +1,5 @@
 /**
- * 走查：**拖拽连线**与**信息面板的「可做」**（第四批 = 缺口 ⑩⑤）—— 真浏览器、真指针。
+ * 走查：**拖拽连线**与**子群集的操作入口**（第四批 = 缺口 ⑩⑤）—— 真浏览器、真指针。
  *
  * 用户提的两件事：
  *   \\cdot"把 H 移到 f 上做 f(H)"（`USABILITY.md` 缺口 ③ 的原话）
@@ -12,7 +12,7 @@
  *   ① 唯一候选**直接执行**：把 A₄ 拖到 `f` 那条箭头上 \\to 立刻长出 `f(A)`
  *   ② 多候选**弹菜单**：把 A₄ 拖到 S₄ 上 \\to 菜单第一条是「包含 \\subseteq」\\to 点它长出关系边
  *   ③ 落点可以是**边**（映射不占节点，但正是要拖过去的目标）
- *   ④ 信息面板的「可做」：子群集能一键 `底集`
+ *   ④ 子群集的操作入口（U44）：`Syl` 那一行的「操作」→ 一键 `底集`
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/connect.mjs`
  */
@@ -225,20 +225,24 @@ ok('关系边标签是 \\trianglelefteq（A_4 \\trianglelefteq S_4，正规性�
 ok('对象表里多了一行（那条关系是个一等对象）', (await rowIds()).length > idsBefore, (await rowIds()).join(','))
 ok('没有错误行', (await rowErrs()).length === 0, JSON.stringify(await rowErrs()))
 
-/* ── ③ 面板「可做」：子群集一键 底集（缺口 ⑤） ── */
+/* ── ③ 子群集的操作入口（U44：从信息面板的「可做」挪到「操作」抽屉那一行）── */
 
-await clickRow('Syl')
-await page.waitForTimeout(380)
+/* 子群集（`list` 档）不上画布 ⇒ 没有悬浮球，操作入口就在 OpDock 那一行上 */
+await ensureOpsDock()
+const opsBtn = page.locator('.dock-topleft .row:has(.row-name:text-is("Syl")) .ops')
+ok('子群集那一行带「操作」按钮（它不上画布，没有悬浮球）', (await opsBtn.count()) === 1)
+await opsBtn.click()
+await page.waitForTimeout(260)
 const ops = await page.evaluate(() =>
-  [...document.querySelectorAll('.info-op')].map((e) => e.textContent.trim()),
+  [...document.querySelectorAll('.row-ops .row-op')].map((e) => e.textContent.trim()),
 )
-ok('子群集的信息面板列出「可做」', (await page.locator('.info-ops').count()) === 1)
+ok('展开后列出它能做的操作', ops.length > 0, ops.join(' | '))
 ok('里面就有「底集」(underlyingSet)', ops.some((x) => x.includes('底集')), ops.join(' | '))
 
-await page.screenshot({ path: '../../docs/assets/u21-info-ops.png' })
+await page.screenshot({ path: '../../docs/assets/u44-row-ops.png' })
 
 const nodesBefore = (await canvasState()).nodes.length
-await page.click('.info-op >> nth=0')
+await page.locator('.row-ops .row-op', { hasText: '底集' }).first().click()
 await page.waitForTimeout(460)
 const afterSet = await canvasState()
 ok(
