@@ -1,4 +1,6 @@
 import { createGroupFromSymbol, parseGroupNotation, type Group } from '@groupviz/core'
+// 本地补的记号（U49）：core 有人为上限、但本地机器建得出的那几种（`A_n`）
+import { buildLocally } from './localBuild'
 import {
   INFIX_SYMBOLS,
   INFIX_TABLE,
@@ -548,6 +550,23 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
     return { ok: false, error: `无法识别：${t}`, hint: n.hint ? asciiClean(n.hint) : undefined }
   }
   if (!n.symbol) {
+    /*
+     * core 报 `symbol: null` 不等于"算不动"——它也可能是**只在那儿的人为上限**
+     * （`A_6`：core 的 `createAlternatingGroup` 卡在 n ≤ 5，而族门写的是 6）。
+     * 这一层按 `canonical` 补（U49），补得上就当普通群走。
+     */
+    const local = buildLocally(n.canonical)
+    if (local) {
+      return {
+        ok: true,
+        value: { type: 'group', group: local },
+        label: prettySymbol(local.symbol),
+        sub: `|G| = ${local.order}`,
+        note: n.via,
+        origin: 'input',
+        sources: [],
+      }
+    }
     return {
       ok: false,
       error: `该记号本地建不了：${t}`,

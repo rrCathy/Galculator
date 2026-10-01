@@ -24,6 +24,8 @@ import {
   type HomomorphismMap,
 } from '@groupviz/core'
 import { elementNotation, resolveElementLoose } from './ops'
+// 本地补的记号（U49）：core 有人为上限、但本地机器建得出的那几种（`A_n`）
+import { buildLocally } from './localBuild'
 import { prettySymbol, subscript, superscript } from './pretty'
 
 /**
@@ -229,7 +231,13 @@ export function stageInfo(raw: string): StageInfo {
   if (!notation.ok) {
     return { ...BAD_STAGE, raw: text, error: notation.hint ?? `认不出群记号「${text}」` }
   }
-  if (!notation.symbol) {
+  /*
+   * `symbol: null` 有两种：core **真建不动**的（后端记号），和 core **只在那儿设了
+   * 人为上限**的（`A_6`，U49）。后一种本地补得上，就不能拿"core 要后端"当理由拒了面板。
+   */
+  const local = notation.symbol ? null : buildLocally(notation.canonical)
+
+  if (!local && !notation.symbol) {
     return {
       ...BAD_STAGE,
       raw: text,
@@ -241,11 +249,13 @@ export function stageInfo(raw: string): StageInfo {
   }
 
   // 建群本身也可能抛（core 对某些记号会直接 throw）——面板不能因为一个错字白屏
-  let g: Group | null = null
-  try {
-    g = createGroupFromSymbol(notation.symbol)
-  } catch {
-    g = null
+  let g: Group | null = local
+  if (!g && notation.symbol) {
+    try {
+      g = createGroupFromSymbol(notation.symbol)
+    } catch {
+      g = null
+    }
   }
   if (!g) return { ...BAD_STAGE, raw: text, error: `「${text}」建不出群对象` }
 
@@ -307,7 +317,8 @@ function checkParams(info: StageInfo, p: number): string | null {
 /** 由体检过的记号建出群（只在 `stageInfo(...).ok` 之后用）。 */
 function groupOf(info: StageInfo): Group | null {
   const notation = parseGroupNotation(info.raw.trim())
-  if (!notation.symbol) return null
+  // 与 `stageInfo` **同一份判据**（U49）：本地补的记号也得从这里建得出来
+  if (!notation.symbol) return buildLocally(notation.canonical)
   try {
     return createGroupFromSymbol(notation.symbol)
   } catch {

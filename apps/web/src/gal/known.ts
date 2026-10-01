@@ -1,4 +1,6 @@
 import { createGroupFromSymbol, parseGroupNotation, type Group, type GroupElement } from '@groupviz/core'
+// 本地补的记号（U49）：core 有人为上限、但本地机器建得出的那几种（`A_n`）
+import { buildLocally } from './localBuild'
 
 /**
  * **已知结论层**（U48）—— 把课本上的闭式结论先查表，再谈计算。
@@ -216,7 +218,8 @@ export function knownGroupInfo(g: Group): KnownGroupSpec | null {
 export function realizeKnownGroup(s: KnownGroupSpec): Group {
   if (s.build) {
     const n = parseGroupNotation(s.build)
-    const built = n.symbol ? createGroupFromSymbol(n.symbol) : null
+    // core 建不出 ≠ 建不出（U49）：`A_{6}` 这类过一下本地补丁层（`[S_6, S_6] = A_6` 要靠它）
+    const built = (n.symbol ? createGroupFromSymbol(n.symbol) : null) ?? buildLocally(n.canonical)
     if (built) {
       const named: Group = { ...built, symbol: s.display }
       KNOWN_INFO.set(named, s)

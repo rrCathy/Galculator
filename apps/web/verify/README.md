@@ -48,7 +48,7 @@ node verify/e2e/batch10.mjs           # 第十八批：独立构造的群之间�
 node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来的字符（U25，输入 + 显示两半）
 node verify/e2e/narrow-docks.mjs      # 窄窗口下面板之间不许互相盖（U41）
 node verify/e2e/info-split.mjs        # 信息面板的折叠分区 + 字号层级（U42 → U45）
-node verify/e2e/known-facts.mjs       # 已知结论层：Aut(S6) 的结论 + 「课本结论」块（U48）
+node verify/e2e/known-facts.mjs       # 已知结论层：Aut(S6) 的结论 + 「课本结论」块 + A_6 建得出（U48/U49）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -308,3 +308,24 @@ node verify/e2e/known-facts.mjs       # 已知结论层：Aut(S6) 的结论 + �
     断言里补一条**负面判据**：认不出的族（`C_4 x C_4`）展开「基本」也**不许**出现这一块。
     另一条副产品：走查 `known-facts.mjs` 里点节点后展开分区要**幂等**
     （`if (!h.classList.contains('on')) h.click()`）—— 手风琴里再点一下是收起。
+61. **"core 报 `symbol: null`"不等于"算不动" —— 先分诊是"真建不动"还是"只在那儿设了上限"**（2026-10-01，U49）。
+    用户对 U48 的结论不认：「逗我吗，S6能算，A6不能算？」。查下去是 core 的**自相矛盾**：
+    `groupFactory` 的 `S_{n}` 门与 `A_{n}` 门**都写 `3..6`**，而 `AlternatingGroup.ts` 的构造器
+    `if (n > 5) throw 'A_{n} for n > 5 is too large'` ⇒ `A_6` **过了门、死在构造器**；
+    邻居 `createSymmetricGroup` **没有任何内部上限**，于是 720 元的 `S_6` 建得、360 元的 `A_6` 建不得。
+    四条纪律：
+    · **先看一眼 core 那头是不是自相矛盾**：门的宽度与构造器的宽度对不上，就是人为上限，
+      不是"算不动"。**报"建不动"之前先找到那行 throw**。
+    · **能借现成原语就别抄数学**：`A_n` 就是 `S_n` 的偶置换子群，core 自带
+      `buildSubgroupGroup(parent, elements, symbol, gens)` —— `multiply`/`inverse` 继承父群，
+      元素 id 与父群一致。一行置换数学都不用写。
+    · **借谁的父群就受谁的门限**；且 **core 建得出的不许抢**（`A_3`/`A_4`/`A_5` 一律返回 `null`）
+      —— 否则同一个记号会长出两个互相独立、只是**同构**的群对象。
+      这条纪律要**由函数自己守**（函数内再 `parseGroupNotation` 探一次），不能指望调用方记得。
+    · **生成元必须自校验闭包**：`buildSubgroupGroup` **不检查**生成元是否真能生成那堆元素，
+      而 `minimalGenerators` 在 360 元上要 **4.2s**（太慢）。实测 `(123),(12345)` 的闭包
+      **只有 60 阶**，`(123),(23456)` 才是 360 —— 挑错的后果**不是崩**，是面板上给出
+      "生成元生成不出这个群"的**假象**，比报错更难查。所以要**先算闭包验尺寸 + 验全偶**，
+      不过就退到"全部 3-循环 `(1 2 i)`"（A_n 由 3-循环生成，是定理）。
+    顺带：`known.realizeKnownGroup` 也要接同一份补丁 —— `build: 'A_{6}'` 这才真落得下来
+    （`[S_6, S_6] = A_6` 从「已知群」变回真群）。

@@ -16,9 +16,10 @@
  *   ② 预算**内**的照旧真算（元素是自同构本身，结论区才能说 `Aut(S₄) ≅ S₄`）—— 不许退化成表里的同构品；
  *   ③ 表里**没有**的那一族（`C₄ × C₄`）照旧走守卫拦住。
  */
-import { createGroupFromSymbol, parseGroupNotation, type Group } from '@groupviz/core'
+import { createGroupFromSymbol, parseGroupNotation, type Group, type GroupElement } from '@groupviz/core'
 import type { GalObject } from '../../src/gal/types'
 import { isKnownGroup, knownFacts } from '../../src/gal/known'
+import { buildLocally } from '../../src/gal/localBuild'
 import { build, eq, ok, suite } from '../harness'
 
 /** 一行定义 + 拿最后一个对象（`build` 的 byId 在本套件里写成小助手）。 */
@@ -116,7 +117,8 @@ export function run(): void {
      */
     const grp = (sym: string): Group | null => {
       const n = parseGroupNotation(sym)
-      return n.symbol ? createGroupFromSymbol(n.symbol) : null
+      // `A_6` 这类 core 只设了人为上限的，要过本地补丁层才拿得到群对象（U49）
+      return (n.symbol ? createGroupFromSymbol(n.symbol) : null) ?? buildLocally(n.canonical)
     }
     const autOf = (sym: string): number | null => {
       const g = grp(sym)
@@ -152,13 +154,12 @@ export function run(): void {
     eq('|Aut(A_4)| = 24 = |S_4|', autOf('A_4'), 24)
     eq('|Aut(A_5)| = 120 = |S_5|', autOf('A_5'), 120)
     /*
-     * A_6 这条**故意不查表**：`parseGroupNotation('A_6')` 给的是 `symbol: null`
-     * （标着 `backend`）—— A_6 本地**建不出来**，所以根本没有可传进 `knownFacts` 的
-     * 群对象，`alternatingFacts(6)` 那条结论进不去。这条边界要写出来，免得下次
-     * 有人以为 `Aut(A_6)` 也会走表（真要覆盖它，得先让本地能构造 A_6）。
+     * A_6（U49）：core 的 `AlternatingGroup` 构造器卡在 n ≤ 5，而族门写的是 3..6
+     * ⇒ `A_6` 过了门、死在构造器里，`parseGroupNotation` 只好把它标成 `backend`。
+     * 本地补丁层（`A_n = S_n 的偶置换子群`）把它建了出来 ⇒ 这条闭式**现在真的触发得了**
+     * （U48 时它是一条"当前无处触发"的空头结论）。
      */
-    const na6 = parseGroupNotation('A_6')
-    ok('A_6 本地建不出（symbol 为 null，标 backend）⇒ `|Aut(A_6)| = 1440` 当前无处触发', !na6.symbol && na6.order === 360, `symbol=${String(na6.symbol)} order=${na6.order}`)
+    eq('|Aut(A_6)| = 1440 = 4 * 360（Out(A_6) ≅ V_4，比 S_6 那个例外大一倍）', autOf('A_6'), 1440)
 
     // 小群
     eq('|Aut(Q_8)| = 24 = |S_4|', autOf('Q_8'), 24)
@@ -205,6 +206,84 @@ export function run(): void {
     // 手写的常见群**不是**已知群（别把整条路都改成查表）
     const s5 = calcOf(['G = S_5'])
     ok('手写的 S_5 仍然是普通群（元素表齐全）', !knownOf(s5.obj) && (elemCount(s5.obj) ?? 0) === 120)
+  }
+
+  suite('budget \\cdot 本地补的记号：A_6 能建了（U49）')
+  {
+    /*
+     * 用户原话：「逗我吗，S6能算，A6不能算？」
+     *
+     * 这不是"算不动"，是 core 的一处**自相矛盾**：`groupFactory` 的 `S_{n}` 门与
+     * `A_{n}` 门**都写 6**，可 `createAlternatingGroup` 内部只给到 5 ⇒ 720 元的 S_6
+     * 建得、360 元的 A_6 建不得。补法：`A_n` 就是 `S_n` 的偶置换子群，用 core 自己的
+     * `buildSubgroupGroup` 拿 —— 不抄一行置换数学。
+     */
+    const a6 = buildLocally('A_{6}') as Group | null
+    ok('`A_6` 本地建得出（core 给的 symbol 是 null，这一层补上）', !!a6)
+    eq('阶 = 360', a6?.order ?? null, 360)
+    eq('符号就是 A_{6}（结果要认得出来）', a6?.symbol ?? null, 'A_{6}')
+    eq('元素表齐全（360 个，不是「已知群」）', a6?.elements.length ?? null, 360)
+    eq('非交换（A_6 是单群）', a6?.isAbelian ?? null, false)
+
+    /*
+     * 元素阶分布是**强不变量**：A_6 的真分布 = 1 + 45 + 80 + 90 + 144（= 360）。
+     * 80 = 3-循环 40 + 两个不交 3-循环 40；90 = 4-轮换乘对换。
+     * 这条能抓住"建出来的其实是别的 360 阶群"。
+     */
+    const dist: Record<number, number> = {}
+    for (const e of a6?.elements ?? []) {
+      let o = 1
+      let x = e
+      while (x.id !== (a6 as Group).identity.id) {
+        x = (a6 as Group).multiply(x, e)
+        o++
+      }
+      dist[o] = (dist[o] ?? 0) + 1
+    }
+    eq(
+      '元素阶分布 = A_6 的真分布（1/45/80/90/144）',
+      JSON.stringify(dist),
+      JSON.stringify({ 1: 1, 2: 45, 3: 80, 4: 90, 5: 144 }),
+    )
+
+    /*
+     * 生成元**必须真生成**：`buildSubgroupGroup` **不校验**传进去的生成元，
+     * 而实测 `(123),(12345)` 的闭包只有 60 阶（`(123),(23456)` 才是 360）。
+     * 挑错的后果不是崩，是面板上给出"生成元生成不出这个群"的假象 —— 比报错更难查。
+     */
+    const g6 = a6 as Group
+    const seen = new Set([g6.identity.id])
+    const stack = [g6.identity]
+    while (stack.length > 0) {
+      const x = stack.pop() as GroupElement
+      for (const gen of g6.generators) {
+        const y = (gen.apply as (e: GroupElement) => GroupElement)(x)
+        if (!seen.has(y.id)) {
+          seen.add(y.id)
+          stack.push(y)
+        }
+      }
+    }
+    eq('生成元的闭包 = 360（真能生成整个 A_6）', seen.size, 360)
+    ok('有两个生成元（面板上不是空的一行）', g6.generators.length === 2, String(g6.generators.length))
+
+    /*
+     * 纪律①：**core 建得出的不许抢**。补丁层自己守这条 —— 否则同一个记号会长出
+     * 两个互相独立（只是同构）的群对象。
+     */
+    eq('A_5 core 自己建得出 ⇒ 补丁层不接', buildLocally('A_{5}'), null)
+    eq('A_4 / A_3 同理', `${buildLocally('A_{4}')}${buildLocally('A_{3}')}`, 'nullnull')
+    // 纪律③：借哪个父群就受哪个门限（`S_7` 也是 backend）⇒ A_7 仍建不出
+    eq('A_7 仍建不出（它得从 S_7 拿，而 S_7 本身也超门）', buildLocally('A_{7}'), null)
+    eq('只管 A_n：S_6 不走这一层', buildLocally('S_{6}'), null)
+    eq('别的记号也不走（不猜）', buildLocally('C_{4}'), null)
+
+    // 走完整条求值链：打 `A_6` 真的变成一个群对象，`Aut(A_6)` 走表给 1440
+    const typed = calcOf(['G = A_6'])
+    ok('打 `A_6` 建出一个真群（不是「已知群」）', !knownOf(typed.obj) && elemCount(typed.obj) === 360)
+    const auto = calcOf(['G = A_6', 'A = Aut(G)'])
+    eq('|Aut(A_6)| = 1440（走表，不硬搜）', orderOf(auto.obj), 1440)
+    ok('当场返回（真搜 A_6 的自同构是不可能的）', auto.ms < 2000, `${auto.ms}ms`)
   }
 
   suite('budget \\cdot Syl_p / pSub：p-元素压力（U47）')
