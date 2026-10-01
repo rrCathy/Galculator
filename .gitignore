@@ -2,5 +2,15 @@ node_modules/
 dist/
 .tmp-*
 *.local
+
+# 编辑器与系统噪音
 .DS_Store
 .eslintcache
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+
+# AI 协作工具的本地状态（只属于本机，不入库）
+.workbuddy/
+.commandcode/
