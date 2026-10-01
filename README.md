@@ -116,7 +116,7 @@ pnpm dev                                  # 另开一个终端起 dev server
 pnpm --filter @galculator/web verify:e2e  # 真浏览器走查：几何、marker、命中测试
 ```
 
-当前 **1495 条语义断言 + 707 条走查断言（24 套）全绿**。
+当前 **1526 条语义断言 + 715 条走查断言（24 套）全绿**。
 约定：期望值一律来自**手算**的数学值，不从运行结果里抄。跑法细节见 [apps/web/verify/README.md](apps/web/verify/README.md)。
 
 ## 文档

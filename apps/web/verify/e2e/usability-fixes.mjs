@@ -292,6 +292,60 @@ ok(
 
 await page.screenshot({ path: '../../docs/assets/u18-info-fixes.png' })
 
+/* ══ U47：本地预算 —— 敲 `Aut(S6)` 不许把页面卡死 ═══════════ */
+
+/**
+ * 事故路径就是**按键预览**：`ComposerOrb` 的 `useMemo` 每次输入都同步求值一次，
+ * 所以"算不完"在这里不是"慢"，是**整个页面不动了**（连光标都不闪）。
+ *
+ * 这一段的判据是**时间**：守卫没生效时下面这些 `page.*` 调用会一直挂着 ——
+ * 所以先把默认超时压到 4s，挂住就记一条 FAIL，而不是让整条走查线卡死在这里。
+ *
+ * 放在截图**之后**：这一段要反复换画布，会把上面那条 U18 的截图换掉。
+ */
+await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
+await page.waitForTimeout(900)
+await ensureCard()
+page.setDefaultTimeout(4000)
+
+try {
+  const t0 = Date.now()
+  await page.fill('.composer-expr', 'Aut(S6)')
+  const fillMs = Date.now() - t0
+  ok('输入 Aut(S6)：预览立刻回来（< 2s，事故时是 240s 没完）', fillMs < 2000, `${fillMs}ms`)
+
+  const st = await status()
+  ok('状态行明说"搜不动"', st.text.includes('搜不动'), st.text)
+  ok('报错落在预览区（不是空白、也不是装作能提交）', st.cls.includes('bad'), st.cls)
+
+  await page.screenshot({ path: '../../docs/assets/u47-aut-budget.png' })
+
+  // 守卫不许误伤：S_4 的自同构群照旧算得出来
+  const t1 = Date.now()
+  await page.fill('.composer-expr', 'Aut(S4)')
+  const fill2Ms = Date.now() - t1
+  const st2 = await status()
+  ok('Aut(S4) 照旧算得出（守的是"跑不动"，不是"一律不算"）', st2.cls.includes('good'), `${st2.text}`)
+  ok('Aut(S4) 也很快（|Aut| = 24）', fill2Ms < 2000 && st2.text.includes('24'), `${fill2Ms}ms ${st2.text}`)
+
+  // 被拦之后页面还得是活的
+  const t2 = Date.now()
+  await page.fill('.composer-expr', 'Syl(S6, 2)')
+  const fill3Ms = Date.now() - t2
+  const st3 = await status()
+  ok('Syl(S6, 2) 也被拦住', st3.text.includes('算不动'), st3.text)
+  ok('Syl(S6, 2) 当场返回', fill3Ms < 2000, `${fill3Ms}ms`)
+
+  const t3 = Date.now()
+  await page.click('.composer-orb .orb-center')
+  const clickMs = Date.now() - t3
+  ok('被拦之后页面仍然响应点击', clickMs < 1000, `${clickMs}ms`)
+  await page.click('.composer-orb .orb-center')
+  await page.waitForTimeout(200)
+} catch (e) {
+  ok('U47 这一段没有把页面挂住', false, String(e).slice(0, 160))
+}
+
 ok('控制台零错误', logs.length === 0, logs.join(' | '))
 console.log('')
 console.log(`${pass} PASS / ${fail} FAIL`)

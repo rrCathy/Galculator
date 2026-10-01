@@ -18,6 +18,7 @@ import {
   createAutomorphismGroup,
   createDirectProduct,
   elementOrder,
+  elementOrderDistribution,
   ENUMERATION_LIMIT,
   extendFromGenerators,
   factorizeOrder,
@@ -48,6 +49,8 @@ import { elementSemanticKey } from './semantic'
 // 「G 里有没有与 H 同构的子群」—— 求商 / 陪集作用的自动翻译（U30）、报错时的配方（U29）、
 // 集合运算的候选对齐（U32），以及 `containment` 的嵌入关（U38）**共用同一份搜索**
 import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
+// 「Aut 本地算不动」的两段预算（2026-10-01：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机）
+import { AUT_COUNT_CAP, AUT_SEARCH_BUDGET, lookupAutomorphisms } from './automorphisms'
 // 包含判据与信息面板的「关系」层（U19）**共用同一份** —— `包含(H, G)` 声明出来的
 // 关系，与面板里"算出来"的关系永远一致，不会出现两种说法。
 // `embeddingSearchBlocked` = 「嵌入那条路被守卫挡下了」（U38），报错语据此说"未判定"
@@ -1224,6 +1227,54 @@ function setOp(a: OpArg[], kind: SetOpKind, ctx?: OpContext): OpOutcome {
   }
 }
 
+/* ── p-子群枚举的预算（2026-10-01）────────────────────────── */
+
+/**
+ * p-子群枚举的**实测分界线**。
+ *
+ * 为什么不能用阶当判据：core `guards.ts` 把 `SYLOW_MAX_ORDER` 定在 144（那条线是
+ * **子群枚举**测出来的），可它自己**没有**用在 `findSylowSubgroups` / `findAllPSubgroups`
+ * 里，而这两条路真正卡死的地方在 144 之下 —— 64 阶的 `C_2^6` 就是。阶完全分不开。
+ *
+ * 真正的自变量是 **p-子群个数**（core 的 `vi()`：对每个 p-元素，与已找到的每个子群
+ * 合并一次闭包，每个闭包又是 O(子群²)）—— 而那正是我们要算的东西，不能拿来当判据。
+ * 用"p-元素对数 ÷ 阶"当代理（一对元素生成一个子群，子群越大被重复数到的次数越多）：
+ *
+ * | G | p | p-元素 | 对数/阶 | p-子群 | 实测 |
+ * |---|---|---|---|---|---|
+ * | C_2^3 | 2 | 7 | 6 | 15 | 1ms |
+ * | Q_8 | 2 | 7 | 6 | 5 | 0ms |
+ * | A_5 | 2 | 15 | 4 | 20 | 3ms |
+ * | C_4 x C_4 | 2 | 15 | 14 | 14 | 2ms |
+ * | C_3^3 | 3 | 26 | 25 | 27 | 13ms |
+ * | C_2^5 | 2 | 31 | 30 | 373 | 0.85s |
+ * | S_5 | 2 | 55 | 25 | 75 | 0.20s |
+ * | S_6 | 3 | 80 | 9 | 10 | 1.2s |
+ * | S_6 | 5 | 144 | 29 | 6 | 0.45s |
+ * | C_2^6 | 2 | 63 | **62** | 2825（手算） | **60s 没完** |
+ * | S_6 | 2 | 255 | **90** | | **45s 没完** |
+ *
+ * 线取 50：放行最贵的一档是 30（C_2^5 的 0.85s，`S_6` 的 3-子群 1.2s 也放行 ——
+ * 那是课本上的经典题，舍不得不算），拦下最小的一档是 62。两档之间空两倍，不是"差不多安全"。
+ */
+const P_SUBGROUP_LOAD_CAP = 50
+
+/**
+ * p-元素的**对数密度**：`(阶为 p 的幂的元素个数)² / |G|`。
+ *
+ * `elements` 是 p-元素个数（不含单位元），`load` 是上面那条代理量。
+ */
+function pSubgroupLoad(G: Group, p: number): { elements: number; load: number } {
+  let elements = 0
+  for (const [order, count] of elementOrderDistribution(G)) {
+    if (order === 1) continue
+    let rest = order
+    while (rest % p === 0) rest /= p
+    if (rest === 1) elements += count
+  }
+  return { elements, load: (elements * elements) / G.order }
+}
+
 /* ── 注册表 ───────────────────────────────────────────── */
 
 export const OPS: OpDef[] = [
@@ -1680,7 +1731,25 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('Aut(\\cdot) 需要一个群')
-      const A = createAutomorphismGroup(G)
+      /**
+       * 两段守卫（`automorphisms.ts` 里有实测账）：core 只看候选组合数、不看阶，
+       * `S_6` 的 18000 组正好从它的 30000 下面钻过去 —— 这条 op 于是能在按键预览里
+       * 跑上百秒（等于死机），而界面连"在算"都显示不出来。
+       */
+      const found = lookupAutomorphisms(G)
+      if (found.kind === 'searchTooBig') {
+        return fail(
+          `${refText(a[0])} 太大（阶 ${G.order}，候选 ${found.combos} 组），自同构搜不动`,
+          `搜索线 ${AUT_SEARCH_BUDGET}，待后端 GAP 通道`,
+        )
+      }
+      if (found.kind === 'overCap') {
+        return fail(
+          `${refText(a[0])} 有 ${found.count} 个自同构，本地建不出这个群`,
+          `建群线 ${AUT_COUNT_CAP}，待后端 GAP 通道`,
+        )
+      }
+      const A = createAutomorphismGroup(G, found.auts)
       if (!A) return fail(`${refText(a[0])} 的自同构群太大，本地算不了`, '待后端 GAP 通道')
       return {
         ok: true,
@@ -2440,6 +2509,16 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('Sub(\\cdot) 需要一个群')
+      /**
+       * 守卫必须自己判：core 的 `findAllSubgroups` 超限时**不报错**，直接回空数组
+       * （720 阶实测 0ms 回 []）——照单全收就是"S_6 有 0 个子群"这种假答案。
+       */
+      if (G.order > ENUMERATION_LIMIT) {
+        return fail(
+          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}，子群本地算不了`,
+          '待后端 GAP 通道',
+        )
+      }
       const subs = normalizeSubgroups(findAllSubgroups(G), G)
       return {
         ok: true,
@@ -2524,6 +2603,13 @@ export const OPS: OpDef[] = [
       if (p === null) return fail('pSub(\\cdot) 的第二个参数必须是整数')
       const bad = checkPrime(p, 'pSub')
       if (bad) return fail(bad)
+      const load = pSubgroupLoad(G, p)
+      if (load.load > P_SUBGROUP_LOAD_CAP) {
+        return fail(
+          `${refText(a[0])} 的 ${p}-元素有 ${load.elements} 个（压力 ${load.load.toFixed(0)}），p-子群本地算不动`,
+          `枚举线 ${P_SUBGROUP_LOAD_CAP}，待后端 GAP 通道`,
+        )
+      }
       const subs = normalizeSubgroups(findAllPSubgroups(G, p), G)
       return {
         ok: true,
@@ -2555,6 +2641,14 @@ export const OPS: OpDef[] = [
       if (p === null) return fail('Syl_p(\\cdot) 的第二个参数必须是整数')
       const bad = checkPrime(p, 'Syl_p')
       if (bad) return fail(bad)
+      // 同 `pSub`：同一条枚举、同一条线（`Syl_2(S_6)` 实测 45s 没完）
+      const load = pSubgroupLoad(G, p)
+      if (load.load > P_SUBGROUP_LOAD_CAP) {
+        return fail(
+          `${refText(a[0])} 的 ${p}-元素有 ${load.elements} 个（压力 ${load.load.toFixed(0)}），Sylow 本地算不动`,
+          `枚举线 ${P_SUBGROUP_LOAD_CAP}，待后端 GAP 通道`,
+        )
+      }
       const subs = normalizeSubgroups(findSylowSubgroups(G, p), G)
       const order = subs[0]?.order ?? 1
       return {
@@ -2580,6 +2674,13 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('正规子群(\\cdot) 需要一个群')
+      // 同上：core 超限静默回空数组，自己不拦就会说"S_6 没有正规子群"
+      if (G.order > ENUMERATION_LIMIT) {
+        return fail(
+          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}，正规子群本地算不了`,
+          '待后端 GAP 通道',
+        )
+      }
       const subs = normalizeSubgroups(findAllNormalSubgroups(G), G)
       return {
         ok: true,
