@@ -13,6 +13,8 @@ import { maxObjectArity, objectArity } from './compose'
 import { containment, embeddingSearchBlocked } from './relations'
 // 同构判据同源（缺口 ⑰）
 import { isomorphismOf } from './insights'
+// 「已知群」不能当输入（U48）
+import { isKnownGroup } from './known'
 import { prettySymbol } from './pretty'
 import type { GalValue } from './value'
 
@@ -241,7 +243,11 @@ const PAIR_PRIORITY = [
  * 参数有序而拖拽无序：`像(f, H)` 与 `包含(H, G)` 都是两参，但先后不能反。
  * 于是正反各试一次、合并去重（同一 op 只留先匹配上的那个顺序）。
  */
-export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {  const out: PairCandidate[] = []
+export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
+  // 「已知群」没有元素表（U48）：拖动两条边也列不出能跑的操作（菜单不撒谎）
+  const known = (v: GalValue) => v.type === 'group' && isKnownGroup(v.group)
+  if (known(a) || known(b)) return []
+  const out: PairCandidate[] = []
   for (const op of OPS) {
     if (op.params.length < 2) continue
     const [p0, p1] = op.params

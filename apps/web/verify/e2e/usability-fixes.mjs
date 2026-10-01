@@ -292,7 +292,7 @@ ok(
 
 await page.screenshot({ path: '../../docs/assets/u18-info-fixes.png' })
 
-/* ══ U47：本地预算 —— 敲 `Aut(S6)` 不许把页面卡死 ═══════════ */
+/* ══ U47/U48：本地预算 + 已知结论 —— 敲 `Aut(S6)` 不许卡死，还要有答案 ═══ */
 
 /**
  * 事故路径就是**按键预览**：`ComposerOrb` 的 `useMemo` 每次输入都同步求值一次，
@@ -300,6 +300,12 @@ await page.screenshot({ path: '../../docs/assets/u18-info-fixes.png' })
  *
  * 这一段的判据是**时间**：守卫没生效时下面这些 `page.*` 调用会一直挂着 ——
  * 所以先把默认超时压到 4s，挂住就记一条 FAIL，而不是让整条走查线卡死在这里。
+ *
+ * ⚠️ **U48 把这里的期望值翻过来了**：U47 时 `Aut(S6)` 的答案是"搜不动"（拒绝语），
+ * 用户当场否掉了那个答案（「起码得把常见结论硬编码吧」）⇒ 现在 `Aut(S6)` **当场给出
+ * `|Aut| = 1440`**（结论表），预览区是 `good` 而不是 `bad`。判据因此换成：
+ * **快 + 有 1440**（"搜不动"那条断言反过来，写成"不再说搜不动"）。
+ * 仍然守的是同一件事：`Syl(S6, 2)` 这种表里没有的，还是当场说算不动。
  *
  * 放在截图**之后**：这一段要反复换画布，会把上面那条 U18 的截图换掉。
  */
@@ -315,10 +321,11 @@ try {
   ok('输入 Aut(S6)：预览立刻回来（< 2s，事故时是 240s 没完）', fillMs < 2000, `${fillMs}ms`)
 
   const st = await status()
-  ok('状态行明说"搜不动"', st.text.includes('搜不动'), st.text)
-  ok('报错落在预览区（不是空白、也不是装作能提交）', st.cls.includes('bad'), st.cls)
+  ok('U48：预览区给出结论 |Aut(S_6)| = 1440（不再是"搜不动"）', st.text.includes('1440'), st.text)
+  ok('而且不再说"搜不动"', !st.text.includes('搜不动'), st.text)
+  ok('预览是"可以提交"的（不是拒绝、也不是空白）', st.cls.includes('good'), st.cls)
 
-  await page.screenshot({ path: '../../docs/assets/u47-aut-budget.png' })
+  await page.screenshot({ path: '../../docs/assets/u48-aut-known.png' })
 
   // 守卫不许误伤：S_4 的自同构群照旧算得出来
   const t1 = Date.now()

@@ -6,6 +6,7 @@ import {
   type Group,
 } from '@groupviz/core'
 import { prettySymbol } from './pretty'
+import { isKnownGroup } from './known'
 
 /**
  * 「结构」节（U27）—— 群的**结构事实**：合成列 / 导来列 / 半直积分解 / 完美。
@@ -129,6 +130,8 @@ function compute(group: Group): StructureFacts {
  * **不猜**：算不出来就说算不出来，别给半截答案）。
  */
 export function structureFacts(group: Group): StructureFacts | null {
+  // 「已知群」没有元素表（U48）—— 合成列 / 半直积分解全都要遍历元素，直接说没算
+  if (isKnownGroup(group)) return null
   if (group.order > STRUCTURE_CAP) return null
   const key = fingerprint(group)
   const hit = cache.get(key)

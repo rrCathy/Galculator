@@ -15,6 +15,10 @@ import { STRUCTURAL_LABEL } from '../gal/derive'
 import { elementNotation } from '../gal/ops'
 import { prettySymbol } from '../gal/pretty'
 import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/structure'
+// 「已知群」（U48）：结论表给的群只有符号 + 阶，没有元素表 —— 面板各节都得改口径
+// `knownFacts` 则相反：常见族的**闭式结论**（Aut / Out / Z / [G,G] / 幂指数）先查表，
+// 让「基本」节能直接把课本答案摆出来（不必先跑一遍操作）
+import { isKnownGroup, knownFacts, knownGroupInfo } from '../gal/known'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { DockPanel } from './DockPanel'
@@ -51,6 +55,8 @@ const SUB_COUNT_CAP = 60
 const subCountCache = new WeakMap<Group, number>()
 
 function subgroupClassCount(group: Group): number {
+  // 「已知群」没有元素表（U48）：枚举不了，标题行不给数字（`sectionSummary` 也不显示）
+  if (isKnownGroup(group)) return 0
   const hit = subCountCache.get(group)
   if (hit !== undefined) return hit
   // 与 `SubgroupsTab` **同一个表达式**（`structKey`），标题与正文的数字不许打架
@@ -311,15 +317,36 @@ function EdgeSection({ edge }: { edge: { edge: GalEdge; info: StructuralEdge } }
  * 这里不重复。
  */
 function BasicTab({ group, node }: { group: Group; node: GalObject }) {
+  const known = knownGroupInfo(group)
   const info = useMemo(() => {
-    const small = group.order <= ENUM_CAP
+    // 「已知群」没有元素表（U48）：循环 / 单 / 可解 / 幂零都要遍历元素 —— 一律不给
+    const small = !isKnownGroup(group) && group.order <= ENUM_CAP
     return {
-      cyclic: isGroupCyclic(group),
+      cyclic: small ? isGroupCyclic(group) : null,
       simple: small ? isSimpleGroup(group) : null,
       solvable: small ? isSolvable(group) : null,
       nilpotent: small ? isNilpotent(group) : null,
     }
   }, [group])
+
+  /*
+   * 「已知群」只给两件**真**的东西：阶，与它是从哪来的。
+   * 其余属性（交换 / 单 / 可解 / 合成列）全要遍历元素 —— 一律不显示：
+   * stub 上的 `isAbelian = false` 是**占位值**，把它渲染成"非交换"就是撒谎。
+   */
+  if (known) {
+    return (
+      <>
+        <Row k="阶">
+          <span>|G| = {group.order}</span>
+        </Row>
+        <Row k="来源">
+          <span>结论表（本地没有这个群的元素表）</span>
+        </Row>
+        <div className="insp-line dim">{known.plain}</div>
+      </>
+    )
+  }
 
   return (
     <>
@@ -356,6 +383,7 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
           <span>{info.nilpotent ? '是' : '否'}</span>
         </Row>
       )}
+      <BookFacts group={group} />
       <StructureSection group={group} />
       {node.sources.length > 0 && (
         <Row k="来源">
@@ -368,6 +396,72 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
         </Row>
       )}
     </>
+  )
+}
+
+/**
+ * 「课本结论」（U48）—— 常见族的**闭式结论**，进「基本」节就能看到，不必先跑一遍操作。
+ *
+ * 用户的原话："作为群论计算器，起码得把常见结论硬编码吧"。硬编码之后得**看得见**
+ * ——否则那只是一张只发给测试用的表（"能过测试但用户感知不到"是无效改动）。
+ *
+ * ## 为什么落在「基本」节，而不是结论区（`insights.ts`）
+ *
+ *   ① **结论区有契约**：对**手写的群**只给「识别 + 阶」两条（U18 立、U44 复核 ——
+ *      用户嫌"信息塞太满"）。往里塞第三行会破那条契约，也会把"一眼"级的结论区
+ *      变成"一节"内容。
+ *   ② **零视觉成本**：「基本」节**默认收着**（U45），不展开就不占地方。
+ *   ③ **成本**：这一块只是查表（`knownFacts` 全是整数算术，不碰元素）。
+ *
+ * ## 只对命中的常见族出现
+ *
+ * `knownFacts` 的判据是「记号 + 阶」双重的，认不出就返回 `null` —— 整块不渲染。
+ * 这段回答的是"**这个群落在课本哪一条闭式里**"；认不出就不猜。
+ */
+function BookFacts({ group }: { group: Group }) {
+  const facts = useMemo(() => knownFacts(group), [group])
+  if (!facts) return null
+
+  /*
+   * 每行一条结论：TeX 主体给 `Tex` 渲染，纯文本形态放 `data-book-plain` 当断言锚点
+   * （KaTeX 渲染后 `textContent` 里没有空格，断言读不了原文 —— 见走查纪律）。
+   */
+  const rows: { k: string; tex: string; plain: string }[] = []
+  const add = (k: string, s: { tex: string; plain: string } | undefined) => {
+    if (s) rows.push({ k, tex: s.tex, plain: s.plain })
+  }
+  add('自同构', facts.aut)
+  add('内自同构', facts.inn)
+  add('中心', facts.center)
+  add('换位子群', facts.commutator)
+  if (facts.outOrder !== undefined) {
+    rows.push({
+      k: '外自同构',
+      tex: `\\lvert \\operatorname{Out}(G)\\rvert = ${facts.outOrder}`,
+      plain: `|Out| = ${facts.outOrder}（Out = Aut / Inn）`,
+    })
+  }
+  if (facts.exponent !== undefined) {
+    rows.push({
+      k: '幂指数',
+      tex: `\\exp(G) = ${facts.exponent}`,
+      plain: `幂指数 = ${facts.exponent}（各元素阶的 lcm）`,
+    })
+  }
+  if (rows.length === 0) return null
+
+  return (
+    <div className="structure" data-book="facts">
+      <div className="rel-head">课本结论</div>
+      {rows.map((r) => (
+        <Row key={r.k} k={r.k}>
+          <span data-book-plain={r.plain}>
+            <Tex tex={r.tex} />
+          </span>
+        </Row>
+      ))}
+      <div className="insp-line dim">{facts.source}</div>
+    </div>
   )
 }
 
@@ -389,6 +483,14 @@ function StructureSection({ group }: { group: Group }) {
   const facts = useMemo(() => structureFacts(group), [group])
 
   if (!facts) {
+    // 「已知群」不是"超限没算"，是"没有元素表"（U48）—— 两种"没算"要说不同的话
+    if (isKnownGroup(group)) {
+      return (
+        <div className="insp-line dim" data-structure="known">
+          这是结论表给出的已知群：本地没有元素表，合成列 / 结构分解都无从算起
+        </div>
+      )
+    }
     return (
       <div className="insp-line dim" data-structure="capped">
         |G| &gt; {STRUCTURE_CAP}：合成列 / 结构分解未自动计算（子群枚举代价高）
@@ -496,7 +598,7 @@ function SubgroupsTab({ group }: { group: Group }) {
   }
 
   const subs = useMemo(() => {
-    if (group.order > ENUM_CAP) return null
+    if (isKnownGroup(group) || group.order > ENUM_CAP) return null
     return listCosetStripSubgroups(group).map((s) => ({
       ...s,
       repr: reprLabel(s.elementIds),
@@ -550,7 +652,15 @@ function SubgroupsTab({ group }: { group: Group }) {
     setOpenKeys(new Set(groups.filter((g) => g.normal).map((g) => g.key)))
   }, [groups])
 
-  if (!subs) return <div className="insp-line dim">|G| &gt; {ENUM_CAP}，子群未枚举（守卫）</div>
+  if (!subs) {
+    return (
+      <div className="insp-line dim">
+        {isKnownGroup(group)
+          ? '这是结论表给出的已知群：本地没有元素表，子群无从枚举'
+          : `|G| > ${ENUM_CAP}，子群未枚举（守卫）`}
+      </div>
+    )
+  }
   if (subs.length === 0) return <div className="insp-line dim">没有非平凡真子群</div>
 
   const normalCount = subs.filter((s) => s.isNormal).length
@@ -980,6 +1090,20 @@ function OtherTab({
  * 分隔一律用 ASCII `-`：`·` 键盘打不出来（`no-unicode-leak` 判据）。
  */
 function sectionSummary(id: InfoTab, group: Group, subCount: number | null): string {
+  /*
+   * 「已知群」（U48）：只有阶是真的，交换性是**未知**（`isAbelian` 在 stub 上是占位的
+   * false）—— 摘要行不能把"未知"说成"非交换"，那是最容易骗过人的那种谎。
+   */
+  if (isKnownGroup(group)) {
+    switch (id) {
+      case 'basic':
+        return `|G| = ${group.order} - 已知群（无元素表）`
+      case 'elements':
+        return '无元素表'
+      case 'subgroups':
+        return ''
+    }
+  }
   switch (id) {
     case 'basic':
       return `|G| = ${group.order} - ${group.isAbelian ? '交换' : '非交换'}`

@@ -12,6 +12,7 @@ import {
 } from '@groupviz/core'
 import { prettySymbol, superscript } from './pretty'
 import { groupFingerprint } from './identity'
+import { isKnownGroup, knownGroupInfo } from './known'
 import type { GalAction, GalMap } from './value'
 import type { GalObject } from './types'
 
@@ -111,6 +112,8 @@ function smallGroupEntry(order: number, iso: string): { order: number; index: nu
  * 但对**超出识别范围**的群（阶太大 / 库外结构）会返回 null——不猜。
  */
 export function identifyGroup(group: Group): string | null {
+  // 「已知群」没有元素表（U48）：识别要按不变量匹配小群库，空元素表上没意义 —— 直接说不认识
+  if (isKnownGroup(group)) return null
   // 缓存 key 用**群身份指纹**（含元素 id），不是 `symbol#order`——后者会串
   // （同符号同阶的两个群可能是不同结构，见 `identity.groupFingerprint` 的说明）
   const key = groupFingerprint(group)
@@ -193,6 +196,26 @@ export interface Insight {
  */
 export function groupInsights(group: Group, node?: GalObject): Insight[] {
   const out: Insight[] = []
+
+  /**
+   * ⓪ **「已知群」的结论**（U48）—— 顶到头条。
+   *
+   * 这类群来自结论表（`|Aut(S₆)| = 1440` 是背下来的），没有元素表 ——
+   * 所以识别与阶分解都无从谈起，**能说的就是这条结论本身与它凭什么**。
+   */
+  const known = knownGroupInfo(group)
+  if (known) {
+    out.push({
+      label: '已知结论',
+      tone: 'key',
+      tex: known.tex,
+      text: known.plain,
+      detail: known.build
+        ? `结论指出它同构于 ${prettySymbol(known.build)}；这里给的就是那个群，可以直接接着算`
+        : '本地没有这个群的元素表：知道它是什么、阶是多少，但不算出来（元素级运算用不了）',
+    })
+    return out
+  }
 
   // ① 识别 / 同构 —— **头条**
   const iso = identifyGroup(group)

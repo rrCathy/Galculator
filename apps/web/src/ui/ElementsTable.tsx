@@ -1,6 +1,8 @@
 import { useMemo, type DragEvent } from 'react'
 import type { Group } from '@groupviz/core'
 import { buildElementTable } from '../gal/summary'
+// 「已知群」（U48）：只有符号 + 阶、没有元素表 —— 逐元素表在那种群上不成立
+import { isKnownGroup } from '../gal/known'
 import { elementNotation } from '../gal/ops'
 import { prettySymbol } from '../gal/pretty'
 import { Tex, TexOrText } from './Tex'
@@ -32,7 +34,17 @@ export function writeNumberPayload(e: DragEvent, label: string, value: number) {
  * 数字格照旧**可以直接拖进左下角的数值区**（阶 / 类大小 / 中心化子）。
  */
 export function ElementsTable({ group }: { group: Group }) {
-  const table = useMemo(() => buildElementTable(group), [group])
+  const known = isKnownGroup(group)
+  // 「已知群」没有元素表（U48）：`buildElementTable` 要遍历元素 —— 那种群上直接不建
+  const table = useMemo(() => (known ? null : buildElementTable(group)), [group, known])
+
+  if (!table) {
+    return (
+      <div className="insp-line dim" data-etable="known">
+        这是结论表给出的已知群：本地没有元素表（只有符号与阶），逐元素表无从列起
+      </div>
+    )
+  }
 
   const cell = (v: number | null, label: string, elId: string, el: string) => {
     const canDrag = v !== null

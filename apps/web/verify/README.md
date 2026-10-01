@@ -41,7 +41,14 @@ node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值
 node verify/e2e/copy-label.mjs        # 把画布上的记号抄回去：三条复制路径（U24）
 node verify/e2e/structural-edges.mjs  # 结构伴生边可点：π/↪/=/≅ 的账与三条纪律（U26）
 node verify/e2e/structure-ops.mjs     # gcd/lcm/phi · Burnside · 极大子群 · Inn · 「结构」节（U27）
+node verify/e2e/snapshot.mjs          # 视图快照导出 / 导入（定义 + 钉住 + 视口，U28）
+node verify/e2e/idspace.mjs           # 跨群元素表示的分诊与翻译（U29/U30）
+node verify/e2e/batch9.mjs            # 第十七批：连线把手 / 同一性 / ≅ 操作 / 删除改名等（U37）
+node verify/e2e/batch10.mjs           # 第十八批：独立构造的群之间的包含（U38）
 node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来的字符（U25，输入 + 显示两半）
+node verify/e2e/narrow-docks.mjs      # 窄窗口下面板之间不许互相盖（U41）
+node verify/e2e/info-split.mjs        # 信息面板的折叠分区 + 字号层级（U42 → U45）
+node verify/e2e/known-facts.mjs       # 已知结论层：Aut(S6) 的结论 + 「课本结论」块（U48）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -281,3 +288,23 @@ node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来
     状态行里有"搜不动"。守卫没生效时这些调用会**一直挂着**，所以这一段先把
     `page.setDefaultTimeout(4000)` 压下来、整块套 try/catch —— 挂住记一条 FAIL，
     而不是让整条走查线死在这一步（那才是最容易骗过自己的失败：什么都不打印）。
+59. **"算不动"不该是终点：能查表就查表，查不了退成一个"只有符号与阶"的对象**（2026-10-01，U48）。
+    用户对 U47 的"搜不动"不认（「起码得把常见结论硬编码吧」）⇒ `gal/known.ts` 把课本闭式
+    查表化。三条纪律：
+    · **两级**：能本地构造就返回**真群**（并改名成结论的符号，否则 `Aut(S₅) ≅ S₅` 会退化成废话
+      `S₅ = S₅`）；构造不了返回**没有元素表的「已知群」** —— 它的 `multiply`/`inverse` **抛错**
+      （真被调用说明有入口漏网；抛错强过静默返回假值）。
+    · **表只在本地真算不动时接手**：预算内的照旧真算（元素是自同构本身，`Aut(S₄) ≅ S₄` 才说得出口），
+      预算外的才查表 —— 否则会把"算得出来的"也降级成"同构的代表"。
+    · **族识别是双判据（记号 + 阶）**：只看记号会串（`V_4` 与 `C_4` 的元素 id 都是 `e0 e1 e2 e3`）；
+      认不出返回 `null`，不猜。
+    顺带：闭式**逐族与引擎现算对照**过（阶 + 元素阶分布 + 交换性）——这次抓出
+    `alternatingFacts(6)` 的 `|Aut(A₆)|` 写错（720，应为 1440，因 `Out(A₆) ≅ V₄` 是 4 阶）。
+60. **"硬编码"了还得看得见 —— 默认收着的分区是它的天然归宿**（2026-10-01，U48）。
+    只发给测试用的表 = 无效改动（"能过测试但用户感知不到"）。落点选了 `InfoDock` 的「基本」节
+    新增一段**「课本结论」**（6 行：自同构/内自同构/中心/换位子群/外自同构/幂指数），因为
+    U45 之后「基本」**默认收着且收着时 body 不渲染** ⇒ **零视觉成本**，不破坏 U18 那条
+    "手写群在结论区只说识别 + 阶"的契约（结论区是"一眼"级，这里是一节）。
+    断言里补一条**负面判据**：认不出的族（`C_4 x C_4`）展开「基本」也**不许**出现这一块。
+    另一条副产品：走查 `known-facts.mjs` 里点节点后展开分区要**幂等**
+    （`if (!h.classList.contains('on')) h.click()`）—— 手风琴里再点一下是收起。

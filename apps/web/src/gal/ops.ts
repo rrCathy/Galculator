@@ -50,7 +50,10 @@ import { elementSemanticKey } from './semantic'
 // 集合运算的候选对齐（U32），以及 `containment` 的嵌入关（U38）**共用同一份搜索**
 import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
 // 「Aut 本地算不动」的两段预算（2026-10-01：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机）
-import { AUT_COUNT_CAP, AUT_SEARCH_BUDGET, lookupAutomorphisms } from './automorphisms'
+import { AUT_COUNT_CAP, AUT_SEARCH_BUDGET, autSearchCombinations, lookupAutomorphisms } from './automorphisms'
+// 已知结论层（U48）：课本有闭式的族**先查表再谈计算** —— `Aut(S_6) = 1440` 是背下来的结论，
+// 不是现场搜索出来的（用户：「说 S6 搜不动我不是很认可」）
+import { isKnownGroup, knownFacts, realizeKnownGroup, type KnownGroupSpec } from './known'
 // 包含判据与信息面板的「关系」层（U19）**共用同一份** —— `包含(H, G)` 声明出来的
 // 关系，与面板里"算出来"的关系永远一致，不会出现两种说法。
 // `embeddingSearchBlocked` = 「嵌入那条路被守卫挡下了」（U38），报错语据此说"未判定"
@@ -464,6 +467,25 @@ function structureHint(parent: Group, elements: GroupElement[]): string | null {
 function structSuffix(parent: Group, elements: GroupElement[]): string {
   const s = structureHint(parent, elements)
   return s ? `，${s}` : ''
+}
+
+/**
+ * 结论表给出的群 → 操作结果（U48）。
+ *
+ * 能本地构造就是**真群**（用户还能接着对它算）；构造不了就是**已知群**
+ * （有符号有阶、没有元素表）—— 面板据此披露来源，元素级操作明说不能算。
+ *
+ * `sub` 传纯文本（对象列表的副行不吃 KaTeX）；结论区的 LaTeX 版在
+ * `groupInsights` 里由 `knownGroupInfo` 给。
+ */
+function knownGroupOutcome(spec: KnownGroupSpec, sub: string): OpOutcome {
+  const g = realizeKnownGroup(spec)
+  return {
+    ok: true,
+    value: { type: 'group', group: g },
+    label: prettySymbol(g.symbol),
+    sub,
+  }
 }
 
 /**
@@ -1732,18 +1754,40 @@ export const OPS: OpDef[] = [
       const G = groupOf(a[0])
       if (!G) return fail('Aut(\\cdot) 需要一个群')
       /**
-       * 两段守卫（`automorphisms.ts` 里有实测账）：core 只看候选组合数、不看阶，
+       * ① **结论表只在本地算不动的时候接手**（U48）。
+       *
+       * 顺序有讲究：`Aut(S₄)` 本地算得动（62ms），那就**照旧真算** —— 算出来的元素是
+       * **自同构本身**（`\mathrm{id}, \alpha_1, …`），结论区能说 `Aut(S₄) ≅ S₄`。
+       * 换成表里"记号的同构品"反而**丢信息**（元素变成了置换）。
+       *
+       * 只有预算外（`S₆` 的 18000×720、`S₅` 的 600×120、`A₅` 的 |Aut|=120 建不出）
+       * 才查表 —— 那正是用户报的那条路：「敲完 6 网站卡死」。判据用**便宜的那一步**
+       * （组合数 × 阶，走 `elementOrderDistribution`），不必先跑搜索。
+       */
+      const facts = knownFacts(G)
+      if (facts?.aut) {
+        const combos = autSearchCombinations(G)
+        if (combos * G.order > AUT_SEARCH_BUDGET) {
+          return knownGroupOutcome(facts.aut, `|Aut| = ${facts.aut.order}`)
+        }
+      }
+      /**
+       * ② 两段守卫（`automorphisms.ts` 里有实测账）：core 只看候选组合数、不看阶，
        * `S_6` 的 18000 组正好从它的 30000 下面钻过去 —— 这条 op 于是能在按键预览里
        * 跑上百秒（等于死机），而界面连"在算"都显示不出来。
        */
       const found = lookupAutomorphisms(G)
       if (found.kind === 'searchTooBig') {
+        // 表里有结论就救回来（理论上上面那一关已经拦下了，这里是兜底）
+        if (facts?.aut) return knownGroupOutcome(facts.aut, `|Aut| = ${facts.aut.order}`)
         return fail(
           `${refText(a[0])} 太大（阶 ${G.order}，候选 ${found.combos} 组），自同构搜不动`,
           `搜索线 ${AUT_SEARCH_BUDGET}，待后端 GAP 通道`,
         )
       }
       if (found.kind === 'overCap') {
+        // 搜索过得去、建群过不去（`C₂³` 只有 8 阶，|Aut| = 168）：结论表这时最有用
+        if (facts?.aut) return knownGroupOutcome(facts.aut, `|Aut| = ${facts.aut.order}`)
         return fail(
           `${refText(a[0])} 有 ${found.count} 个自同构，本地建不出这个群`,
           `建群线 ${AUT_COUNT_CAP}，待后端 GAP 通道`,
@@ -1920,6 +1964,23 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('Inn(\\cdot) 需要一个群')
+      /**
+       * **已知结论接手，但只在本地真算不动的时候**（U48）。
+       *
+       * 判据是**阶**（与 `enumeration` 那条线同源）：`Inn(S₆)` 走 core 要把 720 元商一遍
+       * （实测 1.3s，在按键预览里就是一次可见的卡顿），而 `Inn(S₅)` / `Inn(A₅)` 只有
+       * 几十毫秒 —— 那种就照旧真算（元素是陪集，比"同构的代表"更贴题）。
+       */
+      const facts = knownFacts(G)
+      if (facts?.inn && G.order > ENUMERATION_LIMIT) {
+        const k = realizeKnownGroup(facts.inn)
+        return {
+          ok: true,
+          value: { type: 'group', group: k },
+          label: `Inn(${refText(a[0])})`,
+          sub: `|Inn| = ${facts.inn.order} = |G| / |Z| = ${G.order} / ${facts.center?.order ?? 1}`,
+        }
+      }
       /**
        * 走**第一同构定理**这条经典路径：`G → Aut(G), g ↦ conj_g` 的核是 Z(G)，
        * 所以 `Inn(G) ≅ G/Z(G)`——这也是课本上唯一"算得动"的算法。
@@ -3087,6 +3148,12 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
  */
 export function opsFor(selection: GalValue[]): OpDef[] {
   if (selection.length === 0) return []
+  /*
+   * 「已知群」没有元素表（U48）—— **一条都不列**。
+   * 「菜单不撒谎」这条纪律要求列给用户点的东西点下去必须真能跑，而它跑不了；
+   * 与其列出来再报错，不如这里就空着（面板侧另有说明为什么空）。
+   */
+  if (selection.some((v) => v.type === 'group' && isKnownGroup(v.group))) return []
   return OPS.filter((op) => {
     if (selection.length > op.params.length) return false
     for (let i = 0; i < selection.length; i++) {

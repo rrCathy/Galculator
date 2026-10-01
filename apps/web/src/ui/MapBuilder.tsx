@@ -10,6 +10,8 @@ import {
   type Group,
 } from '@groupviz/core'
 import { composeMapLine } from '../gal/compose'
+// 「已知群」（U48）：只有符号 + 阶、没有元素表 —— 做不了「填生成元的像」
+import { isKnownGroup } from '../gal/known'
 import { checkName, nextAutoName, normalizeName } from '../gal/naming'
 import { prettySymbol } from '../gal/pretty'
 import { TexOrText } from './Tex'
@@ -30,21 +32,36 @@ type Check =
  * `verifyHomomorphism`——**边填边知道行不行、不行是坏在哪两个元素上**，
  * 而不是等确认后才报错。
  */
-export function MapBuilder({
-  op,
-  src,
-  tgt,
-  objects,
-  onSubmit,
-  onCancel,
-}: {
+/** 编辑器入参（包装层与编辑器共用）。 */
+interface MapBuilderProps {
   op: OpDef
   src: CanvasNode
   tgt: CanvasNode
   objects: GalObject[]
   onSubmit: (line: string) => void
   onCancel: () => void
-}) {
+}
+
+export function MapBuilder(props: MapBuilderProps) {
+  const g = props.src.value.type === 'group' ? props.src.value.group : null
+  const h = props.tgt.value.type === 'group' ? props.tgt.value.group : null
+  /*
+   * 「已知群」没有元素表（U48）：映射靠"填生成元的像"来定，而它连生成元都拿不到。
+   * 挡在**包装层**（不是把守卫塞进编辑器里）—— 编辑器那一堆 hooks 的顺序不能被
+   * 条件提前 return 打乱（rules-of-hooks）。
+   */
+  if (isKnownGroup(g) || isKnownGroup(h)) {
+    return (
+      <div className="insp-line dim">
+        映射的两端不能是「已知群」：它只有符号与阶（来自结论表），本地没有元素表，
+        填不了生成元的像。
+      </div>
+    )
+  }
+  return <MapBuilderEditor {...props} />
+}
+
+function MapBuilderEditor({ op, src, tgt, objects, onSubmit, onCancel }: MapBuilderProps) {
   const G = src.value.type === 'group' ? src.value.group : null
   const H = tgt.value.type === 'group' ? tgt.value.group : null
 

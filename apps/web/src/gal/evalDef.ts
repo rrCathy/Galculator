@@ -9,6 +9,8 @@ import {
   type OpDef,
 } from './ops'
 import { asciiClean, prettySymbol, scanNotAscii } from './pretty'
+// 「已知群」不能当输入（U48）：结论表给的群只有符号 + 阶，没有元素表
+import { isKnownGroup } from './known'
 import type { GalValue } from './value'
 import type { GalObject } from './types'
 
@@ -296,6 +298,26 @@ function runOp(op: OpDef, args: OpArg[], objects: Map<string, GalObject>): EvalR
       ok: false,
       error: `${op.notation} 需要 ${need} 个参数，收到 ${args.length} 个`,
       hint: op.doc,
+    }
+  }
+  /**
+   * 「已知群」**只能当结果看，不能当输入算**（U48）。
+   *
+   * 它是结论表给的（`Aut(S_6)` 只有符号与阶 1440，本地建不出那个群），
+   * `elements` 是空数组 —— 放它进操作会**静默算在空集上**（`闭包(它)` 会得到一个
+   * 看不出错的平凡结果），这比报错难查得多。所以在**唯一的分发口**拦下，
+   * 而不是赌每个 op 都记得自己查一遍。
+   */
+  const knownArg = args.find(
+    (a) => a.kind === 'object' && a.value?.type === 'group' && isKnownGroup(a.value.group),
+  )
+  if (knownArg) {
+    return {
+      ok: false,
+      error: '这是结论表给出的「已知群」，没有元素表',
+      hint:
+        '它来自课本的闭式结论（例如 |Aut(S_6)| = 2*6! = 1440，本地建不出这个群），' +
+        '只有符号与阶，不能再参与元素级运算。',
     }
   }
   const out = op.run(args, opContextOf(objects))
