@@ -13,6 +13,7 @@ import {
   multiOps,
   needsEditor,
   pairOps,
+  pairMissHint,
   pickedIds,
   pendingHint,
   singleOpsFor,
@@ -23,7 +24,10 @@ import { computedNumbers, type NumericEntry } from './gal/numeric'
 import { renameRefs, nextAutoName } from './gal/naming'
 import { findExistingObject } from './gal/identity'
 import { parseSnapshot, serializeSnapshot, SNAPSHOT_VERSION } from './gal/snapshot'
+import { boardDisabled, loadBoardLines, saveBoardLines } from './gal/board'
 import { SnapshotCard } from './ui/SnapshotCard'
+import { CorrespondenceCard } from './ui/CorrespondenceCard'
+import type { Group } from '@groupviz/core'
 import { opTemplate } from './gal/ops'
 import { proofHighlight, proofLines, type ProofParams, type ProofTemplate } from './gal/proof'
 import { CanvasView, type CanvasHandle, type NodeAnchor } from './ui/CanvasView'
@@ -94,10 +98,16 @@ function saveAutoFirstIso(v: boolean) {
  *   节点左上角 —— 对象悬浮球（看 / 单对象操作）
  */
 export default function App() {
-  const [lines, setLines] = useState<string[]>(() =>
+  const [lines, setLines] = useState<string[]>(() => {
     // `?empty=1` 从**空画布**起（走查脚本用它，免得依赖默认示范的内容）
-    typeof location !== 'undefined' && location.search.includes('empty') ? [] : DEFAULT_LINES,
-  )
+    if (typeof location !== 'undefined' && location.search.includes('empty')) return []
+    /**
+     * 上次离开时的那张图（用户实测反馈第一条："我希望刷新时保存画布"）。
+     * 定义行是整张图的唯一真相 —— 存下它就等于存下整张图；钉住位置与视口
+     * 由画布自己持久化（决策 ④）。都没存过才落到默认示范。
+     */
+    return loadBoardLines() ?? DEFAULT_LINES
+  })
   const [inter, setInter] = useState<Interaction>(IDLE)
   const [orbStage, setOrbStage] = useState<OrbStage>('closed')
   const [multiOpen, setMultiOpen] = useState(false)
@@ -113,6 +123,11 @@ export default function App() {
     from: string
     to: string
     cands: PairCandidate[]
+    /**
+     * 「为什么没有【包含】」的一句话（U38）。两个群凑一起却没列出包含时给个理由
+     * （阶不整除 / 群太大没算 / 算过确实没有）—— 菜单不撒谎，但也不该沉默。
+     */
+    missHint: string | null
   } | null>(null)
 
   // 默认只展开「对象」：三个都摊开会把画布左上角整片盖住，连顶部那颗球都压上去了
@@ -143,6 +158,40 @@ export default function App() {
     if (typeof location === 'undefined' || location.search.includes('empty')) return
     saveAutoFirstIso(autoFirstIso)
   }, [autoFirstIso])
+
+  /**
+   * 定义行**自动落盘**（用户实测反馈第一条："刷新时保存画布"）。
+   *
+   * 静默、无感：每次改定义就写一次，刷新回来还是这张图。空画布 = 删档
+   * （见 `board.ts`）——所以"清空画布"之后刷新不会把图变回来。
+   */
+  useEffect(() => {
+    if (boardDisabled()) return
+    saveBoardLines(lines)
+  }, [lines])
+
+  /**
+   * 清空画布：定义行（App 的）+ 钉住 / 视口（画布的）一起清。
+   * 只清定义行的话，钉住的位置会变成下一张图的**孤儿数据**——
+   * 自动命名又从 `A` 开始，新对象会继承旧位置，画布一开就是歪的。
+   *
+   * 落盘交给 `lines` 那个 effect：它会把**空数组**写进去（而不是删档），
+   * 于是刷新之后是空画布，而不是又冒出来的默认示范页。
+   */
+  const clearBoard = useCallback(() => {
+    setLines([])
+    setInter(IDLE)
+    setOrbStage('closed')
+    setMultiOpen(false)
+    setConnectMenu(null)
+    setEditing(null)
+    setDragged([])
+    canvasRef.current?.resetViewState()
+    setNotice({
+      text: '画布已清空',
+      hint: '输入一行定义就能重新开始（默认示范页不会自己回来）',
+    })
+  }, [])
 
   /* ── 证明（M1）：step-through = 替用户一行行写定义 ─────────
    *
@@ -288,6 +337,12 @@ export default function App() {
   const [snapshotOpen, setSnapshotOpen] = useState(false)
   const [snapshotText, setSnapshotText] = useState('')
   const [snapshotErr, setSnapshotErr] = useState<string | null>(null)
+
+  /**
+   * 对应定理卡片：从子群列表里某个**正规**子群点「对应」打开。
+   * 存的是 G 与 N 的元素 id 快照 —— 之后焦点换到别处也不影响这张卡。
+   */
+  const [corr, setCorr] = useState<{ G: Group; nIds: string[] } | null>(null)
 
   /** 导出：取画布当下的钉住 + 视口，连同定义行写成一段文本。 */
   const exportSnapshot = useCallback(() => {
@@ -512,6 +567,48 @@ export default function App() {
   )
 
   /**
+   * 「这个顺序求值走得通吗」—— UI 手势的**顺序兜底**判据（拖拽连线 / pending 收尾共用）。
+   *
+   * 拖拽不表达顺序，而参数是有序的：`pairOps` 只能按类型匹配猜一次，
+   * 对 `包含(H, G)` 这种**两位同型**的操作猜不出谁该在前
+   * （`(S₄, A₄)` 与 `(A₄, S₄)` 都能填进两个 `group` 槽），于是"把 S₄ 拖到 A₄ 上"
+   * 会拼出 `包含(S₄, A₄)` —— 那是错的。pending 收尾同理：顺序 = **点击顺序**，
+   * 而用户点第一个对象时想的是"拿它做什么"，不是"它是第一参"。
+   *
+   * **只在 UI 手势上兜**：手打的 `R = S_4 ⊆ A_4` 要照样报错，不许替用户改（U21）。
+   */
+  const tryOrder = useCallback(
+    (op: OpDef, picked: string[]): boolean => {
+      const args: (string | null)[] = op.params.map((_, i) => picked[i] ?? null)
+      const expr = composeCall(op, args)
+      return !!expr && evalExpr(expr, byId).ok
+    },
+    [byId],
+  )
+
+  /**
+   * pending 收尾时的**参数顺序兜底**（2026-09-30）。
+   *
+   * 从对象旁边点进"两位同型"的操作时，参数顺序由**点击顺序**决定，而顺序是有语义的：
+   * `N_G(G, H)` 的第一参是**母群**。实测用户的心智是"我要算 A₄ 的正规化子，先点 A₄"——
+   * 那一下被填进第一槽 G，于是拼成 `N_G(A₄, S₄)`，而 core 对"第二参放不进第一参"
+   * 是**静默**的（返回空集）⇒ 画布上长出一个 **0 阶的"群"**（用户报的就是这条）。
+   *
+   * 兜一次：正序求值走得通就用正序，走不通才试反序；**两个都不通就还给正序**
+   * （那时 `runOp` 的报错才有着落）。
+   */
+  const orderForUi = useCallback(
+    (op: OpDef, picked: string[]): string[] => {
+      // 有标量位的 op 不兜：`picked` 是按对象位顺序摆的，换了位会把标量塞错槽。
+      if (picked.length !== 2 || scalarSlots(op).length > 0) return picked
+      if (tryOrder(op, picked)) return picked
+      const swapped = [picked[1], picked[0]]
+      return tryOrder(op, swapped) ? swapped : picked
+    },
+    [tryOrder],
+  )
+
+  /**
    * 从某个节点发起一个操作：一元直接算，多元进 pending，缺标量进 fill，要编辑器进 editor。
    *
    * `dispatchOp` 是它的本体（**已经知道参数顺序**）；`startOp` 是"只点了第一个对象"
@@ -544,35 +641,12 @@ export default function App() {
         setOrbStage('closed')
         return
       }
-      runOp(op, picked)
+      runOp(op, orderForUi(op, picked))
     },
-    [runOp],
+    [runOp, orderForUi],
   )
 
   const startOp = useCallback((op: OpDef, from: string) => dispatchOp(op, [from]), [dispatchOp])
-
-  /**
-   * 拖拽连线的**参数顺序**：正序不行就反序再试。
-   *
-   * 拖拽不表达顺序，而参数是有序的。`pairOps` 只能按类型匹配猜一次，
-   * 对 `包含(H, G)` 这种**两位同型**的操作猜不出谁该在前
-   * （`(S₄, A₄)` 与 `(A₄, S₄)` 都能填进两个 `group` 槽），
-   * 于是"把 S₄ 拖到 A₄ 上"会拼出 `包含(S₄, A₄)` —— 那是错的。
-   *
-   * 所以拖拽这条路**自己兜一次**：正序求值走得通就用正序，否则反序；
-   * 两种都不行才按正序交给 `dispatchOp`（那时它的报错才有着落，
-   * 比如「映射」要先弹编辑器）。
-   *
-   * **只在这条手势上这么做**：手打的 `R = S_4 ⊆ A_4` 要照样报错，不许替用户改。
-   */
-  const tryOrder = useCallback(
-    (op: OpDef, picked: string[]): boolean => {
-      const args: (string | null)[] = op.params.map((_, i) => picked[i] ?? null)
-      const expr = composeCall(op, args)
-      return !!expr && evalExpr(expr, byId).ok
-    },
-    [byId],
-  )
 
   const dispatchPairOp = useCallback(
     (op: OpDef, from: string, to: string, swappedPref = false) => {
@@ -614,7 +688,11 @@ export default function App() {
         return
       }
       setNotice(null)
-      setConnectMenu({ at, from, to, cands })
+      // 候选里没有「包含」时，顺手带一句"为什么"（两个群才有；别的组合给 null）
+      const missHint = cands.some((c) => c.op.id === 'contains')
+        ? null
+        : pairMissHint(a.value, b.value)
+      setConnectMenu({ at, from, to, cands, missHint })
     },
     [byId, dispatchPairOp],
   )
@@ -685,7 +763,7 @@ export default function App() {
           setInter({ kind: 'fill', opId: pendOp.id, picked, scalars })
           return
         }
-        runOp(pendOp, picked)
+        runOp(pendOp, orderForUi(pendOp, picked))
         return
       }
       setInter({ kind: 'selected', target: id })
@@ -693,7 +771,7 @@ export default function App() {
       // 点对象 = 想看它 —— 信息面板直接打开（与"点对象行"的行为一致）
       setOpenInfo(true)
     },
-    [inter, pendOp, runOp],
+    [inter, pendOp, runOp, orderForUi],
   )
 
   useEffect(() => {
@@ -869,6 +947,7 @@ export default function App() {
         autoFirstIso={autoFirstIso}
         onToggleAutoFirstIso={() => setAutoFirstIso((v) => !v)}
         onOpenSnapshot={() => setSnapshotOpen(true)}
+        onClearBoard={clearBoard}
       />
 
       {/*
@@ -905,6 +984,9 @@ export default function App() {
               <code>{opTemplate(c.op)}</code>
             </button>
           ))}
+          {connectMenu.missHint && (
+            <div className="connect-miss">{connectMenu.missHint}</div>
+          )}
           <div className="connect-hint">参数顺序已经按操作摆好，点一下就建出来</div>
         </div>
       )}
@@ -963,6 +1045,10 @@ export default function App() {
           edge={busy ? null : focusedEdge}
           table={objects}
           onExtract={extractSubgroup}
+          onCorrespond={(nIds) => {
+            const v = focusedObj?.value
+            if (v && v.type === 'group') setCorr({ G: v.group, nIds })
+          }}
           singleOps={singleOps}
           onRunOp={(op) => focusedObj && startOp(op, focusedObj.id)}
         />
@@ -1026,6 +1112,10 @@ export default function App() {
           onSubmit={submitEditorLine}
           onCancel={reset}
         />
+      )}
+
+      {corr && (
+        <CorrespondenceCard G={corr.G} nIds={corr.nIds} onClose={() => setCorr(null)} />
       )}
 
       {snapshotOpen && (

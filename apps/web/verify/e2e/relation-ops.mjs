@@ -9,7 +9,7 @@
  *   - `FA = 像(f, A)` 长出 `f(A) \\trianglelefteq S₃` 的顶点与边（`A_3 \\trianglelefteq S_3`，指数 2）
  *   - `R = A \\subseteq G` 长出**可点选**的关系边（A₄ \\trianglelefteq S₄ \\to 标签 `\\trianglelefteq`）
  *   - 点那条边 \\to 信息面板给出「关系」的账（指数 24/12 = 2）
- *   - 假声明（D₄ \\subseteq S₄）被拦在行里
+ *   - D₄ \\subseteq S₄ 现在建得出来（U38 嵌入判定：指数 3、非正规 \\to 单射钩）
  *
  * U31 增补：`f(H)` 的**菜单入口**（从前只有拖拽 / 打字两条路，用户"找不到入口"）——
  *   ① 点箭头 f \\to 信息面板「可做」\\to 像 f(H) \\to 条上停在"可选 H"（有"不填，直接执行"）
@@ -197,16 +197,33 @@ const fi = await infoState()
 ok('点 f(A) 看到的是群', fi.chip === '群', `${fi.chip} :: ${fi.head}`)
 ok('阶是 3（手算：A_4 的像 \\cong C_3）', fi.vals.some((v) => v.includes('|G| = 3')), JSON.stringify(fi.vals))
 
-/* ── 假声明被拦在行里 ── */
+/* ── U38：D₄ 的包含现在真建得出来（旧判据下这条曾被当成"假声明"）── */
 
 await addLine('D', 'D_4')
-// 假声明是**输入层**就拦住的（按钮置灰 \\to 根本写不进对象表），
-// 所以这里看的是状态行，不是 `.row-err`。这一点与"定义表里的行"是两条不同的路。
+// U38 第二关（嵌入判定）之后，`D_4 \\subseteq S_4` 是**真声明**（指数 3、非正规）——
+// 从前"拦住"是判据太窄（只认元素 id 逐个对得上），不是数学错。
 const submitted = await addLine('R2', 'D \\subseteq G')
+ok('`D \\subseteq G`（D_4 是 S_4 的子群，指数 3）被输入层接受', submitted === true, `submitted=${submitted}`)
+{
+  const cs2 = await canvasState()
+  const dr = cs2.edges.find(
+    (e) => e.cls.includes('gedge-relation') && e.label === '\\hookrightarrow',
+  )
+  ok(
+    '新边是 D 到 G 的单射钩（非正规，不是正规包含）',
+    !!dr,
+    cs2.edges.map((e) => `${e.cls}:${e.label}`).join(' | '),
+  )
+}
+ok('对象表里没有求值失败的行', (await rowErrs()).length === 0)
+
+/* ── 对照：搜过真没有的一对（Q_8 ⊄ S_4）仍被拦住 ── */
+
+await addLine('Q8', 'Q_8')
+const badSubmitted = await addLine('R3', 'Q8 \\subseteq G')
 const st = await page.evaluate(() => document.querySelector('.composer-status')?.textContent ?? '')
-ok('`D \\subseteq G`（D_4 不是 S_4 的子群）被输入层拦住', submitted === false, `submitted=${submitted}`)
-ok('拦的理由是"不是子群"', st.includes('不是') && st.includes('子群'), st)
-ok('对象表里没有多出任何求值失败的行', (await rowErrs()).length === 0)
+ok('`Q_8 \\subseteq G`（S_4 里没有同构于 Q_8 的子群）被拦住', badSubmitted === false, `submitted=${badSubmitted}`)
+ok('拦的理由是"不是子群"（已枚举全部子群）', st.includes('不是') && st.includes('子群'), st)
 
 await page.screenshot({ path: '../../docs/assets/u20-subgroup-image.png' })
 

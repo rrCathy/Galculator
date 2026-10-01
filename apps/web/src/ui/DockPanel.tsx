@@ -14,6 +14,7 @@ export function DockPanel({
   onToggle,
   direction = 'down',
   bodyWidth,
+  bodyClass,
   actions,
   children,
 }: {
@@ -29,6 +30,11 @@ export function DockPanel({
    * 窄了只能横滚，等于没显示。
    */
   bodyWidth?: number
+  /**
+   * 面板体的附加类名。信息面板用它挂 `.info-split` ——
+   * 那一处的 body 要**分区**（摘要区 + tab 区各自滚），外层反而不能再滚。
+   */
+  bodyClass?: string
   /** 展开后标题栏右侧的附加按钮 */
   actions?: ReactNode
   children: ReactNode
@@ -44,7 +50,7 @@ export function DockPanel({
         {open && actions}
       </header>
       {open && (
-        <div className="dock-body" style={bodyWidth ? { width: bodyWidth } : undefined}>
+        <div className={`dock-body${bodyClass ? ` ${bodyClass}` : ''}`} style={bodyWidth ? { width: bodyWidth } : undefined}>
           {children}
         </div>
       )}

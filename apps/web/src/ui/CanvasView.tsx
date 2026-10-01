@@ -224,6 +224,8 @@ function edgeAnchor(p: Pt, b: Box, target: Pt): Pt {
 export interface CanvasHandle {
   getViewState: () => CanvasViewState
   applyViewState: (s: CanvasViewState) => void
+  /** 清掉钉住与视口（清空画布时用；免得留着下一张图的孤儿数据） */
+  resetViewState: () => void
 }
 
 export interface CanvasViewState {
@@ -245,6 +247,7 @@ export function CanvasView({
   autoFirstIso = true,
   onToggleAutoFirstIso,
   onOpenSnapshot,
+  onClearBoard,
 }: {
   /** 命令式把手（缺口 ⑫）：导出视图时读钉住与视口，导入时写回去 */
   ref?: Ref<CanvasHandle>
@@ -274,6 +277,8 @@ export function CanvasView({
   onToggleAutoFirstIso?: () => void
   /** 打开「视图快照」卡片（缺口 ⑫）——卡片归 App 管，它才拿得到定义行 */
   onOpenSnapshot?: () => void
+  /** 清空画布（定义行归 App 管）；钉住与视口由这里的 `resetViewState` 一起清 */
+  onClearBoard?: () => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -314,6 +319,12 @@ export function CanvasView({
         setDrag(null)
         dragRef.current = null
         setUserView(s.view ?? null)
+      },
+      resetViewState: () => {
+        setPinned({})
+        setDrag(null)
+        dragRef.current = null
+        setUserView(null)
       },
     }),
     [pinned, userView],
@@ -1729,6 +1740,18 @@ export function CanvasView({
           title="清除手动摆放的位置，回到自动排版"
         >
           恢复自动布局{pinnedCount > 0 ? `（${pinnedCount}）` : ''}
+        </button>
+        {/*
+          清空画布（2026-09-30）：定义行落盘之后，"刷新"不再等于"重来"——
+          想从零开始就得有个明面上的入口，否则用户只能去清浏览器数据。
+          连**钉住与视口**一起清（留着就是下一张图的孤儿数据）。
+        */}
+        <button
+          className="ct-btn ct-danger"
+          onClick={() => onClearBoard?.()}
+          title="删掉全部定义行，从空画布开始（钉住的位置与视口一并清掉；刷新不会恢复）"
+        >
+          清空画布
         </button>
       </div>
     </div>

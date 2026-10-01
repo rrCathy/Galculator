@@ -38,9 +38,30 @@ export interface FactRow {
   numeric: boolean
 }
 
+/**
+ * 一个**共轭类**（元素表的折叠单位）。
+ *
+ * 同类元素天生共享全部属性（阶 / ∈Z? / 类大小 / 中心化子），把它们铺成 N 行
+ * 是纯冗余 —— `S_4` 的 24 个元素折成 5 行，横向也不用再滚。
+ */
+export interface ConjClass {
+  /** 共轭类序号（从 1 起），与 `ElementFact.classIndex` 同源 */
+  index: number
+  size: number
+  /** 类中元素的阶（同类同阶）*/
+  order: number
+  inCenter: boolean
+  centralizerOrder: number | null
+  /** 代表元（core 给的类内第一个）*/
+  rep: GroupElement
+  elements: GroupElement[]
+}
+
 export interface ElementTable {
   facts: ElementFact[]
   rows: FactRow[]
+  /** 共轭类（超限未枚举时为空数组）*/
+  classes: ConjClass[]
   /** 群太大，共轭类 / 中心化子未枚举（不静默失败） */
   capped: boolean
 }
@@ -49,12 +70,11 @@ export function buildElementTable(group: Group): ElementTable {
   const capped = group.order > ENUM_CAP
 
   const center = capped ? new Set<string>() : new Set(getGroupCenter(group).map((e) => e.id))
+  const rawClasses = capped ? [] : getConjugacyClasses(group)
   const classOf = new Map<string, { index: number; size: number }>()
-  if (!capped) {
-    getConjugacyClasses(group).forEach((cls, i) => {
-      for (const e of cls) classOf.set(e.id, { index: i + 1, size: cls.length })
-    })
-  }
+  rawClasses.forEach((cls, i) => {
+    for (const e of cls) classOf.set(e.id, { index: i + 1, size: cls.length })
+  })
 
   const facts: ElementFact[] = group.elements.map((e) => {
     const cls = classOf.get(e.id)
@@ -65,6 +85,20 @@ export function buildElementTable(group: Group): ElementTable {
       classIndex: cls?.index ?? null,
       classSize: cls?.size ?? null,
       centralizerOrder: capped ? null : getCentralizer(group, [e]).length,
+    }
+  })
+
+  const byId = new Map(facts.map((f) => [f.element.id, f]))
+  const classes: ConjClass[] = rawClasses.map((elems, i) => {
+    const f0 = byId.get(elems[0].id)
+    return {
+      index: i + 1,
+      size: elems.length,
+      order: f0?.order ?? 0,
+      inCenter: f0?.inCenter ?? false,
+      centralizerOrder: f0?.centralizerOrder ?? null,
+      rep: elems[0],
+      elements: elems,
     }
   })
 
@@ -91,5 +125,5 @@ export function buildElementTable(group: Group): ElementTable {
     },
   ]
 
-  return { facts, rows, capped }
+  return { facts, rows, classes, capped }
 }

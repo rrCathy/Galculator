@@ -7,10 +7,13 @@ import {
   type ParamType,
 } from './ops'
 import { maxObjectArity, objectArity } from './compose'
-// 包含判据与信息面板的「关系」层（U19）**共用同一份**
-import { containment } from './relations'
+// 包含判据与信息面板的「关系」层（U19）**共用同一份**。
+// `embeddingSearchBlocked` = 「嵌入那条路被守卫挡下了」（U38），`pairMissHint` 用它区分
+// "证明了没有"与"没算"
+import { containment, embeddingSearchBlocked } from './relations'
 // 同构判据同源（缺口 ⑰）
 import { isomorphismOf } from './insights'
+import { prettySymbol } from './pretty'
 import type { GalValue } from './value'
 
 /**
@@ -238,8 +241,7 @@ const PAIR_PRIORITY = [
  * 参数有序而拖拽无序：`像(f, H)` 与 `包含(H, G)` 都是两参，但先后不能反。
  * 于是正反各试一次、合并去重（同一 op 只留先匹配上的那个顺序）。
  */
-export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
-  const out: PairCandidate[] = []
+export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {  const out: PairCandidate[] = []
   for (const op of OPS) {
     if (op.params.length < 2) continue
     const [p0, p1] = op.params
@@ -302,4 +304,32 @@ export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
       rank(x) - rank(y) ||
       (regIndex.get(x.op.id) ?? 0) - (regIndex.get(y.op.id) ?? 0),
   )
+}
+
+/**
+ * 两个群凑在一起、候选里却**没有「包含」**时的一句解释（U38）。
+ *
+ * 背景：菜单**不撒谎** —— `包含(H, G)` 只有真判得出包含关系时才会出现在候选里。
+ * 但"没列出来"和"为什么没列出来"是两件事：用户实测把 `C_3` 拖到 `V_4` 上，
+ * 菜单里只有直积 / 映射，没有任何地方说一句"3 不整除 4"。
+ *
+ * 只对**两个群**给答案（别的情形原因太杂，硬凑一句话反而会误导）；其余返回 `null`。
+ * 措辞分三种，正好对应 `containment` 的三种"没有"：
+ *   · 阶不整除 → 拉格朗日**证明了**没有；
+ *   · 群太大 / 带陪集 → **没算**（`embeddingSearchBlocked`）；
+ *   · 其余 → **算过了**，G 里确实没有与 H 同构的子群。
+ */
+export function pairMissHint(a: GalValue, b: GalValue): string | null {
+  if (a.type !== 'group' || b.type !== 'group') return null
+  const g1 = a.group
+  const g2 = b.group
+  if (g1 === g2) return null
+  const [lo, hi] = g1.order <= g2.order ? [g1, g2] : [g2, g1]
+  if (hi.order % lo.order !== 0) {
+    return `|${prettySymbol(lo.symbol)}| = ${lo.order} 不整除 |${prettySymbol(hi.symbol)}| = ${hi.order}，按拉格朗日定理不可能有包含关系`
+  }
+  if (embeddingSearchBlocked(lo, hi)) {
+    return `${prettySymbol(hi.symbol)}（阶 ${hi.order}）太大或带陪集元素，没做嵌入枚举，所以包含关系也判不了`
+  }
+  return `${prettySymbol(hi.symbol)} 里没有与 ${prettySymbol(lo.symbol)} 同构的子群（已枚举全部子群）`
 }

@@ -389,6 +389,37 @@ function unknownOpError(name: string, objects: Map<string, GalObject>): EvalResu
  *   ④ 记号建群（回退）
  */
 export function evalExpr(raw: string, objects: Map<string, GalObject>): EvalResult {
+  return evalExprGuarded(raw, objects)
+}
+
+/**
+ * 求值的**异常兜底**（2026-09-30）。
+ *
+ * 引擎（`@groupviz/core`）在"元素表示对不上"的边角会**直接抛**，而不是返回空值 ——
+ * 实测 `N_G(V_4, S_4)` 抛 `Cannot read properties of undefined (reading 'map')`
+ * （core 的 `findPermIndex` 回退后拿到了 undefined）。从前这一抛会**穿过整个求值层
+ * 漏进事件处理器**，用户看到的是控制台报错 / 界面没反应，而不知道自己做错了什么。
+ *
+ * 兜底不去猜"是哪一步崩的"（那要改 core），只保证：**再崩也要变成一句人话**，
+ * 并把原始信息留在 hint 里（用户能原样贴给我，比截图强）。
+ *
+ * ⚠️ 上游那些**已知**的越界情形都该在各自 op 里判掉（`N_G` / `C_G` 已经补上）；
+ * 这一层是**最后一道网**，不是替它们兜底的手段。
+ */
+function evalExprGuarded(raw: string, objects: Map<string, GalObject>): EvalResult {
+  try {
+    return evalExprInner(raw, objects)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    return {
+      ok: false,
+      error: '这一步把引擎算崩了（是工具的 bug，不是你写错了）',
+      hint: `算式：${asciiClean(raw)} · 原始信息：${asciiClean(detail).slice(0, 120)}`,
+    }
+  }
+}
+
+function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult {
   // **先拦"键盘打不出来的字符"**：这类输入从前是被静默转换的，于是用户永远
   // 不知道"系统给的记号"和"他能敲的记号"其实不是同一个字符集。
   // 报错要给**可照抄的写法**（`suggestion` 是把这一行真折了一遍的结果），

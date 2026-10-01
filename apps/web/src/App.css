@@ -267,6 +267,20 @@ body {
   line-height: 1.45;
 }
 
+/**
+ * 「为什么没有【包含】」（U38）—— 比 `connect-hint` 更显眼一档：
+ * 它是**这一对对象专属**的解释（阶不整除 / 群太大没算 / 算过确实没有），
+ * 而不是通用的操作提示。左侧一条细线把它和候选列表分开。
+ */
+.connect-miss {
+  margin-top: 6px;
+  padding: 5px 2px 0 8px;
+  border-left: 2px solid var(--warn, #d08a2e);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 /* ── 格点 / 吸附 / 视图工具条（U10：开放视图编辑）────────── */
 
 /* 格点 = 列中心 × 行中心的交点。对象只能停在这些点上，
@@ -351,6 +365,12 @@ body {
   border-color: var(--purple);
   background: rgba(83, 74, 183, 0.12);
   color: var(--purple);
+}
+
+/* 破坏性按钮（清空画布）：hover 才露警示色，静息时与普通按钮一致 */
+.ct-btn.ct-danger:hover:not(:disabled) {
+  border-color: #b91c1c;
+  color: #b91c1c;
 }
 
 /* ── 浮层抽屉 ──────────────────────────────────────────── */
@@ -858,6 +878,67 @@ body {
   font-size: 11.5px;
 }
 
+/* ── 信息面板的分区（U42，2026-09-30）────────────────────────
+   用户第三次报元素列表：「你不会不知道信息栏有限高吧，关系条目太多给元素列表挤没了不知道？」
+
+   实测病根（1500×950，点 S₄ 的 A₄）：`.dock-body` 限高 540px，摘要区一路吃到底 ——
+   info-target 19 + 结论 129 + 关系 199（**只 2 条**）+ 可做 95 = 442，
+   于是 tab 头落到 top 502，元素表只剩 **38px** 可视（还被 flex 压扁）。
+
+   分区：摘要区封顶自己滚，tab 区吃剩下的全部，tab 头钉在区顶。
+   收缩规则是刻意的 —— 两边都 `shrink: 1`，但摘要区被 `max-height` 夹住后
+   会把空间**还**给 tab 区（flex 对 clamp 过的项会重新分配）。
+   实测 tab 区从 38px 涨到 250px+。 */
+.dock-body.info-split {
+  /*
+   * 高度必须**确定**，不能留给内容决定。
+   * `.dock-body` 原本只有 `max-height: min(62vh, 540px)` —— 内容多时撑满 540 没问题，
+   * 可一旦摘要区被 `max-height` 夹住（240），body 就跟着缩到"240 + 摘要以外的内容高"
+   * = 402，tab 区的 `flex-grow` **没有剩余空间可长**，元素表只拿到 107px。
+   * 钉成 height 之后：brief 240 + tab 区 279（tab 头 29 + 列表 245）。
+   */
+  height: min(62vh, 540px);
+  overflow: hidden;
+}
+
+.info-brief {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+  /* 封顶 ≈ 面板的 45%：`.dock-body` 上限是 min(62vh, 540px)，28vh 与之同源 */
+  max-height: min(28vh, 240px);
+  overflow-y: auto;
+}
+
+.info-panel {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+}
+
+/* tab 头不参与滚动 */
+.info-panel .info-tabs {
+  flex: none;
+}
+
+.info-panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 表格在分区里交出自己的 300px 上限：外层在滚，它吃满 tab 区 */
+.info-panel-body .etable-wrap {
+  max-height: none;
+}
+
 /* ── 结构伴生边（缺口 ⑧）：点画布上 π / ↪ / ≅ 时的那一节 ── */
 
 .edge-target {
@@ -971,6 +1052,85 @@ body {
   gap: 5px;
 }
 
+/* 共轭类代表那一行的"代表子群"（生成元）—— 同构但不共轭的两行靠它区分 */
+.insp-sub-gen {
+  flex: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/*
+ * 共轭类列表的**同构类分组**（2026-09-30，用户："我的子群去重呢？"）。
+ * 组头用 `.sub-group-head`（与 Sub(T) 的折叠头同一套）；组体左缩进一条竖线，
+ * 一眼看出"这些共轭类属于同一个同构类"。
+ */
+.insp-isogroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.insp-isogroup-body {
+  margin-left: 5px;
+  padding-left: 9px;
+  border-left: 2px solid var(--border);
+}
+
+/* 组头上的「N 类」——提醒"这一组的成员长得同构、但不全共轭" */
+.sub-group-sub {
+  color: var(--text-faint);
+  font-family: var(--font);
+  font-size: 10.5px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+/* 「全部子群」按结构分组折叠（2026-09-30）：「C_2 x9」一眼可见，点开才摊成员 */
+.insp-subgroups {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.insp-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sub-group-head {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.sub-group-head em {
+  color: var(--text-faint);
+  font-style: normal;
+  font-size: 11.5px;
+}
+
+.sub-group-head:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+}
+
+.sub-group-head.on {
+  border-color: var(--purple);
+  background: rgba(83, 74, 183, 0.1);
+  color: var(--purple);
+}
+
 .insp-subs {
   display: flex;
   flex-direction: column;
@@ -980,7 +1140,8 @@ body {
 .insp-sub {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 2px 8px;
 }
 
 .insp-sub-name {
@@ -1036,7 +1197,7 @@ body {
 
 .etable th,
 .etable td {
-  padding: 4px 9px;
+  padding: 3px 6px;
   text-align: center;
   white-space: nowrap;
 }
@@ -1082,6 +1243,64 @@ body {
 .etable-cell.can-drag:hover {
   background: var(--blue-fill);
   color: var(--blue-text);
+}
+
+/* 行首：共轭类的折叠开关（圈号 + 代表元 + 「等 N 个」） */
+.etable-cls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 400;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.etable-cls:hover {
+  color: var(--blue-text);
+}
+
+.etable-cno {
+  color: var(--text-faint);
+  font-style: normal;
+}
+
+/*
+ * 行首那个小三角（SVG）：折叠态下唯一提示"这一行背后不止一个元素"的地方
+ *（原先写「等 N 个」，四个字把行首列顶到 130px，表格又越出面板 —— 类大小列
+ * 已经写了 N，这里只要能点开就够了）。
+ */
+.etable-more {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.etable tbody tr.on {
+  background: var(--blue-fill);
+}
+
+/* 展开行：这一类的全部元素（横排，不占额外行高预算） */
+.etable-expand > td {
+  padding: 3px 8px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.etable-el {
+  white-space: nowrap;
+}
+
+.etable-sep {
+  margin: 0 4px;
+  color: var(--text-faint);
+  font-style: normal;
 }
 
 /* ── 数值区（上拉）─────────────────────────────────────── */
@@ -1863,6 +2082,26 @@ body {
   max-width: calc(100% - 24px);
 }
 
+/*
+ * 窄窗口：左上（对象 / 操作 / 信息）与右上（证明）**各占一半宽**。
+ *
+ * 不拦这一道，两块面板各自 `max-width: calc(100% - 24px)` 就只跟视口比宽，
+ * 于是互相重叠 —— 实测 691px 宽的窗口下，证明面板约 420px、信息面板 298px，
+ * 叠了两百多 px；而 `.dock-topright` 在 DOM 里靠后 ⇒ 盖在信息面板上面，
+ * 「元素」「子群」两个 tab **直接点不动**（拦截者报的是 `.proof-item`），
+ * 画布中央的对象也一样点不中。
+ *
+ * 判据是"谁在操作"：信息面板是用户正在用的那一块，不能在任何宽度下被证明面板吃掉。
+ * 各占一半之后，`.dock-col`（168px 的对象/操作）与信息面板（298px）在窄屏下会自动换行，
+ * 宽度仍然够用。
+ */
+@media (max-width: 1080px) {
+  .dock-topleft,
+  .dock-topright {
+    max-width: calc(50% - 18px);
+  }
+}
+
 .dock-mini {
   padding: 1px 7px;
   border: 1px solid var(--border);
@@ -2310,5 +2549,181 @@ body {
   background: rgba(163, 45, 45, 0.08);
   color: #a32d2d;
   font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ── 对应定理卡片（第四同构定理，U40）───────────────────── */
+
+/* 子群列表里那一行右侧的入口：只有正规子群才有 */
+
+/*
+ * ⚠️ 曾经是个灰扑扑的小「对应」按钮 —— 用户 2026-09-30 的原话是
+ * 「这就是你说的对应定理？」，因为他**根本没找到这个入口**（转而在画布上手搭
+ * A₄ ⊴ S₄ / V₄ ↪ S₄ / S₄/V₄ 想自己摆出对应）。所以现在是主色描边 + 写全「对应定理」。
+ */
+.insp-sub-corr {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid rgba(24, 95, 165, 0.45);
+  border-radius: 6px;
+  background: rgba(24, 95, 165, 0.07);
+  color: #185fa5;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.insp-sub-corr:hover {
+  border-color: rgba(24, 95, 165, 0.72);
+  background: rgba(24, 95, 165, 0.15);
+}
+
+.corr-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 800px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 14px 18px 16px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.99);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+}
+
+.corr-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.corr-head strong {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.corr-sub {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.corr-sub b {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.corr-x {
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.corr-x:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.corr-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.corr-svg {
+  width: 100%;
+  height: auto;
+}
+
+.corr-col {
+  fill: var(--text-faint);
+  font-size: 12px;
+}
+
+.corr-node rect {
+  fill: rgba(0, 0, 0, 0.035);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.corr-node-nrm rect {
+  fill: rgba(24, 95, 165, 0.07);
+  stroke: rgba(24, 95, 165, 0.42);
+}
+
+.corr-sym {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.corr-ord {
+  fill: var(--text-dim);
+  font-size: 11px;
+}
+
+.corr-badge {
+  fill: var(--text-faint);
+  font-size: 11px;
+}
+
+.corr-edge {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.corr-link line {
+  stroke: rgba(24, 95, 165, 0.42);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.corr-link text {
+  fill: rgba(24, 95, 165, 0.8);
+  font-size: 13px;
+}
+
+.corr-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+}
+
+.corr-ok {
+  color: #1d7a4f;
+}
+
+.corr-no {
+  color: #a32d2d;
+}
+
+.corr-dim {
+  color: var(--text-faint);
+}
+
+.corr-bad {
+  padding: 6px 0;
+  color: #a32d2d;
+  font-size: 13px;
   line-height: 1.6;
 }

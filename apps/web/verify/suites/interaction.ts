@@ -287,10 +287,31 @@ export function run(): void {
       !!containsFwd && !!containsBwd,
     )
 
-    // 数学判据挡住了胡说：S₄ 与 S₃ 之间没有包含
+    /**
+     * U38（2026-09-30）：`S₃ ⊆ S₄` **不再**是"胡说" —— S₄ 的点稳定子 ≅ S₃（指数 4），
+     * 第二关（嵌入）判得出包含，方向由判据定。从前这条写的是"S₄ 与 S₃ 没有包含"，
+     * 那是旧判据（只认元素 id）的产物，现在翻过来。
+     */
     const gh = ids(pairOps(G, H))
-    ok('不相干的两个群（S_4 与 S_3）之间没有「包含」', !gh.includes('contains'), gh.join(','))
+    ok('S₄ 与 S₃：列出了「包含」（S₃ <= S₄）', gh.includes('contains'), gh.join(','))
+    eq(
+      '方向由判据定 ⇒ 标 swapped（参数摆成 (S₃, S₄)）',
+      pairOps(G, H).find((c) => c.op.id === 'contains')?.swapped,
+      true,
+    )
     ok('但直积 / 映射照给（它们对任意两个群都成立）', gh.includes('directProduct') && gh.includes('map'))
+
+    // **真的**不相干的一对（同阶、不同构）仍不许列出「包含」
+    {
+      const objs = buildLines(['P = C_4', 'Q = V_4']).objects
+      const p = objs.find((o) => o.id === 'P')!.value
+      const q = objs.find((o) => o.id === 'Q')!.value
+      ok(
+        '真不相干（C₄ 与 V₄：同阶不同构）之间没有「包含」',
+        !ids(pairOps(p, q)).includes('contains'),
+        ids(pairOps(p, q)).join(','),
+      )
+    }
 
     // 映射是**边不是节点**，照样能当拖拽的端点（U21 的核心诉求）
     const af = pairOps(A, F)

@@ -168,3 +168,61 @@ node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来
     node 的事件循环** —— 断言全部打完、输出全部落盘，进程却不退出，表象是"脚本卡死"
     （实际上活已经干完了）。全仓库 18 个走查只有 U26 那份第一版漏了，其余都有 —— 写新的
     时从旧脚本抄结尾，别手打。
+44. **JSX 属性字面量里的反斜杠不转义**（2026-09-30，用户报"trianglelefteq 是？"）。
+    写 `<Tex tex="\\trianglelefteq" />` 时，组件**收不到** `\trianglelefteq` —— Vite/esbuild
+    对 JSX 属性字符串**按原样保留**，于是 KaTeX 拿到的是 `\\`（换行命令）+ `trianglelefteq`
+    纯文本 ⇒ 界面上就真的显示 `trianglelefteq`。
+    **更坑的是**：改成表达式 `{'\trianglelefteq'}` 也**不对** —— 那是标准 JS 字符串，
+    `\t` 被转成**制表符**，首字母没了，显示 `rianglelefteq`（这个"首字母消失"正是判据）。
+    **正解**：表达式 + 双反斜杠 `{'\\trianglelefteq'}`（或 `String.raw`）。
+    **纪律**：给 `<Tex>` 的 `tex` 一律走表达式 `{'\\...'}`；写完之后**必须真跑一次看渲染** ——
+    这个坑肉眼审不出来（改前只丢反斜杠、改后只丢首字母，都"看着挺像"）。
+45. **走查脚本的环境变量要统一**（2026-09-30）。`first-iso-square.mjs` / `third-iso.mjs`
+    从前只认 `GAL_URL`，其余 21 套认 `GAL_BASE` —— 于是跑全套时这两套**连的还是默认的 5273**。
+    若那个 server 已死或页面白屏，表象是 `TimeoutError`（卡在
+    `waitForSelector('.composer-orb …')`），**看着像渲染代码坏了**，其实是连错了地址。
+    **处置**：统一成两者都认（`const BASE = GAL_BASE ?? '…5273'`，`URL = GAL_URL ?? BASE + '/?empty=1'`）。
+    **判据**：批量跑走查前先确认变量名一致；脚本卡在 `waitForSelector('.composer-orb …')`
+    时**先怀疑 URL**，别急着怀疑代码。
+
+46. **两块顶部抽屉都只跟视口比宽 ⇒ 窄窗口下互相盖，点击被吞**（2026-09-30，用户报"元素列表
+    现在都看不了了"）。`.dock-topleft` 与 `.dock-topright` 各写 `max-width: calc(100% - 24px)`，
+    谁也没给对面留位置。691px 宽的窗口实测：证明面板约 420px + 信息面板 298px，**叠了两百多 px**；
+    `.dock-topright` 在 DOM 里靠后 ⇒ 盖在上面 ⇒ 「元素」「子群」两个 tab **点不动**，
+    走查报的是 `<div class="proof-item"> … intercepts pointer events`，画布中央的对象也点不中。
+    **判据：重叠是"点得中点不中"的问题，就要按命中测** —— `page.evaluate` 里
+    `document.elementFromPoint(x, y)` 看返回的是不是目标（`closest('g.gnode')` / `el === button`），
+    别拿两块 `getBoundingClientRect` 比大小就当验过了。修法：窄屏 `@media (max-width: 1080px)`
+    两块各占一半宽。回归 `e2e/narrow-docks.mjs`（691×886）。
+47. **面板里做"折叠"之后，`tr` 的条数不再是群的阶**（2026-09-30）。元素表改成按共轭类折叠后，
+    `document.querySelectorAll('.etable tbody tr').length` 给的是**共轭类个数**（S₄ = 5），
+    不是 24。旧断言 `|A₄/V₄| = 3` 恰好还成立（C₃ 每类一个元素）—— **这种"碰巧过"最危险**。
+    处置：行上带 `data-size`，走查算 `{classes, elements}` 两个量，断言同时钉住。
+    **纪律**：改了列表的呈现粒度，先 grep 一遍所有"数行数"的断言，逐个问"它原本想验的是行数，
+    还是行数恰好等于的那个数学量"。
+48. **`title` 是纯文本面，塞 LaTeX 原串就是泄漏**（2026-09-30）。`title={\`${g.symbol} 的子群……\`}`
+    里 `g.symbol` 是 `C_{2}\times C_{2}`，直接显示成那样。`no-unicode-leak` 走查会抓
+    （它把 `[title] / [placeholder] / [aria-label]` 一起扫）。`title` 这个面**没有 KaTeX** ——
+    要么只讲数量（"这一类子群共 4 个"），要么用 `plainSymbol()` 降到 ASCII。
+    同一轮还抓到圈号 `①`（U+2460）、`▸`（U+25B8）、`↔`（U+2194）、破折号 `——`（U+2014）
+    —— 用户 2026-09-27 的硬要求是"**键盘打不出来的字符不许显示**"，装饰性符号也一样：
+    编号用 `(1)`、展开三角用内联 SVG、破折号换中文逗号。
+
+49. **`flex-grow` 只在容器真有余量时才长 —— 容器高度由内容决定时它长不起来**（2026-09-30，
+    用户第三次报元素列表）。给信息面板分区：`.info-brief` 封顶 240px 自己滚、`.info-panel`
+    `flex: 1 1 auto` 吃剩余。看着对，实测元素表只拿到 107px，**面板整体从 540 掉到 402**。
+    原因：`.dock-body` 的高度是**内容驱动**的（原本只有 `max-height: min(62vh, 540px)`），
+    摘要区被夹到 240 之后总内容高变小，body 跟着缩，`flex-grow` **没有剩余空间可分**。
+    修法：分区布局里容器高度必须**确定**（`height: min(62vh, 540px)`）—— 之后摘要 240 /
+    tab 区 279 / 元素表 127。**判据**：改了 flex 分配，先量**容器自己**的高度，再看子项，
+    只量子项会以为分配逻辑没生效。回归 `e2e/info-split.mjs`。
+50. **"被挤没了"要分清是"被裁"还是"被压扁"**（2026-09-30）。`.etable-wrap` 是 flex column 的子项，
+    `flex-shrink: 1` 是默认值 —— 它自己的 `max-height: 300px` 只是**上限**，挡不住压缩。
+    实测表格 38px 时 `max-height` 仍是 300，而 `getBoundingClientRect().height` 是 38。
+    "不许压" = `flex: none` 或放进**独立滚动区**；"封顶可滚" = `max-height + overflow-y: auto`。
+    两件事，别混。**走查判据**：不要只判"元素在容器内"，还要判**它自己需不需要内滚**
+    （`el.scrollHeight <= el.clientHeight + 1`）—— 前者过了它仍可能被压成一条缝。
+51. **切 tab 时"按钮位置不动"是可以钉的，而且值得钉**（2026-09-30）。面板高度随内容变
+    （子群 tab 486px vs 元素 tab 156px）会让整条 tab 栏每切一次上下跳。把高度钉死之后
+    加一条断言 `tabs.top` 前后相等，比截图更能守住。**副作用要认**：底部会留空白 ——
+    位置稳定比"少留白"值钱。

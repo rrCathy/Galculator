@@ -106,7 +106,9 @@ const infoState = () =>
     labels: [...document.querySelectorAll('.insight-label')].map((e) => e.textContent.trim()),
     texts: [...document.querySelectorAll('.insight-body')].map((e) => e.textContent.trim()),
     notes: [...document.querySelectorAll('.insp-note')].map((e) => e.textContent.trim()),
-    normals: [...document.querySelectorAll('.insp-normal')].map((e) => e.textContent.trim()),
+    // 只数**共轭类那一行**里的正规标记（2026-09-30 起子群 tab 按同构类分组，
+    // 组头上也有一个只写 ⊴ 的提示徽标，它不是"某个子群正规"的行内标记）
+    normals: [...document.querySelectorAll('.insp-sub .insp-normal')].map((e) => e.textContent.trim()),
     subs: [...document.querySelectorAll('.insp-sub-meta')].map((e) => e.textContent.replace(/\s+/g, ' ').trim()),
   }))
 
@@ -261,8 +263,10 @@ await page.click('.info-tab:has-text("子群")')
 await page.waitForTimeout(350)
 const subInfo = await infoState()
 ok(
-  '子群 tab 顶部写了「共轭类代表」',
-  subInfo.notes.some((n) => n.includes('共轭类代表')),
+  // 2026-09-30 起子群 tab 先折**同构类**再摊共轭类 —— 顶部说明跟着改了，
+  // 但"这个列表是什么"这件事必须照旧说清（旧断言的关键词是「共轭类代表」）
+  '子群 tab 顶部说清了这个列表是什么（同构类分组 + 共轭类）',
+  subInfo.notes.some((n) => n.includes('同构类') && n.includes('共轭类')),
   subInfo.notes.join(' | '),
 )
 ok(

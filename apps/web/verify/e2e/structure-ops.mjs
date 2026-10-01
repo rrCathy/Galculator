@@ -107,6 +107,19 @@ const clickRow = async (id) => {
   return hit
 }
 
+/**
+ * 把「全部子群」里**折起来的组全摊开**（第十七批起长列表按结构分组）。
+ * 与用户的实际动作一致：想看某类里有谁，先点开那一组。
+ */
+const expandSubgroupGroups = async () => {
+  await page.evaluate(() => {
+    document.querySelectorAll('.sub-group-head').forEach((b) => {
+      if (!b.classList.contains('on')) b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+  })
+  await page.waitForTimeout(360)
+}
+
 /** 信息面板的读数。 */
 const infoState = () =>
   page.evaluate(() => ({
@@ -197,13 +210,19 @@ ok('在「操作」抽屉里点中 M', await clickRow('M'))
 {
   const inf = await infoState()
   ok('信息面板说这是子群集', inf.chip === '子群集', `${inf.chip} :: ${inf.def}`)
-  const orders = inf.tags.map((t) => /H\|=(\d+)/.exec(t)?.[1]).filter(Boolean)
-  ok('列出来 8 个', orders.length === 8, JSON.stringify(inf.tags))
+  /**
+   * 「全部子群」这类长列表从第十七批起**按结构折成组**（`C_2 x9` 那种），
+   * 成员要点开组头才渲染 —— 所以先全摊开再数（这也是用户看长列表的实际动作）。
+   */
+  await expandSubgroupGroups()
+  const inf2 = await infoState()
+  const orders = inf2.tags.map((t) => /H\|=(\d+)/.exec(t)?.[1]).filter(Boolean)
+  ok('列出来 8 个', orders.length === 8, JSON.stringify(inf2.tags))
   // 手算：A₄(12) + 三个 D₄(8) + 四个 S₃(6)
   ok(
     '八项：12 + 8,8,8 + 6,6,6,6',
     orders.sort((a, b) => b - a).join(',') === '12,8,8,8,6,6,6,6',
-    JSON.stringify(inf.tags),
+    JSON.stringify(inf2.tags),
   )
 }
 

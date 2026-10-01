@@ -260,15 +260,47 @@ export function run(): void {
     const derived = find('f', 'derived', 'K')
     ok('映射 f 的面板里列出派生出的 K', !!derived, JSON.stringify(rel('f').map((r) => `${r.kind}:${r.other}`)))
 
-    // ── 纪律：假阳性必须为 0 ──
-    //  V₄ 的 id 是 `e a b c`、D₄ 的 id 是 `r0…s3`，两者本无关系。
-    //  朴素的"id 子集 + core 校验"写法在 D₄ 上会返回**平凡子群**（core 静默丢掉认不得的引用），
-    //  于是得出 `V₄ \\le D₄`——这条断言就是钉死它的。
-    const falsePos = buildLines(['V = V_4', 'D = D_4']).objects
-    const bogus = relationsFor(falsePos.find((o) => o.id === 'V')!, falsePos).filter(
-      (r) => r.kind === 'subgroup' || r.kind === 'contains' || r.kind === 'equal',
-    )
-    eq('V_4 与 D_4 之间不该有任何包含关系（假阳性）', bogus.length, 0)
+    /**
+     * ── 纪律：**core 静默返回平凡子群**这条假路必须还是死的 ──
+     *
+     * V₄ 的 id 是 `e a b c`、D₄ 的是 `r0…s3`；`subgroupFromElementIds(D_4, ['e','a','b','c'])`
+     * 会把认不得的引用一丢了之、返回**平凡子群**（阶 1）—— 从前它会让 `V₄ <= D₄` 凭空成立。
+     *
+     * ⚠️ **U38（2026-09-30）改了这条断言的期望值**：用户实测"V₄ 拉不出包含箭头到 S₄"，
+     * 查下来是判据只认"元素 id 逐个对得上"，独立构造的抽象群一律判不出来。
+     * 修法是给 `containment` 加了**第二关：嵌入**（G 里有没有与 H 同构的子群）。
+     * 于是 `V₄ <= D₄` 现在**确实成立** —— 但理由换了：D₄ 真有 2 个 Klein 子群
+     * （`<r^2, s>` / `<r^2, rs>`，指数 2 ⇒ 都正规）。所以判据升级成：
+     * **报出来的阶必须是 |H|（4），不许是 core 静默给的 1**。
+     */
+    {
+      const objs = buildLines(['V = V_4', 'D = D_4']).objects
+      const vv = objs.find((o) => o.id === 'V')!.value
+      const dv = objs.find((o) => o.id === 'D')!.value
+      const c = vv.type === 'group' && dv.type === 'group' ? containment(vv.group, dv.group) : null
+      eq('V₄ <= D₄ 的阶是 4（不是 core 静默给的平凡子群 1）', c?.order, 4)
+      eq('指数 = 8 / 4 = 2', c?.index, 2)
+      eq('指数 2 ⇒ 正规', c?.normal, true)
+
+      const rows = relationsFor(objs.find((o) => o.id === 'V')!, objs).filter(
+        (r) => r.kind === 'subgroup' || r.kind === 'contains' || r.kind === 'equal',
+      )
+      ok('关系层报出这条真包含（D₄ 里真有 Klein）', rows.length > 0, JSON.stringify(rows.map((r) => r.kind)))
+      ok('没有误报成「同一个群」（阶不同，绝不可能是同一个）', !rows.some((r) => r.kind === 'equal'))
+    }
+
+    /* ── 对照组：第二关**搜过、确实没有** ⇒ 必须还是 `null` ── */
+    for (const [h, g, why] of [
+      ['Q_8', 'S_4', 'S₄ 的 8 阶子群只有 D₄，没有 Q₈'],
+      ['C_4', 'V_4', 'V₄ 里全是 2 阶元，没有 4 阶元'],
+      ['C_6', 'A_4', 'A₄ 没有 6 阶元'],
+    ] as const) {
+      const objs = buildLines([`H = ${h}`, `G = ${g}`]).objects
+      const hv = objs.find((o) => o.id === 'H')!.value
+      const gv = objs.find((o) => o.id === 'G')!.value
+      const c = hv.type === 'group' && gv.type === 'group' ? containment(hv.group, gv.group) : 'bad'
+      eq(`${h} 与 ${g} 真的没有包含（${why}）`, c, null)
+    }
 
     //  两个各自声明的 `C_6`：元素是同一批 `e0…e5` \\to 判成"同一个群"是**对的**；
     //  错的是把它说成包含（"互相包含"读起来像两个东西）
@@ -277,13 +309,18 @@ export function run(): void {
     ok('两个 `C_6` 判成「同一个群」而不是包含', !sameRel.some((r) => r.kind === 'subgroup' || r.kind === 'contains'), JSON.stringify(sameRel.map((r) => r.kind)))
     ok('那条写着"元素完全相同"', sameRel.some((r) => r.kind === 'equal' && (r.detail ?? '').includes('元素完全相同')), JSON.stringify(sameRel))
 
-    //  C₂ 与 C₄ 的 id 都是 `e0 e1 …`（真子集！），但 C₂ 在 C₄ 里的"嵌入"不封闭 \\to
-    //  core 校验必须挡住它。这比上面的 V₄/D₄ 更阴险：id 真的全部命中。
-    const cyc = buildLines(['A = C_2', 'B = C_4']).objects
-    const cycRel = relationsFor(cyc.find((o) => o.id === 'A')!, cyc).filter(
-      (r) => r.kind === 'subgroup' || r.kind === 'equal',
-    )
-    eq('C_2 不因 id 恰好是 C_4 的前缀而被判成子群', cycRel.length, 0)
+    //  C₂ 与 C₄ 的 id 都是 `e0 e1 …`：`{e0,e1}` 在 C₄ 里**不封闭**（`e1 * e1 = e2` 不在里面），
+    //  所以"按 id 前缀当子集"这条假路仍然是死的（core 的封闭性校验拦下它）。
+    //  U38 之后 `C₂ <= C₄` 也**是真的** —— 理由换成"C₄ 有唯一的 2 阶子群 `{e0,e2}`"。
+    {
+      const objs = buildLines(['A = C_2', 'B = C_4']).objects
+      const av = objs.find((o) => o.id === 'A')!.value
+      const bv = objs.find((o) => o.id === 'B')!.value
+      const cc = av.type === 'group' && bv.type === 'group' ? containment(av.group, bv.group) : null
+      eq('C₂ <= C₄ 的阶是 2（不是"前缀"那条假路给的 0/1）', cc?.order, 2)
+      eq('指数 = 4 / 2 = 2', cc?.index, 2)
+      eq('正规（循环群的全部子群都正规）', cc?.normal, true)
+    }
   }
 
   /* ══ ⑤ 第三批：子群像 + 声明包含（U20）═══════════════════ */
@@ -384,19 +421,64 @@ export function run(): void {
     }
 
     /* ── ④ 假声明全被拦（每一条都给了可读的理由） ── */
-
+    //  ⚠️ U38 起 `D_4 ⊆ S_4` 与 `C_2 ⊆ C_4` **不再**是假声明（S₄ 真有 3 个 D₄ 子群、
+    //  C₄ 真有唯一的 2 阶子群）—— 它们挪到 ④b。这里换成**真该拦**的几条，
+    //  并把三种"没有"都钉住：阶不整除 / 搜过确实没有 / 群太大没搜。
     const bad: [string, string[]][] = [
-      ['D_4 不是 S_4 的子群（id 空间不同）', [...STAGE, 'D = D_4', 'R = D \\subseteq G']],
-      ['C_2 不是 C_4 的子群（id 是真前缀，但乘法不封闭）', ['X = C_2', 'Y = C_4', 'R = X \\subseteq Y']],
       ['阶更大的不能当子群', ['X = C_4', 'Y = C_2', 'R = X \\subseteq Y']],
       ['同一个对象', ['G = S_4', 'R = G \\subseteq G']],
       ['元素完全相同（两个 C_6）', ['X = C_6', 'Y = C_6', 'R = X \\subseteq Y']],
+      ['阶不整除：拉格朗日直接否', ['X = C_3', 'Y = V_4', 'R = X \\subseteq Y']],
+      ['阶整除但搜过确实没有（S₄ 里没有 Q₈）', ['X = Q_8', 'Y = S_4', 'R = X \\subseteq Y']],
     ]
     for (const [name, lines] of bad) {
       const b = build(lines)
       const last = b.lineStates[b.lineStates.length - 1]
       ok(`${name} -> 报错`, !last.ok && b.byId('R') === undefined, JSON.stringify(last.error))
       ok(`${name} -> 报错里说清了理由`, (last.error ?? '').length > 6, last.error)
+    }
+    // 拉格朗日那条要**点名定理**（"不是子群"太笼统，用户实测抱怨过）
+    {
+      const b = build(['X = C_3', 'Y = V_4', 'R = X \\subseteq Y'])
+      ok(
+        '阶不整除时点明"拉格朗日"（不是笼统的"不是子群"）',
+        (b.line('R')?.error ?? '').includes('拉格朗日'),
+        b.line('R')?.error,
+      )
+    }
+    // 搜过确实没有时，措辞要说明**已枚举**（"不是子群"是算出来的，不是没算）
+    {
+      const b = build(['X = Q_8', 'Y = S_4', 'R = X \\subseteq Y'])
+      ok(
+        '搜过没有时说明"已枚举全部子群"',
+        (b.line('R')?.hint ?? '').includes('已枚举'),
+        b.line('R')?.hint,
+      )
+    }
+    // 群太大 ⇒ 说"没能判定"，**不许**说"不是子群"（那是假话）
+    {
+      const b = build(['X = C_2', 'Y = C_2xC_2xC_2xC_2xC_2xC_2xC_2', 'R = X \\subseteq Y'])
+      ok('|G| 超枚举上限 -> 报错', !b.line('R')?.ok, b.line('R')?.error)
+      ok(
+        '措辞是"没能判定"而不是"不是子群"',
+        (b.line('R')?.error ?? '').includes('没能判定'),
+        b.line('R')?.error,
+      )
+      ok('并说清是"没做嵌入枚举"', (b.line('R')?.hint ?? '').includes('没做嵌入枚举'), b.line('R')?.hint)
+    }
+
+    /* ── ④b U38：独立构造的群靠**嵌入**判包含（从前一律被拦） ── */
+    const nowOk: [string, string[], number, boolean][] = [
+      ['D₄ ⊆ S₄（S₄ 有 3 个 D₄，指数 3 ⇒ 都非正规）', [...STAGE, 'D = D_4', 'R = D \\subseteq G'], 3, false],
+      ['C₂ ⊆ C₄（C₄ 唯一的 2 阶子群，指数 2 ⇒ 正规）', ['X = C_2', 'Y = C_4', 'R = X \\subseteq Y'], 2, true],
+      ['V₄ ⊆ S₄（S₄ 有 4 个 Klein，正规性不一致 ⇒ 未判定）', ['X = V_4', 'Y = S_4', 'R = X \\subseteq Y'], 6, false],
+    ]
+    for (const [name, lines, idx, normal] of nowOk) {
+      const b = build(lines)
+      const r = b.byId('R')?.value
+      ok(`${name} -> 建出关系（U38 第二关：嵌入）`, r?.type === 'relation', b.line('R')?.error)
+      eq(`${name} -> 指数`, r?.type === 'relation' ? r.relation.index : -1, idx)
+      eq(`${name} -> 正规性`, r?.type === 'relation' ? r.relation.isNormal : null, normal)
     }
 
     /* ── ⑤ 正规性由工具判定：非正规的画 `\\hookrightarrow` 而不是 `\\trianglelefteq` ── */
@@ -501,11 +583,32 @@ export function run(): void {
     const ga = pair('G', 'A').find((c) => c.op.id === 'contains')
     ok('反着拖（S_4 -> A_4）也列「包含」', !!ga, pair('G', 'A').map((c) => c.op.id).join(','))
     eq('而且标了 swapped（参数会摆成 (A_4, S_4)）', ga?.swapped, true)
+    /**
+     * U38（2026-09-30）：`S₃ ⊆ S₄` **不再**是"胡说" —— S₄ 的点稳定子 ≅ S₃（指数 4），
+     * 第二关（嵌入）判得出包含。这条从前写的是"S₄ 与 S₃ 不相干、没有包含"，
+     * 那是**旧判据**（只认元素 id 逐个对得上）的产物，现在得翻过来。
+     */
     ok(
-      '两个不相干的群之间（S_4 与 S_3）没有「包含」',
-      !pair('G', 'H').some((c) => c.op.id === 'contains'),
+      'S₄ 与 S₃：列出「包含」（S₃ <= S₄，点稳定子，指数 4）',
+      pair('G', 'H').some((c) => c.op.id === 'contains'),
       pair('G', 'H').map((c) => c.op.id).join(','),
     )
+    eq(
+      '方向仍由判据定 ⇒ 标 swapped（参数摆成 (S₃, S₄)）',
+      pair('G', 'H').find((c) => c.op.id === 'contains')?.swapped,
+      true,
+    )
+    // **真的**不相干的一对：同阶、不同构，谁也不是谁的子群
+    {
+      const objs = buildLines(['P = C_4', 'Q = V_4']).objects
+      const p = objs.find((o) => o.id === 'P')!.value
+      const q = objs.find((o) => o.id === 'Q')!.value
+      ok(
+        '真不相干（C₄ 与 V₄：同阶不同构）之间没有「包含」',
+        !pairOps(p, q).some((c) => c.op.id === 'contains'),
+        pairOps(p, q).map((c) => c.op.id).join(','),
+      )
+    }
     ok('而且候选不止一个（所以会弹菜单让用户挑）', ag.length > 1, ag.map((c) => c.op.id).join(','))
 
     /* ── ④ 拆分的直接成果：吃不下子群集的 op 不再出现 ── */

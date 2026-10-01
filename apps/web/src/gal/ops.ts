@@ -45,9 +45,13 @@ import {
 import { prettySymbol, subscript, superscript } from './pretty'
 import { idsComparable, rememberParent, rootOf, sameGroup } from './parents'
 import { elementSemanticKey } from './semantic'
+// 「G 里有没有与 H 同构的子群」—— 求商 / 陪集作用的自动翻译（U30）、报错时的配方（U29）、
+// 集合运算的候选对齐（U32），以及 `containment` 的嵌入关（U38）**共用同一份搜索**
+import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
 // 包含判据与信息面板的「关系」层（U19）**共用同一份** —— `包含(H, G)` 声明出来的
-// 关系，与面板里"算出来"的关系永远一致，不会出现两种说法
-import { containment } from './relations'
+// 关系，与面板里"算出来"的关系永远一致，不会出现两种说法。
+// `embeddingSearchBlocked` = 「嵌入那条路被守卫挡下了」（U38），报错语据此说"未判定"
+import { containment, embeddingSearchBlocked } from './relations'
 // 同构判据同理（缺口 ⑰）：声明的 `A \cong B` 与面板那句"同构于 …"同源
 import { identifyGroup, isomorphismOf } from './insights'
 import {
@@ -337,9 +341,14 @@ function elementListHint(group: Group, cap = 24): string {
  *   ⓪ **展示形态回认**：`prettySymbol(label)` 的唯一命中（`α₂` → `\alpha_2`，
  *      `id` → `\mathrm{id}`）——让"照着面板上的记号敲"成立
  *   ① core 的 `resolveElement`（精确；循环记号走这里）
- *   ② 生成元的幂：`r4` / `r^4` / `r^{4}`
- *   ③ 单生成元群（循环群）里的单字母：`r` / `a` / `g` 一律视作那个生成元
+ *   ② 单位元通用记号 `e` / `id` / `1`（**标签被改写的群**上唯一认得它的路，见下）
+ *   ③ 生成元的幂：`r4` / `r^4` / `r^{4}`
+ *   ④ 单生成元群（循环群）里的单字母：`r` / `a` / `g` 一律视作那个生成元
  */
+
+/** 单位元的通用记号（`e` / `id` / `1`）。 */
+const UNIT_TOKENS = new Set(['e', 'id', '1'])
+
 export function resolveElementLoose(group: Group, text: string): GroupElement | null {
   const t = text.trim()
   const direct = resolveElement(group, t)
@@ -357,6 +366,21 @@ export function resolveElementLoose(group: Group, text: string): GroupElement | 
   const tp = prettySymbol(t)
   const prettyHits = group.elements.filter((e) => prettySymbol(e.label) === tp)
   if (prettyHits.length === 1) return prettyHits[0]
+
+  /**
+   * 单位元的**通用记号**：`e` / `id` / `1`（2026-09-30）。
+   *
+   * 必须在下面那截"循环群单生成元的桥"**之前**短路。反例（实测，陪集层）：
+   * core 给商群单位元的 label 是 `e, \dots`（陪集成员列表拼出来的），所以
+   * `prettySymbol(label) <=> "e"` 回认不命中 ⇒ 一路掉到桥里 ⇒ 而 `C_2` 的商群
+   * **只有一个生成元** ⇒ `e` 被当成生成元 ⇒ **`闭包(Q, e)` 返回整个 Q（2 阶）、
+   * `ord(Q, e)` = 2**（单位元的阶居然不是 1），而且不报错。
+   *
+   * 放在这里不改其它群的行为：常见群里的 `e` 在上面 `resolveElement`
+   * 或 pretty 回认那两关就已经命中单位元了；只有**标签被改写**的群
+   * （陪集层）才走得到这一条。
+   */
+  if (UNIT_TOKENS.has(t.toLowerCase())) return group.identity
 
   const m = /^([A-Za-z][A-Za-z0-9]*?)\^?\{?(\d*)\}?$/.exec(t)
   if (!m) return null
@@ -533,10 +557,7 @@ function foreignSubgroupFail(
   )
 }
 
-/** 元素表里有没有**陪集元素**（商群的元素）。跨"层级"的翻译靠它守。 */
-function hasCosetElements(g: Group): boolean {
-  return g.elements.some((e) => (e.cosetMemberLabels?.length ?? 0) > 0)
-}
+/* ── 跨群元素表示的分诊（2026-09-29）─────────────────────── */
 
 /**
  * 「两边根本不在同一个**世界**」的统一诊断（2026-09-29，记号串号那笔账）。
@@ -580,49 +601,41 @@ function subgroupMisdiagnosis(
 }
 
 /**
- * 在 `G` 里找与 `S` 同构（同阶 + 同结构符号）的子群。
+ * `N_G` / `C_G` 这类"第二参是一个元素集 / 子群"的操作的**统一前置检查**（2026-09-30）。
  *
- * 三道守卫任一不满足就返回 `null`（调用方退回中性措辞，不硬编建议）：
- * 阶超枚举上限 / 结构符号算不出 / 枚举抛错。只在**报错与翻译**路径上调用。
+ * 它们与集合运算 / `商` / `包含` 用的是同一条判据（U29–U34 那一族）：第二参的元素
+ * 必须**能在 G 里对齐**（`idsComparable` + 元素 id 全在），否则 core 会静默给出
+ * 两个方向都假的答案 —— 用户实测（`S_4` + `A_4` 两个独立对象）：
  *
- * 结构符号跨母群**形式一致**（实测：`V_4` 自身与 `A_4` 的那个 Klein 子群
- * 都算出 `C_{2}\times C_{2}`），所以可以直接比字符串。
+ *   · `N_G(A_4, S_4)` → `getNormalizer` 返回 **[]** ⇒ 画布上长出一个 **0 阶的"群"**
+ *     （数学上不存在，`subgroupGroupOf(G, [])` 也不拦）；
+ *   · `C_G(A_4, S_4)` → `getCentralizer` 返回**整个群**（看着像"全都与它交换"）；
+ *   · `N_G(V_4, S_4)` → core 内部直接抛（`findPermIndex` 拿到对不上的元素）。
+ *
+ * 所以：**先判再算**，判不过就走 U29 那套分诊（说清是"不在同一个群里"还是
+ * "记号碰巧重合"，并给出可照抄的配方）。
  */
-function isomorphicSubgroupsIn(
+function foreignElementSetFail(
+  gRef: string,
   G: Group,
+  hRef: string,
   S: { group: Group; elements: GroupElement[] },
-): Subgroup[] | null {
-  if (G.order > ENUM_LIMIT || S.elements.length === 0) return null
-  let want: string | null
-  try {
-    want = subgroupStructureSymbol(S.group, S.elements.map((e) => e.id))
-    if (!want) return null
-    const out = findAllSubgroups(G).filter(
-      (h) =>
-        h.order === S.elements.length &&
-        subgroupStructureSymbol(G, h.elements.map((e) => e.id)) === want,
+): OpOutcome | null {
+  if (S.elements.length === 0) {
+    return fail(
+      `${hRef} 里一个元素都没有 —— 空集不是群，也算不出中心化子 / 正规化子`,
+      `检查一下 ${hRef} 是不是哪一步算空了（0 阶的对象不是群）`,
     )
-    /**
-     * `findAllSubgroups` **不含 G 自身** —— 而"与 S 同构的子群"完全可能就是 G 自己：
-     * `商(V_4, 独立 V_4)`（→ 平凡商）、`Klein × 独立 V_4`（↔ V₄ 整个映到它）都要它。
-     * 补进候选：`G ⊴ G` 恒正规，生成元取声明的那组。
-     */
-    if (
-      G.order === S.elements.length &&
-      subgroupStructureSymbol(G, G.elements.map((e) => e.id)) === want
-    ) {
-      out.push({
-        elements: G.elements,
-        order: G.order,
-        index: 1,
-        generators: getGeneratorElements(G).map((x) => x.el),
-        isNormal: true,
-      })
-    }
-    return out
-  } catch {
-    return null
   }
+  const gIds = new Set(G.elements.map((e) => e.id))
+  if (idsComparable(S.group, G) && S.elements.every((e) => gIds.has(e.id))) return null
+  return (
+    subgroupMisdiagnosis(gRef, G, hRef, S, false) ??
+    fail(
+      `${hRef} 的元素对不上 ${gRef}`,
+      `想用 ${gRef} 里的子群，先从它构造（如 闭包(${gRef}, 生成元)）`,
+    )
+  )
 }
 
 /**
@@ -807,10 +820,6 @@ function omegaElements(A: GalAction, indices: number[]): GroupElement[] | null {
   if (A.setLabels && A.setLabels.length > 0) return null
   return indices.map((i) => A.group.elements[i]).filter(Boolean)
 }
-
-/** 枚举类操作的规模上限（与 core 的守卫阈值同量级）*/
-const ENUM_LIMIT = 120
-
 
 /* ── 共轭作用在子群集上（Sylow 定理的主角动作）────────────── */
 
@@ -1890,7 +1899,16 @@ export const OPS: OpDef[] = [
           `如 C_G(G, H) 或 C_G(G, (12)(34))`,
         )
       }
+      const foreign = foreignElementSetFail(refText(a[0]), G, refText(a[1]), S)
+      if (foreign) return foreign
       const els = getCentralizer(G, S.elements)
+      // 上面已保证元素能对齐，这里空集只可能是 core 的意外 —— 不许建 0 阶群对象。
+      if (els.length === 0) {
+        return fail(
+          `C_G 算出来是空集 —— 空集不是群`,
+          `这通常是元素没对上导致的，请检查 ${refText(a[1])} 是不是 ${refText(a[0])} 里的子集`,
+        )
+      }
       return {
         ok: true,
         value: { type: 'group', group: subgroupGroupOf(G, els, `C(${refText(a[1])})`) },
@@ -1919,7 +1937,15 @@ export const OPS: OpDef[] = [
       if (!G) return fail('N_G(\\cdot) 的第一个参数必须是群')
       const S = subgroupArgOf(a[1]) ?? elementSetArgOf(a[1], G)
       if (!S) return fail('N_G(\\cdot) 的第二个参数必须是子群（或一个元素记号）')
+      const foreign = foreignElementSetFail(refText(a[0]), G, refText(a[1]), S)
+      if (foreign) return foreign
       const els = getNormalizer(G, S.elements)
+      if (els.length === 0) {
+        return fail(
+          `N_G 算出来是空集 —— 空集不是群`,
+          `正规化子至少含单位元，出现空集说明元素没对上，请检查 ${refText(a[1])} 是不是 ${refText(a[0])} 里的子群`,
+        )
+      }
       return {
         ok: true,
         value: { type: 'group', group: subgroupGroupOf(G, els, `N(${refText(a[1])})`) },
@@ -2244,21 +2270,58 @@ export const OPS: OpDef[] = [
           '子群判定第一关就是阶整除',
         )
       }
+      /**
+       * **拉格朗日先判**（U38）：子群的阶必须整除母群的阶。
+       * 这是**证明**了"没有"，比笼统的"不是子群"有信息量得多——
+       * 用户实测的 `包含(C_3, V_4)` 就该说这句（3 不整除 4），
+       * 而不是被含糊地打发成"元素不在同一个群里"。
+       *
+       * 有一种情形还得**补一句**：H 的 id 全都能在 G 里"找到"、却来自另一个群
+       * （`C_3` 的 `e0 e1 e2` 在 `C_7` 里"也有"）—— 那是用户最容易踩的陷阱，
+       * 不点破的话他会以为"名字对得上就该是子群"。
+       */
+      if (G.order % H.order !== 0) {
+        const gIds = new Set(G.elements.map((e) => e.id))
+        const trap =
+          H.elements.every((e) => gIds.has(e.id)) && !idsComparable(H, G)
+            ? `另外注意：${hn} 的元素记号在 ${gn} 里也"找得到"，但那是两个各自构造的群、记号碰巧重合，不是同一个东西`
+            : '子群的阶必须整除母群的阶（这条是证明，不是"没算出来"）'
+        return fail(
+          `|${hn}| = ${H.order} 不整除 |${gn}| = ${G.order}，按拉格朗日定理不可能是子群`,
+          trap,
+        )
+      }
       // 判据复用 U19 的 `containment()`（信息面板「关系」层用的是同一份）——
-      // 于是"声明出来的关系"和"算出来的关系"永远一致，不会出现两种说法
+      // 于是"声明出来的关系"和"算出来的关系"永远一致，不会出现两种说法。
+      // U38 起它还带**第二关**：元素 id 对不上时，在 G 里搜同构子群（独立构造的 V₄ ≤ S₄）。
       const c = containment(H, G)
       if (!c) {
         /**
-         * 分诊三态（与 `商` 同一套）：
-         *   · 世界不同（`D = V_4` 独立构造、或记号串号）→ "元素记号碰巧重合"；
-         *   · 有 id 不在 G 里 → "元素不在同一个群里"；
-         *   · 都齐（同一世界里挑错了子集）→ 才是"不是子集 / 不封闭"的实话。
+         * 守卫挡下过就先说"未判定"（U38）：`containment` 的 `null` 在那种情形下
+         * 只表示"**不知道**"。`包含(C_11, C_2^7)`（|G| = 128 超枚举上限）得说这句，
+         * 说"不是子群"是假话。
          */
-        const out = subgroupMisdiagnosis(gn, G, hn, { group: H, elements: H.elements }, false)
-        if (out) return out
+        if (embeddingSearchBlocked(H, G)) {
+          return fail(
+            `没能判定「${hn}」是不是「${gn}」的子群`,
+            `${prettySymbol(G.symbol)} 太大（阶 ${G.order}）或带陪集元素，没做嵌入枚举；` +
+              `若 ${hn} 的元素本来就取自 ${gn}，请从它构造（如 闭包(${gn}, 生成元)）`,
+          )
+        }
+        /**
+         * 走到这里：**第二关真的搜过了**（阶严格且整除、两边都没陪集元素、|G| 在枚举
+         * 上限内），结论是「G 里没有与 H 同构的子群」—— 所以"不是子群"这句是**算出来的**，
+         * 不是"没算出来"。分诊那套（"元素不在同一个群里"/"记号碰巧重合"）退成**附注**：
+         * 它解释的是"为什么两边元素对不上"，不再充当结论。
+         */
+        const why = subgroupMisdiagnosis(gn, G, hn, { group: H, elements: H.elements }, false)
+        const tail =
+          why && !why.ok
+            ? `另外，${why.error}`
+            : `${prettySymbol(H.symbol)} 的元素也不是 ${prettySymbol(G.symbol)} 的子集`
         return fail(
           `「${hn}」不是「${gn}」的子群`,
-          `${prettySymbol(H.symbol)} 的元素不是 ${prettySymbol(G.symbol)} 的子集，或对乘法不封闭`,
+          `${prettySymbol(G.symbol)} 里没有与 ${prettySymbol(H.symbol)} 同构的子群（已枚举全部子群）。${tail}`,
         )
       }
       // 指数 1 = 元素完全相同 = 同一个群（U19 的关系层把这一档单列成「同一」）。
@@ -2287,7 +2350,7 @@ export const OPS: OpDef[] = [
           c.normal === true
             ? '正规子群（判出来的，不是声明的）'
             : c.normal === null
-              ? '正规性超出可判定范围（群太大，未枚举）'
+              ? '正规性判不准：群太大未枚举，或 H 在 G 里有多个嵌入、正规性不一致（只要有非正规的嵌入，`⊴` 就不是普适的说法）'
               : '非正规子群',
       }
     },

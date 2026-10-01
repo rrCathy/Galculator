@@ -8,7 +8,8 @@
  * 跑法（先起 dev server 5273）：`node verify/e2e/third-iso.mjs`
  */
 const PW = 'file:///C:/newproject/GroupViz/node_modules/playwright/index.mjs'
-const URL = process.env.GAL_URL ?? 'http://127.0.0.1:5273/?empty=1'
+const BASE = process.env.GAL_BASE ?? 'http://127.0.0.1:5273'
+const URL = process.env.GAL_URL ?? `${BASE}/?empty=1`
 
 let pass = 0
 let fail = 0
