@@ -49,6 +49,7 @@ node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来
 node verify/e2e/narrow-docks.mjs      # 窄窗口下面板之间不许互相盖（U41）
 node verify/e2e/info-split.mjs        # 信息面板的折叠分区 + 字号层级（U42 → U45）
 node verify/e2e/known-facts.mjs       # 已知结论层 + A_6 建得出 + U50 的 Aut/GL/S_7（U48/U49/U50）
+node verify/e2e/semidirect-op.mjs     # 半直积 ⋊ 的三态分诊 + 连线菜单不撒谎（U51）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 

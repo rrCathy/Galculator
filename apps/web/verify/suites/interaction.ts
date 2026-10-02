@@ -138,7 +138,8 @@ export function run(): void {
     ok('而 multiOps 给得出', multi.length > 0)
 
     // 2026-09-29（缺口 ⑰）：`同构` 进表 → 38 变 39
-    ok('注册表就是这 39 条（多了少了都说明有人动过菜单的面）', OPS.length === 39, `${OPS.length}`)
+    // 2026-10-02（U51）：`半直积` 进表 → 39 变 40
+    ok('注册表就是这 40 条（多了少了都说明有人动过菜单的面）', OPS.length === 40, `${OPS.length}`)
   }
 
   /* ══ ④ canPick：pending 时哪些节点点得动 ════════════════ */

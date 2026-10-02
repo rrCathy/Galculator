@@ -115,6 +115,9 @@ export function multiOps(): OpDef[] {
  */
 const MENU_LABEL: Record<string, string> = {
   directProduct: '直积',
+  // U51：与 `directProduct` 同款 —— 不写这一条，菜单会退到 `op.notation`，
+  // 也就是把 `N \rtimes H` 原样当**纯文本**贴出来（按钮上是反斜杠，不是符号）。
+  semidirectProduct: '半直积',
   quotient: '商 /',
   intersection: '交',
   union: '并',
@@ -222,6 +225,8 @@ const PAIR_PRIORITY = [
   'quotient',
   'image',
   'directProduct',
+  // 半直积（U51）紧挨直积 —— 同上"造个新的"，只是多要一个作用
+  'semidirectProduct',
   'intersection',
   'productSet',
   'union',
@@ -297,6 +302,17 @@ export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
     const forward = paramAccepts(p0.type, a, []) && paramAccepts(p1.type, b, [a])
     const backward = paramAccepts(p0.type, b, []) && paramAccepts(p1.type, a, [b])
     if (!forward && !backward) continue
+    /**
+     * **候选预检**（U51）：类型上"填得上"不等于**跑得动**。
+     *
+     * `⋊` 与直积不同 —— 它对任意两个群都有定义，但本地不一定算得动
+     * （`A_4 ⋊ S_4` 实测要 14 秒：160 组生成元像，每组建一个 288 阶群再算指纹）。
+     * 列出来点下去被预算拦住，就是这一批最忌讳的「菜单撒谎」。
+     *
+     * 与 `planSemidirect` 的首道门共用同一个判据（`semidirectBudget`），两处不会打架。
+     * 顺序取"能匹配上的那个方向"（参数有序而拖拽无序）——预检也跟着同一个顺序判。
+     */
+    if (op.fits && !op.fits(forward ? [a, b] : [b, a])) continue
     out.push({ op, swapped: !forward && backward })
   }
 

@@ -58,6 +58,8 @@ import {
   buildAutomorphismGroup,
   lookupAutomorphisms,
 } from './automorphisms'
+// 半直积的三态分诊（U51）：core 有 `createSemidirectProduct`，缺的是"φ 从哪来"
+import { humanFingerprint, planInnerSemidirect, planSemidirect, semidirectBudget } from './semidirect'
 // 已知结论层（U48）：课本有闭式的族**先查表再谈计算** —— `Aut(S_6) = 1440` 是背下来的结论，
 // 不是现场搜索出来的（用户：「说 S6 搜不动我不是很认可」）
 import { isKnownGroup, knownFacts, realizeKnownGroup, type KnownGroupSpec } from './known'
@@ -241,6 +243,17 @@ export interface OpDef {
   optional?: number
   /** 产出值类型 */
   result: ValueType
+  /**
+   * **候选预检**（U51）：`opsFor` / `pairOps` 用它挡掉"列出来点下去必被拦住"的候选。
+   *
+   * 只对**类型匹配、参数已凑齐**的 op 调用，且允许返回 `true`（"判不了就别挡"）。
+   * 与 op 内部真正的守卫**必须共用同一个判据** —— 预检拦下的，正式求值也一定拦下；
+   * 预检放过的，正式求值可以再拦（那时用户已经点了，会看到理由）。
+   *
+   * 目前只有半直积用它：`⋊` 对任意两个群都有定义，但算得动才算数
+   * （`A_4 ⋊ S_4` 要 14 秒 —— 列出来就是撒谎）。
+   */
+  fits?: (values: GalValue[]) => boolean
   run: (args: OpArg[], ctx?: OpContext) => OpOutcome
 }
 
@@ -251,6 +264,11 @@ const fail = (error: string, hint?: string): OpOutcome => ({ ok: false, error, h
 function groupOf(a: OpArg | undefined): Group | null {
   if (!a || a.kind !== 'object') return null
   return a.value.type === 'group' ? a.value.group : null
+}
+
+/** `GalValue` 形态的同一个取群（`fits` 收到的是值不是实参）。 */
+function groupValueOf(v: GalValue | undefined): Group | null {
+  return v && v.type === 'group' ? v.group : null
 }
 
 function elementsOf(a: OpArg | undefined): { group: Group; elements: GroupElement[] } | null {
@@ -1335,6 +1353,112 @@ export const OPS: OpDef[] = [
         label: prettySymbol(g.symbol),
         sub: `|G| = ${g.order}`,
       }
+    },
+  },
+  {
+    id: 'semidirectProduct',
+    notation: 'N \\rtimes H',
+    mechanism: 'atomic',
+    primitive: true,
+    doc: '半直积：N 被 H 作用着拼起来。记号定不下作用时分诊：唯一就建、多解列出、算不动说清',
+    recipe: '原子构造（不归约）',
+    impl: 'createSemidirectProduct + gal/semidirect 的 phi 枚举（core 备好了零件，缺的只是"phi 从哪来"）',
+    // 中缀只收 `\rtimes`（`rtimes` 由输入规范化折过来）：**不收 `:`** ——
+    // `:` 那个形态由输入层的记号分诊（`evalDef`）接，两条路共用同一个 `planSemidirect`。
+    // 这里收 `\rtimes` 是为了**让参数能是画布对象**（`A \rtimes B`）：
+    // 记号解析那条路只认群记号，不认对象名。
+    infix: ['\\rtimes'],
+    call: ['半直积', 'semidirectProduct', 'semidirect', 'rtimes'],
+    params: [
+      { name: 'N', type: 'group' },
+      { name: 'H', type: 'group' },
+    ],
+    arity: 2,
+    result: 'group',
+    /*
+     * **候选预检**：预算拦得下来的，菜单里就别列（列了点下去必被拦住 = 撒谎）。
+     * 判据与 `planSemidirect` 的第一道门共用同一个 `semidirectBudget`。
+     *
+     * 注意分寸：这里只挡**预算**，不挡"多解"—— 「多解」是**数学答复**
+     *（这个记号本来就定不下一个群），不是"点了必然报错"的实现问题。
+     */
+    fits: (vs) => {
+      const A = groupValueOf(vs[0])
+      const B = groupValueOf(vs[1])
+      return !A || !B || semidirectBudget(A, B).ok
+    },
+    run: (a) => {
+      const N = groupOf(a[0])
+      const H = groupOf(a[1])
+      // `fail` 的两个参数都会进 `.composer-status` 这个**纯文本面**（不走 KaTeX）：
+      // 不许有 LaTeX 命令（`\rtimes`）、也不许有键盘打不出来的字符（`——` / `⇒` / `·`）。
+      if (!N || !H) return fail('半直积需要两个群', `如 半直积(N, H)：左边当正规子群，右边当作用群`)
+
+      /*
+       * ① **内半直积**：两个参数是同一个母群里的子群 ⇒ 作用由母群内部的共轭定死。
+       *
+       * 画布上最常发生的正是这一种：从 G 里挑两个子群拉一条线。答案**就是 G 自己**，
+       * 不存在"选哪个作用"的问题 —— 不该被外路径报成"有 3 类"。
+       */
+      const inner = planInnerSemidirect(N, H)
+      if (inner.kind === 'ok') {
+        return {
+          ok: true,
+          value: { type: 'group', group: inner.group },
+          label: prettySymbol(inner.group.symbol),
+          sub: `|G| = ${inner.group.order}，内半直积：就是它所在的母群本身`,
+        }
+      }
+
+      /*
+       * ② **外半直积**：枚举 `Hom(H, Aut(N))` 做三态分诊（`gal/semidirect.ts`）。
+       *
+       * 措辞两条（`fail` 的文案落在**纯文本面**：状态行 `/composer-status`）：
+       *   · 不写 LaTeX 命令 —— 记号 `\rtimes_{\phi}` 带反斜杠，只用对象名说话；
+       *   · "有多解"与"算不动"分开说 —— 前者是数学结论（该列候选），后者是本地能力（该说卡在哪）。
+       */
+      const plan = planSemidirect(N, H)
+      const nRef = refText(a[0])
+      const hRef = refText(a[1])
+      const innerWhy = inner.why ? `另外，${inner.why}` : ''
+
+      if (plan.kind === 'ok' || plan.kind === 'trivial') {
+        const g = plan.group
+        const how = plan.kind === 'trivial' ? '只有平凡作用，就指直积' : '作用唯一'
+        /*
+         * 两边真的在同一个母群里、但内半直积不成立时，**必须披露**：这时给的是
+         * 「外半直积」的答案（另一个群），不说明白就等于静默换题。
+         *
+         * ⚠️ 披露只能写在 `sub` 里，而且必须短：`sub` 落在 `.composer-status` 的
+         * `.status-meta` 上，那是 `flex: none`（不收缩、不换行），写长了整行溢出。
+         * 完整原因进 `note`（对象上的记录字段）；失败那条路上 hint 有地方，写全。
+         */
+        const sub = inner.why ? `|G| = ${g.order}，按外半直积算（${how}）` : `|G| = ${g.order}，${how}`
+        return {
+          ok: true,
+          value: { type: 'group', group: g },
+          label: prettySymbol(g.symbol),
+          sub,
+          note: inner.why ?? undefined,
+        }
+      }
+      if (plan.kind === 'multi') {
+        const kindWord = plan.faithfulOnly ? '忠实作用' : '非平凡作用'
+        // 候选**不能只列符号**：同一个记号下不同作用的群符号长得一模一样
+        //（`C_{2}^{4} \rtimes_{\phi} S_{3}`），只有不变量能区分。
+        const list = plan.options.map((o) => humanFingerprint(o.fingerprint)).join('；')
+        return fail(
+          `${nRef} 与 ${hRef} 的${kindWord}有 ${plan.options.length} 个本质不同的选法，各自给出不同构的群，它不是一个群`,
+          `候选（按不变量区分）：${list}` +
+            (plan.sampled ? `。候选较多，本地做了分层抽样，"${plan.options.length}"是下界` : '') +
+            `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群做内半直积` +
+            (innerWhy ? `。${innerWhy}` : ''),
+        )
+      }
+      return fail(
+        `${nRef} 与 ${hRef} 的半直积本地算不了`,
+        `${plan.why}${innerWhy ? `。${innerWhy}` : ''}`,
+      )
     },
   },
   {
@@ -3187,6 +3311,12 @@ export function opsFor(selection: GalValue[]): OpDef[] {
       const p = op.params[i]
       if (!p.optional && !isScalarParam(p.type)) return false
     }
+    /*
+     * **候选预检**（U51）：类型匹配还不够 —— 有些 op 对任意两个对象都有定义，
+     * 但**本地算不动**（`A_4 ⋊ S_4` 要 14 秒）。列出来点下去必被守卫拦住就是撒谎。
+     * 只在参数**已凑齐**时判（差一个对象时无从判断，那时照列不误 —— 用户还没选完）。
+     */
+    if (selection.length === op.params.length && op.fits && !op.fits(selection)) return false
     return true
   })
 }
@@ -3223,6 +3353,7 @@ export function opsByMechanism(): { mechanism: Mechanism; label: string; ops: Op
  */
 const TEMPLATES: Record<string, string> = {
   directProduct: 'G x H',
+  semidirectProduct: 'G \\rtimes H',
   quotient: 'G / N',
   conjugationAction: '共轭作用(G)',
   leftTranslationAction: '正则作用(G)',

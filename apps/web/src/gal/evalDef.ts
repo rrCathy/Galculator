@@ -1,6 +1,8 @@
 import { createGroupFromSymbol, parseGroupNotation, type Group } from '@groupviz/core'
 // 本地补的记号（U49）：core 有人为上限、但本地机器建得出的那几种（`A_n`）
 import { buildLocally } from './localBuild'
+// 半直积 `N : H` 的三态分诊（U51）：唯一就建、多解列出、算不动说清
+import { humanFingerprint, planSemidirect } from './semidirect'
 import {
   INFIX_SYMBOLS,
   INFIX_TABLE,
@@ -532,6 +534,11 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
   // ④ 记号建群
   const n = parseGroupNotation(toNotationForm(t))
   if (!n.ok) {
+    // ★ U51：半直积记号。core 认得 `N:H` 的**语法**，但定不了 φ —— 它回
+    //   `error === 'semidirect'` 并说「找不到满足条件的非平凡作用 φ」。那句话是错的
+    //   （实测 `C_2^2:C_3` 的非平凡作用**唯一**，`C_2^4:S_3` 有一大把）。
+    //   分诊三态：唯一 ⇒ 直接建；多解 ⇒ 报"不是一个群"并列候选；算不动 ⇒ 说清卡在哪。
+    if (n.error === 'semidirect') return evalSemidirectNotation(t, n.canonical)
     // 打的是个"操作调用"却找不到 → 那是**没有这个操作**，不是群记号写错了
     if (unknownOp) return unknownOpError(unknownOp, objects)
     // 写的是个关系（`H ⊆ G`）→ 说清"哪几条能用"，别甩一句"群记号认不出"。
@@ -579,7 +586,15 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
     }
   }
   const g = createGroupFromSymbol(n.symbol)
-  if (!g) return { ok: false, error: `本地建群失败：${n.symbol}`, hint: n.hint }
+  if (!g) {
+    /*
+     * core 有时**给了 `symbol` 却建不出来**（`C_4:C_2` 真跑就是这样：`n.ok = true`、
+     * `symbol = 'C_{4} \\rtimes_{\\phi} C_{2}'`，但 `createGroupFromSymbol` 返回 null）。
+     * 这种"半直积形状的记号"正好是分诊能接的活，别把它甩给用户当"建群失败"。
+     */
+    if (splitTopLevel(n.canonical ?? '', ':').length === 2) return evalSemidirectNotation(t, n.canonical)
+    return { ok: false, error: `本地建群失败：${n.symbol}`, hint: n.hint }
+  }
   return {
     ok: true,
     value: { type: 'group', group: g },
@@ -589,4 +604,92 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
     origin: 'input',
     sources: [],
   }
+}
+
+/* ── 半直积记号的三态分诊（U51）──────────────────────────── */
+
+/** `canonical` 记号 → 真群：core 建得出就走 core，建不出才落到本地补丁层。 */
+function groupFromCanonical(canonical: string): Group | null {
+  const inner = parseGroupNotation(canonical)
+  if (inner.ok && inner.symbol) {
+    const g = createGroupFromSymbol(inner.symbol)
+    if (g) return g
+  }
+  return buildLocally(canonical)
+}
+
+/**
+ * `N : H` → 真群，或"这不是一个群"。
+ *
+ * 三种结局（`docs/USABILITY.md` §6.35）：
+ *   · **唯一作用** ⇒ 直接建（`C_2^2 : C_3` → `A_4`）—— 记号欠定≠无解，唯一时没有歧义；
+ *   · **多解** ⇒ `ok: false` 并列出各候选 —— 选哪个是**数学问题**，不替用户挑；
+ *   · **只有平凡作用** ⇒ 这个记号指的其实是直积（说清楚，而不是让用户以为算不出来）。
+ *
+ * 措辞三条底线：不写"后端"（本项目没有）· 不写 core 那句错话（"找不到非平凡作用"）·
+ * 抽样得出的结论要标出"至少"。
+ */
+function evalSemidirectNotation(text: string, canonical: string): EvalResult {
+  const parts = splitTopLevel(canonical, ':')
+  if (parts.length !== 2) {
+    return {
+      ok: false,
+      error: `无法识别：${text}`,
+      hint: '半直积要写成 `N : H` 两半（如 `C_2^2 : C_3`）',
+    }
+  }
+  /*
+   * 报错 / 提示**只用用户自己敲的那串**说话：`canonical` 是 core 归一后的形态
+   * （`C_{2}^{4}` 这种带花括号的），摆到 `.composer-status` 这个**纯文本面**上
+   * 就是花括号乱飞。用户敲的是 `C_2^4`，就还他 `C_2^4`。
+   */
+  const typed = splitTopLevel(text, ':')
+  const [nRef, hRef] = (typed.length === 2 ? typed : parts).map((p) => p.trim())
+  const [N, H] = [groupFromCanonical(parts[0].trim()), groupFromCanonical(parts[1].trim())]
+  if (!N) return { ok: false, error: `半直积左边的「${nRef}」本地建不出来`, hint: '先把两半各自写成能建出来的记号' }
+  if (!H) return { ok: false, error: `半直积右边的「${hRef}」本地建不出来`, hint: '先把两半各自写成能建出来的记号' }
+
+  const plan = planSemidirect(N, H)
+  if (plan.kind === 'ok') {
+    return {
+      ok: true,
+      value: { type: 'group', group: plan.group },
+      label: prettySymbol(plan.group.symbol),
+      sub: `|G| = ${plan.group.order}`,
+      note: plan.sampled
+        ? `作用唯一（候选较多，本地做了分层抽样；共 ${plan.actionCount} 个同态）`
+        : `作用唯一，这个记号就是一个群`,
+      origin: 'input',
+      sources: [],
+    }
+  }
+  if (plan.kind === 'trivial') {
+    return {
+      ok: true,
+      value: { type: 'group', group: plan.group },
+      label: prettySymbol(plan.group.symbol),
+      sub: `|G| = ${plan.group.order}，只有平凡作用，就指直积`,
+      note: `${nRef} 上没有 ${hRef} 的非平凡作用，这个记号指的就是直积`,
+      origin: 'input',
+      sources: [],
+    }
+  }
+  if (plan.kind === 'multi') {
+    const kindWord = plan.faithfulOnly ? '忠实作用' : '非平凡作用'
+    /*
+     * 候选列表**只能列不变量**：同一个记号下不同作用的群，符号长得一模一样
+     * （`C_{2}^{4} \rtimes_{\phi} S_{3}`），列符号等于没列；而符号本身带反斜杠，
+     * 落在这个纯文本面上也不合适。
+     */
+    const list = plan.options.map((o) => humanFingerprint(o.fingerprint)).join('；')
+    return {
+      ok: false,
+      error: `${text} 不是一个群：${nRef} 与 ${hRef} 的${kindWord}有 ${plan.options.length} 个本质不同的选法，各自给出不同构的群`,
+      hint:
+        `候选（按不变量区分）：${list}` +
+        (plan.sampled ? `（候选较多，本地做了分层抽样，"${plan.options.length}" 是下界）` : '') +
+        `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群做内半直积`,
+    }
+  }
+  return { ok: false, error: `${text} 本地算不了`, hint: plan.why }
 }
