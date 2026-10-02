@@ -66,6 +66,12 @@ node verify/e2e/semidirect-op.mjs     # 半直积 ⋊ 的三态分诊 + 连线�
 - 走查脚本一律从 `?empty=1`（空画布）起、自己铺前置行——只依赖自己写了什么，
   产品改默认示范不会打崩它们。`layout-spec.mjs` 里唯一使用默认示范的那段是**故意的**（它是门面）。
 - 截图落在仓库根的 `docs/assets/`（脚本 cwd 是 `apps/web`，所以路径写 `../../docs/assets/…`）。
+  ⚠ **截图是版本资产，会静默过期**：每张 `u*.png` 只有**它自己那条** e2e 会重刷，
+  单跑一条看效果时别的老截图就停在上一次整套跑的时刻。U51 收尾时 `git status` 冒出 9 张
+  `M docs/assets/u*.png`（`u2-radial-menu.png` 里没有 U48 的「课本结论」块）——
+  说明那批收尾**没整套跑**。判据：**批次收尾必须整套 `verify:e2e` 跑一遍**
+  （逐个 `node verify/e2e/*.mjs`），然后 `git status --short docs/assets/` 复核差异
+  **确实是本次改动引起的**再提交，别把过期截图和新截图混在一个提交里说不清。
 
 ## 写断言时的坑（都是真踩过的）
 
