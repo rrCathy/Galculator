@@ -2556,3 +2556,56 @@ body {
   line-height: 1.6;
 }
 
+
+/* ── 作用编辑器（U52）────────────────────────────────────────
+   复用 MapBuilder 的壳（`.map-builder` / `.mb-*`）：同一类弹层、同一个位置。
+   只补它没有的两样：循环记号的**文本输入框**、点数的输入行、生成元阶的角标。 */
+.mb-row input.cycle-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  outline: none;
+}
+
+.mb-row input.cycle-input:focus {
+  border-color: var(--blue);
+}
+
+.mb-row input.cycle-input.bad {
+  border-color: var(--danger);
+}
+
+.ab-n {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ab-n input {
+  width: 78px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  outline: none;
+}
+
+.ab-n input:focus {
+  border-color: var(--blue);
+}
+
+.ab-ord {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 12px;
+}

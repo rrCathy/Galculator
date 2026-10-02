@@ -134,6 +134,9 @@ const MENU_LABEL: Record<string, string> = {
   normalSubgroups: '正规子群',
   conjugationAction: '共轭作用',
   leftTranslationAction: '正则作用',
+  // U52：显式写出来，别靠 `menuLabel` 的兜底（`notation` 里切 `(` 之前那段）。
+  // 兜底在这次恰好给出「自定义作用」，但那是**巧合**，不是约定。
+  customAction: '自定义作用',
   orbits: '轨道',
   stabilizers: '稳定子',
   fixedPoints: '不动点',

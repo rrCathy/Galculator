@@ -12,6 +12,8 @@ import {
 } from '@groupviz/core'
 import { prettySymbol, superscript } from './pretty'
 import { groupFingerprint } from './identity'
+// 作用的核（U52）：判据只有一份 —— 与「自定义作用」的披露共用同一个函数
+import { actionKernel } from './customAction'
 import { isKnownGroup, knownGroupInfo } from './known'
 import type { GalAction, GalMap } from './value'
 import type { GalObject } from './types'
@@ -365,7 +367,39 @@ export function actionInsights(A: GalAction): Insight[] {
     })
   }
 
-  // ── ② Sylow III：共轭作用在 Syl_p(G) 上 ──
+  // ── ② 同态的核：这个作用**忠实**吗 ──
+  //
+  // U52 补的一条。理由：忠实性不是"可选的花边"，它是第一同构定理的入口 ——
+  // 「作用忠实 ⟺ 核平凡 ⟺ G 同构于置换群的一个子群」。四个内置作用各有姓名：
+  //   · 共轭作用的核 = **Z(G)**（中心）
+  //   · 左正则作用的核 = {e} —— 这就是 **Cayley 定理**（G 嵌入 S_G）
+  //   · 陪集作用的核 = H 在 G 里的核（所有共轭的交）
+  // 从前信息面板里看不到这件事，用户只能自己去猜"这个作用丢了多少信息"。
+  {
+    const kernelIds = actionKernel(A)
+    const faithful = kernelIds.length === 1
+    const named =
+      A.kind === 'conjugation'
+        ? '共轭作用的核就是中心 Z(G)'
+        : A.kind === 'leftTranslation'
+          ? '这就是 Cayley 定理：G 嵌入自身的置换群 S_G'
+          : A.kind === 'coset'
+            ? '陪集作用的核是 H 的全部共轭之交'
+            : null
+    out.push({
+      label: '同态的核',
+      tone: faithful ? 'note' : 'key',
+      tex: `\\lvert \\ker \\varphi \\rvert = ${kernelIds.length}`,
+      text: `|ker| = ${kernelIds.length}`,
+      detail: faithful
+        ? `作用忠实，核只有单位元${named ? `（${named}）` : ''}`
+        : `不忠实：核有 ${kernelIds.length} 个元素，只有 G 商掉它才嵌入置换群${
+            named ? `（${named}）` : ''
+          }`,
+    })
+  }
+
+  // ── ③ Sylow III：共轭作用在 Syl_p(G) 上 ──
   if (A.kind === 'conjugationOnSubgroups' && A.omega) {
     const pK = A.omega.members[0]?.subgroupElements?.length ?? 0
     const fs = pK > 0 ? factorizeOrder(pK) : []

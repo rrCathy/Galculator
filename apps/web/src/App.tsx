@@ -34,6 +34,9 @@ import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
 import { MultiOrb } from './ui/MultiOrb'
 import { ComposerOrb } from './ui/ComposerOrb'
 import { MapBuilder } from './ui/MapBuilder'
+// 作用编辑器（U52）：点住一个群就能填「它作用在 n 个点上」的像
+import { ActionBuilder } from './ui/ActionBuilder'
+import type { CanvasNode } from './gal/types'
 import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
 import { OpDock } from './ui/OpDock'
@@ -916,13 +919,16 @@ export default function App() {
     return [...new Set([...base, ...proofHighlight(proofSteps, proofCursor)])]
   })()
 
-  /** 编辑器（映射构建器）：两端必须都落在画布节点上 */
+  /**
+   * 编辑器要看的那几个画布节点。
+   *
+   * **不再固定两个**（U52）：`映射` 要源与靶两端，而 `自定义作用` 只要作用群这一端。
+   * 按 `inter.picked` 逐个找，找齐几个就交出几个（少一个就整块不渲染）。
+   */
   const editorNodes = (() => {
     if (inter.kind !== 'editor') return null
-    const [a, b] = inter.picked
-    const s = graph.nodes.find((n) => n.id === a)
-    const t = graph.nodes.find((n) => n.id === b)
-    return s && t ? ([s, t] as const) : null
+    const found = inter.picked.map((id) => graph.nodes.find((n) => n.id === id))
+    return found.some((n) => !n) ? null : (found as CanvasNode[])
   })()
 
   return (
@@ -1095,16 +1101,27 @@ export default function App() {
 
       {banner}
 
-      {inter.kind === 'editor' && pendOp && editorNodes && (
-        <MapBuilder
-          op={pendOp}
-          src={editorNodes[0]}
-          tgt={editorNodes[1]}
-          objects={objects}
-          onSubmit={submitEditorLine}
-          onCancel={reset}
-        />
-      )}
+      {inter.kind === 'editor' &&
+        pendOp &&
+        editorNodes &&
+        (pendOp.id === 'customAction' ? (
+          <ActionBuilder
+            op={pendOp}
+            src={editorNodes[0]}
+            objects={objects}
+            onSubmit={submitEditorLine}
+            onCancel={reset}
+          />
+        ) : (
+          <MapBuilder
+            op={pendOp}
+            src={editorNodes[0]}
+            tgt={editorNodes[1]}
+            objects={objects}
+            onSubmit={submitEditorLine}
+            onCancel={reset}
+          />
+        ))}
 
       {snapshotOpen && (
         <SnapshotCard

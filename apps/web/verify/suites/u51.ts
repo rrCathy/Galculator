@@ -313,7 +313,8 @@ export function run(): void {
     ok('选一个群时不列（还差一个群）', !opsFor([sel[0]]).map((o) => o.id).includes('semidirectProduct'))
 
     // 注册表自洽：每个 op 的参数表长度 == arity + optional（模块加载时已断言，这里再钉一次）
-    ok('注册表长度就是 40 条（U51 把半直积加进去了）', OPS.length === 40, String(OPS.length))
+    // （U52 又加了一条「自定义作用」→ 41；这条断言的用意是"有人动过面就得有人知道"）
+    ok('注册表长度就是 41 条（U51 半直积 + U52 自定义作用）', OPS.length === 41, String(OPS.length))
 
     /*
      * **预算预检**（菜单不撒谎）：`A_4 ⋊ S_4` 那条要枚举 160 组生成元像、

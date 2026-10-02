@@ -10,6 +10,8 @@ import {
   type Group,
 } from '@groupviz/core'
 import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalMap, type NormalizedSubgroup } from '../gal/value'
+// 作用的核（U52）：判据只有一份 —— 结论层那条 insight 用的是同一个函数
+import { actionKernel } from '../gal/customAction'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { STRUCTURAL_LABEL } from '../gal/derive'
 import { elementNotation } from '../gal/ops'
@@ -949,6 +951,7 @@ function OtherTab({
     case 'action': {
       const A = v.action
       const members = A.omega?.members ?? []
+      const kernel = actionKernel(A)
       return (
         <>
           <Row k="类型">
@@ -957,6 +960,17 @@ function OtherTab({
           <Row k="群">
             <span>
               <Tex tex={A.group.symbol} />（|G| = {A.group.order}）
+            </span>
+          </Row>
+          {/*
+            核（U52）：作用作为同态的核 —— 「忠实吗」是看作用时第一个该知道的事实。
+            从前这一行没有，用户只能自己猜"这个作用丢了多少信息"；
+            对共轭作用它就是 Z(G)、对左正则作用它是 {e}（Cayley 定理）。
+            判据与「自定义作用」的披露、结论层那条共用 `actionKernel`。
+          */}
+          <Row k="核">
+            <span>
+              {kernel.length === 1 ? '忠实（只有单位元）' : `不忠实，阶 ${kernel.length}`}
             </span>
           </Row>
           <Row k="Omega">

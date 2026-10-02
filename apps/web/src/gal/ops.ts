@@ -48,6 +48,17 @@ import { elementSemanticKey } from './semantic'
 // 「G 里有没有与 H 同构的子群」—— 求商 / 陪集作用的自动翻译（U30）、报错时的配方（U29）、
 // 集合运算的候选对齐（U32），以及 `containment` 的嵌入关（U38）**共用同一份搜索**
 import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
+// 自定义作用（U52）：`自定义作用(G, n, a\to (1 2 3 4))`。
+// 生成元记号的对齐（`resolveGenerator`）也在这边 —— 一条判据只留一份，
+// 编辑器的下拉与手打的字形因此永远给出同一个答案。
+import {
+  IDENTITY_TOKEN,
+  generatorCollisionReason,
+  generatorsDistinct,
+  planCustomAction,
+  resolveGenerator,
+  type GenImageDraft,
+} from './customAction'
 // `Aut` 的搜索预算 + 建群路（2026-10-01 事故：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机；
 // 2026-10-02 U50 更正：贵的是 core 的线性搜索乘法，建群本身 96 阶只要 1ms）
 import {
@@ -246,12 +257,18 @@ export interface OpDef {
   /**
    * **候选预检**（U51）：`opsFor` / `pairOps` 用它挡掉"列出来点下去必被拦住"的候选。
    *
-   * 只对**类型匹配、参数已凑齐**的 op 调用，且允许返回 `true`（"判不了就别挡"）。
    * 与 op 内部真正的守卫**必须共用同一个判据** —— 预检拦下的，正式求值也一定拦下；
    * 预检放过的，正式求值可以再拦（那时用户已经点了，会看到理由）。
    *
-   * 目前只有半直积用它：`⋊` 对任意两个群都有定义，但算得动才算数
-   * （`A_4 ⋊ S_4` 要 14 秒 —— 列出来就是撒谎）。
+   * ⚠️ **契约**（U52 收紧）：`values` 可能是**前缀**（用户还没选完）——
+   * 实现必须容忍它：**判不了就返回 `true`**，不许对 `undefined` 抛错，也不许因为
+   * "参数没齐"而返回 `false`（那会把一条只是还没选完的操作从菜单里抹掉）。
+   *
+   * 收紧要读 U52 那一处：单对象 op（`自定义作用(G, n, ...)`）的参数里夹着标量 `n`，
+   * `opsFor` 永远等不到 `selection.length === params.length`（画布给不了 `n`），
+   * 于是"只在参数凑齐时预检"这条旧写法**对它永远不触发** —— 直积群上
+   * 「自定义作用」照列，点开却只得到一句"做不了"。菜单不撒谎，所以这一钩子
+   * 改成**类型匹配就调**，把"要不要再判一次"交给实现自己。
    */
   fits?: (values: GalValue[]) => boolean
   run: (args: OpArg[], ctx?: OpContext) => OpOutcome
@@ -803,16 +820,14 @@ function elementLabel(group: Group, id: string): string {
  *
  * 注意 core 的 `extendFromGenerators` 收的 Map 的 key 是**元素 id**，
  * 不是名字——这里返回 `el` 就是为了这个（踩过：传名字一律得到 null）。
+ *
+ * **判据只有一份**（U52）：实现在 `customAction.ts#resolveGenerator`，
+ * 那里同时供「自定义作用」用（它要的是 `gen.symbol`）。两处若各写一份，
+ * 迟早对同一串记号给出不同答案。
  */
 function generatorOf(group: Group, text: string): { genName: string; el: GroupElement } | null {
-  const gens = getGeneratorElements(group)
-  const hit = gens.find((g) => g.gen.name === text || g.el.label === text || g.el.id === text)
-  if (hit) return { genName: hit.gen.name, el: hit.el }
-  // 循环群的两种通行写法：core 叫 `a`，课本写 `r`（或反之）
-  if (gens.length === 1 && /^[A-Za-z]$/.test(text.trim())) {
-    return { genName: gens[0].gen.name, el: gens[0].el }
-  }
-  return null
+  const r = resolveGenerator(group, text)
+  return r ? { genName: r.name, el: r.el } : null
 }
 
 /** 生成元的候选记号（报错提示 / 编辑器下拉都要用）。 */
@@ -1866,6 +1881,95 @@ export const OPS: OpDef[] = [
         label: `陪集作用(${gRef}, ${hRef})`,
         sub: `|\\Omega| = ${n} = [G : H]${translated ? `，${translated}` : ''}`,
         note: translated ?? undefined,
+      }
+    },
+  },
+  {
+    id: 'customAction',
+    notation: '自定义作用(G, n, a\\to (1 2 3 4))',
+    mechanism: 'atomic',
+    primitive: true,
+    doc: 'G 通过你给的置换作用在 n 个点上：每个生成元配一个循环记号（恒等写 e），立刻报是否忠实',
+    recipe: '同态 G -> S_n，由生成元的像唯一决定',
+    impl: 'gal/customAction 的 planCustomAction（core 备好 extendAndVerifyPerms + parseCycleNotation）',
+    call: ['自定义作用', 'customAction'],
+    params: [
+      { name: 'G', type: 'group' },
+      { name: 'n', type: 'int' },
+    ],
+    variadic: { name: '像', type: 'genImage' },
+    arity: 2,
+    editor: true,
+    result: 'action',
+    /*
+     * **候选预检**（U52）：直积群（`C_2^2` / `C_2^3` …）的生成元在 core 里重名重号，
+     * "给每个生成元分别指定像"这件事**表达不出来**（见 `generatorsDistinct`）。
+     * 判据与 `run` 里的那道门、与编辑器包装层的守卫**共用同一个函数** ——
+     * 于是"菜单里列着的"与"点下去能做的"永远是同一批（菜单不撒谎）。
+     *
+     * 容忍前缀：`n` 是标量位，画布答不出来 ⇒ 这里只可能拿到 `[G]`。
+     */
+    fits: (vs) => {
+      const G = groupValueOf(vs[0])
+      return !G || generatorsDistinct(G)
+    },
+    run: (a) => {
+      const G = groupOf(a[0])
+      if (!G) return fail('自定义作用的作用群必须是群', '如 自定义作用(C_4, 4, a -> (1 2 3 4))')
+      // 直积群的生成元在 core 里重名重号（`C_2^3` 是三个 `a`/`1`）—— 那种群上
+      // "给每个生成元分别指定像"表达不出来。**先于生成元名字检查**说这件事：
+      // 否则用户会先撞上"G 里没有生成元 b"（而对着一串 `a` 他不知道该写什么）。
+      if (!generatorsDistinct(G)) {
+        return fail(
+          `${generatorCollisionReason(G)}，给不了它们不同的像`,
+          '想让 G 作用在自己身上用「正则作用」，其余三种内置作用也各有现成的路',
+        )
+      }
+      const gRef = refText(a[0])
+      const nArg = a[1]
+      const n = nArg?.kind === 'number' ? nArg.num : Number((nArg?.text ?? '').trim())
+
+      // 像对：`a\to (1 2 3 4)` —— 三种箭头都认（与 `映射` 同款）
+      const drafts: GenImageDraft[] = []
+      for (let i = 2; i < a.length; i++) {
+        const raw = a[i].text
+        const parts = raw.split(/\\to\s*|->|=>/)
+        if (parts.length !== 2 || !parts[0].trim()) {
+          return fail(
+            `像对的写法不对：${raw}`,
+            `应形如 a -> (1 2 3 4)（生成元 -> 循环记号）；恒等写 ${IDENTITY_TOKEN}`,
+          )
+        }
+        drafts.push({ genText: parts[0].trim(), cycle: parts[1].trim() })
+      }
+      if (drafts.length === 0) {
+        return fail(
+          '自定义作用至少要给一个生成元的像',
+          `如 自定义作用(${gRef}, 4, ${generatorNames(G)[0] ?? 'a'} -> (1 2 3 4))`,
+        )
+      }
+      // 生成元记号先在这里对一遍 —— 报错要能指名道姓（core 那边只认 symbol，对不上会 THROW）
+      for (const d of drafts) {
+        if (!resolveGenerator(G, d.genText)) {
+          return fail(`${gRef} 里没有生成元 ${d.genText}`, `生成元：${generatorNames(G).join('、')}`)
+        }
+      }
+
+      const plan = planCustomAction(G, n, drafts)
+      if (!plan.ok) return fail(plan.error, plan.hint)
+
+      const count = plan.orbitSizes.length
+      const transitive = count === 1 && plan.orbitSizes[0] === n
+      // 忠实性**必须说出来**：不忠实不是错误，但用户不该自己去猜（第一同构定理的入口）
+      const faithfulPart = plan.faithful ? '忠实' : `不忠实，核阶 ${plan.kernelIds.length}`
+      return {
+        ok: true,
+        value: { type: 'action', action: plan.action },
+        label: `自定义作用(${gRef})`,
+        sub: `|\\Omega| = ${n} \\cdot ${transitive ? '传递（1 个轨道）' : `${count} 个轨道`} \\cdot ${faithfulPart}`,
+        note: plan.faithful
+          ? undefined
+          : `${gRef} 到置换群的像只有 ${G.order / plan.kernelIds.length} 阶（G 是 ${G.order} 阶）`,
       }
     },
   },
@@ -3314,9 +3418,13 @@ export function opsFor(selection: GalValue[]): OpDef[] {
     /*
      * **候选预检**（U51）：类型匹配还不够 —— 有些 op 对任意两个对象都有定义，
      * 但**本地算不动**（`A_4 ⋊ S_4` 要 14 秒）。列出来点下去必被守卫拦住就是撒谎。
-     * 只在参数**已凑齐**时判（差一个对象时无从判断，那时照列不误 —— 用户还没选完）。
+     *
+     * ⚠️ **U52 收紧**：从前这里要求 `selection.length === op.params.length`（"参数凑齐才判"），
+     * 那对**夹着标量参数**的单对象 op 永远不成立 —— 画布给不了 `n`（`自定义作用` 的 `int`），
+     * 于是预检形同虚设。现在改成**类型匹配就调**，实现自己按契约容忍前缀
+     * （判不了返回 `true`，见 `OpDef.fits` 的注释）。
      */
-    if (selection.length === op.params.length && op.fits && !op.fits(selection)) return false
+    if (op.fits && !op.fits(selection)) return false
     return true
   })
 }
@@ -3358,6 +3466,9 @@ const TEMPLATES: Record<string, string> = {
   conjugationAction: '共轭作用(G)',
   leftTranslationAction: '正则作用(G)',
   cosetAction: '陪集作用(G, P)',
+  // U52：不给这一条，径向菜单那个 `<code>` 会退到 `notation`（一长串占位符），
+  // 而模板的意思是"**照这个敲就能跑**"——给个真能跑的短例子。
+  customAction: '自定义作用(G, 4, a -> (1 2 3 4))',
   automorphismGroup: 'Aut(G)',
   intersection: 'A \\cap B',
   union: 'A \\cup B',

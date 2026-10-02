@@ -28,6 +28,7 @@ import { run as idspace } from './suites/idspace'
 import { run as budget } from './suites/budget'
 import { run as u50 } from './suites/u50'
 import { run as u51 } from './suites/u51'
+import { run as u52 } from './suites/u52'
 
 diagram()
 firstIso()
@@ -48,6 +49,7 @@ idspace()
 budget()
 u50()
 u51()
+u52()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1
