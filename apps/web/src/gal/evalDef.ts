@@ -570,7 +570,12 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
     return {
       ok: false,
       error: `该记号本地建不了：${t}`,
-      hint: n.gapExpr ? `需要后端 GAP：${n.gapExpr}（后端通道尚未接入）` : n.hint,
+      /*
+       * core 的 `gapExpr` 是它替"有 GAP 后端的宿主"准备的表达式 —— 本项目没有后端，
+       * 所以这里只能诚实说"本地构造器没覆盖到"，不拿"待接入"当理由（那是用户看不见的承诺）。
+       * 也别把 `gapExpr` 摆到界面上：`DihedralGroup(2000)` 这种串对用户是噪音。
+       */
+      hint: `本地构造器只覆盖到常见小规模族 —— 这个记号要么规模超出本地能画的线，要么族还没写`,
     }
   }
   const g = createGroupFromSymbol(n.symbol)

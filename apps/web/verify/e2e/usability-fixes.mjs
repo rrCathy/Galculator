@@ -305,7 +305,7 @@ await page.screenshot({ path: '../../docs/assets/u18-info-fixes.png' })
  * 用户当场否掉了那个答案（「起码得把常见结论硬编码吧」）⇒ 现在 `Aut(S6)` **当场给出
  * `|Aut| = 1440`**（结论表），预览区是 `good` 而不是 `bad`。判据因此换成：
  * **快 + 有 1440**（"搜不动"那条断言反过来，写成"不再说搜不动"）。
- * 仍然守的是同一件事：`Syl(S6, 2)` 这种表里没有的，还是当场说算不动。
+ * 仍然守的是同一件事：`Syl(S6, 2)` 这种本地真跑不完的，还是当场拦下（且说人话）。
  *
  * 放在截图**之后**：这一段要反复换画布，会把上面那条 U18 的截图换掉。
  */
@@ -340,7 +340,8 @@ try {
   await page.fill('.composer-expr', 'Syl(S6, 2)')
   const fill3Ms = Date.now() - t2
   const st3 = await status()
-  ok('Syl(S6, 2) 也被拦住', st3.text.includes('算不动'), st3.text)
+  ok('Syl(S6, 2) 也被拦住', st3.text.includes('本地跑不完'), st3.text)
+  ok('拦住的理由不说"待后端"（本项目没有后端）', !st3.text.includes('后端'), st3.text)
   ok('Syl(S6, 2) 当场返回', fill3Ms < 2000, `${fill3Ms}ms`)
 
   const t3 = Date.now()

@@ -34,13 +34,42 @@
  * 实测（`ord=360`）：元素阶分布 `1^1 2^45 3^80 4^90 5^144` —— 与 A_6 的真分布一致
  * （3-循环 40 + 两个不交 3-循环 40 = 80；4-轮换乘对换 90；5-循环 144）。
  */
-import { buildSubgroupGroup, createGroupFromSymbol, parseGroupNotation, type Group, type GroupElement } from '@groupviz/core'
+import {
+  buildSubgroupGroup,
+  createCyclicGroup,
+  createDihedralGroup,
+  createSymmetricGroup,
+  parseGroupNotation,
+  type Group,
+  type GroupElement,
+} from '@groupviz/core'
+
+import { buildMatrixGroup } from './matrixGroups'
 
 /** 能补的记号。`parseGroupNotation` 的 `canonical` 已归一（`A6`/`A_6`/`A_{ 6 }` 都是 `A_{6}`）。 */
 const ALT = /^A_\{(\d+)\}$/
+const SYM = /^S_\{(\d+)\}$/
+const DIH = /^D_\{(\d+)\}$/
+const CYC = /^C_\{(\d+)\}$/
 
-/** 借 `S_n` 拿偶置换 —— 上限就是 core 的 `S_{n}` 门（6）。 */
-const SOURCE_MAX = 6
+/**
+ * 各族补到哪为止 —— **每一条都要说清为什么停在这**（U50 扩族时补的账）。
+ *
+ * | 族 | 上限 | 实测与理由 |
+ * |---|---|---|
+ * | `S_n` / `A_n` | `n <= 7` | `S_7` = 5040 个元素（11ms）。`S_8` = 40320（44ms、堆 +13.5MB）**建得出，但元素表四万行必然把页面卡死** —— U47 的教训正是"建得出不等于该建"。 |
+ * | `D_n` | `n <= 120` | `D_120` = 240 个元素、0ms。core 的门只到 8（`D_8` = 16 阶）。 |
+ * | `C_n` | `n <= 1000` | 纯循环群的乘法是闭式（core 自己的注释就这么说），1000 阶 0ms；core 的门停在 120。 |
+ *
+ * 借谁的父群受谁的门限：`A_n` 借 `S_n`，所以它跟 `S_n` 共用同一条线。
+ */
+const ALT_MAX = 7
+const SYM_MAX = 7
+const DIH_MAX = 120
+const CYC_MAX = 1000
+
+/** 借 `S_n` 拿偶置换的上限 —— `createSymmetricGroup` 本身没有内部上限，这条线是上面那张表定的。 */
+const SOURCE_MAX = ALT_MAX
 
 /** 逆序数的奇偶 —— 置换的符号。 */
 function isEvenPermutation(p: readonly number[]): boolean {
@@ -123,11 +152,25 @@ function pickGenerators(sn: Group, even: readonly GroupElement[], n: number): Gr
 /**
  * 用 `canonical` 记号本地补一个群；补不了返回 `null`（调用方照原样报错）。
  *
- * 现在只认 `A_{n}`（3 ≤ n ≤ 6）—— 见文件头。加新的族之前先问一句：
- * **"core 那边是真算不动，还是只是一行人为上限？"** 后者才归这一层。
+ * 加新族之前先问一句：**"core 那边是真算不动，还是只是一行人为上限？"**
+ *   · 人为上限 → 归这一层：`A_n`（构造器卡在 n ≤ 5，而门写 6）·
+ *     `S_n` / `D_n` / `C_n`（构造器**都没有内部上限**，纯粹门写窄了）；
+ *   · 真没实现 → 归 `matrixGroups.ts`：`GL` / `SL` / `PGL` / `PSL`。
  */
 export function buildLocally(canonical: string): Group | null {
-  const m = ALT.exec(canonical.replace(/\s+/g, ''))
+  const key = canonical.replace(/\s+/g, '')
+  return (
+    buildAlternatingLocally(key) ??
+    buildSymmetricLocally(key) ??
+    buildDihedralLocally(key) ??
+    buildCyclicLocally(key) ??
+    buildMatrixGroup(key)
+  )
+}
+
+/** `A_n`（3 ≤ n ≤ 7）= `S_n` 的**偶置换子群** —— 一行置换数学不用抄。 */
+function buildAlternatingLocally(key: string): Group | null {
+  const m = ALT.exec(key)
   if (!m) return null
   const n = Number(m[1])
   if (!Number.isInteger(n) || n < 3 || n > SOURCE_MAX) return null
@@ -138,7 +181,7 @@ export function buildLocally(canonical: string): Group | null {
    */
   if (parseGroupNotation(`A_{${n}}`).symbol) return null
 
-  const sn = createGroupFromSymbol(`S_{${n}}`)
+  const sn = createSymmetricGroup(n)
   if (!sn) return null
 
   const even = sn.elements.filter((e) => isEvenPermutation(e.value))
@@ -149,4 +192,39 @@ export function buildLocally(canonical: string): Group | null {
   if (!gens) return null
 
   return buildSubgroupGroup(sn, even, `A_{${n}}`, gens)
+}
+
+/**
+ * `S_n`（7 ≤ n ≤ 7 —— `S_8` 建得出但元素表四万行必卡，见上限表）。
+ *
+ * `createSymmetricGroup` 没有任何内部上限，`S_7` 是纯粹被门挡在外面的：
+ * 同一条 `S_{n}` 门给 `A_{n}` 写 3..6，给 `S_{n}` 也写 6。
+ */
+function buildSymmetricLocally(key: string): Group | null {
+  const m = SYM.exec(key)
+  if (!m) return null
+  const n = Number(m[1])
+  if (!Number.isInteger(n) || n < 2 || n > SYM_MAX) return null
+  if (parseGroupNotation(`S_{${n}}`).symbol) return null // core 建得出的不抢
+  return createSymmetricGroup(n)
+}
+
+/** `D_n`（4 ≤ n ≤ 120）。core 的门停在 8，`createDihedralGroup` 自己没有上限。 */
+function buildDihedralLocally(key: string): Group | null {
+  const m = DIH.exec(key)
+  if (!m) return null
+  const n = Number(m[1])
+  if (!Number.isInteger(n) || n < 4 || n > DIH_MAX) return null
+  if (parseGroupNotation(`D_{${n}}`).symbol) return null
+  return createDihedralGroup(n)
+}
+
+/** `C_n`（2 ≤ n ≤ 1000）。core 的门是 `CYCLIC_GROUP_MAX_ORDER = 120`，而闭式乘法本该任意阶都行。 */
+function buildCyclicLocally(key: string): Group | null {
+  const m = CYC.exec(key)
+  if (!m) return null
+  const n = Number(m[1])
+  if (!Number.isInteger(n) || n < 2 || n > CYC_MAX) return null
+  if (parseGroupNotation(`C_{${n}}`).symbol) return null
+  return createCyclicGroup(n)
 }

@@ -14,7 +14,8 @@
  * 所以这套断言现在守三件事：
  *   ① 预算**外**的不许卡、也不许只说"算不了" —— 要给出真答案（`|Aut(S₆)| = 1440`）；
  *   ② 预算**内**的照旧真算（元素是自同构本身，结论区才能说 `Aut(S₄) ≅ S₄`）—— 不许退化成表里的同构品；
- *   ③ 表里**没有**的那一族（`C₄ × C₄`）照旧走守卫拦住。
+ *   ③ 表里**没有**、且**真建不起**的那一族照旧走守卫拦住（U50 起实例换成 `C₆ × C₆`：
+ *      `|Aut| = 288`，代价 `288² × 36` 远超建群预算 —— U47 举的 `C₄ × C₄` 已经建得出来了）。
  */
 import { createGroupFromSymbol, parseGroupNotation, type Group, type GroupElement } from '@groupviz/core'
 import type { GalObject } from '../../src/gal/types'
@@ -85,11 +86,22 @@ export function run(): void {
     // 阶小 != 没事：C_2^3 只有 8 阶，|Aut| = |GL(3,2)| = 168
     const c23 = calcOf(['G = C_2^3', 'A = Aut(G)'])
     eq('|Aut(C_2^3)| = |GL(3,2)| = 168（8 阶群的 |Aut| 可以很大）', orderOf(c23.obj), 168)
-    ok('C_2^3 给的是「已知群」（GL(3,2) 本地没有记号）', knownOf(c23.obj))
+    /*
+     * U50 改：这一条原本断言"给的是「已知群」（GL(3,2) 本地没有记号）"。
+     * 现在 `GL(3,2)` 本地建得出来（`matrixGroups.ts`）⇒ 168 阶是**真群**。
+     * 序列更短，信息更多 —— 结论区因此拿得到元素表。
+     */
+    ok('C_2^3 的 Aut 是**真群**（GL(3,2) 本地有记号了，U50）', !knownOf(c23.obj) && elemCount(c23.obj) === 168)
 
-    // ② 表里**没有**那一族照旧走守卫拦住
-    const c44 = failOf(['G = C_4 x C_4', 'A = Aut(G)'])
-    ok('|Aut(C_4 x C_4)| = 96：不在结论表里，照旧在建群线外拦住', c44.err.includes('96'), c44.err)
+    /*
+     * ② 建群预算**还在**，但已经量对了对象（U50）。U47 曾把 `C_4 x C_4` 当"表里没有
+     * 那一族照旧拦住"的例子 —— 那是错的：96 阶包成群只要 13ms，慢的是 core 的 `multiply`。
+     * 真正建不起的档现在由 `|Aut|^2 x |G|` 这条线守（`C_6 x C_6` 是实例，见 `u50.ts`）。
+     */
+    const c44 = calcOf(['G = C_4 x C_4', 'A = Aut(G)'])
+    eq('|Aut(C_4 x C_4)| = 96 现在真建得出来（U50 撤了那条 48 线）', orderOf(c44.obj), 96)
+    ok('C_4 x C_4 的 Aut 是真群，不是「已知群」', !knownOf(c44.obj) && elemCount(c44.obj) === 96)
+    ok('当场返回（< 2s；core 的 createAutomorphismGroup 实测 2323ms）', c44.ms < 2000, `${c44.ms}ms`)
 
     // ③ 误伤检查：线内的一律**真算**（元素是自同构本身，不是表里的同构品）
     const s4 = calcOf(['G = S_4', 'A = Aut(G)'])
@@ -273,9 +285,9 @@ export function run(): void {
      */
     eq('A_5 core 自己建得出 ⇒ 补丁层不接', buildLocally('A_{5}'), null)
     eq('A_4 / A_3 同理', `${buildLocally('A_{4}')}${buildLocally('A_{3}')}`, 'nullnull')
-    // 纪律③：借哪个父群就受哪个门限（`S_7` 也是 backend）⇒ A_7 仍建不出
-    eq('A_7 仍建不出（它得从 S_7 拿，而 S_7 本身也超门）', buildLocally('A_{7}'), null)
-    eq('只管 A_n：S_6 不走这一层', buildLocally('S_{6}'), null)
+    // 纪律③在 U50 改了口径：`S_7` 现在补得出来（门窄，构造器没上限）⇒ `A_7` 跟着能建
+    eq('A_7 建得出（借 S_7 的偶置换子群，U50 把 S_7 的门补到 7）', (buildLocally('A_{7}') as Group | null)?.order ?? null, 2520)
+    eq('只管 A_n：S_6 不走这一层（core 建得出）', buildLocally('S_{6}'), null)
     eq('别的记号也不走（不猜）', buildLocally('C_{4}'), null)
 
     // 走完整条求值链：打 `A_6` 真的变成一个群对象，`Aut(A_6)` 走表给 1440
@@ -291,17 +303,17 @@ export function run(): void {
     // p-子群个数才是自变量（core 的 vi() 对每个 p-元素与每个已找到的子群合并一次闭包），
     // 而阶不是：C_2^6 只有 64 阶（在 core 的 144 线**之下**）却 60s 没完。
     const syl2 = failOf(['G = S_6', 'A = Syl(G, 2)'])
-    ok('Syl_2(S_6) 说算不了（实测 45s 没完）', syl2.err.includes('算不动'), syl2.err)
+    ok('Syl_2(S_6) 说算不了（实测 45s 没完）', syl2.err.includes('本地跑不完'), syl2.err)
     ok('报错带上 p-元素个数（255 是手算的：75 个对换 + 180 个 4-轮换）', syl2.err.includes('255'), syl2.err)
     ok('Syl_2(S_6) 当场返回', syl2.ms < 2000, `${syl2.ms}ms`)
 
     const psub2 = failOf(['G = S_6', 'A = pSub(G, 2)'])
-    ok('pSub_2(S_6) 同样拦住', psub2.err.includes('算不动'), psub2.err)
+    ok('pSub_2(S_6) 同样拦住', psub2.err.includes('本地跑不完'), psub2.err)
 
     const c26 = failOf(['G = C_2^6', 'A = Syl(G, 2)'])
     ok(
       'C_2^6（64 阶，144 线之下）也拦得住 —— 阶这条线对 p-子群枚举根本不管用',
-      c26.err.includes('算不动'),
+      c26.err.includes('本地跑不完'),
       c26.err,
     )
     ok('C_2^6 当场返回（实测 60s 没完）', c26.ms < 2000, `${c26.ms}ms`)

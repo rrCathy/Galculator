@@ -15,7 +15,6 @@ import {
   computeStabilizers,
   computeSubgroupLattice,
   conjugateSubgroup,
-  createAutomorphismGroup,
   createDirectProduct,
   elementOrder,
   elementOrderDistribution,
@@ -49,8 +48,16 @@ import { elementSemanticKey } from './semantic'
 // 「G 里有没有与 H 同构的子群」—— 求商 / 陪集作用的自动翻译（U30）、报错时的配方（U29）、
 // 集合运算的候选对齐（U32），以及 `containment` 的嵌入关（U38）**共用同一份搜索**
 import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
-// 「Aut 本地算不动」的两段预算（2026-10-01：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机）
-import { AUT_COUNT_CAP, AUT_SEARCH_BUDGET, autSearchCombinations, lookupAutomorphisms } from './automorphisms'
+// `Aut` 的搜索预算 + 建群路（2026-10-01 事故：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机；
+// 2026-10-02 U50 更正：贵的是 core 的线性搜索乘法，建群本身 96 阶只要 1ms）
+import {
+  AUT_BUILD_BUDGET,
+  AUT_SEARCH_BUDGET,
+  autBuildCost,
+  autSearchCombinations,
+  buildAutomorphismGroup,
+  lookupAutomorphisms,
+} from './automorphisms'
 // 已知结论层（U48）：课本有闭式的族**先查表再谈计算** —— `Aut(S_6) = 1440` 是背下来的结论，
 // 不是现场搜索出来的（用户：「说 S6 搜不动我不是很认可」）
 import { isKnownGroup, knownFacts, realizeKnownGroup, type KnownGroupSpec } from './known'
@@ -1760,9 +1767,12 @@ export const OPS: OpDef[] = [
        * **自同构本身**（`\mathrm{id}, \alpha_1, …`），结论区能说 `Aut(S₄) ≅ S₄`。
        * 换成表里"记号的同构品"反而**丢信息**（元素变成了置换）。
        *
-       * 只有预算外（`S₆` 的 18000×720、`S₅` 的 600×120、`A₅` 的 |Aut|=120 建不出）
-       * 才查表 —— 那正是用户报的那条路：「敲完 6 网站卡死」。判据用**便宜的那一步**
+       * 只有搜索预算外（`S₆` 的 18000×720、`S₅` 的 600×120）才查表 ——
+       * 那正是用户报的那条路：「敲完 6 网站卡死」。判据用**便宜的那一步**
        * （组合数 × 阶，走 `elementOrderDistribution`），不必先跑搜索。
+       *
+       * ⚠️ U50 更正：`A₅` 的 `|Aut| = 120` 原本也挂在这句里当"建不出"的例子 ——
+       * 那是错的，它本地建得动（哈希乘法 2ms，见 ③）。
        */
       const facts = knownFacts(G)
       if (facts?.aut) {
@@ -1772,7 +1782,7 @@ export const OPS: OpDef[] = [
         }
       }
       /**
-       * ② 两段守卫（`automorphisms.ts` 里有实测账）：core 只看候选组合数、不看阶，
+       * ② 搜索预算（`automorphisms.ts` 里有实测账）：core 只看候选组合数、不看阶，
        * `S_6` 的 18000 组正好从它的 30000 下面钻过去 —— 这条 op 于是能在按键预览里
        * 跑上百秒（等于死机），而界面连"在算"都显示不出来。
        */
@@ -1781,20 +1791,31 @@ export const OPS: OpDef[] = [
         // 表里有结论就救回来（理论上上面那一关已经拦下了，这里是兜底）
         if (facts?.aut) return knownGroupOutcome(facts.aut, `|Aut| = ${facts.aut.order}`)
         return fail(
-          `${refText(a[0])} 太大（阶 ${G.order}，候选 ${found.combos} 组），自同构搜不动`,
-          `搜索线 ${AUT_SEARCH_BUDGET}，待后端 GAP 通道`,
+          `${refText(a[0])} 的自同构本地搜不完（阶 ${G.order}，候选 ${found.combos} 组）`,
+          `候选组合数 x 阶超过搜索线 ${AUT_SEARCH_BUDGET} —— 这一步是逐个同阶元素试出来的，本地没有更快的路`,
         )
       }
-      if (found.kind === 'overCap') {
-        // 搜索过得去、建群过不去（`C₂³` 只有 8 阶，|Aut| = 168）：结论表这时最有用
+      /**
+       * ③ 建群预算（U50）。U47 曾在这里划 `|Aut| <= 48`，那是**量错了对象**：当时看到
+       * `|Aut| = 96` 要 2.1s，就以为建群本身贵 —— 其实贵的是 core 的 `multiply`
+       * （复合完再线性搜一遍，每次 O(|Aut| x |G|)）。换哈希乘法后 96 阶 **1ms**。
+       * 用户那句「本地建不出这个群」在 96 阶上就是错的（他当场就报了）。
+       */
+      const cost = autBuildCost(found.auts.length, G.order)
+      if (cost > AUT_BUILD_BUDGET) {
         if (facts?.aut) return knownGroupOutcome(facts.aut, `|Aut| = ${facts.aut.order}`)
         return fail(
-          `${refText(a[0])} 有 ${found.count} 个自同构，本地建不出这个群`,
-          `建群线 ${AUT_COUNT_CAP}，待后端 GAP 通道`,
+          `${refText(a[0])} 有 ${found.auts.length} 个自同构，包成这个群超出本地预算`,
+          `代价 |Aut|^2 x |G| = ${cost}，预算 ${AUT_BUILD_BUDGET}`,
         )
       }
-      const A = createAutomorphismGroup(G, found.auts)
-      if (!A) return fail(`${refText(a[0])} 的自同构群太大，本地算不了`, '待后端 GAP 通道')
+      const A = buildAutomorphismGroup(G, found.auts)
+      if (!A) {
+        return fail(
+          `${refText(a[0])} 的自同构集不自洽，包不成群`,
+          '本地搜出来的那堆映射与群公理对不上 —— 这是内部异常，不是"算不动"',
+        )
+      }
       return {
         ok: true,
         value: { type: 'group', group: A },
@@ -2576,8 +2597,8 @@ export const OPS: OpDef[] = [
        */
       if (G.order > ENUMERATION_LIMIT) {
         return fail(
-          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}，子群本地算不了`,
-          '待后端 GAP 通道',
+          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}：子群要逐个筛出来，这个规模本地跑不完`,
+          `本地枚举上限 ${ENUMERATION_LIMIT}`,
         )
       }
       const subs = normalizeSubgroups(findAllSubgroups(G), G)
@@ -2611,8 +2632,8 @@ export const OPS: OpDef[] = [
        */
       if (G.order > ENUMERATION_LIMIT) {
         return fail(
-          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}，极大子群本地算不了`,
-          '待后端 GAP 通道',
+          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}：极大子群要先有整张子群格，这个规模本地立不出来`,
+          `本地枚举上限 ${ENUMERATION_LIMIT}`,
         )
       }
       const { nodes, edges } = computeSubgroupLattice(G)
@@ -2667,8 +2688,8 @@ export const OPS: OpDef[] = [
       const load = pSubgroupLoad(G, p)
       if (load.load > P_SUBGROUP_LOAD_CAP) {
         return fail(
-          `${refText(a[0])} 的 ${p}-元素有 ${load.elements} 个（压力 ${load.load.toFixed(0)}），p-子群本地算不动`,
-          `枚举线 ${P_SUBGROUP_LOAD_CAP}，待后端 GAP 通道`,
+          `${refText(a[0])} 的 ${p}-元素有 ${load.elements} 个（压力 ${load.load.toFixed(0)}），p-子群要逐个枚举闭包，本地跑不完`,
+          `本地压力上限 ${P_SUBGROUP_LOAD_CAP}`,
         )
       }
       const subs = normalizeSubgroups(findAllPSubgroups(G, p), G)
@@ -2706,8 +2727,8 @@ export const OPS: OpDef[] = [
       const load = pSubgroupLoad(G, p)
       if (load.load > P_SUBGROUP_LOAD_CAP) {
         return fail(
-          `${refText(a[0])} 的 ${p}-元素有 ${load.elements} 个（压力 ${load.load.toFixed(0)}），Sylow 本地算不动`,
-          `枚举线 ${P_SUBGROUP_LOAD_CAP}，待后端 GAP 通道`,
+          `${refText(a[0])} 的 ${p}-元素有 ${load.elements} 个（压力 ${load.load.toFixed(0)}），Sylow 子群要逐个枚举闭包，本地跑不完`,
+          `本地压力上限 ${P_SUBGROUP_LOAD_CAP}`,
         )
       }
       const subs = normalizeSubgroups(findSylowSubgroups(G, p), G)
@@ -2738,8 +2759,8 @@ export const OPS: OpDef[] = [
       // 同上：core 超限静默回空数组，自己不拦就会说"S_6 没有正规子群"
       if (G.order > ENUMERATION_LIMIT) {
         return fail(
-          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}，正规子群本地算不了`,
-          '待后端 GAP 通道',
+          `|G| = ${G.order} 超过子群枚举线 ${ENUMERATION_LIMIT}：正规子群要先把子群全筛一遍，这个规模本地跑不完`,
+          `本地枚举上限 ${ENUMERATION_LIMIT}`,
         )
       }
       const subs = normalizeSubgroups(findAllNormalSubgroups(G), G)

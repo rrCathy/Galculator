@@ -26,6 +26,7 @@ import { run as batch10 } from './suites/batch10'
 import { run as snapshot } from './suites/snapshot'
 import { run as idspace } from './suites/idspace'
 import { run as budget } from './suites/budget'
+import { run as u50 } from './suites/u50'
 
 diagram()
 firstIso()
@@ -44,6 +45,7 @@ batch10()
 snapshot()
 idspace()
 budget()
+u50()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1

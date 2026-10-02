@@ -1,5 +1,5 @@
 /**
- * 走查：**已知结论层**（U48）+ **本地补的记号**（U49）—— 常见族的闭式结论，
+ * 走查：**已知结论层**（U48）+ **本地补的记号**（U49/U50）—— 常见族的闭式结论，
  * 看得见；core 的人为上限不该由用户承担。
  *
  * 事故与用户原话：输入 `Aut(S6)` 页面卡死（U47 把"死机"换成了"算不动"），用户不接受
@@ -8,14 +8,22 @@
  * 紧接着用户又抓到下一层荒谬：「逗我吗，S6能算，A6不能算？」⇒ `src/gal/localBuild.ts`
  * （`A_n` = `S_n` 的偶置换子群；core 的构造器卡在 n ≤ 5，而族门写的是 6）。
  *
- * 这份走查钉**四个用户看得见的面**（"能过测试但用户感知不到"是无效改动）：
+ * 第三轮（U50）是**同一个病根换了个名字**：`AUT(C4^2)` 报「有 96 个自同构，本地建不出
+ * 这个群，建群线 48，待后端 GAP 通道」、`GL(2,4)` 报「该记号本地建不了（后端通道尚未
+ * 接入）」。用户原话：「常见群族不会没导入吧……难道 desmos 算一些微积分还要跑去接入
+ * matlab/sagemath 吗」—— 96 阶包成群只要 13ms（慢的是 core 的 `multiply`），
+ * 180 阶矩阵群枚举出来只要 0.2ms（core 只是没写这一族）。
+ *
+ * 这份走查钉**五个用户看得见的面**（"能过测试但用户感知不到"是无效改动）：
  *
  *   ① **跑 `Aut(S_6)`**：结论区直接说出 `|Aut(S_6)| = 1440`，且当场返回；
  *   ② **点 `S_6` 这件群本身**：展开「基本」节，有一段「课本结论」——
  *      自同构 / 内自同构 / 中心 / 换位子群 / 外自同构 / 幂指数 六条（不必先跑一遍操作）；
  *   ③ 认不出的群（`C_4 x C_4`）**不许蹭**结论（表只在命中的族上说话）；
  *   ④ **打 `A_6` 建得出**（U49）：真群 360 元、元素表展开得完、`Aut(A_6)` = 1440；
- *      而 `S_7` 仍然建不出（补丁层只管 A_n，别把门全拆了）。
+ *   ⑤ **U50 的三件**：`Aut(C_4 x C_4)` 给 96（不再说"建不出"）· `GL(2,4)` 建得出且
+ *      元素表 180 行渲染得完 · `S_7` 建得出（5040）—— 而真不该建的 `S_8` 仍被挡下，
+ *      且**理由不许是"待后端"**（本项目没有后端）。
  *
  * 两条边界：
  *   · 「基本」节**默认收着**（U45）⇒ 不展开时 DOM 里**没有**这一块（零视觉成本）；
@@ -76,10 +84,37 @@ const NODES = () =>
     }),
   )
 
+/** 上一次 `pickNode` 的结果说明 —— 只在断言 FAIL 时露出来，省得靠猜。 */
+let lastPick = ''
+
 async function pickNode(id) {
+  /*
+   * ⚠️ 先**收起**面板再点：左上面板是浮层（画布不让位），后加进来的节点可能正好落在
+   * 它底下 —— 那时 `page.mouse.click` 打的是面板，选中状态不变，读到的还是上一个对象的
+   * 结论（本轮走查就栽在这上面：读 `H = S_7` 的结论区，读出来的是 `GL(2,4)` 的 180）。
+   * 这是**走查的坑，不是产品的坑**，所以这里先收面板、点完再开。
+   */
+  await page.evaluate(() => {
+    const t = [...document.querySelectorAll('.dock-topleft .dock-toggle')].find((b) => b.textContent.includes('信息'))
+    if (t && t.closest('.dock').className.includes('open')) t.click()
+  })
+  await page.waitForTimeout(250)
+
   const nodes = await NODES()
   const n = nodes.find((x) => x.id === id)
-  if (!n) return false
+  if (!n) {
+    lastPick = `画布上没有 ${id}（现有：${nodes.map((x) => x.id).join(',')}）`
+    return false
+  }
+  const hit = await page.evaluate((p) => {
+    const el = document.elementFromPoint(p.x, p.y)
+    return el?.closest?.('g.gnode')?.getAttribute('data-id') ?? el?.className ?? 'null'
+  }, n)
+  if (hit !== id) {
+    lastPick = `${id} 的点上压着「${hit}」（x=${Math.round(n.x)}, y=${Math.round(n.y)}）`
+    return false // 还压着浮层 —— 断言会 FAIL，不静默读旧数据
+  }
+  lastPick = `命中 ${id}`
   await page.mouse.click(n.x, n.y)
   await page.waitForTimeout(500)
   const t = page.locator('.dock-topleft .dock-toggle', { hasText: '信息' })
@@ -88,6 +123,24 @@ async function pickNode(id) {
     await page.waitForTimeout(450)
   }
   return true
+}
+
+/**
+ * 点「对象」抽屉里的一行（按 `.row-name` 里的 **id** 匹配 —— 不是展示形态）。
+ *
+ * 画布上的节点可能被浮层（面板、证明串）压住，点不到；对象抽屉不会。
+ * 这是同一个选择的两条入口，走查里按"哪条路没被挡住"挑。
+ */
+async function clickObjectRow(id) {
+  const hit = await page.evaluate((want) => {
+    const rows = [...document.querySelectorAll('.dock-topleft .row-click')]
+    const row = rows.find((r) => r.querySelector('.row-name')?.textContent?.trim() === want)
+    if (!row) return false
+    row.click()
+    return true
+  }, id)
+  await page.waitForTimeout(450)
+  return hit
 }
 
 /** 幂等地展开「基本」（手风琴里再点一下是收起 —— 所以先看 class）。 */
@@ -169,7 +222,7 @@ await page.waitForTimeout(1300)
  * 而 `createAlternatingGroup` 内部只给到 5。补丁层把 A_6 当 `S_6` 的偶置换子群建出来。
  */
 const tA = Date.now()
-ok('打 `A_6` 提交得了（别处说它"要后端 GAP"）', await addLine('G', 'A_6'))
+ok('打 `A_6` 提交得了（旧文案曾说它是"本地建不了 / 要后端"）', await addLine('G', 'A_6'))
 ok('建群 + 上画布当场返回（< 5s）', Date.now() - tA < 5000, `${Date.now() - tA}ms`)
 await closeComposer()
 ok('画布上真的有了这个节点（不是"预览过了但没落地"）', (await NODES()).some((n) => n.id === 'G'))
@@ -227,8 +280,83 @@ ok('Aut(A_6) 的结论区说出 1440', autA6.includes('1440'), autA6.slice(0, 18
 
 await page.screenshot({ path: '../../docs/assets/u49-a6-aut.png' })
 
-// 负面：补丁层只管 A_n，别把门全拆了 —— `S_7`（5040）仍然建不出
-ok('S_7 仍然建不出（借不到父群，不该硬造）', !(await addLine('H', 'S_7')))
+/* ══ ⑤ U50：常见群族不再拿"待后端"当挡箭牌 ═══════════════ */
+
+console.log('')
+console.log('== ⑤ GL / PSL 与 Aut 建群：本地就有 ==')
+await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
+await page.waitForTimeout(1300)
+
+/*
+ * 两张截图对应两条：`AUT(C4^2)`（96 个自同构被说成"本地建不出这个群"）与
+ * `GL(2,4)`（"该记号本地建不了"）。这一节钉的就是这两条**不再出现**。
+ */
+const t5 = Date.now()
+ok('建出 `G = C_4 x C_4`', await addLine('G', 'C_4 x C_4'))
+ok('`A = Aut(G)` 提交得了（旧文案说它"本地建不出这个群"）', await addLine('A', 'Aut(G)'))
+ok('`B = GL(2,4)` 提交得了（旧文案说它"该记号本地建不了"）', await addLine('B', 'GL(2,4)'))
+await closeComposer()
+ok('两条一起当场返回（< 6s）', Date.now() - t5 < 6000, `${Date.now() - t5}ms`)
+const ids5 = (await NODES()).map((n) => n.id)
+ok('画布上真的落了三个节点（不是"预览过了但没落地"）', ['G', 'A', 'B'].every((i) => ids5.includes(i)), JSON.stringify(ids5))
+
+const insights = () =>
+  page.evaluate(
+    () => document.querySelector('.dock-topleft .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
+  )
+
+await pickNode('A')
+const insAut = await insights()
+ok('Aut(C_4 x C_4) 的结论区说 96', insAut.includes('96'), insAut.slice(0, 160))
+ok('而且不再说"建不出 / 后端"', !insAut.includes('建不出') && !insAut.includes('后端'), insAut.slice(0, 160))
+await page.screenshot({ path: '../../docs/assets/u50-aut-c44.png' })
+
+await pickNode('B')
+const insGl = await insights()
+ok('GL(2,4) 的结论区说 |G| = 180', insGl.includes('180'), insGl.slice(0, 160))
+
+// 元素表：180 行**真渲染得出来**——只"建出群对象"不够，用户看得见的是这张表
+await page.evaluate(() => {
+  const h = document.querySelector('.info-sec-head[data-sec="elements"]')
+  if (h && !h.classList.contains('on')) h.click()
+})
+await page.waitForTimeout(200)
+await page.waitForFunction(() => document.querySelectorAll('.dock-topleft .etable tbody tr').length > 0, {
+  timeout: 8000,
+})
+const glRows = await page.locator('.dock-topleft .etable tbody tr').count()
+ok('GL(2,4) 的元素表渲染完 180 行（真群，不是「已知群」）', glRows === 180, `${glRows} 行`)
+await page.screenshot({ path: '../../docs/assets/u50-gl24-elements.png' })
+
+// 收起元素表（不然下面 pickNode 会再渲染一份 180 行）
+await page.evaluate(() => {
+  const h = document.querySelector('.info-sec-head[data-sec="elements"]')
+  if (h && h.classList.contains('on')) h.click()
+})
+await page.waitForTimeout(200)
+
+const t7 = Date.now()
+ok('`H = S_7` 提交得了（U50：门窄的族补到 n = 7）', await addLine('H', 'S_7'))
+await closeComposer()
+ok('S_7 当场返回', Date.now() - t7 < 5000, `${Date.now() - t7}ms`)
+/*
+ * 不点画布节点：自动布局可能把 `H` 摆在面板/证明串底下（实测压着 `proof-prime-p`），
+ * 点不到 —— 那是走查的坑。改点「对象」抽屉里那一行，同一个选中动作。
+ */
+ok('在「对象」抽屉里点中 S_7 那一行', await clickObjectRow('H'))
+const insS7 = await insights()
+ok('S_7 的结论区说 |G| = 5040', insS7.includes('5040'), insS7.slice(0, 160))
+
+/*
+ * 负面：真不该建的照旧挡下，但**理由不许是"待后端"**（本项目没有后端）。
+ * `S_8` = 40320 个元素：建得出，可元素表四万行必然把页面卡死（U47 的教训）。
+ */
+ok('`X = S_8` 被挡下（建得出也不该建）', !(await addLine('X', 'S_8')))
+const st8 = await page.evaluate(() => document.querySelector('.composer-status')?.textContent ?? '')
+ok('挡下的理由写着"本地建不了"', st8.includes('本地建不了'), st8.slice(0, 200))
+ok('理由里没有"后端 / 待接入"', !st8.includes('后端') && !st8.includes('待接入'), st8.slice(0, 200))
+await page.screenshot({ path: '../../docs/assets/u50-composer-no-backend.png' })
+await closeComposer()
 ok('这一节没有 console 错误', logs.length === 0, logs.join(' | '))
 
 console.log('')

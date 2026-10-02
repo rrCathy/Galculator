@@ -243,7 +243,7 @@ export function stageInfo(raw: string): StageInfo {
       raw: text,
       error:
         notation.source === 'backend'
-          ? `「${text}」本地建不出来（core 要后端 GAP），证明模板跑不了`
+          ? `「${text}」本地建不出来：这个记号不在本地构造器覆盖的族里，证明模板跑不了`
           : `认不出群记号「${text}」`,
     }
   }
