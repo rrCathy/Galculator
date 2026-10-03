@@ -55,6 +55,7 @@ import {
   IDENTITY_TOKEN,
   generatorCollisionReason,
   generatorsDistinct,
+  isOmegaCarrier,
   planCustomAction,
   resolveGenerator,
   omegaSpecOfValue,
@@ -1086,7 +1087,7 @@ function omegaSpecOf(a: OpArg | undefined): OmegaSpec | { error: string; hint?: 
   if (!a) {
     return {
       error: '自定义作用的第二个参数要一个点数或一个点集',
-      hint: '点数如 4；点集如 pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))',
+      hint: '点数如 4；点集如 pointSet(5) / labeledSet(a, b, c) / Syl(G, 3)',
     }
   }
   if (a.kind === 'number') return { kind: 'count', n: a.num }
@@ -1105,7 +1106,7 @@ function omegaSpecOf(a: OpArg | undefined): OmegaSpec | { error: string; hint?: 
   return {
     error: `自定义作用的第二个参数要一个点数或一个点集，「${a.text}」两者都不是`,
     // 例子必须是**照抄就能跑**的：`Syl_p(G)` 只是个数学记号，当输入会报"要 2 个参数"
-    hint: '点数如 4；点集如 pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))；作用在 G 自身上用 leftAction',
+    hint: '点数如 4；点集如 pointSet(5) / labeledSet(a, b, c) / Syl(G, 3) / asSet(Syl(G, 3))；作用在 G 自身上用 leftAction',
   }
 }
 
@@ -3588,16 +3589,27 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
     }
     case 'omega': {
       // Ω：恰好是 `omegaArgOf` 收的那几种（**不收 subgroups 列表**，哪怕是单元素）
+      // —— `共轭作用在` / `陪集作用` 走的是"点背后必须有子群/元素"那套算法，
+      // 而 `omegaArgOf` 只从 `set` / `elements` / `group` 里读出 `points`。
+      // U58 只把 `omegaOrInt`（`customAction` 的 Ω）放开了子群集，这里**故意不动**：
+      // 要放开得连 `omegaArgOf` 的 `points` 一起改，等点名。
       if (v.type === 'set' || v.type === 'elements') return true
       if (v.type !== 'group') return false
       return groupAsSet(v.group)
     }
     case 'omegaOrInt': {
-      // Ω **或**它的点数（U53）：画布给得了的那些与 `omega` 一模一样，
+      // Ω **或**它的点数（U53）：画布给得了的那些与 `omega` 一样，
       // 给不了的那一支（一个整数）由文本 / 编辑器补 —— 那一支不是 `GalValue`，走不到这儿。
-      if (v.type === 'set' || v.type === 'elements') return true
-      if (v.type !== 'group') return false
-      return groupAsSet(v.group)
+      //
+      // U58：判据**委托内核那一份**（`customAction.ts#isOmegaCarrier`）——
+      // 于是"画布上点得动的"与"`omegaSpecOfValue` 读得出的"永远是同一批。
+      // 多出来的那一档是 `subgroups`：子群集本身就是一族点，用户 2026-10-03 问
+      // 「特殊构造的集合（比如子群集）你怎么弄？」—— 从前得先手打一次 `asSet`。
+      if (isOmegaCarrier(v)) {
+        if (v.type !== 'group') return true
+        return groupAsSet(v.group)
+      }
+      return false
     }
     case 'subset': {
       // **单个**数集。`subgroups` 只在恰好一个成员时收——那时它等于一个子群

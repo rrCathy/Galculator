@@ -13,6 +13,7 @@ import {
   IDENTITY_TOKEN,
   generatorCollisionReason,
   generatorsDistinct,
+  isOmegaCarrier,
   omegaSpecOfValue,
   planCustomAction,
   type GenImageDraft,
@@ -24,7 +25,7 @@ import { evalExpr } from '../gal/evalDef'
 import { isKnownGroup } from '../gal/known'
 import { checkName, nextAutoName, normalizeName } from '../gal/naming'
 import { labelsHint, POINT_SET_MAX } from '../gal/pointSet'
-import { prettySymbol } from '../gal/pretty'
+import { asciiSymbol, prettySymbol } from '../gal/pretty'
 import type { OpDef } from '../gal/ops'
 import type { CanvasNode, GalObject } from '../gal/types'
 import { TexOrText } from './Tex'
@@ -180,10 +181,23 @@ function ActionBuilderEditor({
    * 三条支路：空的 / 一个纯整数（= 点数，老行为）/ 一句点集表达式。
    */
   const objectMap = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects])
-  /** 画布上已经有的、能当 Ω 的对象（下面那排一键按钮用）。 */
+  /**
+   * 画布上已经有的、能当 Ω 的对象（下面那排一键按钮用）。
+   *
+   * 判据 = **内核那一份**（`isOmegaCarrier`，U58），只排掉作用群自己：
+   *   · `set` / `elements` / `subgroups` —— `pointSet(5)` / `Z(S_4)` / **`Syl(G,3)`**
+   *   · 别的**群** —— 当"它的底集"读（`customAction(G, H, …)` = G 作用在 H 的元素上）
+   *
+   * 从前这里写的是 `set || elements`：画布上只有 `Syl(S_4,3)`（子群集）的时侯
+   * **一个 chip 都不显示**，用户既不知道该填什么、也不知道能填什么
+   *（他 2026-10-03 问的正是"子群集这种特殊构造的集合你怎么弄"）。
+   *
+   * 类名用 `ab-set-chip` 而不是 `mb-auto` —— 后者是「一键起点」那一排的类名，
+   * 回归套件按它数按钮，混进来会让"两个按钮都在"那条断言读错。
+   */
   const canvasSets = useMemo(
-    () => objects.filter((o) => o.value.type === 'set' || o.value.type === 'elements'),
-    [objects],
+    () => objects.filter((o) => o.id !== src.id && isOmegaCarrier(o.value)),
+    [objects, src.id],
   )
   const omega = useMemo<
     | { kind: 'empty' }
@@ -203,7 +217,7 @@ function ActionBuilderEditor({
       return {
         kind: 'bad',
         error: `点集「${t}」认不出来：它${r.value.type === 'number' ? '只是一个数' : '不是集合'}`,
-        hint: '点集如 pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))；只要点数就直接填一个数字（如 4）',
+        hint: '点集如 pointSet(5) / labeledSet(a, b, c) / Syl(G, 3) / asSet(Syl(G, 3))；只要点数就直接填一个数字（如 4）',
       }
     }
     return {
@@ -228,7 +242,7 @@ function ActionBuilderEditor({
 
   const check = useMemo<Check>(() => {
     if (!G) return { state: 'bad', error: '作用的作用群必须是群' }
-    if (omega.kind === 'empty') return { state: 'empty', message: '先填作用点集：一个点数（如 4），或一个点集表达式（如 pointSet(5) / labeledSet(a, b, c)）' }
+    if (omega.kind === 'empty') return { state: 'empty', message: '先填作用点集：一个点数（如 4），或一个点集表达式（如 pointSet(5) / Syl(G, 3) / labeledSet(a, b, c)）' }
     if (omega.kind === 'bad') return { state: 'bad', error: omega.error, hint: omega.hint }
     if (omega.n < 1) return { state: 'empty', message: '点数得是正整数' }
     const filled = gens.filter((g) => (images[g.gen.name] ?? '').trim())
@@ -302,7 +316,17 @@ function ActionBuilderEditor({
 
   const regularTooBig = G.order > POINT_SET_MAX || G.order * G.order > CUSTOM_ACTION_CELL_CAP
 
-  /** Ω 那一格的读数（纯文本面：不写希腊字母，说"点集"）。 */
+  /**
+   * Ω 那一格的读数（**纯文本面**：不写 LaTeX 命令，说"点"）。
+   *
+   * 带**点号**（U58）：Ω 的标号不是数字时（子群集正是这种），用户填像只能写
+   * 位置号 `(1 3)` —— 那他必须能一眼看出"第 3 个点是谁"。从前这里只把标号排一列
+   * 且不带编号，还把 `\langle 234\rangle` **原样贴进纯文本面**（LaTeX 泄漏）。
+   * 现在是 `4 个点：1 <234> , 2 <123> , ...`（与 `labelsHint` 同款）。
+   *
+   * 标号恰好**就是点号**时（`pointSet(8)` 的标号是 `1..8`）只写一个 —— 写成
+   * `1 1 , 2 2` 是纯噪音，那一档本来也不需要"对照"。
+   */
   const omegaSummary =
     omega.kind === 'empty'
       ? '点数，或点集'
@@ -310,7 +334,10 @@ function ActionBuilderEditor({
         ? '认不出来'
         : omega.kind === 'count'
           ? `${omega.n} 个点`
-          : `点集 ${omega.n} 个点：${omega.labels.slice(0, 6).join(' ')}${omega.labels.length > 6 ? ' ...' : ''}`
+          : `${omega.n} 个点：${omega.labels
+              .slice(0, 6)
+              .map((l, i) => (l === String(i + 1) ? `${i + 1}` : `${i + 1} ${asciiSymbol(l)}`))
+              .join(' , ')}${omega.labels.length > 6 ? ' ...' : ''}`
 
   return (
     <div className="map-builder action-builder" onClick={(e) => e.stopPropagation()}>
@@ -331,7 +358,7 @@ function ActionBuilderEditor({
       */}
       <div className="mb-hint">
         一个作用就是一个同态 G 到置换群：先定作用点集，再填每个生成元把点映到哪。
-        点集填一个点数，或一个点集表达式（点集 / 集合 / 底集）。
+        点集填一个点数，或一个点集表达式（点集 / 集合 / 子群集 / 底集）。
       </div>
 
       <label className="ab-n">
@@ -341,7 +368,7 @@ function ActionBuilderEditor({
           value={omegaDraft}
           onChange={(e) => setOmegaDraft(e.target.value)}
           placeholder="4"
-          title="点数（如 4），或一个点集（pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))）"
+          title="点数（如 4），或一个点集（pointSet(5) / labeledSet(a, b, c) / Syl(G, 3) / asSet(Syl(G, 3))）"
           spellCheck={false}
           autoComplete="off"
         />

@@ -271,16 +271,36 @@ export interface CustomActionPlanBlocked {
 export type CustomActionPlan = CustomActionPlanOk | CustomActionPlanBlocked
 
 /**
+ * 一个值能不能**当 Ω 的载体**（U58）。
+ *
+ * 四个地方共用这一份判据：
+ *   · `omegaSpecOfValue`（内核：把这个值读成 Ω）
+ *   · `ops.ts#paramAccepts` 的 `omega` / `omegaOrInt` 两支（画布上点不点得动）
+ *   · `ActionBuilder` 的「画布上的集合」那排一键按钮（列不列出来）
+ *   · 语义层断言
+ *
+ * 收四种：
+ *   · `set` —— `pointSet(5)` / `labeledSet(a,b,c)` / `asSet(Syl_p(G))` 的产物
+ *   · `elements` —— 元素集（`Z(S_4)` / `orbits(A,1)`）
+ *   · `subgroups` —— **子群集**（U58 补）。`Syl(G, 3)` / `Sub(A_4)` 本身就是一族点，
+ *     从前非要用户先 `asSet` 一步才肯收 —— 而画布上只有 `Syl(S_4,3)` 时，
+ *     他连"该打 asSet"都不知道（chip 那排也一个都不列，零线索）。
+ *     用户 2026-10-03 的原话：「如果不是任意阶集合，是一个**特殊构造的集合
+ *     （比如子群集）**你怎么弄？」
+ *   · `group` —— 群本身（当"它的底集"读，与 `共轭作用在` 的 Ω 同理）
+ */
+export function isOmegaCarrier(v: GalValue): boolean {
+  return v.type === 'set' || v.type === 'elements' || v.type === 'subgroups' || v.type === 'group'
+}
+
+/**
  * 一个**值**能不能当 Ω；能就给出 `OmegaSpec`。
  *
  * **op 与作用编辑器共用这一条判据**（U53）：手打的 `customAction(G, asSet(Syl_p(G)), …)`
  * 与编辑器里填 `asSet(Syl_p(G))` 必须对同一个东西给出同一个答案。
  * 两处各写一份筛选，迟早出现"编辑器收而 op 不收"那种最难查的错。
  *
- * 收三种：
- *   · `set` —— `pointSet(5)` / `labeledSet(a,b,c)` / `asSet(Syl_p(G))` 的产物
- *   · `elements` —— 元素集（`Z(S_4)` / `orbits(A,1)`）
- *   · `group` —— 群本身（当"它的底集"读，与 `共轭作用在` 的 Ω 同理）
+ * 收哪些类型见 `isOmegaCarrier`。
  */
 export function omegaSpecOfValue(v: GalValue, name: string, ref?: string): OmegaSpec | null {
   if (v.type === 'set') return { kind: 'set', set: { ...v.set, from: ref }, ref }
@@ -291,6 +311,21 @@ export function omegaSpecOfValue(v: GalValue, name: string, ref?: string): Omega
         group: v.group,
         label: `asSet(${name})`,
         members: v.elements.map((e) => ({ label: e.label })),
+        from: ref,
+      },
+      ref,
+    }
+  }
+  if (v.type === 'subgroups') {
+    // 子群集 → 每个子群**一个点**。成员构造与 `ops.ts#asSet` **逐字同款**
+    //（含 `subgroupElements`：面板上「取出为对象」靠它）—— 两处对同一件事
+    // 给同一个答案，用户不必先手打一次 asSet 再来这儿。
+    return {
+      kind: 'set',
+      set: {
+        group: v.group,
+        label: `asSet(${name})`,
+        members: v.subgroups.map((s) => ({ label: s.label, subgroupElements: s.elements })),
         from: ref,
       },
       ref,

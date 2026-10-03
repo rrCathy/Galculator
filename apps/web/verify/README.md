@@ -54,6 +54,7 @@ node verify/e2e/custom-action.mjs     # 自定义作用：作用编辑器 + 核�
 node verify/e2e/small-group.mjs       # 小群表：GAP 编号取群 + 与手写群同一 id 空间（U55）
 node verify/e2e/catalog.mjs           # 目录面板：凭空造集合 / 挑群，点了落成一行定义（U56）
 node verify/e2e/action-entries.mjs    # 群作用的四条入口：⊕ 球 / 点集「被作用」/ 拖拽（U57）
+node verify/e2e/action-omega.mjs      # 群作用这件事本身：Ω 能选 / 子群集当 Ω / 元素送到哪（U58）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -486,3 +487,28 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
     两个坑：**`.orb-sat` 是球的兄弟节点不是子节点**（写 `.orb .orb-sat` 恒空），
     且环要**先点球**才铺开 —— 这个错让探针一度得到"点集菜单是空的"的假结论；
     **≤ 3 条单对象操作时没有「操作」卫星**（是直接铺出来的，U3.1 的老规矩）。
+
+74. **"入口通了" ≠ "进去能用"；一次改动只跑覆盖它的那一套 = 没验过**（2026-10-03，U58）。
+    U57 补了群作用的四条入口、`action-entries.mjs` **40 条全绿**、语义层 2298 条全绿 ——
+    用户点进去照样卡住，原话：「开发完不会起 playwright 看看实际能不能用？……
+    **群作用作为多对象操作只能选择一个对象**？那如果不是任意阶集合，是一个**特殊构造的集合
+    （比如子群集）**你怎么弄？还有群作用的信息显示了什么东西？**元素映射到哪去了**？」
+    三个都不是"入口"问题，所以**入口套件一条都抓不到**：
+      ① `maxObjectArity` / `canPick` / `pendingHint` 三处仍用 `isScalarParam` 口径
+         ⇒ Ω 明明能吃画布上的集合，pending 里却点不动、也不提示（U57 只改了 `multiOps` / `pairOps`）；
+      ② `omegaSpecOfValue` / `paramAccepts` / 编辑器那排 chip 三处都不认 `subgroups`
+         ⇒ 画布上摆着 `Syl(S_4,3)` 时**一个 chip 都不列**（零线索），填 `S3` 报"它不是集合"；
+      ③ 作用的信息面板只有 类型/群/核/|Ω|/点 列表，`GalAction.perms` 这张
+         "每个元素映成哪个置换"的表**从来没铺出来**（映射早就有一张 `MapCorrespondence`）。
+    **纪律**：补完入口，必须**以用户的手把全程走一遍**（起点 → 产物 → 产物上能看到什么），
+    并把"产物那一侧"单独写一套走查 —— 判据落在**产出**上（信息面板里的表、Ω 读数、
+    编辑器里列出来的 chip），不是"点得中按钮"。
+    三条落点：**`maxObjectArity` 与 `canPick` 必须与 `multiOps` 同口径**（都是 `takesCanvasObject`）；
+    **pending 的"可选位"有两种收尾**（`image(f,·)` 是"直接执行"、`customAction` 的 Ω 是
+    "进编辑器填"），措辞与按钮文案都不许串；**哪些值能当 Ω 由 `customAction.ts#isOmegaCarrier`
+    一份判据定**，内核读值 / `paramAccepts` / chip 清单三处共用。
+    另修一处纯文本面泄漏：编辑器里 Ω 的读数原样打印 `\langle 234\rangle` ——
+    `asciiSymbol` 补 `\langle\s*` → `<`（**`\s*` 不能省**，`\langle` 后面那个空格只是
+    命令分隔符，留着就成了 `< 234>`），读数随之带点号 `1 <234> , 2 <123>`（用户照着写像要用）。
+    诊断手法：`.tmp-diag/probe2.mjs` 先复现（改之前），修完重跑同一份探针（改之后）——
+    **同一份脚本前后各跑一次**，比"看代码觉得对了"硬。

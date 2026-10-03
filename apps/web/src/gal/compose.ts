@@ -1,4 +1,4 @@
-import { isScalarParam, type OpDef } from './ops'
+import { isScalarParam, takesCanvasObject, type OpDef } from './ops'
 
 /**
  * 从「注册表操作 + 实参」组装出一行可求值的表达式（U2）。
@@ -24,15 +24,23 @@ export function objectArity(op: OpDef): number {
 }
 
 /**
- * 对象参数位的**总数（含可选）**——决定"还差一个对象要选"要不要停下来等。
+ * 对象参数位的**总数（含可选、含半对象档）**——决定"还差一个对象要选"要不要停下来等。
  *
- * 与 `objectArity` 的差就是「可选对象参数」的存在（目前只有 `image(f, H)` 的 H）：
- * 必需参数选满后，**可选位留着让用户再点一个对象**（点不到就直接执行）。
- * 从前 `multiOps` / `dispatchOp` 都只看 `objectArity`，于是 `f(H)` 在菜单里
- * 根本没有路（用户实测："把 f(H) 功能做了然后接入"）。
+ * 两处与 `objectArity` 不同：
+ *   · **可选对象参数**（`image(f, H)` 的 H）—— 必需位选满后留着让用户再点一个对象
+ *     （点不到就直接执行）。从前 `multiOps` / `dispatchOp` 只看 `objectArity`，
+ *     于是 `f(H)` 在菜单里根本没有路。
+ *   · **`omegaOrInt` 半对象档**（U58）—— 它既是"空着填一个点数"，也是"能吃画布上的
+ *     集合"。既然 ⊕ 球与拖拽都按 `takesCanvasObject` 数它（U57），"还能再点一个对象"
+ *     这件事就必须同口径 —— 否则 `customAction(G, Ω, …)` 停在 pending 时，
+ *     **Ω 明明能点却点不动**（`canPick` 同一条口径），用户只能到编辑器里再指一次。
+ *     用户 2026-10-03 的原话：「群作用作为多对象操作**只能选择一个对象**？」
+ *
+ * 于是这个函数与 `multiOps` / `pairOps` / `canPick` 共用**同一份判据**
+ * （`ops.ts#takesCanvasObject`），不再各写一套 `!isScalarParam`。
  */
 export function maxObjectArity(op: OpDef): number {
-  return op.params.filter((p) => !isScalarParam(p.type)).length
+  return op.params.filter((p) => takesCanvasObject(p.type)).length
 }
 
 /**

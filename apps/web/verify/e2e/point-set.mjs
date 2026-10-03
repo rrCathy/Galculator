@@ -370,14 +370,15 @@ await openOpsPanel('G')
   await setOmega('pointSet(8)')
   await setCycle(0, '(1 2 3 4)(5 6 7 8)')
   s = await editorState()
-  ok('Ω = pointSet(8) 收下了', (s?.summary ?? '').startsWith('点集 8 个点'), s?.summary)
+  // U58：读数改成"点号在前"（标号 == 点号时只写一个）—— 断言跟着翻
+  ok('Ω = pointSet(8) 收下了', (s?.summary ?? '').startsWith('8 个点'), s?.summary)
   ok('  读数截断用 ASCII 三个点（不是省略号）', (s?.summary ?? '').includes('...'), s?.summary)
   ok('  8 个点上两个 4-循环 -> 2 个轨道 - 忠实', !!s && s.cls.includes('ok') && s.check.includes('2 个轨道') && s.check.includes('忠实'), s?.check)
 
   /* ── `labeledSet(a, b, c)`：标号，且记号里就能写标号 ── */
   await setOmega('labeledSet(a, b, c)')
   s = await editorState()
-  ok('Ω = labeledSet(a, b, c) 收下了', s?.summary === '点集 3 个点：a b c', s?.summary)
+  ok('Ω = labeledSet(a, b, c) 收下了', s?.summary === '3 个点：1 a , 2 b , 3 c', s?.summary)
   await setCycle(0, '(a b)')
   s = await editorState()
   ok('像写标号 (a b) 认得出来（不是"不是点集里的点"）', !!s && !s.check.includes('不是点集里的点'), s?.check)
@@ -390,7 +391,7 @@ await openOpsPanel('G')
   await page.waitForTimeout(400)
   s = await editorState()
   ok('点一下 X -> Ω 框里填的是它的名字', s?.omega === 'X', String(s?.omega))
-  ok('  读数给出 3 个标号', s?.summary === '点集 3 个点：a b c', s?.summary)
+  ok('  读数给出 3 个标号（带点号）', s?.summary === '3 个点：1 a , 2 b , 3 c', s?.summary)
   ok('  X 那个按钮亮着（.on）', (await page.locator('.action-builder .ab-set-chip.on:text-is("X")').count()) === 1)
 
   /* ── 认不出来的话 -> 指名报错 ── */

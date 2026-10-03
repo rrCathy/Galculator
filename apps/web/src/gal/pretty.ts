@@ -328,15 +328,25 @@ export function prettySymbol(raw: string): string {
  * "键盘打不出的字符一律不许显示" —— 那两个字符都不在放行集里。
  */
 export function asciiSymbol(raw: string): string {
-  return prettySymbol(raw)
-    .replace(/\\times/g, ' x ')
-    .replace(/\\rtimes/g, ' : ')
-    .replace(/\\cdot/g, ' * ')
-    .replace(/\\varphi/g, 'phi')
-    .replace(/\\operatorname\{([^{}]*)\}/g, '$1')
-    // 剩下的命令一律只留名字（`\le` → `le`）：记号串里出现别的命令本来就是异常
-    .replace(/\\([A-Za-z]+)/g, '$1')
-    .replace(/[{}]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return (
+    prettySymbol(raw)
+      // 尖括号（子群生成记号 `\langle 234\rangle`）：纯文本面写 `<234>` ——
+      // 与循环记号 `(234)` 一眼能对上，比 `langle 234rangle` 好读得多。
+      // `\s*` 是必须的：`\langle` 后面那个空格只是 LaTeX 的**命令分隔符**，
+      // 不留（实测漏了它就成了 `< 234>`，中间多一个空格）。
+      .replace(/\\langle\s*/g, '<')
+      .replace(/\s*\\rangle/g, '>')
+      // 细空格 `\,` / `\;` / `\:` / `\!`：纯文本面直接去掉，它不是字面内容
+      .replace(/\\[,;:!]/g, '')
+      .replace(/\\times/g, ' x ')
+      .replace(/\\rtimes/g, ' : ')
+      .replace(/\\cdot/g, ' * ')
+      .replace(/\\varphi/g, 'phi')
+      .replace(/\\operatorname\{([^{}]*)\}/g, '$1')
+      // 剩下的命令一律只留名字（`\le` → `le`）：记号串里出现别的命令本来就是异常
+      .replace(/\\([A-Za-z]+)/g, '$1')
+      .replace(/[{}]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  )
 }

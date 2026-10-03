@@ -170,10 +170,15 @@ export function needsEditor(op: OpDef): boolean {
 export function pendingHint(op: OpDef, pickedCount: number): string {
   const p = op.params[pickedCount]
   if (!p) return '选择参数'
-  // 必需位**已经选满**、还剩可选对象位（`image(f, ·)` 的 H）：这不是"还差一个"，
-  // 而是"可以再点一个"——措辞得让"不选也行"一眼可见，否则用户以为卡住了。
+  // 必需位**已经选满**、还剩可选对象位：这不是"还差一个"，而是"可以再点一个"——
+  // 措辞得让"不选也行"一眼可见，否则用户以为卡住了。两种可选位收尾不同：
+  //   · `image(f, ·)` 的 H：不选就直接执行（`im f`）
+  //   · `customAction` 的 Ω（U58）：不选就进编辑器填一个点数
+  // 把它们混成一句"不选就直接执行"会撒谎 —— 那正是用户 2026-10-03 撞上的那句。
   if (pickedCount >= objectArity(op)) {
-    return `可选：「${p.name}」（${PARAM_LABEL[p.type]}）----不选就直接执行`
+    return needsEditor(op)
+      ? `可选：「${p.name}」（${PARAM_LABEL[p.type]}）----不选就进编辑器填`
+      : `可选：「${p.name}」（${PARAM_LABEL[p.type]}）----不选就直接执行`
   }
   return `选择「${p.name}」（${PARAM_LABEL[p.type]}），第 ${pickedCount + 1} / ${maxObjectArity(op)} 个对象`
 }
@@ -182,6 +187,11 @@ export function pendingHint(op: OpDef, pickedCount: number): string {
  * pending 时某个候选节点能不能当**下一位**参数。
  *
  * 复用的就是 `opsFor` 的匹配规则，所以"菜单里能点出来的"与"这里能点的"永远一致。
+ *
+ * ⚠️ 这里的门用 **`takesCanvasObject`**（不是 `isScalarParam`，U58）：
+ * `omegaOrInt` 是半对象档，它的"能吃画布上的集合"那一半必须能在 pending 里点得到。
+ * 从前写成 `isScalarParam(p.type) return false` ⇒ `customAction(G, ·, …)` 停在
+ * 第 2 位时，**画布上的集合点不动**（用户 2026-10-03：「只能选择一个对象？」）。
  */
 export function canPick(
   op: OpDef,
@@ -191,7 +201,7 @@ export function canPick(
 ): boolean {
   const p = op.params[index]
   if (!p) return false
-  if (isScalarParam(p.type)) return false
+  if (!takesCanvasObject(p.type)) return false
   return paramAccepts(p.type, candidate, pickedValues)
 }
 

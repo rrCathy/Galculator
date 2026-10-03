@@ -82,11 +82,25 @@ export function run(): void {
       multi.some((o) => o.id === 'customAction'),
       multi.map((o) => o.id).join(','),
     )
-    // 新进来的**只有**它 —— 别的 op 不该被这次换判据顺手带进来
+    /*
+     * U58 翻案。这条原判据是「U57 换了筛子之后，新混进 multiOps 的恰好是
+     * `customAction` 一条」—— 判据写成"`maxObjectArity ≤ 1` 却进得来"的差集。
+     *
+     * U58 把 `maxObjectArity` 也统一到 `takesCanvasObject`（Ω 那一档算一个
+     * "能在画布上点的位"）⇒ 两处口径一致，差集**理应**为空。
+     * 为什么要统一：`customAction` 停在 pending 时，Ω 明明能点却点不动
+     * （`canPick` 是同一条口径），用户 2026-10-03 的原话正是
+     * 「群作用作为多对象操作**只能选择一个对象**？」。
+     */
     eq(
-      '新进来的只有它（"maxObjectArity ≤ 1 却进得来"的那批恰好是它一条）',
+      'maxObjectArity 与 multiOps 口径一致（U58 起：差集为空）',
       multi.filter((o) => maxObjectArity(o) <= 1).map((o) => o.id).join(','),
-      'customAction',
+      '',
+    )
+    eq(
+      '  customAction 的 maxObjectArity = 2（G 与 Ω 都能在画布上点）',
+      maxObjectArity(multi.find((o) => o.id === 'customAction')!),
+      2,
     )
     ok(
       '新不变量：每条都至少两个"能从画布上拿对象"的位',

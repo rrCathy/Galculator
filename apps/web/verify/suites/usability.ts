@@ -582,7 +582,14 @@ export function run(): void {
     for (const id of ['conjugationOnSet', 'cosetAction', 'centralizer', 'normalizer']) {
       ok(`子群集 + 群：不再列出「${id}」（它吃不下一个列表）`, !sylG.includes(id), sylG.join(','))
     }
-    eq('子群集 + 群：一个候选都不剩（列表跟群凑不出"用到两个"的操作）', sylG.length, 0)
+    /*
+     * U58 翻案：U22 时这条成立（子群集跟群凑不出"用到两个"的操作），
+     * 因为 `customAction` 的第二参当时既不吃集合、也不吃子群集。
+     * U53 让它能吃画布上的集合、U58 放开到**子群集** ⇒ 现在剩一条 `customAction`，
+     * 而它正是 Sylow 那条路的正题：「G 作用在 Syl_p(G) 上」。
+     * 上面那四条（吃不下列表的 op）照旧一条都不许回来。
+     */
+    eq('子群集 + 群：只剩 `customAction`（U22 时是 0 —— 那时它吃不下子群集）', sylG.join(','), 'customAction')
 
     /* ── ⑤ **菜单不撒谎**：逐个候选 dry-run ── */
 

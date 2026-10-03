@@ -575,8 +575,21 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
       if (gid) omegaHome.set(o.id, gid)
       continue
     }
+    /*
+     * Ω 的"家"。
+     *
+     * ⚠️ **必须是上了画布的对象**（`isCanvasValue`，U58）—— 不是"对象表里有这个 id"就行。
+     * 反例正是**子群集**：`Syl(S_4, 3)` 的 `sortOf` 是 `list`（它是信息不是对象），
+     * **画布上没有它的节点**。而 `customAction(G, Syl(S_4,3), …)` 里 Ω 的 `from` 就是那个 id
+     * ⇒ 家指向一个不存在的节点 ⇒ 底下按 `ids.has(...)` 建边时**整条作用线被丢掉**
+     * ⇒ 用户造完了作用，画布上什么都没长（左栏有行、信息面板也全，就是没有线）。
+     * 从前走不到这儿：那时 `subgroups` 根本当不了 Ω（U58 才放开，见 `isOmegaCarrier`）。
+     * 现在落回 ② / ③ 两支：找一个真在画布上的同名集合，找不到就**就地造 Ω 节点**。
+     */
     let home: string | null =
-      omega.from && objects.some((x) => x.id === omega.from) ? omega.from : null
+      omega.from && objects.some((x) => x.id === omega.from && isCanvasValue(x.value))
+        ? omega.from
+        : null
     if (!home) home = setNodeId(objects, omega)
     if (!home) {
       // ⚠️ **id 用纯 ASCII**（`/Omega`），label 才是 LaTeX（`\Omega`）。

@@ -284,11 +284,21 @@ console.log('== ② 从 ⊕ 球点 `customAction` -> 空着手 pending，等你�
     hint: document.querySelector('.pending-hint')?.textContent?.trim() ?? '',
   }))
   ok('提示条要的就是第一参 G', pend.what.includes('customAction'), JSON.stringify(pend))
-  ok('  且没说"两个对象"（它只要一个群）', !pend.hint.includes('2'), JSON.stringify(pend))
+  /*
+   * U58 翻案：这条从前写的是「且没说"两个对象"（它只要一个群）」。
+   * U58 起它**真的要两个** —— 第二位 Ω 也能在画布上点（提示条写「第 1 / 2 个对象」，
+   * 而 Ω 那一格是"可选：不选就进编辑器填"）。详见 `e2e/action-omega.mjs`。
+   */
+  ok('  第 1 / 2 个对象（U58 翻案：Ω 也是一格）', pend.hint.includes('第 1 / 2'), JSON.stringify(pend))
 
   ok('点得中群节点 G', await clickSvg('svg.canvas g.gnode[data-id="G"] .gnode-hit'))
+  // U58：点完 G 还停在 pending 等 Ω（可选）—— 回车 = 不选 Ω，直接进编辑器
+  const mid = await page.evaluate(() => document.querySelector('.pending-hint')?.textContent?.trim() ?? '')
+  ok('  停在 pending 等 Ω，措辞是"可选"', mid.includes('可选'), mid)
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(520)
   const e = await editorState()
-  ok('编辑器弹出来了（不是补参条 / 不是 pending）', e.open === 1, JSON.stringify(e))
+  ok('回车 → 编辑器弹出来了（不是补参条 / 不是 pending）', e.open === 1, JSON.stringify(e))
   ok('  生成元两行（D_4 是 r / s 两个生成元）', e.rows === 2, JSON.stringify(e))
   // 走这条路时用户没指过 Ω ⇒ 回落到老初值（|D_4| = 8 ≤ 12 ⇒ 取 |G|）
   ok('  Ω 回落到 `|G|` = 8（用户没指过 Ω）', e.omega === '8', JSON.stringify(e))

@@ -801,10 +801,19 @@ export default function App() {
       setNotice(null)
       if (inter.kind === 'pending' && pendOp) {
         const picked = [...inter.picked, id]
-        // 上界是 `maxObjectArity`（含可选对象位）：`image(f, ·)` 停在 pending 时，
-        // 再点一个群 = 把可选位 H 填上（点满就执行）；不点就走条上的"直接执行"。
-        if (picked.length < maxObjectArity(pendOp)) {
-          setInter({ kind: 'pending', opId: pendOp.id, picked })
+        /*
+         * 上界是 `maxObjectArity`（含可选对象位）：`image(f, ·)` 停在 pending 时，
+         * 再点一个群 = 把可选位 H 填上（点满就执行）；不点就走条上的"直接执行"。
+         *
+         * ⚠️ `!inter.presetOmega` 这一半是 U58 补的（**回归修复**）：
+         * `customAction` 的 Ω 也算进 `maxObjectArity` 之后，从点集那头进来的那条路
+         * （点了集合的「被作用」⇒ `presetOmega` 已经指着它）在点完 G 之后会被拦下来
+         * 问"还要不要选 Ω" —— 可他**刚点的就是 Ω**，那条 hint 说的"可选：不选就…"
+         * 等于把他已经指过的东西又说成没指。**Ω 已经有了 ⇒ 没有"可选位"可等，直接进编辑器。**
+         * （⊕ 球那条路 `presetOmega` 是空的 ⇒ 照旧停下来让他从画布上点一个集合当 Ω。）
+         */
+        if (picked.length < maxObjectArity(pendOp) && !inter.presetOmega) {
+          setInter({ kind: 'pending', opId: pendOp.id, picked, presetOmega: inter.presetOmega })
           return
         }
         // 对象参数齐了：要编辑器的转交构建器，缺标量的走补参条，其余直接执行
@@ -836,8 +845,12 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       /**
-       * 「选够了就回车」：pending 里必需位已满、只剩可选对象位时（`image(f, ·)`），
-       * 回车 = 直接执行（`im f`）。**打字时不抢**——输入框里的回车归输入框。
+       * 「选够了就回车」：pending 里必需位已满、只剩可选对象位时，
+       * 回车 = **不含糊地往下一步走**。往哪走分两种（U58）：
+       *   · 要编辑器的（`customAction` 的 Ω / `map`）⇒ 进编辑器（Ω 留空，回落 |G|）；
+       *   · 不要编辑器的（`image(f, ·)`）⇒ 直接执行（`im f`）。
+       * 从前这里无条件 `runOp` —— 对 `customAction` 会撞上"至少要给一个生成元的像"，
+       * 用户以为这条 op 坏了。**打字时不抢**：输入框里的回车归输入框。
        */
       const t = e.target as HTMLElement | null
       const typing =
@@ -848,7 +861,16 @@ export default function App() {
           inter.picked.length < maxObjectArity(pendOp)
         ) {
           e.preventDefault()
-          runOp(pendOp, inter.picked)
+          if (needsEditor(pendOp)) {
+            setInter({
+              kind: 'editor',
+              opId: pendOp.id,
+              picked: inter.picked,
+              presetOmega: inter.presetOmega,
+            })
+          } else {
+            runOp(pendOp, inter.picked)
+          }
           return
         }
       }
@@ -897,10 +919,20 @@ export default function App() {
   const banner = (() => {
     if (!pendOp) return null
     if (inter.kind === 'pending') {
-      // 必需位已满、只剩**可选**对象位（`image(f, ·)` 的 H）：给一个"直接执行"的出口 ——
-      // 没有它，进到这一步的用户会以为卡住了（Esc 之外无路可走）。
+      // 必需位已满、只剩**可选**对象位：给一个出口 —— 没有它，进到这一步的用户
+      // 会以为卡住了（Esc 之外无路可走）。出口分两种（U58）：
+      //   · `image(f, ·)` 的 H ⇒ 直接执行（`im f`）；
+      //   · `customAction` 的 Ω ⇒ 进编辑器（那儿能填一个点数，也能改选集合）。
       const optionalSlot =
         inter.picked.length >= objectArity(pendOp) && inter.picked.length < maxObjectArity(pendOp)
+      const slotName = pendOp.params[inter.picked.length]?.name ?? ''
+      const toEditor = () =>
+        setInter({
+          kind: 'editor',
+          opId: pendOp.id,
+          picked: inter.picked,
+          presetOmega: inter.presetOmega,
+        })
       return (
         <div className="pending-bar">
           <span className="pending-hint">{pendingHint(pendOp, inter.picked.length)}</span>
@@ -914,9 +946,11 @@ export default function App() {
             <button
               className="pending-btn primary"
               title={pendOp.doc}
-              onClick={() => runOp(pendOp, inter.picked)}
+              onClick={() => (needsEditor(pendOp) ? toEditor() : runOp(pendOp, inter.picked))}
             >
-              不填 {pendOp.params[inter.picked.length]?.name}，直接执行
+              {needsEditor(pendOp)
+                ? `不选 ${slotName}，在编辑器里填`
+                : `不填 ${slotName}，直接执行`}
             </button>
           )}
           <button className="pending-btn" onClick={reset}>

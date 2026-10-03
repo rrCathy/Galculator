@@ -9,12 +9,13 @@ import {
   subgroupStructureSymbol,
   type Group,
 } from '@groupviz/core'
-import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalMap, type NormalizedSubgroup } from '../gal/value'
+import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalAction, type GalMap, type NormalizedSubgroup } from '../gal/value'
 // 作用的核（U52）：判据只有一份 —— 结论层那条 insight 用的是同一个函数
 import { actionKernel } from '../gal/customAction'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { STRUCTURAL_LABEL } from '../gal/derive'
 import { elementNotation } from '../gal/ops'
+import { labelWritable } from '../gal/pointSet'
 import { prettySymbol } from '../gal/pretty'
 import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/structure'
 // 「已知群」（U48）：结论表给的群只有符号 + 阶，没有元素表 —— 面板各节都得改口径
@@ -908,6 +909,97 @@ function MapCorrespondence({ map }: { map: GalMap }) {
   )
 }
 
+/**
+ * 0 起置换 → 循环记号，点用 `pt` 渲染。恒等回 `e`（与编辑器、`IDENTITY_TOKEN` 同款写法）。
+ *
+ * ⚠️ 与 `ActionBuilder.tsx` 里那个 `cycleNotation` 的差别只有一处：那边点号固定是
+ * `i + 1`（用户输入的就是点号），这边要能换成 Ω 的**标号**。两条路的循环写法
+ * （跳不动点、按最左元素开环）必须一致 —— 所以这里只把"点怎么写"参数化。
+ */
+function cycleNotationOf(perm: readonly number[] | undefined, pt: (i: number) => string): string {
+  if (!perm) return '--'
+  const n = perm.length
+  const seen = new Array<boolean>(n).fill(false)
+  const parts: string[] = []
+  for (let i = 0; i < n; i++) {
+    if (seen[i]) continue
+    seen[i] = true
+    if (perm[i] === i) continue
+    const cyc = [pt(i)]
+    let j = perm[i]
+    while (j !== i) {
+      seen[j] = true
+      cyc.push(pt(j))
+      j = perm[j]
+    }
+    parts.push(`(${cyc.join(' ')})`)
+  }
+  return parts.length > 0 ? parts.join('') : 'e'
+}
+
+/**
+ * 「元素送到哪里去了」—— **作用版**（U58）。
+ *
+ * 用户原话（2026-10-03，对着作用问的）：「群作用的信息显示了什么？**元素映射到哪去了**？」
+ *
+ * 这张表与映射那张（`MapCorrespondence`）回答同一个问题，只是答案的形式不同：
+ * 映射是"元素 → 另一个元素"，作用是"元素 → **Ω 上的一个置换**"。
+ * 数据一直都在 —— `GalAction.perms` 就是"G 的每个元素在 Ω 上的置换"，作用本来就是
+ * 由它定义的（`buildActionComputation` 交出来的就是这张表）。可从没人把它铺出来：
+ * 信息面板从前只给了 核 / |Ω| / 点列表，等于把"这个作用到底怎么动"藏起来了。
+ *
+ * 三个细节：
+ *   ① **点优先用标号写**：标号能直接进循环记号时（`labeledSet(a, b, c)`）就写 `(a b)`，
+ *      屏幕上写着 `a` 就看得见 `a`；标号是子群记号那种 LaTeX（`Syl(S_4,3)` 的成员）
+ *      时退回**点号**，并在表下注明"1..n 是点号，对应上面「点」那一行"——
+ *      把 `\langle 234\rangle` 塞进 `( )` 里没法读，硬塞反而更糟。
+ *   ② 恒等写 `e`。
+ *   ③ **对四个内置作用一样成立**：共轭作用的表就是"每个元素把每个元素送到哪"
+ *      （`Z(G)` 那几行的像是 `e`，一眼可见）。
+ */
+function ActionCorrespondence({ A }: { A: GalAction }) {
+  const labels = A.setLabels ?? A.omega?.members.map((m) => m.label) ?? []
+  // 标号能写进循环记号吗？（`labelWritable` = 无空白 / 括号 / 逗号；再去掉 LaTeX 记号）
+  const byLabel = labels.length === A.n && labels.every((l) => labelWritable(l) && !/\\/.test(l))
+  const pt = (i: number) => (byLabel ? labels[i] : String(i + 1))
+  const rows = A.group.elements
+  const CAP = 60
+  if (A.perms.size === 0) return null
+  return (
+    <div className="map-corr">
+      <div className="rel-head">元素送到哪里去</div>
+      <div className="etable-wrap">
+        <table className="etable map-corr-table">
+          <thead>
+            <tr>
+              <th>元素</th>
+              <th>像</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.slice(0, CAP).map((e) => (
+              <tr key={e.id} data-src={e.id}>
+                <td>
+                  <TexOrText text={e.label} />
+                </td>
+                <td>
+                  <TexOrText text={cycleNotationOf(A.perms.get(e.id), pt)} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!byLabel && A.n > 0 && (
+        <div className="insp-line dim">像里的 1..{A.n} 是点号，对应上面「点」那一行</div>
+      )}
+      {rows.length > CAP && (
+        <div className="insp-line dim">...共 {rows.length} 个元素（这里只列前 {CAP} 个）</div>
+      )}
+    </div>
+  )
+}
+
 function OtherTab({
   node,
   onExtract,
@@ -993,6 +1085,12 @@ function OtherTab({
               </span>
             </Row>
           )}
+          {/*
+            元素送到哪里去（U58）：作用的**结果**本身。
+            用户原话：「群作用的信息显示了什么？**元素映射到哪去了**？」
+            上面那几行只说"核多大 / Ω 有几个点"，回答不了"这个作用怎么动"。
+          */}
+          <ActionCorrespondence A={A} />
         </>
       )
     }

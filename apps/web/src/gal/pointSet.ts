@@ -26,6 +26,7 @@
  * （见 `planLabeledPointSet`）。这条与 U25「恒等必须写 `e`、留空不算」同源：
  * 静默默认会让用户看不出自己表达错了。
  */
+import { asciiSymbol } from './pretty'
 import type { GalSet } from './value'
 
 /**
@@ -203,10 +204,16 @@ export function labelCycleToNumeric(labels: readonly string[], cycle: string): C
   return { ok: true, numeric: out }
 }
 
-/** 点标号的一行提示（报错与编辑器状态行共用，措辞只有一份）。 */
+/**
+ * 点标号的一行提示（报错与编辑器状态行共用，措辞只有一份）。
+ *
+ * **纯文本面** —— 标号要过 `asciiSymbol`（U58）。子群集的标号是 LaTeX
+ * （`\langle 234\rangle`），从前原样贴进报错语里就是 LaTeX 泄漏；
+ * 现在是 `<234>`，与循环记号 `(234)` 一眼能对上。
+ */
 export function labelsHint(labels: readonly string[], max = 12): string {
   if (labels.length === 0) return '这个点集是空的'
-  const head = labels.slice(0, max).map((l, i) => `${i + 1} ${l}`)
+  const head = labels.slice(0, max).map((l, i) => `${i + 1} ${asciiSymbol(l)}`)
   const more = labels.length > max ? ` ...共 ${labels.length} 个` : ''
   return `点集有 ${labels.length} 个点：${head.join('，')}${more}`
 }
