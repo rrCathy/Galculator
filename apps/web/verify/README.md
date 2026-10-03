@@ -52,6 +52,7 @@ node verify/e2e/known-facts.mjs       # 已知结论层 + A_6 建得出 + U50 �
 node verify/e2e/semidirect-op.mjs     # 半直积 ⋊ 的三态分诊 + 连线菜单不撒谎（U51）
 node verify/e2e/custom-action.mjs     # 自定义作用：作用编辑器 + 核的披露 + G ↷ Ω（U52）
 node verify/e2e/small-group.mjs       # 小群表：GAP 编号取群 + 与手写群同一 id 空间（U55）
+node verify/e2e/catalog.mjs           # 目录面板：凭空造集合 / 挑群，点了落成一行定义（U56）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -450,3 +451,21 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
     走查侧本批新踩的两条（第 15 条的复现）：**op 结果的 `origin` 是 `derived` ⇒ 落「操作」抽屉**，
     而`DockPanel` 收起时 body 不渲染 ⇒ `clickObjectRow` 必须**先展开「对象」与「操作」两个抽屉**；
     画布点节点常被左上浮层（`proof-item` / `mrel`）挡住 ⇒ 命中失败时改走对象行（`pickAny`）。
+
+72. **"凭空造"是第三类操作：既不是单对象、也不是多对象**（2026-10-03，U56）。
+    `pointSet(n)` / `labeledSet(a, b, c)` / `smallGroup(n, i)` 的实参**全是标量**
+    （`int` / `element`），一个对象参数都不吃 ⇒ 三个手势入口**一个都捞不到**：
+    径向菜单筛 `opsFor([value])`、⊕ 球筛 `maxObjectArity > 1`、拖拽筛 `pairOps`。
+    它们的入口是左栏「目录」面板（`ui/CatalogDock.tsx`，与「对象 / 操作」同列）。
+    **教训（比这一条本身重要）**：U53 的 `point-set.mjs` 与 U55 的 `small-group.mjs`
+    **注释里自己写着"全不通"**，却整套用 `addLine` 直接往输入球灌字**绕过界面**
+    ⇒ **三条 op 零入口而回归全绿**。加"新造一类东西"的 op 时，要单独跑一遍
+    "**这个入口用户点得到吗**" —— 那是 `verify/e2e/catalog.mjs` 的活。
+    两个坑：① **JSX children 位置的裸 `/* ... */` 不是注释、会被当文本渲染出来**
+    （`tsc` 不报、语义层抓不到，**只有那一帧的截图能现形**）—— 必须写 `{/* ... */}`；
+    ② 从目录点出来的行也是 **op 调用**（`origin: 'derived'` ⇒ 落「操作」抽屉），
+    断言同样要**先展开两个抽屉**（同第 15 / 71 条）。
+    另注：**点目录 → 落成一行定义**走的是 `App.tsx#commitExpr`（从 `runOp` 抽出的共用段），
+    所以"点出来的"与"手敲的"是同一条路（`compose.ts`：执行层只认定义行）；
+    顺带核实过一条**既有行为** —— 自动命名跳过 `C`，因为 `C` 是二项式系数 op 的调用名
+    （`RESERVED_CALL_NAMES` 收全部 op 的调用名），别当 bug 修。

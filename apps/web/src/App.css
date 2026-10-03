@@ -497,6 +497,130 @@ body {
   font-weight: 500;
 }
 
+/* ── 「目录」面板（U56）：群手风琴 + 造集合 ─────────────── */
+
+/* 阶标题：可点折叠 —— 与 `.dock-subtitle` 同级（它就是面板内的分区标题） */
+.cat-order {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 2px 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-order:hover {
+  color: var(--text);
+}
+
+.cat-caret {
+  flex: none;
+  width: 8px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.cat-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* 缩进半格：层级靠位置说，不靠字号 */
+  padding: 1px 0 3px 10px;
+}
+
+/* 群条目：编号 + 结构。hover 才描边，静息时是一张安静的清单 */
+.cat-g {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cat-g:hover {
+  border-color: var(--blue);
+  background: var(--surface);
+}
+
+.cat-i {
+  flex: none;
+  min-width: 12px;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-align: right;
+}
+
+.cat-sym {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 造集合的两条：一个输入框 + 一颗按钮 */
+.cat-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.cat-input:focus {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.cat-go {
+  flex: none;
+  padding: 3px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 11.5px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cat-go:hover:not(:disabled) {
+  border-color: var(--purple);
+  color: var(--purple-text);
+}
+
+.cat-go:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+
 .count {
   padding: 0 5px;
   border-radius: 8px;

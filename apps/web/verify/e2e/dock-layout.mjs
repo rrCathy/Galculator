@@ -65,6 +65,8 @@ const readGeo = (page) =>
     return {
       obj: R(dock('对象')),
       op: R(dock('操作')),
+      // 「目录」（U56）也在这列里 —— 列高断言要把它算上
+      cat: R(dock('目录')),
       info: R(dock('信息')),
       col: R(document.querySelector('.dock-col')),
       colRight: R(document.querySelector('.dock-topleft'))?.right,
@@ -105,10 +107,17 @@ const readGeo = (page) =>
     `info.y=${g.info.y} op.y=${g.op.y}`,
   )
   ok('整组不越出视口右边', g.colRight <= g.vw, `right=${g.colRight} vw=${g.vw}`)
+  /*
+   * 列高 = 各项高度之和 + gap（即**没有多余空隙**）。
+   *
+   * ⚠️ U56 起这一列有**三个**抽屉（对象 / 操作 / 目录）—— 原来只算两栏，
+   * 多出来的「目录」胶囊就把这条读红了（col 343 = obj 78 + op 218 + cat 31 + 2 x 8）。
+   * 判据本身没变，变的只是成员个数。以后再加栏，记得同步这里。
+   */
   ok(
-    '「操作」单独一项时列高 = 两栏之和 + gap',
-    g.col.h === g.obj.h + g.op.h + 8,
-    `col.h=${g.col.h} obj.h=${g.obj.h} op.h=${g.op.h}`,
+    '「操作」单独一项时列高 = 三栏之和 + 2 个 gap',
+    g.col.h === g.obj.h + g.op.h + g.cat.h + 8 * 2,
+    `col.h=${g.col.h} obj.h=${g.obj.h} op.h=${g.op.h} cat.h=${g.cat.h}`,
   )
 
   // 收起「操作」\\to 列变矮，且对象纹丝不动（收展不动布局）

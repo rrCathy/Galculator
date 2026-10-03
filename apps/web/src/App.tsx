@@ -40,6 +40,7 @@ import type { CanvasNode } from './gal/types'
 import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
 import { OpDock } from './ui/OpDock'
+import { CatalogDock } from './ui/CatalogDock'
 import { InfoDock, type InfoTab } from './ui/InfoDock'
 import { NumericDock } from './ui/NumericDock'
 import type { GalValue, NormalizedSubgroup } from './gal/value'
@@ -132,9 +133,17 @@ export default function App() {
     missHint: string | null
   } | null>(null)
 
-  // 默认只展开「对象」：三个都摊开会把画布左上角整片盖住，连顶部那颗球都压上去了
+  // 默认只展开「对象」：都摊开会把画布左上角整片盖住，连顶部那颗球都压上去了
   const [openObjects, setOpenObjects] = useState(true)
   const [openOps, setOpenOps] = useState(false)
+  /**
+   * 「目录」面板（U56）：从库里挑群 / 凭空造集合。
+   *
+   * 它与「对象 / 操作」同列 —— 三者都是"让画布上多一个对象"的入口，
+   * 区别只在东西从哪来（手输 / 运算产出 / 库）。默认收起：它一展开就是
+   * 93 个群的长列表，常驻会把画布压掉。
+   */
+  const [openCatalog, setOpenCatalog] = useState(false)
   const [openInfo, setOpenInfo] = useState(false)
   const [openNumeric, setOpenNumeric] = useState(true)
   /**
@@ -320,7 +329,7 @@ export default function App() {
     const ro = new ResizeObserver(measure)
     els.forEach((el) => ro.observe(el))
     return () => ro.disconnect()
-  }, [openObjects, openOps, openInfo, openNumeric, lines])
+  }, [openObjects, openOps, openCatalog, openInfo, openNumeric, lines])
 
   const reset = useCallback(() => {
     setInter(IDLE)
@@ -526,17 +535,16 @@ export default function App() {
 
   /* ── 执行：把点选出来的操作编成一行定义，交给同一个求值器 ───────── */
 
-  const runOp = useCallback(
-    (op: OpDef, picked: string[], scalars: (string | null)[] = []) => {
-      const args: (string | null)[] = op.params.map((_, i) => scalars[i] ?? null)
-      picked.forEach((p, i) => {
-        args[i] = p
-      })
-      const expr = composeCall(op, args)
-      if (!expr) {
-        setNotice({ text: `${op.notation} 的参数还没凑齐` })
-        return
-      }
+  /**
+   * 求值 → 去重 → 命名 → 落成一行定义 → 选中（U56 从 `runOp` 里抽出来）。
+   *
+   * `runOp`（把手势编好的表达式交给它）与「目录」面板（`CatalogDock` 直接给
+   * 表达式）共用这一步 —— 在用户看来"点操作"与"点目录里的群"是同一件事：
+   * 都该长出一行**可读可改**的定义，而且同一个东西不重复添行
+   * （缺口 ⑯：判据看"同一次推导"）。
+   */
+  const commitExpr = useCallback(
+    (expr: string) => {
       const check = evalExpr(expr, byId)
       if (!check.ok) {
         setNotice({ text: check.error, hint: check.hint })
@@ -564,6 +572,22 @@ export default function App() {
       setNotice(null)
     },
     [byId, objects, usedNames],
+  )
+
+  const runOp = useCallback(
+    (op: OpDef, picked: string[], scalars: (string | null)[] = []) => {
+      const args: (string | null)[] = op.params.map((_, i) => scalars[i] ?? null)
+      picked.forEach((p, i) => {
+        args[i] = p
+      })
+      const expr = composeCall(op, args)
+      if (!expr) {
+        setNotice({ text: `${op.notation} 的参数还没凑齐` })
+        return
+      }
+      commitExpr(expr)
+    },
+    [commitExpr],
   )
 
   /**
@@ -1019,6 +1043,9 @@ export default function App() {
          * 「对象」与「操作」是**同一件事的两半**（输入的定义 / 运算的产物），
          * 用户来回复查的就是这两栏 —— 所以它们叠成一列（`dock-col`），
          * 「信息」另占一列（它是"看"的那一栏，跟上面两栏不是一类活）。
+         *
+         * 「目录」（U56）也进这一列：三者都是"让画布上多一个对象"的入口，
+         * 区别只在东西从哪来（手输 / 运算产出 / 库里挑）。
          */}
         <div className="dock-col">
           <ObjectDock
@@ -1038,6 +1065,12 @@ export default function App() {
             onSelect={selectFromDock}
             // 不上画布的对象（子群集）只有这条路能跑操作 —— 它们没有悬浮球
             onRunOp={(op, id) => startOp(op, id)}
+          />
+          <CatalogDock
+            open={openCatalog}
+            onToggle={() => setOpenCatalog((v) => !v)}
+            // 点出来的表达式走 `commitExpr` —— 与径向菜单 / 拖拽落行完全同一条路
+            onAdd={commitExpr}
           />
         </div>
         <InfoDock

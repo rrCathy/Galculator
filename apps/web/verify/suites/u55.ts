@@ -199,6 +199,32 @@ export function run(): void {
     eq('smallGroupCount(8)', smallGroupCount(8), 5)
     eq('smallGroupCount(32)（表外）', smallGroupCount(32), 0)
 
+    /*
+     * 分组的三条**不变量**（U56 目录面板直接吃这张表，排错了用户在界面上就挑不到）：
+     * 组间按阶升序 · 组内按 GAP 编号升序且不重号 · `count` 与条目数一致。
+     */
+    ok(
+      '组按阶升序',
+      cat.every((g, k) => k === 0 || cat[k - 1].order < g.order),
+      cat.map((g) => g.order).join(','),
+    )
+    ok(
+      '组内编号严格升序（含不重号）',
+      cat.every((g) => g.entries.every((e, k) => k === 0 || g.entries[k - 1].i < e.i)),
+      cat
+        .filter((g) => !g.entries.every((e, k) => k === 0 || g.entries[k - 1].i < e.i))
+        .map((g) => `${g.order}: ${g.entries.map((e) => e.i).join(',')}`)
+        .join(' | '),
+    )
+    ok(
+      '每组 count 与条目数一致',
+      cat.every((g) => g.count === g.entries.length),
+      cat
+        .filter((g) => g.count !== g.entries.length)
+        .map((g) => `${g.order}: ${g.count}/${g.entries.length}`)
+        .join(' '),
+    )
+
     // 93 条**合并成一条断言**（逐条 audit 会把回归台账冲成 93 行噪音，不划算）
     const catLeaks = cat.flatMap((g) => g.entries.flatMap((e) => leakChars(e.structure).map((c) => `${g.order}#${e.i}:${c}`)))
     ok('目录里 93 条结构串都没有键盘打不出的字符', catLeaks.length === 0, catLeaks.join(' '))
