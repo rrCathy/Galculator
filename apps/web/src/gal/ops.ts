@@ -64,6 +64,9 @@ import {
 // 点集（U53）：凭空造「任意阶集合」——`pointSet(5)` / `labeledSet(a, b, c)`。
 // 这是 U52 缺的那一层：没有它，「自定义作用」的 Ω 只能是内核硬造的 `{1..n}`。
 import { planCountPointSet, planLabeledPointSet } from './pointSet'
+// 小群表（U55）：把引擎内嵌的 1–31 阶 93 个群接成可导入的对象 —— `smallGroup(16, 3)`。
+// 编号是 GAP 的（1 起），与结论层打印的 `SmallGroup(阶, 编号)` 同一口径。
+import { planSmallGroup } from './smallGroups'
 // `Aut` 的搜索预算 + 建群路（2026-10-01 事故：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机；
 // 2026-10-02 U50 更正：贵的是 core 的线性搜索乘法，建群本身 96 阶只要 1ms）
 import {
@@ -1524,7 +1527,7 @@ export const OPS: OpDef[] = [
           `${nRef} 与 ${hRef} 的${kindWord}有 ${plan.options.length} 个本质不同的选法，各自给出不同构的群，它不是一个群`,
           `候选（按不变量区分）：${list}` +
             (plan.sampled ? `。候选较多，本地做了分层抽样，"${plan.options.length}"是下界` : '') +
-            `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群，走 semidirectProduct（内半直积）` +
+            `。要指定作用：改用 smallGroup(n, i) 从表里挑一个，或从同一个母群里挑两个子群，走 semidirectProduct（内半直积）` +
             (innerWhy ? `。${innerWhy}` : ''),
         )
       }
@@ -2328,6 +2331,54 @@ export const OPS: OpDef[] = [
         value: { type: 'set', set: plan.set },
         label: plan.set.label,
         sub: `|Omega| = ${plan.labels.length}, 点号 ${plan.labels.slice(0, 8).join(' ')}${plan.labels.length > 8 ? ' ...' : ''}`,
+      }
+    },
+  },
+  /*
+   * ── 小群表（U55）：**导入**引擎内嵌的 93 个群 ────────────────────────────
+   *
+   * 与 `pointSet` 同一档：不是 §3 的 10 个原语，而是「原子构造」机制下的实例。
+   *
+   * 为什么非得有这条 op（而不是靠记号解析自带的 `SmallGroup(n, i)`）：
+   *   ① 报错语**早就在承诺**它了（`evalDef` / `ops.ts` 都写着"改用 SmallGroup(n, i)"），
+   *      而承诺了就得有个能敲、能解释的地方 —— 这是兑现，不是新功能；
+   *   ② 记号解析那条路只会回一句 core 的通用话，而这里能说清"16 阶有 14 个群，
+   *      编号 1 到 14" —— 用户想试错时，边界得看得见。
+   */
+  {
+    id: 'smallGroup',
+    notation: 'smallGroup(n, i)',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '小群表：1 到 31 阶共 93 个群，按 GAP 编号取 ---- 表格里没有的群在这里也能拿到',
+    recipe: '原子构造（查内嵌小群表）',
+    impl: 'gal/smallGroups 的 planSmallGroup',
+    call: ['smallGroup'],
+    params: [
+      { name: 'n', type: 'int' },
+      { name: 'i', type: 'int' },
+    ],
+    arity: 2,
+    result: 'group',
+    run: (a) => {
+      const num = (x: OpArg | undefined): number => {
+        if (!x) return Number.NaN
+        if (x.kind === 'number') return x.num
+        return Number((x.text ?? '').trim())
+      }
+      const n = num(a[0])
+      const i = num(a[1])
+      const plan = planSmallGroup(n, i)
+      if (!plan.ok) return fail(plan.error, plan.hint)
+      const g = plan.group
+      return {
+        ok: true,
+        value: { type: 'group', group: g },
+        // 标签给**结构**（节点上看得懂），出处（`SmallGroup(n, i)`）放副行
+        label: prettySymbol(g.symbol),
+        // ⚠️ `sub` 是纯文本面（`ComposerOrb` 的普通 `<span>`）—— 必须过 `asciiSymbol`，
+        // 否则 `C_{2}\times C_{2}` 会把反斜杠摆在用户眼前（U54 立的规矩）
+        sub: `SmallGroup(${n}, ${i})，|G| = ${g.order}，${asciiSymbol(g.symbol)}`,
       }
     },
   },

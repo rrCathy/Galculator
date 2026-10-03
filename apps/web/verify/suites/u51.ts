@@ -313,9 +313,9 @@ export function run(): void {
     ok('选一个群时不列（还差一个群）', !opsFor([sel[0]]).map((o) => o.id).includes('semidirectProduct'))
 
     // 注册表自洽：每个 op 的参数表长度 == arity + optional（模块加载时已断言，这里再钉一次）
-    // （U52 又加了一条「自定义作用」→ 41；U53 再加「点集」「集合」→ 43；
+    // （U52 又加了一条「自定义作用」→ 41；U53 再加「点集」「集合」→ 43；U55 加「小群表」→ 44；
     //  这条断言的用意是"有人动过面就得有人知道"）
-    ok('注册表长度就是 43 条（U51 半直积 + U52 自定义作用 + U53 点集/集合）', OPS.length === 43, String(OPS.length))
+    ok('注册表长度就是 44 条（U51 半直积 + U52 自定义作用 + U53 点集/集合 + U55 小群表）', OPS.length === 44, String(OPS.length))
 
     /*
      * **预算预检**（菜单不撒谎）：`A_4 ⋊ S_4` 那条要枚举 160 组生成元像、
@@ -379,6 +379,6 @@ export function run(): void {
 
     // 报错语里必须有"出路"，不能只判死刑
     const f = failOf(['P = C_2^4 \\rtimes S_3'])
-    ok('多解时报错语给出路（SmallGroup 或从母群里挑子群）', f.hint.includes('SmallGroup') || f.hint.includes('内半直积'), f.hint)
+    ok('多解时报错语给出路（SmallGroup 或从母群里挑子群）', f.hint.includes('smallGroup') || f.hint.includes('内半直积'), f.hint)
   }
 }

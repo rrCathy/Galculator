@@ -771,7 +771,7 @@ function evalSemidirectNotation(text: string, canonical: string): EvalResult {
       hint:
         `候选（按不变量区分）：${list}` +
         (plan.sampled ? `（候选较多，本地做了分层抽样，"${plan.options.length}" 是下界）` : '') +
-        `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群，走 semidirectProduct（内半直积）`,
+        `。要指定作用：改用 smallGroup(n, i) 从表里挑一个，或从同一个母群里挑两个子群，走 semidirectProduct（内半直积）`,
     }
   }
   return { ok: false, error: `${text} 本地算不了`, hint: plan.why }

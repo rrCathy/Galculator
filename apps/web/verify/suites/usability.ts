@@ -105,7 +105,7 @@ export function run(): void {
     ok('`closure(G,r)` 有识别条', groupInsOf(['G = D_4', 'H = closure(G, r)']).labels.includes('识别'))
     const aut = groupInsOf(['G = S_4', 'A = Aut(G)'])
     ok('`Aut(S_4)` 说「同构」（Aut(S_4) \\cong S_4）', aut.labels.includes('同构'), aut.labels.join(','))
-    ok('Aut 的识别带 SmallGroup(24, 11)', aut.insights.some((i) => (i.detail ?? '').includes('SmallGroup(24, 11)')), aut.insights.map((i) => i.detail).join(' | '))
+    ok('Aut 的识别带 SmallGroup(24, 12)', aut.insights.some((i) => (i.detail ?? '').includes('SmallGroup(24, 12)')), aut.insights.map((i) => i.detail).join(' | '))
   }
 
   /* ══ ⑤ 名字：只有一种形态（缺口 ⑥，方向随形态统一而变）═══════ */

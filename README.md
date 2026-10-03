@@ -54,6 +54,7 @@ G = S_4
 | `Z = Z(G)` · `Cg = commutator(G)` · `N_G(G, H)` · `C_G(G, x)` · `Inn(G)` | 作用导出（子群） | 群节点（子群是**真群对象**，所以 `Z(Z(G))` 合法） |
 | `I = A \cap B` · `∪` · `\setminus` · `\cdot` | 集合运算 | 集合节点（∩ 与 · 若结果是子群，升级为群对象） |
 | `V = pointSet(5)` · `L = labeledSet(a, b, c)` · `S = asSet(Syl(G, 3))` | 原子构造（集合） | 集合节点（被作用的舞台 Ω —— 凭空造任意阶集合） |
+| `K = smallGroup(16, 3)`（编号 1 起，同 GAP） | 原子构造（小群表） | 群节点（内嵌 1–31 阶 **93 个群**的乘法表 —— 表里没有别的入口的群在这里也能拿到） |
 | `R = A \subseteq B` · `R = A \cong B` · `contains(H, G)` | 声明关系 | 画布上一条可点选的 `⊴` / `↪` / `≅` 边（正规性由工具判，不由你声明） |
 | `K = <J>` · `K = closure(G, r2)` | 迭代（闭包） | 群节点 |
 | `f = map(G, H, r -> e, s -> s)` | 原子构造（同态） | 实线箭头（不占节点，**可点选** → 环绕出 `ker` / `im`） |
@@ -63,7 +64,8 @@ G = S_4
 
 元素参数走 core 的 `resolveElement`：`id` / `label` / 循环记号都命中，所以 `ord(S_4, (123))` 合法。
 **操作名一律 ASCII 英文**（`directProduct` / `customAction` / `maximalSubgroups` …），菜单标签就是从名字派生的，所以「菜单上看到的」就是「敲得出来的」。
-全部 43 条操作在 [`apps/web/src/gal/ops.ts`](apps/web/src/gal/ops.ts) 的注册表里（每条声明机制、命名参数与类型，菜单由 `opsFor(selection)` 派生）。
+全部 44 条操作在 [`apps/web/src/gal/ops.ts`](apps/web/src/gal/ops.ts) 的注册表里（每条声明机制、命名参数与类型，菜单由 `opsFor(selection)` 派生）。
+`smallGroup(n, i)` 的编号是 **GAP 的标准编号**（`SmallGroup(8,3) ≅ D₈`、`SmallGroup(24,12) ≅ S₄`），与信息面板里那条「识别」印出的坐标是同一个口径 —— 照抄印出来的坐标就能拿回同一个群。
 
 ## 界面上有什么
 

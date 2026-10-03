@@ -51,6 +51,7 @@ node verify/e2e/info-split.mjs        # 信息面板的折叠分区 + 字号层�
 node verify/e2e/known-facts.mjs       # 已知结论层 + A_6 建得出 + U50 的 Aut/GL/S_7（U48/U49/U50）
 node verify/e2e/semidirect-op.mjs     # 半直积 ⋊ 的三态分诊 + 连线菜单不撒谎（U51）
 node verify/e2e/custom-action.mjs     # 自定义作用：作用编辑器 + 核的披露 + G ↷ Ω（U52）
+node verify/e2e/small-group.mjs       # 小群表：GAP 编号取群 + 与手写群同一 id 空间（U55）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -436,3 +437,16 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
     别照抄源码注释里的旧中文名（那些是**历史记录**）。
     另注：**数值区的标签是 `n = <用户敲的那串>`**（`gal/numeric.ts#computedNumbers`），
     所以断言要写 `includes('burnside')` 而不是 `includes('轨道数')`。
+
+71. **"内嵌小群表的第 i 个" ≠ `SmallGroup(n, i)`**（2026-10-03，U55）。
+    core 的 `SmallGroups/registry.ts#FACTORIES` 对 **1–15 阶是手写工厂序**（8 阶是
+    `C_8, C_4×C_2, C_2³, D_4, Q_8`），**16 阶起才照抄 GAP 的 `i-1`**。
+    于是同一台机器上有**两套下标**，而 `SmallGroup(8, 3)`（GAP）= `D_8`，
+    注册表里 `index 2`（0 起）却是 `C_2³` —— 差一个位就是**另一个群**。
+    走查/断言里凡是拿 `entry.index` 当坐标印给用户看的地方，都得过 `gal/smallGroups.ts#gapNumberOf`
+    校正；**判据用元素阶分布核对，不用符号相等**（`V_4` 与 `C_2²` 同群不同名、因子序也会变）。
+    同一条纪律的变体：**先量清"哪一步贵"再报"算不动"** —— `getAllSmallGroups()` 首调 311ms
+    （给 93 群跑预计算），之后 core 缓存；单车建群 0–3ms。别把一次性预热说成"慢"。
+    走查侧本批新踩的两条（第 15 条的复现）：**op 结果的 `origin` 是 `derived` ⇒ 落「操作」抽屉**，
+    而`DockPanel` 收起时 body 不渲染 ⇒ `clickObjectRow` 必须**先展开「对象」与「操作」两个抽屉**；
+    画布点节点常被左上浮层（`proof-item` / `mrel`）挡住 ⇒ 命中失败时改走对象行（`pickAny`）。

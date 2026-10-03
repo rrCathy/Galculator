@@ -12,6 +12,9 @@ import {
 } from '@groupviz/core'
 import { asciiSymbol, prettySymbol, superscript } from './pretty'
 import { groupFingerprint } from './identity'
+// 小群表（U55）：识别结果给的 `SmallGroup(阶, 编号)` 坐标必须与 op `smallGroup(n, i)`
+// **同一个口径**（GAP 的 1 起编号），否则印出来的坐标抄进去会拿到另一个群。
+import { gapNumberOf } from './smallGroups'
 // 作用的核（U52）：判据只有一份 —— 与「自定义作用」的披露共用同一个函数
 import { actionKernel } from './customAction'
 import { isKnownGroup, knownGroupInfo } from './known'
@@ -84,26 +87,42 @@ const ISO_COMMON_NAME: Record<string, string> = {
 /** 小群库里的条目（`SmallGroup(阶, 编号)`）——识别结果的"坐标"。 */
 const smallCache = new Map<string, { order: number; index: number } | null>()
 
+/**
+ * 识别结果 → 小群表的**坐标**（`SmallGroup(阶, 编号)`）。
+ *
+ * ⚠️ 编号必须过 `gapNumberOf`（U55）：引擎注册表的下标只在 16 阶以上等于 GAP 编号，
+ * 1–15 阶是它自己的手写顺序（8 阶的 `index 2` 是 `C_2³`，而 GAP 的 `(8,3)` 是 `D_8`）。
+ * 从前这里直接用 `entry.index`，于是对一个 `C_2³` 会印出 `SmallGroup(8, 2)` —— 用户
+ * 拿这个坐标去查文献、或者（U55 之后）敲进输入球，**拿到的是另一个群**。
+ *
+ * 现在印出来的坐标就是 `smallGroup(n, i)` 收的坐标，两边同一个口径。
+ */
 function smallGroupEntry(order: number, iso: string): { order: number; index: number } | null {
   const key = `${order}#${iso}`
   const hit = smallCache.get(key)
   if (hit !== undefined) return hit
-  let out: { order: number; index: number } | null = null
+  let found: { order: number; index: number } | null = null
   const direct = getSmallGroupBySymbol(iso)
-  if (direct) out = { order: direct.order, index: direct.index }
+  if (direct) found = { order: direct.order, index: direct.index }
   else {
     // 库里未必用同一个记号（实测 `C_{2}\times C_{2}` 直接查是 null）→ 按阶 + 归一符号找
     const want = canonSymbol(iso)
     for (const e of getAllSmallGroups()) {
       if (e.order !== order) continue
       if (canonSymbol(e.group.symbol) === want) {
-        out = { order: e.order, index: e.index }
+        found = { order: e.order, index: e.index }
         break
       }
     }
   }
-  smallCache.set(key, out)
-  return out
+  // 注册表下标 → GAP 编号（认不出就整个不出坐标，**不猜**）
+  let result: { order: number; index: number } | null = null
+  if (found) {
+    const gap = gapNumberOf(found.order, found.index)
+    if (gap !== null) result = { order: found.order, index: gap }
+  }
+  smallCache.set(key, result)
+  return result
 }
 
 /**
@@ -187,14 +206,15 @@ export interface Insight {
  *   - **手写但库里有惯用名**（`C_2 x C_2` → V₄）→ 说，把惯用名当答案。
  *   - **手写且再没别的可说**（`G = C_6`）→ 闭嘴（`C₆ = C₆` 是废话）。
  *
- * ## ⚠️ 手写的群不给 `SmallGroup(阶, 编号)`
+ * ## 坐标 `SmallGroup(阶, 编号)` 用 GAP 编号（U55 校正）
  *
- * 2026-10-01 实测：**这个库的小群目录不是 GAP 那套编号** —— 它 0 起、且顺序自定
- * （`getAllSmallGroups()` 里 8 阶是 `0=C₈ 1=C₄×C₂ 2=C₂³ 3=D₄ 4=Q₈`，
- * S₄ 落在 `24#11`，而 GAP 里 S₄ 是 `SmallGroup(24,12)`）。
- * 把这么一个**看着像标准 ID 的数**摆在手写的 `G = S₄` 旁边，会把人引到另一个群上去 ——
- * 所以手写的群只给**惯用名**。**构造物**（`ker f`）与**真同构**（`F ≅ C₂`）另说：
- * 那里的符号是副产品、"这是哪个群"本就未知，于是补 `SmallGroup(阶, 编号)` 当坐标。
+ * 2026-10-01 发现引擎注册表的下标**不是** GAP 编号（它 0 起、1–15 阶顺序自定），
+ * 于是当年只能选择"不给坐标"来躲开误导。U55 把编号校正到 GAP 口径
+ * （`gal/smallGroups.ts#gapNumberOf`，手算表 + 可执行核对），**并且把
+ * `smallGroup(n, i)` 做成了真的能敲的 op** —— 印出来的坐标就是能抄进输入球的坐标。
+ *
+ * 手写的群（`G = S₄`）依旧只给**惯用名**：它自己就有记号，再补一个库内坐标是噪音。
+ * 给坐标的是**没有名字的那些** —— **构造物**（`ker f`）与**真同构**（`F ≅ C₂`）。
  */
 export function groupInsights(group: Group, node?: GalObject): Insight[] {
   const out: Insight[] = []
@@ -230,10 +250,10 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
       /*
        * 附注给什么，看"符号是谁给的"：
        *   - **手写的群**（`G = S₄`）：符号就是用户自己敲的答案，只补**惯用名**
-       *     （`→ 4 元对称群`）。**不给库里编号** —— 见函数头那段注：这个库的编号
-       *     不是 GAP 那套，摆出来会把人引到别的群上。
+       *     （`→ 4 元对称群`）。它已经有记号了，再补库内坐标是噪音。
        *   - **构造物**（`ker f` / `closure(…)`）：符号是**副产品**，用户本来就不知道
-       *     "这是哪个群"，所以补**库内坐标** `SmallGroup(阶, 编号)`。
+       *     "这是哪个群"，所以补**坐标** `SmallGroup(阶, 编号)` —— U55 之后这个坐标
+       *     是**能抄进输入球**的（`smallGroup(24, 12)` 就是它）。
        *   - **真同构**（`!same`，如 `F ≅ C₂`）：同前，坐标是"它落在库里哪儿"。
        */
       const parts = same
@@ -259,6 +279,8 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
   // ② 阶的分解：计算器该顺手给出的数论信息
   if (group.order > 1) {
     const fs = factorizeOrder(group.order)
+    /** 素数阶 —— 只有**一个**素因子且**指数为 1**（`2^4` 不是素数阶）。 */
+    const isPrimeOrder = fs.length === 1 && fs[0].exponent === 1
     const tex = fs
       .map((f) => (f.exponent === 1 ? `${f.prime}` : `${f.prime}^{${f.exponent}}`))
       .join(' \\cdot ')
@@ -270,7 +292,17 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
       tone: 'note',
       tex: `\\lvert G\\rvert = ${group.order} = ${tex}`,
       text: `|G| = ${group.order} = ${text}`,
-      detail: fs.length > 1 ? '素因子分解（Sylow 分析的入口）' : '素数阶 -> 循环群',
+      /*
+       * ⚠️ **判据不是 `fs.length`**（U55 走查抓到的真账）：
+       * `factorizeOrder` 回的是**互异素因子**的表（`{prime, exponent}[]`），
+       * 于是 16 = 2^4 只有一条 ⇒ 从前那句退成「素数阶 -> 循环群」——
+       * 而 `(C_4 x C_2):C_2`（16 阶）**既不素也不循环**。素数阶要**真判素数**。
+       */
+      detail: isPrimeOrder
+        ? '素数阶 -> 循环群'
+        : fs.length === 1
+          ? '素数幂阶 -> 幂零（Sylow 分析的入口）'
+          : '素因子分解（Sylow 分析的入口）',
     })
   }
 

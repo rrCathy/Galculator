@@ -234,7 +234,7 @@ await typeExpr('C_2^4 : S_3')
   // 候选用不变量区分：同一个记号下各候选的符号长得一模一样，只有 |Z| / 阶分布能认
   ok('候选里给出可区分的不变量（|Z| = 4 / 2 / 1 都在）', ['|Z| = 4', '|Z| = 2', '|Z| = 1'].every((x) => s.text.includes(x)), s.text)
   ok('抽样结论标了"是下界"（不假装完整枚举）', s.text.includes('下界'), s.text)
-  ok('给出路（SmallGroup 或 从母群里挑子群）', s.text.includes('SmallGroup') || s.text.includes('内半直积'), s.text)
+  ok('给出路（SmallGroup 或 从母群里挑子群）', s.text.includes('smallGroup') || s.text.includes('内半直积'), s.text)
 }
 await page.screenshot({ path: '../../docs/assets/u51-semidirect-multi.png' })
 
