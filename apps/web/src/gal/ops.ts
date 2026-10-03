@@ -196,6 +196,24 @@ export function isScalarParam(t: ParamType): boolean {
   return SCALAR_PARAM_TYPES.includes(t)
 }
 
+/**
+ * 这一档**能从画布上拿一个对象**吗？（U57）
+ *
+ * 与 `isScalarParam` 只差**一档**：`omegaOrInt`（U53）同时是"能空着填一个点数"
+ * 与"能吃画布上的集合"—— 它是**半对象档**。
+ *
+ * ⊕ 球与拖拽连线问的正是"要不要从画布上点对象"，所以半对象档得算进来：
+ * 用户手上正好有 `G` 与一个点集时，「把这两样凑一起」就该列出 `customAction`。
+ * （从前这两种筛子只看 `isScalarParam`，于是 `customAction` 被漏掉 ——
+ * 用户 2026-10-03 那句「我创建了群和点集，然后怎么创建群作用？」正是撞在这上面。）
+ *
+ * 判据**只有这一份**：⊕ 球列出来的、拖拽列出来的、点下去能跑的，三处永远同一批
+ * —— 判据分家就是 U38/U51 反复立的「菜单不撒谎」被悄悄破坏。
+ */
+export function takesCanvasObject(t: ParamType): boolean {
+  return !isScalarParam(t) || t === 'omegaOrInt'
+}
+
 /** 命名参数——三个入口（径向菜单 / 工具条 / 操作表）共用的一张声明。 */
 export interface OpParam {
   name: string

@@ -641,7 +641,14 @@ export default function App() {
    */
   const dispatchOp = useCallback(
     (op: OpDef, picked: string[]) => {
-      if (needsEditor(op) && objectArity(op) === picked.length) {
+      /*
+       * 判据是 `>=` 而**不是** `===`（U57）：拖拽那条路会把 **Ω 也当对象点出来**
+       * （`customAction` 的 Ω 是 `omegaOrInt`，画布上的集合填得进），于是
+       * `picked.length` 可能大于 `objectArity(op)`（后者只数"纯对象位"，Ω 不算）。
+       * 用 `===` 的话「把 G 拖到点集上」会掉进补参条而不是编辑器 —— 那不是用户要的。
+       * 多出来的那一位不浪费：渲染时拿它当 `presetOmega`（见下面的 `presetOmegaOf`）。
+       */
+      if (needsEditor(op) && picked.length >= objectArity(op)) {
         setInter({ kind: 'editor', opId: op.id, picked })
         setOrbStage('closed')
         return
@@ -758,6 +765,33 @@ export default function App() {
     setInter({ kind: 'pending', opId: op.id, picked: [] })
   }, [])
 
+  /**
+   * 「被作用」（U57）：从**点集那一头**起一个作用。
+   *
+   * 这是用户心智里最顺的一条路 —— 他手上有个集合，"让某个群作用在它上面"。
+   * 从前点集合是一片死寂：球上的操作菜单恒空（没有任何一条 op 拿"集合"当第一参，
+   * `customAction` 的第一参是群 G），从 Ω 那侧看过去零线索。
+   *
+   * 所以这条路得由界面起头：先进 pending 让用户在地画布上点一个群，
+   * 同时**把这个集合记进 `presetOmega`** —— 一路带到编辑器填进 Ω 那一格
+   * （不记的话会在他点完群之后被 `|G|` 覆盖掉，等于把他指的东西弄丢）。
+   *
+   * ⚠️ 与群节点 / ⊕ 球 / 拖拽三条路落到**同一个 op**（`customAction`）、
+   * 同一份内核（`planCustomAction`）—— 四条入口，一个函数。
+   */
+  const startActionOnSet = useCallback((setId: string) => {
+    const op = opById('customAction')
+    if (!op) return
+    setOrbStage('closed')
+    setMultiOpen(false)
+    setConnectMenu(null)
+    setNotice({
+      text: '选一个群当作用群 G',
+      hint: '点画布上的群节点，接着在编辑器里填生成元的像',
+    })
+    setInter({ kind: 'pending', opId: op.id, picked: [], presetOmega: setId })
+  }, [])
+
   /* ── 画布点击 ──────────────────────────────────────── */
 
   const onNodeClick = useCallback(
@@ -775,7 +809,8 @@ export default function App() {
         }
         // 对象参数齐了：要编辑器的转交构建器，缺标量的走补参条，其余直接执行
         if (needsEditor(pendOp)) {
-          setInter({ kind: 'editor', opId: pendOp.id, picked })
+          // `presetOmega` 一路带过去（U57）：从点集那头进来的，Ω 已经指好了
+          setInter({ kind: 'editor', opId: pendOp.id, picked, presetOmega: inter.presetOmega })
           return
         }
         const slots = scalarSlots(pendOp)
@@ -955,6 +990,17 @@ export default function App() {
     return found.some((n) => !n) ? null : (found as CanvasNode[])
   })()
 
+  /**
+   * 编辑器里 Ω 那一格的预置值（U57）。两种来路，都躺在 `inter` 里：
+   *   · `presetOmega` —— 用户点了集合节点的「被作用」；
+   *   · `picked[1]`   —— 拖拽把 G 与那个集合**两位都选好了**（Ω 是第二位）。
+   * 都没有就不给（编辑器自己回落到 `|G|` 或 4）。只 `customAction` 用得上。
+   */
+  const presetOmegaOf = (() => {
+    if (inter.kind !== 'editor') return undefined
+    return inter.presetOmega ?? inter.picked[1]
+  })()
+
   return (
     <div className="app">
       <CanvasView
@@ -1035,6 +1081,8 @@ export default function App() {
           }}
           value={focusedObj.value}
           onRun={(op) => startOp(op, focusedObj.id)}
+          // 点集 / 元素集才有的那颗（U57）：让某个群作用在它上面
+          onActOn={() => startActionOnSet(focusedObj.id)}
         />
       )}
 
@@ -1142,6 +1190,7 @@ export default function App() {
             op={pendOp}
             src={editorNodes[0]}
             objects={objects}
+            presetOmega={presetOmegaOf}
             onSubmit={submitEditorLine}
             onCancel={reset}
           />

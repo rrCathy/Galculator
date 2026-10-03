@@ -27,7 +27,7 @@ import {
   singleOpsFor,
   type Interaction,
 } from '../../src/gal/interaction'
-import { OPS, opsFor, paramAccepts } from '../../src/gal/ops'
+import { OPS, opsFor, paramAccepts, takesCanvasObject } from '../../src/gal/ops'
 import { eq, ok, suite } from '../harness'
 
 /** 手边的一台小舞台：S₄ \\twoheadrightarrow S₃（带核）+ 手打的 A₄。 */
@@ -116,9 +116,17 @@ export function run(): void {
   {
     const multi = multiOps()
     ok('多对象操作非空', multi.length > 0, `${multi.length}`)
+    /*
+     * ⚠️ **U57 换判据**：从前这条写的是 `maxObjectArity(op) > 1`（"两个**纯**对象位"）。
+     * 它把 `customAction` 判出去了 —— 那条 op 的第二位 Ω 是 `omegaOrInt`
+     * （**半对象档**：既能吃画布上的集合，也能空着填个点数，U53）。
+     * 真问题是"要不要从画布上点对象"，所以判据换成 `takesCanvasObject`。
+     * 这一条与 `multiOps()` 的实现**共用同一个函数** —— 于是"菜单列出来的"
+     * 与"断言守着的"不可能分家。
+     */
     ok(
-      '每一条都至少要填两个对象参数位（含可选 —— `像 f(H)` 的可选位也算）',
-      multi.every((op) => maxObjectArity(op) > 1),
+      '每一条都至少能从画布上拿两个对象位（含可选位；`omegaOrInt` 那档半对象也算）',
+      multi.every((op) => op.params.filter((p) => takesCanvasObject(p.type)).length > 1),
       multi.map((o) => `${o.id}:${objectArity(o)}/${maxObjectArity(o)}`).join(','),
     )
     ok(
@@ -128,6 +136,19 @@ export function run(): void {
     ok(
       '单对象操作没混进来（中心 / 核 不该在这里）',
       !multi.some((o) => ['center', 'kernel', 'subgroups'].includes(o.id)),
+      multi.map((o) => o.id).join(','),
+    )
+
+    /*
+     * **U57 的正题**：`customAction` **必须**在 ⊕ 球里。
+     *
+     * 用户手上正好有 `G` 与一个点集时，"把这两样凑一起"是他唯一自然的手势 ——
+     * 而它从前偏偏不在（同族的 `conjOn` / `cosetAction` 都在里面），
+     * 于是「怎么创建群作用」这个问题在界面上没有答案。
+     */
+    ok(
+      'U57：`customAction` 在 ⊕ 球里（Ω 是半对象档 ⇒ 它也得算"要你点对象"的）',
+      multi.some((o) => o.id === 'customAction'),
       multi.map((o) => o.id).join(','),
     )
 
@@ -325,9 +346,26 @@ export function run(): void {
 
     // 两个子群集 / 数与群这种组合不该凑出"用得到两个"的操作
     eq('群 + 群 之外的组合不给空壳候选', ids(pairOps(A, A)).includes('contains'), false)
+    /*
+     * ⚠️ **U57 换判据**：从 `objectArity > 1` 换成 `takesCanvasObject`（前两位都得
+     * 能从画布上拿对象）。`A₄` 拖到 `S₄` 上时 `customAction` **确实**该在候选里 ——
+     * "让 `A₄` 作用在 `S₄` 那 24 个元素上"完全合法（`conjOn` 一直是这么列的）；
+     * 只是 Ω 在注册表里是半对象档，而 `objectArity` 只数纯对象位，
+     * 于是把它误判成"没用上第二个对象"。判据与 `pairOps` 的实现共用同一个函数。
+     */
     ok(
-      '每个候选都真的用到这两个对象（没有单对象操作混进来）',
-      ids(pairOps(A, G)).every((id) => objectArity(opOf(id)) > 1),
+      '每个候选都用得上这两个对象（前两位都得能从画布上拿对象）',
+      ids(pairOps(A, G)).every((id) => {
+        const op = opOf(id)
+        return (
+          op.params.length >= 2 && op.params.slice(0, 2).every((p) => takesCanvasObject(p.type))
+        )
+      }),
+      ag.join(','),
+    )
+    ok(
+      'U57：`A_4` 拖到 `S_4` 上列得出 `customAction`',
+      ids(pairOps(A, G)).includes('customAction'),
       ag.join(','),
     )
   }

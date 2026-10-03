@@ -53,6 +53,7 @@ node verify/e2e/semidirect-op.mjs     # 半直积 ⋊ 的三态分诊 + 连线�
 node verify/e2e/custom-action.mjs     # 自定义作用：作用编辑器 + 核的披露 + G ↷ Ω（U52）
 node verify/e2e/small-group.mjs       # 小群表：GAP 编号取群 + 与手写群同一 id 空间（U55）
 node verify/e2e/catalog.mjs           # 目录面板：凭空造集合 / 挑群，点了落成一行定义（U56）
+node verify/e2e/action-entries.mjs    # 群作用的四条入口：⊕ 球 / 点集「被作用」/ 拖拽（U57）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -469,3 +470,19 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
     所以"点出来的"与"手敲的"是同一条路（`compose.ts`：执行层只认定义行）；
     顺带核实过一条**既有行为** —— 自动命名跳过 `C`，因为 `C` 是二项式系数 op 的调用名
     （`RESERVED_CALL_NAMES` 收全部 op 的调用名），别当 bug 修。
+
+73. **筛子判据散成三份时，加一个新参数档就得挨个问"这三个筛子各自会怎么读它"**（2026-10-03，U57）。
+    `omegaOrInt`（U53 加的**半对象档**：既能吃画布上的集合、也能空着填点数）一露头就被
+    **两个筛子同时判成了标量**：`multiOps()` 用 `maxObjectArity > 1`（`objectArity` **只数纯对象位**）
+    ⇒ `customAction` 数到 1、判出去；`pairOps` 遇到 `isScalarParam` 的位直接 `continue` ⇒ 候选恒空。
+    于是用户造完「群 + 点集」后**找不到造作用的路**（"然后呢？…到底在做什么……"）。
+    **修法：判据只写一份** —— `ops.ts#takesCanvasObject(t) = !isScalarParam(t) || t === 'omegaOrInt'`，
+    `multiOps` / `pairOps` / 语义层断言**三处共用**（差集恰好是 `omegaOrInt` 那一档，
+    `suites/u57.ts` 第 ① 节就守着这一行）。
+    另外两条同批的经验：① **`dispatchOp` 等编辑器时的判据是"纯对象位"** ⇒ 加了半对象位的 op
+    要写成 `picked.length >= objectArity(op)`，卡在等号上会**永远等不到编辑器**；
+    ② **点集节点的环上多一颗「被作用」**（`ObjectOrb` 的 `act` 项）—— 它列不出 `customAction`
+    （那条 op 第一参是群），所以由 UI 起头、落到同一个 op。
+    两个坑：**`.orb-sat` 是球的兄弟节点不是子节点**（写 `.orb .orb-sat` 恒空），
+    且环要**先点球**才铺开 —— 这个错让探针一度得到"点集菜单是空的"的假结论；
+    **≤ 3 条单对象操作时没有「操作」卫星**（是直接铺出来的，U3.1 的老规矩）。

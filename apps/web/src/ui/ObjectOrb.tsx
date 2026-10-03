@@ -14,6 +14,8 @@ interface RingItem {
   tab?: InfoTab
   /** 有 opId = 直接执行这个单对象操作 */
   opId?: string
+  /** 有 act = "被作用"（U57：起一个 `customAction`，把这个集合当 Ω） */
+  act?: boolean
   title: string
 }
 
@@ -43,10 +45,30 @@ function ringItems(value: GalValue, singleOps: OpDef[]): RingItem[] {
     tab: 'basic',
     title: '看这个对象的信息',
   }
-  if (singleOps.length === 0) return [info]
+  /*
+   * **能被作用的集合**（U57）。
+   *
+   * 点集 / 元素集从前是个**死角**：光点它，球上的操作菜单恒空 —— 因为没有任何一条 op
+   * 拿"集合"当第一参（`customAction` 的第一参是群 G）。从 Ω 那头看过去零线索。
+   * 用户原话（2026-10-03）：「我创建了群和点集，然后怎么创建群作用？」。
+   *
+   * 这一颗就是那条路的入口：起一个 `customAction`，并把这个集合**当成 Ω**
+   * （App 的 `startActionOnSet`）—— 于是"点集合 → 选个群 → 填生成元的像"成立。
+   */
+  const act: RingItem | null =
+    value.type === 'set' || value.type === 'elements'
+      ? {
+          key: 'actOn',
+          label: '被作用',
+          act: true,
+          title: '让某个群作用在这个集合上（选一个群 G，Ω 就是这个集合）',
+        }
+      : null
+  const head: RingItem[] = act ? [info, act] : [info]
+  if (singleOps.length === 0) return head
   if (singleOps.length <= 3) {
     return [
-      info,
+      ...head,
       ...singleOps.map((op) => ({
         key: op.id,
         label: op.call?.[0] ?? menuLabel(op),
@@ -55,7 +77,7 @@ function ringItems(value: GalValue, singleOps: OpDef[]): RingItem[] {
       })),
     ]
   }
-  return [info, { key: 'ops', label: '操作', title: '只用一个对象就能做的操作' }]
+  return [...head, { key: 'ops', label: '操作', title: '只用一个对象就能做的操作' }]
 }
 
 /** 环绕半径；节点大时按钮就推远一点 */
@@ -87,6 +109,7 @@ export function ObjectOrb({
   onToggleOps,
   onInspect,
   onRun,
+  onActOn,
 }: {
   anchor: NodeAnchor
   stage: OrbStage
@@ -100,6 +123,8 @@ export function ObjectOrb({
   onToggleOps: () => void
   onInspect: (tab: InfoTab) => void
   onRun: (op: OpDef) => void
+  /** 「被作用」（U57）：把这个集合当 Ω 起一个作用 —— 只对 set / elements 出现 */
+  onActOn?: () => void
 }) {
   const clampX = (v: number) => Math.min(Math.max(v, 52), containerW - 52)
   const clampY = (v: number) => Math.min(Math.max(v, 20), containerH - 20)
@@ -142,6 +167,10 @@ export function ObjectOrb({
               title={item.title}
               onClick={(e) => {
                 e.stopPropagation()
+                if (item.act) {
+                  onActOn?.()
+                  return
+                }
                 if (item.opId) {
                   const op = singleOps.find((o) => o.id === item.opId)
                   if (op) onRun(op)

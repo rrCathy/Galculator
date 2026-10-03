@@ -3,6 +3,7 @@ import {
   OPS,
   opsFor,
   paramAccepts,
+  takesCanvasObject,
   type OpDef,
   type ParamType,
 } from './ops'
@@ -40,12 +41,18 @@ export type Interaction =
   | { kind: 'idle' }
   | { kind: 'selected'; target: string }
   | { kind: 'menu'; target: string }
-  /** 等对象参数：点画布上的节点往下凑 */
-  | { kind: 'pending'; opId: string; picked: string[] }
+  /**
+   * 等对象参数：点画布上的节点往下凑。
+   *
+   * `presetOmega`（U57）：用户**已经指明了 Ω**（点集合节点的「被作用」），
+   * 这个 id 一路带到编辑器，填进 Ω 那一格 —— 不这么做的话，他点过的那个集合
+   * 会在编辑器里被 `|G|` 覆盖掉，等于把他指的东西弄丢。只 `customAction` 用得上。
+   */
+  | { kind: 'pending'; opId: string; picked: string[]; presetOmega?: string }
   /** 等标量参数：顶部补参条，回车执行 */
   | { kind: 'fill'; opId: string; picked: string[]; scalars: (string | null)[] }
   /** 交给编辑器（映射构建器）：对象参数已齐，还要用户填生成元的像 */
-  | { kind: 'editor'; opId: string; picked: string[] }
+  | { kind: 'editor'; opId: string; picked: string[]; presetOmega?: string }
 
 export const IDLE: Interaction = { kind: 'idle' }
 
@@ -96,12 +103,21 @@ export function singleOpsFor(value: GalValue): OpDef[] {
  * 而"多对象操作"恰恰是"参数还没填满"的那些，用 `opsFor` 筛必然为空。
  * （U2 就是栽在这儿：菜单里的「造」类恒空。）
  *
- * 判据用 `maxObjectArity`（**含可选对象参数**）：`image(f, H)` 必需位只有 1 个
- * （f），但第二位 H 是"可以再点一个对象"的 —— 它得在这里出现，
+ * 判据用 `takesCanvasObject`（**含可选对象位、也含 `omegaOrInt` 那一档半对象**）：
+ * `image(f, H)` 必需位只有 1 个（f），但第二位 H 是"可以再点一个对象"的 —— 它得在这里出现，
  * 否则 `f(H)` 除了拖拽 / 打字就没有入口（用户实测的正是这条）。
+ *
+ * ⚠️ **U57 改判据**：从前这里是 `maxObjectArity(op) > 1`（"两个**纯**对象位"）。
+ * 它漏掉了 `customAction` —— 那条 op 的第二位 Ω 是 `omegaOrInt`（既能吃画布上的集合，
+ * 也能空着填个点数，U53），于是**第二种筛子看不见它**。实测后果：用户手上正好有
+ * `G` 与一个点集、点开这颗球想「把两样凑一起」，菜单里 15 条全列出来偏偏没有它
+ * （同族的 `conjOn` / `cosetAction` 都在），只能去群节点的球里找。
+ * 换成 `takesCanvasObject` 之后，"要不要从画布上点对象"这个**真问题**才问对了。
  */
 export function multiOps(): OpDef[] {
-  return OPS.filter((op) => maxObjectArity(op) > 1)
+  return OPS.filter(
+    (op) => op.params.filter((p) => takesCanvasObject(p.type)).length > 1,
+  )
 }
 
 /**
@@ -236,8 +252,14 @@ export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
   for (const op of OPS) {
     if (op.params.length < 2) continue
     const [p0, p1] = op.params
-    // 前两位都得是**画布上选得出来的对象**参数：标量（元素记号 / 素数 / 整数）拖不出来
-    if (isScalarParam(p0.type) || isScalarParam(p1.type)) continue
+    /*
+     * 前两位都得是**画布上选得出来的对象**参数：标量（元素记号 / 素数 / 整数）拖不出来。
+     *
+     * U57：判据走 `takesCanvasObject` 而**不是** `isScalarParam` —— `omegaOrInt`
+     * 是半对象档（能吃画布上的集合），漏掉它的话「把 G 拖到点集上」列不出
+     * `customAction`（与 ⊕ 球同一处病根，共用同一份判据）。
+     */
+    if (!takesCanvasObject(p0.type) || !takesCanvasObject(p1.type)) continue
     // 第三位往后：可选的留着，标量的交给补参条，其余（还得再选对象的）这条手势凑不齐
     const restOk = op.params.slice(2).every((p) => p.optional || isScalarParam(p.type))
     if (!restOk) continue

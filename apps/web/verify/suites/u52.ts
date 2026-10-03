@@ -407,10 +407,20 @@ export function run(): void {
     eq('result 是 action', op?.result, 'action')
     eq('arity = 2（群 + 点数）', op?.arity, 2)
     eq('variadic 声明了像对', op?.variadic?.type, 'genImage')
-    // 只需要一个对象参数 ⇒ 不出现在 ⊕ 球（那是"缺第二个对象"的清单）
+    /*
+     * ⚠️ **U57 翻案**。U52 时这里写的是「不进 multiOps（它只要一个对象）」——
+     * 那时把 ⊕ 球理解成"缺第二个**纯**对象"的清单。
+     *
+     * 用户 2026-10-03 的原话（「我创建了群和点集，然后怎么创建群作用？」）证伪了那条理解：
+     * 他手上正好有 `G` 与一个点集，点开 ⊕ 球想"把两样凑一起"，15 条全列出来偏偏
+     * 没有 `customAction`（同族的 `conjOn` / `cosetAction` 都在），于是这条最自然的路断了。
+     *
+     * 真问题是"**要不要从画布上点对象**"，而 Ω 是 `omegaOrInt`（半对象档，U53）⇒ 要。
+     * 判据换成了 `takesCanvasObject`（见 `interaction.ts` 的 `multiOps`）。
+     */
     ok(
-      '不进 multiOps（它只要一个对象）',
-      !multiOps().some((o) => o.id === 'customAction'),
+      'U57 翻案：**进** multiOps（Ω 是半对象档 —— 用户手上 G + 点集时这条路必须列得出来）',
+      multiOps().some((o) => o.id === 'customAction'),
     )
     eq('菜单标签 = notation 前缀（U54 起不再靠手工表）', op ? menuLabel(op) : '', 'customAction')
     eq('模板给的是能照抄的一行', op ? opTemplate(op) : '', 'customAction(G, 4, a -> (1 2 3 4))')

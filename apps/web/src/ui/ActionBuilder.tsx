@@ -39,6 +39,15 @@ interface ActionBuilderProps {
   op: OpDef
   src: CanvasNode
   objects: GalObject[]
+  /**
+   * Ω 的**预置值**（U57）：把这一格直接填成某个表达式（通常是画布上一个集合的名字）。
+   *
+   * 两种来路，语义都是"用户已经指明了 Ω"：
+   *   · 点集合节点 → 球 → 「被作用」（`startActionOnSet`）；
+   *   · 把 G 拖到那个集合上（`dispatchPairOp` 把两位都选好了，Ω 是第二位）。
+   * 都没有时留空 —— 那时才回落到"|G| ≤ 12 就取 |G|，否则 4"的老初值。
+   */
+  presetOmega?: string
   onSubmit: (line: string) => void
   onCancel: () => void
 }
@@ -137,16 +146,29 @@ function sampleCycle(labels: readonly string[]): string {
   return IDENTITY_TOKEN
 }
 
-function ActionBuilderEditor({ op, src, objects, onSubmit, onCancel }: ActionBuilderProps) {
+function ActionBuilderEditor({
+  op,
+  src,
+  objects,
+  presetOmega,
+  onSubmit,
+  onCancel,
+}: ActionBuilderProps) {
   const G = src.value.type === 'group' ? src.value.group : null
   const gens = useMemo(() => (G ? getGeneratorElements(G) : []), [G])
 
   /*
-   * Ω 的初值：小群按**正则作用**（G 作用在自己的 |G| 个元素上）起步最自然，
-   * 那也正是「G ↷ G」这个记号最常指的东西；大群给小舞台（4 个点），
-   * 免得一打开就顶到预算线（|G| x n）。
+   * Ω 的初值。**三种来路，优先级从上到下**：
+   *
+   *   ① `presetOmega`（U57）—— 用户已经指明了 Ω（点了集合节点的「被作用」，
+   *      或把 G 拖到了那个集合上）。这时**不该**拿 |G| 去覆盖他指的东西。
+   *   ② |G| ≤ 12 —— 小群按**正则作用**（G 作用在自己的 |G| 个元素上）起步最自然，
+   *      那也正是「G ↷ G」这个记号最常指的东西。
+   *   ③ 4 —— 大群给小舞台，免得一打开就顶到预算线（|G| x n）。
    */
-  const [omegaDraft, setOmegaDraft] = useState(() => (G && G.order <= 12 ? String(G.order) : '4'))
+  const [omegaDraft, setOmegaDraft] = useState(
+    () => presetOmega ?? (G && G.order <= 12 ? String(G.order) : '4'),
+  )
   const [images, setImages] = useState<Record<string, string>>({})
   const [nameDraft, setNameDraft] = useState('')
   const [autoNote, setAutoNote] = useState<string | null>(null)
