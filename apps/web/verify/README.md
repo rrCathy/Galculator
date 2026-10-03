@@ -54,6 +54,19 @@ node verify/e2e/custom-action.mjs     # 自定义作用：作用编辑器 + 核�
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
+**数条数 / 批次收尾用台账脚本**（`verify:e2e` 是 `&&` 链，被接上 `| tail` 时**退出码是 tail 的**、也不报条数）：
+
+```bash
+cd apps/web
+bash verify/e2e-ledger.sh                  # = npm run verify:e2e:ledger；自动枚举 verify/e2e/*.mjs
+bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
+```
+
+它做三件 `verify:e2e` 做不到的事：**先 ping 5273**（dev server 会在两次调用之间静默死掉）·
+**逐套报条数 + 加总**（"宁可记少不可记虚"靠它）· **任何一套红就退出码 1**（`&&` 链只反馈最后一条）。
+⚠️ 它必须是 **shell**：node 里 spawn 的孙进程会 `EBUSY`（REFERENCE §8，会得到"全 0 PASS"的假象）。
+⚠️ 需要 `bash` 在 PATH 上（Windows 上是 Git Bash）。
+
 - **走查脚本要起跑的模板，点的是卡片上的 `.proof-start`**，不是卡片本身
   （U15 起卡片带参数控件，点卡片不再等于起跑；卡片上有 `data-tpl="<模板 id>"` 可定位）。
 - **抽屉的类名不看顺序看标题**：左上一列里 `.dock` 有多个（对象 / 操作 / 信息），
