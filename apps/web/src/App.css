@@ -2609,3 +2609,46 @@ body {
   font-family: var(--mono);
   font-size: 12px;
 }
+
+/*
+ * Ω 那一排「画布上的集合」一键按钮（U53）。
+ * 与 `.mb-row` 的「一键起点」分开排：那排是**填表单**，这排是**挑对象**。
+ * `flex-wrap` 是必需的 —— `底集(Syl(S_4, 3))` 这类名字一个就顶半行。
+ */
+.ab-sets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ab-sets-label {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.ab-set-chip {
+  padding: 3px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ab-set-chip:hover {
+  border-color: var(--blue);
+  color: var(--text);
+}
+
+.ab-set-chip.on {
+  border-color: var(--blue);
+  color: var(--blue);
+  background: var(--blue-soft, var(--surface));
+}

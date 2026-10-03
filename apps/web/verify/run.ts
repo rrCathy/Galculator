@@ -29,6 +29,7 @@ import { run as budget } from './suites/budget'
 import { run as u50 } from './suites/u50'
 import { run as u51 } from './suites/u51'
 import { run as u52 } from './suites/u52'
+import { run as u53 } from './suites/u53'
 
 diagram()
 firstIso()
@@ -50,6 +51,7 @@ budget()
 u50()
 u51()
 u52()
+u53()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1

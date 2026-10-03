@@ -21,6 +21,21 @@
  * | 传越界下标 | 老实回 `ok:false` + `violation{g,a,x}`（不静默算错）|
  * | 非忠实作用 | 照算 —— 核非平凡是合法的作用，忠实与否是**要披露的事实**，不是错误 |
  *
+ * ## Ω 从哪来（U53 补齐）
+ *
+ * U52 时 Ω 只能是内核硬造的 `{1..n}`（第二个参数是个数字），于是
+ * 「让 G 作用在**你自己的**集合上」表达不出来。U53 起第二参收 **`int | 集合`**：
+ *
+ * | 写法 | Ω |
+ * |---|---|
+ * | `自定义作用(C_4, 4, a -> (1 2 3 4))` | 4 个抽象点，点号 `1..4`（`group: null`）|
+ * | `自定义作用(S_4, 点集(5), s12 -> (1 2))` | 同上，点数由点集给 |
+ * | `自定义作用(S_4, 集合(a, b, c), s12 -> (a b))` | 标号由点集给，**记号里就用标号写** |
+ * | `自定义作用(S_4, 底集(Syl(S_4, 3)), s12 -> (1 2 3 4))` | 现成的集合：标号是子群记号（写不进循环记号）⇒ 数字按**位置**读 |
+ *
+ * 点记号 → 位置号的解析在 `pointSet.ts#labelCycleToNumeric`（**标签优先、位置兜底**），
+ * 语法仍然由 core 的 `parseCycleNotation` 负责 —— 不另写一份循环记号解析器。
+ *
  * ## 三条纪律
  *
  * ① **不许静默补**。core 的 `buildActionComputation(G, {kind:'custom', setSize:n})`
@@ -47,7 +62,13 @@ import {
 } from '@groupviz/core'
 // 记号 → 纯文本面可用的形态：报错语会进状态行与信息面板，别把 `C_{4}` 原样贴出去
 import { prettySymbol } from './pretty'
-import type { GalAction } from './value'
+import {
+  POINT_SET_MAX,
+  labelCycleToNumeric,
+  labelsHint,
+  planCountPointSet,
+} from './pointSet'
+import type { GalAction, GalSet, GalValue } from './value'
 
 /** 记号 → 纯文本面形态。本模块所有给用户看的群名都走它。 */
 const nm = (g: Group): string => prettySymbol(g.symbol)
@@ -55,12 +76,13 @@ const nm = (g: Group): string => prettySymbol(g.symbol)
 // ── 预算 ───────────────────────────────────────────────────────────
 
 /**
- * Ω 的点数上限。
+ * Ω 的点数上限 —— **与 `pointSet.ts` 的 `POINT_SET_MAX` 是同一个数**
+ * （手写循环记号的边界，不是算力的边界）。
  *
- * 不是"算不动"（`extendAndVerifyPerms` 对 n 几乎免费），而是**手写记号**的边界：
- * 循环记号里点号一个个敲，400 个点已经没人真去敲了。超线大概率是打错了 `n`。
+ * U53 起这个数归 `pointSet.ts` 所有（`点集(n)` 与这里共用一个上限），
+ * 这里只是沿用原来的名字，免得下游（`ActionBuilder` / 回归套件）改引用。
  */
-export const CUSTOM_ACTION_POINT_CAP = 400
+export const CUSTOM_ACTION_POINT_CAP = POINT_SET_MAX
 
 /**
  * `|G| x n` 上限（置换表的总格子数）—— 真正决定成本的那一项。
@@ -204,6 +226,20 @@ export interface GenImageDraft {
   cycle: string
 }
 
+/**
+ * Ω 的两种给法（U53）。
+ *
+ * 从前只有 `count` —— 也就是"Ω 只能是内核硬造的 `{1..n}`"，于是
+ * "让 G 作用在**你自己的**集合上"表达不出来（`自定义作用(S_4, 底集(Syl(S_4,3)), …)`
+ * 报「作用点集的基数 n 必须是正整数」）。现在多一条：直接给一个集合对象。
+ *
+ * 纯 `number` 也被接受（= `count`）—— 那是 U52 的写法，契约不改。
+ */
+export type OmegaSpec =
+  | { kind: 'count'; n: number }
+  /** 一个现成的集合（`点集(5)` / `集合(a,b,c)` / `底集(Syl_p(G))` …） */
+  | { kind: 'set'; set: GalSet; ref?: string }
+
 export interface CustomActionPlanOk {
   ok: true
   action: GalAction
@@ -215,6 +251,8 @@ export interface CustomActionPlanOk {
   orbitSizes: number[]
   /** 逐生成元的像（编辑器回显 / 结果说明用） */
   images: { genText: string; cycle: string; order: number }[]
+  /** Ω 的点标号（编辑器状态行与结论层要说清"作用在哪些点上"） */
+  labels: string[]
 }
 
 export interface CustomActionPlanBlocked {
@@ -232,31 +270,91 @@ export interface CustomActionPlanBlocked {
 
 export type CustomActionPlan = CustomActionPlanOk | CustomActionPlanBlocked
 
-/** 组 `GalAction` 的 Ω 与点标签 —— Ω 在画布上是**独立节点**（`omegaBase: 'object'`）。 */
-function omegaOf(G: Group, n: number) {
-  // 点标签就是 `1..n`：与用户写的循环记号**同一套点号**（都是 1 起），
-  // 于是 `轨道(α, 3)` 里的 `3` 与 `(1 2 3 4)` 里的 `3` 指的是同一个点。
-  const labels = Array.from({ length: n }, (_, i) => String(i + 1))
-  return {
-    setLabels: labels,
-    omega: { group: G, label: '作用点集', members: labels.map((l) => ({ label: l })) },
+/**
+ * 一个**值**能不能当 Ω；能就给出 `OmegaSpec`。
+ *
+ * **op 与作用编辑器共用这一条判据**（U53）：手打的 `自定义作用(G, 底集(Syl_p(G)), …)`
+ * 与编辑器里填 `底集(Syl_p(G))` 必须对同一个东西给出同一个答案。
+ * 两处各写一份筛选，迟早出现"编辑器收而 op 不收"那种最难查的错。
+ *
+ * 收三种：
+ *   · `set` —— `点集(5)` / `集合(a,b,c)` / `底集(Syl_p(G))` 的产物
+ *   · `elements` —— 元素集（`中心(S_4)` / `轨道(A,1)`）
+ *   · `group` —— 群本身（当"它的底集"读，与 `共轭作用在` 的 Ω 同理）
+ */
+export function omegaSpecOfValue(v: GalValue, name: string, ref?: string): OmegaSpec | null {
+  if (v.type === 'set') return { kind: 'set', set: { ...v.set, from: ref }, ref }
+  if (v.type === 'elements') {
+    return {
+      kind: 'set',
+      set: {
+        group: v.group,
+        label: `底集(${name})`,
+        members: v.elements.map((e) => ({ label: e.label })),
+        from: ref,
+      },
+      ref,
+    }
   }
+  if (v.type === 'group') {
+    return {
+      kind: 'set',
+      set: {
+        group: v.group,
+        label: `底集(${name})`,
+        members: v.group.elements.map((e) => ({ label: e.label })),
+        from: ref,
+      },
+      ref,
+    }
+  }
+  return null
 }
 
 /**
- * 分诊（内核）：`G` + Ω 的基数 `n` + 各生成元的像 → 一个 `GalAction`，或者一条说清卡在哪的报错。
+ * Ω 定下来：点数、点标号、以及那个 `GalSet` 本体。
+ *
+ * `count` 那一支的 `group` 是 **`null`**（U53）：一批抽象点不属于任何群。
+ * 别退化成"取 `C_1` 当母群" —— 见 `value.ts` 的 `GalSet.group` 注释。
+ */
+function omegaOf(
+  spec: OmegaSpec,
+): { n: number; labels: string[]; omega: GalSet } | { error: string; hint?: string } {
+  if (spec.kind === 'set') {
+    const labels = spec.set.members.map((m) => m.label)
+    if (labels.length === 0) {
+      return { error: `${spec.set.label} 是空集，给不出作用的点`, hint: '点集至少要有一个点' }
+    }
+    return { n: labels.length, labels, omega: spec.set }
+  }
+  const plan = planCountPointSet(spec.n)
+  if (!plan.ok) return { error: plan.error, hint: plan.hint }
+  return { n: spec.n, labels: plan.labels, omega: plan.set }
+}
+
+/**
+ * 分诊（内核）：`G` + Ω（点数**或**一个集合对象）+ 各生成元的像 →
+ * 一个 `GalAction`，或者一条说清卡在哪的报错。
  *
  * 编辑器与 op **共用这一个函数**（同一条求值路径），所以"边填边看到的"
  * 与"确认后算出来的"不可能不一致。
  */
-export function planCustomAction(G: Group, n: number, drafts: GenImageDraft[]): CustomActionPlan {
-  if (!Number.isInteger(n) || n < 1) {
-    return {
-      ok: false,
-      error: '作用点集的基数 n 必须是正整数',
-      hint: `如 自定义作用(${nm(G)}, 4, a -> (1 2 3 4))`,
-    }
-  }
+export function planCustomAction(
+  G: Group,
+  omega: number | OmegaSpec,
+  drafts: GenImageDraft[],
+): CustomActionPlan {
+  const spec: OmegaSpec = typeof omega === 'number' ? { kind: 'count', n: omega } : omega
+  /*
+   * 点数那一支的校验**不在这里另写一份** —— 交给 `pointSet.ts#planCountPointSet`
+   * （`点集(n)` 与这里共用同一个上限、同一批报错语）。
+   * 下面那道 `n > CUSTOM_ACTION_POINT_CAP` 是给**集合**那一支留的：
+   * `底集(C_1000)` 这种现成集合的点数由集合自己决定，不走 `点集(n)`。
+   */
+  const om = omegaOf(spec)
+  if ('error' in om) return { ok: false, error: om.error, hint: om.hint }
+  const { n, labels, omega: omegaSet } = om
+
   if (n > CUSTOM_ACTION_POINT_CAP) {
     return {
       ok: false,
@@ -305,17 +403,34 @@ export function planCustomAction(G: Group, n: number, drafts: GenImageDraft[]): 
     }
 
     // ── ② 像必须是 Ω 上的置换（或 `e`）──
+    //
+    // 记号里的"点"先按 Ω 的标号翻成位置号（U53，`labelCycleToNumeric`），
+    // 语法仍然交给 core 的 `parseCycleNotation` —— 不另写一份解析器。
     let perm: number[]
     if (cycle === IDENTITY_TOKEN) {
       perm = identityPermutation(n)
     } else {
-      const oneBased = parseCycleNotation(cycle, n)
+      const rewritten = labelCycleToNumeric(labels, cycle)
+      if (!rewritten.ok) {
+        return {
+          ok: false,
+          genName: g.gen.name,
+          error: `生成元 ${g.gen.name} 的像「${cycle}」里的 ${rewritten.token} 不是点集里的点`,
+          hint: `${labelsHint(labels)}；恒等写 ${IDENTITY_TOKEN}`,
+        }
+      }
+      const oneBased = parseCycleNotation(rewritten.numeric, n)
       if (!oneBased) {
         return {
           ok: false,
           genName: g.gen.name,
+          // 措辞「不是 N 点上的循环记号」是**契约**（`verify/suites/u52.ts` 按它断言）；
+          // U53 只把点集的名字补进了 hint（点集有标号时 hint 会列出它们）。
           error: `生成元 ${g.gen.name} 的像「${cycle}」不是 ${n} 点上的循环记号`,
-          hint: `写法如 (1 2 3 4) 或 (12)(34)（点号在 1..${n}、不能重复同一段里写两遍）；恒等写 ${IDENTITY_TOKEN}`,
+          hint:
+            n >= 2
+              ? `写法如 (1 2 3 4) 或 (12)(34)；每个点在一段里只能出现一次；恒等写 ${IDENTITY_TOKEN}`
+              : `点集只有 1 个点，像只能是恒等 ${IDENTITY_TOKEN}`,
         }
       }
       perm = oneBased.map((x) => x - 1)
@@ -368,11 +483,14 @@ export function planCustomAction(G: Group, n: number, drafts: GenImageDraft[]): 
     kind: 'custom',
     n,
     perms: spread.perms,
-    ...omegaOf(G, n),
-    // Ω 是**独立对象**（不是 G 自身）：作用线从 G 指向新的 Ω 节点。
-    // 没有 `from` ⇒ `derive.ts` 的就地造节点分支接管（它给节点起名 `\Omega`）。
+    setLabels: labels,
+    omega: omegaSet,
+    // Ω 是**独立对象**（不是 G 自身）：作用线从 G 指向 Ω 那个节点。
+    // 集合是用户给的（画布上已有）时带上 `from` ⇒ `derive` 直接连到那个节点，
+    // 而不是凭空再造一个（`derive.ts#setNodeId` 也兜一层）。
     omegaBase: 'object',
   }
+  if (spec.kind === 'set' && spec.ref) action.omega = { ...omegaSet, from: spec.ref }
   // 核走**共用判据**（`actionKernel` —— 信息面板与结论层用的是同一个）
   const kernelIds = actionKernel(action)
   /*
@@ -394,5 +512,6 @@ export function planCustomAction(G: Group, n: number, drafts: GenImageDraft[]): 
     kernelIds,
     orbitSizes,
     images,
+    labels,
   }
 }

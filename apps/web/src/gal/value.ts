@@ -263,8 +263,14 @@ export interface SetMember {
 
 /** 集合：群作用的作用对象 Ω，也是"列表提升"的产物。 */
 export interface GalSet {
-  /** 上下文群（Ω 的成员取自哪里）*/
-  group: Group
+  /**
+   * 上下文群（Ω 的成员取自哪里）。
+   *
+   * **`null` = 这批点不属于任何群**（U53 的合成点集：`点集(5)` / `集合(a, b, c)`）。
+   * 别把它退化成"取 `C_1` 当母群"：没有母群和"母群是平凡群"是两件事，
+   * 前者任何 G 都能作用上去，后者会把 `G 与 Ω 来自不同的群` 那道关也一起骗过。
+   */
+  group: Group | null
   /** 展示名 */
   label: string
   members: SetMember[]

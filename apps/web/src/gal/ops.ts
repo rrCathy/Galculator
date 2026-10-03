@@ -57,8 +57,13 @@ import {
   generatorsDistinct,
   planCustomAction,
   resolveGenerator,
+  omegaSpecOfValue,
   type GenImageDraft,
+  type OmegaSpec,
 } from './customAction'
+// 点集（U53）：凭空造「任意阶集合」——`点集(5)` / `集合(a, b, c)`。
+// 这是 U52 缺的那一层：没有它，「自定义作用」的 Ω 只能是内核硬造的 `{1..n}`。
+import { planCountPointSet, planLabeledPointSet } from './pointSet'
 // `Aut` 的搜索预算 + 建群路（2026-10-01 事故：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机；
 // 2026-10-02 U50 更正：贵的是 core 的线性搜索乘法，建群本身 96 阶只要 1ms）
 import {
@@ -136,6 +141,7 @@ export const MECHANISM_ORDER: Mechanism[] = [
  * | `subset` | 圆节点（元素集）/ 群节点 | **单个**数集（`∩ ∪ ∖ ·`、`商`、`C_G`、`N_G`、`闭包` 都是它）：元素集 / 集合 / 群（当集合读，且须是前缀里某个群的子群）；`subgroups` 只在**恰好一个成员**时收（那等于一个子群，与 `subgroupArgOf` 一致）|
  * | `setlike` | 圆节点 / 群节点 | **把子群集列表整体当集合读**——**只有 `底集` 用它**（Sylow 链的 `底集(Syl_p(G))` 靠这条；`∩ ∪ ∖ ·` 走的是 `subgroupArgOf`，只收单个数集）|
  * | `omega` | 集合 / 元素集节点 / 群节点 | 作用的作用对象 Ω —— 恰好是 `omegaArgOf` 收的那几种 |
+ * | `omegaOrInt` | 集合 / 元素集节点 / 群节点 | **Ω 或它的点数**（U53）：填不出节点时由文本 / 编辑器补一个整数（`自定义作用` 用它）|
  * | `action` | 作用节点 | |
  * | `map` | — | 映射不占节点，只画边（U3 对象编辑器接入后由它提供）|
  * | `element` | ✗ | **标量**：元素记号（id / label / 循环记号 `(123)`），由操作自行 `resolveElement` |
@@ -159,6 +165,7 @@ export type ParamType =
   | 'subset'
   | 'setlike'
   | 'omega'
+  | 'omegaOrInt'
   | 'action'
   | 'map'
   | 'element'
@@ -171,8 +178,16 @@ export type ParamType =
  *
  * `genImage`（生成元的像，如 `r2→e`）是 U3 映射构建器的产物：
  * 它是**一对**记号（生成元 → 像），画布上一个节点表达不了，所以归入这一类。
+ *
+ * 判据的真正含义是"**这个参数允许空着**"——`opsFor` 用它回答
+ * "选中这三样之后，还差的那些参数用户能不能后面补"。
+ * `omegaOrInt` **同时**满足"能空着"与"能吃画布上的集合"两件事（U53）：
+ * 它既可能由画布给（选中 G 与一个集合 → 列得出「自定义作用」），
+ * 也可能空着等编辑器填（只选中 G → 照样列得出，`n` 由编辑器补）。
+ * ⇒ 所以 `opsFor` 的前缀匹配**不能**再拿 `isScalarParam` 当"画布给不了"的替身，
+ * 必须交给 `paramAccepts` 逐项真判（见那里的注释）。
  */
-export const SCALAR_PARAM_TYPES: ParamType[] = ['element', 'prime', 'int', 'genImage']
+export const SCALAR_PARAM_TYPES: ParamType[] = ['element', 'prime', 'int', 'genImage', 'omegaOrInt']
 
 export function isScalarParam(t: ParamType): boolean {
   return SCALAR_PARAM_TYPES.includes(t)
@@ -897,14 +912,17 @@ function subgroupKeyOf(els: GroupElement[]): string {
  * 把一个「被作用的点集 Ω」实参读成结构化形式。
  *
  * 三种来源：
- *   - `set`（`底集(Syl_p(G))` 的产物）：成员可能带 `subgroupElements` → **点就是子群**
+ *   - `set`（`底集(Syl_p(G))` / `点集(5)` 的产物）：成员可能带 `subgroupElements` → **点就是子群**
  *   - `elements`：点是 G 的元素（共轭类 / 正规子群集 …）
  *   - `group`：同上（Ω = G 自身）
  *
  * `points` 为 null 表示"点是元素"而不是子群 —— 这两条路走的是两套置换算法。
+ *
+ * `group` 为 null 表示**这批点不属于任何群**（U53 的合成点集 `点集(5)`）——
+ * 目前只有 `共轭作用在` 用它，那里会把 null 当作"共轭干不了"（共轭作用要的真是子群集）。
  */
 interface OmegaArg {
-  group: Group
+  group: Group | null
   label: string
   members: SetMember[]
   /** 点背后的子群元素集（按 `members` 对齐）；点是元素时为 null */
@@ -1027,7 +1045,47 @@ function conjugationPermsOnElements(
 
 /** Ω 的展示名（作用线的副行与结论用）。 */
 function omegaDisplayName(O: OmegaArg): string {
+  if (!O.group) return `自由点集（${O.members.length} 个点）`
   return O.points ? `Syl / 子群集（${O.members.length} 个点）` : `G 的元素（${O.members.length} 个点）`
+}
+
+/**
+ * 「自定义作用」的第二个实参 → `OmegaSpec`（U53）。
+ *
+ * 认两种：
+ *   · **一个整数** ⇒ 点数（`自定义作用(C_4, 4, a -> (1 2 3 4))`，U52 的老写法，契约不改）；
+ *   · **一个集合 / 元素集 / 群对象** ⇒ 就用它当 Ω（`点集(5)` / `集合(a,b,c)` / `底集(Syl_p(G))`）。
+ *
+ * 值的筛选**不在这里另写一份** —— 交给 `customAction.ts#omegaSpecOfValue`，
+ * 那个函数同时供作用编辑器用（"编辑器能填的"与"手打的能吃"必须是同一批）。
+ *
+ * 第三种情况（一句既不是数字也不是集合的话）**点名报错**，不静默当成点数 1。
+ */
+function omegaSpecOf(a: OpArg | undefined): OmegaSpec | { error: string; hint?: string } {
+  if (!a) {
+    return {
+      error: '自定义作用的第二个参数要一个点数或一个点集',
+      hint: '点数如 4；点集如 点集(5) / 集合(a, b, c) / 底集(Syl(G, 3))',
+    }
+  }
+  if (a.kind === 'number') return { kind: 'count', n: a.num }
+  /*
+   * **长得像数字的也算点数**（`1.5` / `-3`）：`resolveArg` 只把 `^-?\d+$` 认成数字，
+   * 于是 `1.5` 会落到 `literal`。但它的错是"点数不是正整数"，不是"这个参数不是点集"——
+   * 交给同一个校验点去说，报错才具体。
+   */
+  if (a.kind === 'literal' && /^[-+]?\d*\.?\d+$/.test(a.text.trim())) {
+    return { kind: 'count', n: Number(a.text) }
+  }
+  if (a.kind === 'object') {
+    const spec = omegaSpecOfValue(a.value, a.ref ?? a.text, a.ref)
+    if (spec) return spec
+  }
+  return {
+    error: `自定义作用的第二个参数要一个点数或一个点集，「${a.text}」两者都不是`,
+    // 例子必须是**照抄就能跑**的：`Syl_p(G)` 只是个数学记号，当输入会报"要 2 个参数"
+    hint: '点数如 4；点集如 点集(5) / 集合(a, b, c) / 底集(Syl(G, 3))；作用在 G 自身上用「正则作用」',
+  }
 }
 
 const COSET_OMEGA_HINT = '\\Omega 是陪集而非 G 的元素；陪集视图接入后再支持'
@@ -1757,7 +1815,7 @@ export const OPS: OpDef[] = [
       if (!O) {
         return fail(
           '共轭作用在(\\cdot) 的第二个参数必须是集合 \\Omega',
-          '如 \\Omega = 底集(Syl_p(G))：先把子群集取底集成集合，再让 G 作用上去',
+          '如 \\Omega = 底集(Syl(G, 3))：先把子群集取底集成集合，再让 G 作用上去',
         )
       }
       if (G.order > ENUM_LIMIT) {
@@ -1773,6 +1831,15 @@ export const OPS: OpDef[] = [
        * 子群对象又沿用母群的元素 id，所以这里只要判"P 是不是 G 的子群"。
        */
       const ambient = O.group
+      // Ω 是**没有母群的合成点集**（U53 的 `点集(5)` / `集合(a,b,c)`）——
+      // 共轭作用要的是"G 共轭作用在它的一族子群/元素上"，抽象点集没有共轭可言。
+      // 这不是"算不动"，是**这个问题在这里不成立**，要说清并指向自定义作用。
+      if (!ambient) {
+        return fail(
+          '共轭作用在(\\cdot) 要 Ω 是某个群的子群集 / 元素集',
+          `\\Omega = ${O.label} 是一批抽象点，没有被共轭的结构；要给它定作用就用「自定义作用」，G 上的共轭用「共轭作用(G)」`,
+        )
+      }
       const sameAs = sameGroup(G, ambient)
       const asSub =
         !sameAs &&
@@ -1886,16 +1953,28 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'customAction',
-    notation: '自定义作用(G, n, a\\to (1 2 3 4))',
+    notation: '自定义作用(G, \\Omega, a\\to (1 2 3 4))',
     mechanism: 'atomic',
     primitive: true,
-    doc: 'G 通过你给的置换作用在 n 个点上：每个生成元配一个循环记号（恒等写 e），立刻报是否忠实',
+    doc: 'G 通过你给的置换作用在点集上：每个生成元配一个循环记号（恒等写 e），立刻报是否忠实',
     recipe: '同态 G -> S_n，由生成元的像唯一决定',
     impl: 'gal/customAction 的 planCustomAction（core 备好 extendAndVerifyPerms + parseCycleNotation）',
     call: ['自定义作用', 'customAction'],
     params: [
       { name: 'G', type: 'group' },
-      { name: 'n', type: 'int' },
+      /*
+       * 第二参 = **Ω 或它的点数**（U53）。
+       *
+       * U52 时这里是 `int`：Ω 只能是内核硬造的 `{1..n}`，"让 G 作用在**你自己的**
+       * 集合上"根本表达不出来（用户 2026-10-02 当晚的原话是
+       * 「逗我吗，连任意阶集合都创建不了，怎么创建自定义群作用？」）。
+       * 现在它同时收**集合对象**：`点集(5)` / `集合(a,b,c)` / `底集(Syl(S_4,3))` 都行。
+       *
+       * 两件属性都要（见 `SCALAR_PARAM_TYPES` 的注释）：
+       *   · 画布上给了集合 ⇒ 前缀匹配得上（只选 G 与一个集合也能列出它）；
+       *   · 画布上给不出 ⇒ 允许空着，由编辑器填一个整数。
+       */
+      { name: 'Omega', type: 'omegaOrInt' },
     ],
     variadic: { name: '像', type: 'genImage' },
     arity: 2,
@@ -1907,7 +1986,7 @@ export const OPS: OpDef[] = [
      * 判据与 `run` 里的那道门、与编辑器包装层的守卫**共用同一个函数** ——
      * 于是"菜单里列着的"与"点下去能做的"永远是同一批（菜单不撒谎）。
      *
-     * 容忍前缀：`n` 是标量位，画布答不出来 ⇒ 这里只可能拿到 `[G]`。
+     * 容忍前缀：`n` 是标量位，画布答不出来 ⇒ 这里只可能拿到 `[G]`（或 `[G, Ω]`）。
      */
     fits: (vs) => {
       const G = groupValueOf(vs[0])
@@ -1926,8 +2005,10 @@ export const OPS: OpDef[] = [
         )
       }
       const gRef = refText(a[0])
-      const nArg = a[1]
-      const n = nArg?.kind === 'number' ? nArg.num : Number((nArg?.text ?? '').trim())
+
+      // ── Ω：一个整数（点数）或一个集合对象（U53）──
+      const omega = omegaSpecOf(a[1])
+      if ('error' in omega) return fail(omega.error, omega.hint)
 
       // 像对：`a\to (1 2 3 4)` —— 三种箭头都认（与 `映射` 同款）
       const drafts: GenImageDraft[] = []
@@ -1955,18 +2036,22 @@ export const OPS: OpDef[] = [
         }
       }
 
-      const plan = planCustomAction(G, n, drafts)
+      const plan = planCustomAction(G, omega, drafts)
       if (!plan.ok) return fail(plan.error, plan.hint)
 
+      const n = plan.action.n
       const count = plan.orbitSizes.length
       const transitive = count === 1 && plan.orbitSizes[0] === n
       // 忠实性**必须说出来**：不忠实不是错误，但用户不该自己去猜（第一同构定理的入口）
       const faithfulPart = plan.faithful ? '忠实' : `不忠实，核阶 ${plan.kernelIds.length}`
+      // Ω 是**用户给的集合**时把它的名字挂上（`|Ω| = 4` 之外还得说清是哪个 Ω）
+      const omegaPart =
+        omega.kind === 'set' ? `|\\Omega| = ${n} \\cdot ${omega.set.label}` : `|\\Omega| = ${n}`
       return {
         ok: true,
         value: { type: 'action', action: plan.action },
         label: `自定义作用(${gRef})`,
-        sub: `|\\Omega| = ${n} \\cdot ${transitive ? '传递（1 个轨道）' : `${count} 个轨道`} \\cdot ${faithfulPart}`,
+        sub: `${omegaPart} \\cdot ${transitive ? '传递（1 个轨道）' : `${count} 个轨道`} \\cdot ${faithfulPart}`,
         note: plan.faithful
           ? undefined
           : `${gRef} 到置换群的像只有 ${G.order / plan.kernelIds.length} 阶（G 是 ${G.order} 阶）`,
@@ -2172,6 +2257,80 @@ export const OPS: OpDef[] = [
       }
     },
   },
+  /*
+   * ── 点集（U53）：**凭空**造任意阶集合 ────────────────────────────
+   *
+   * 上面那个 `底集(S)` 要求 `S` 已经存在（子群集 / 元素集 / 群）——
+   * 也就是说集合的点**必须从某个已存在的群里借**。于是一批抽象点
+   * （"G 作用在 5 个点上"、"作用在立方体的 8 个顶点上"）根本造不出来。
+   *
+   * 这两个 op 补的就是这一层。分成两个而不是一个，是因为 `集合(5)` 到底指
+   * "5 个点"还是"一个叫 5 的点"两种读法都通 —— **不许猜**（见 `pointSet.ts` 模块头）。
+   *
+   * `primitive: false`：它们不是 §3 的 10 个原语，而是「原子构造」机制下的实例
+   * （与 `底集` 同一个待遇）—— 别为了两个构造器去动那份架构账。
+   */
+  {
+    id: 'pointSet',
+    notation: '点集(n)',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '造 n 个抽象点：点号 1 到 n，不属于任何群 ---- 给「自定义作用」准备舞台',
+    recipe: '原子构造（凭空给一个集合）',
+    impl: 'gal/pointSet 的 planCountPointSet',
+    call: ['点集', 'pointSet', 'points'],
+    params: [{ name: 'n', type: 'int' }],
+    arity: 1,
+    result: 'set',
+    run: (a) => {
+      const arg = a[0]
+      const n = arg?.kind === 'number' ? arg.num : Number((arg?.text ?? '').trim())
+      const plan = planCountPointSet(n)
+      if (!plan.ok) return fail(plan.error, plan.hint)
+      return {
+        ok: true,
+        value: { type: 'set', set: plan.set },
+        label: `点集(${n})`,
+        sub: `|\\Omega| = ${n} \\cdot 点号 1 到 ${n}`,
+      }
+    },
+  },
+  {
+    id: 'labeledSet',
+    notation: '集合(a, b, c)',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '造一个点集，点标号由你定（`集合(a, b, c)`）---- 标号能直接写进循环记号',
+    recipe: '原子构造（凭空给一个集合）',
+    impl: 'gal/pointSet 的 planLabeledPointSet',
+    call: ['集合', 'labeledSet', 'labels'],
+    /*
+     * 参数个数不定（1 到 `POINT_SET_MAX` 个点），所以走 variadic 而不是 params：
+     * `params` 是"参数表长度"，注册表有一致性断言（`params.length === arity + optional`）。
+     * `variadic` 的类型是 `element`：每个实参就是一个**记号**（`a` / `红` / `v1`），
+     * 由这两个 op 自己解释成"点标号"，不走元素解析。
+     */
+    params: [],
+    variadic: { name: '点', type: 'element' },
+    arity: 0,
+    result: 'set',
+    run: (a) => {
+      /*
+       * `arity: 0` + variadic：实参全部落在 `a` 里。
+       * 取 `text` 而不是 `num` —— 标号是**记号**（`a` / `v1` / `红`），`12` 这种
+       * 纯数字也按原样当标号用（会不会歧义由 `planLabeledPointSet` 判，见那边）。
+       */
+      const labels = a.map((x) => x.text)
+      const plan = planLabeledPointSet(labels)
+      if (!plan.ok) return fail(plan.error, plan.hint)
+      return {
+        ok: true,
+        value: { type: 'set', set: plan.set },
+        label: plan.set.label,
+        sub: `|\\Omega| = ${plan.labels.length} \\cdot 点号 ${plan.labels.slice(0, 8).join(' ')}${plan.labels.length > 8 ? ' ...' : ''}`,
+      }
+    },
+  },
 
   /* ══ 作用导出 ══════════════════════════════════════════ */
   {
@@ -2367,7 +2526,9 @@ export const OPS: OpDef[] = [
           ok: true,
           value: {
             type: 'set',
-            set: { group: A.group, label: `轨道_${act}(${x})`, members: picked },
+            // 母群**跟着 Ω 走**（U53）：自由点集（`点集(5)`）的轨道也是自由点集，
+            // 别硬填 `A.group` —— 那会让"Ω 的成员是 G 的元素"这句话变成谎
+            set: { group: A.omega.group, label: `轨道_${act}(${x})`, members: picked },
           },
           label: `Orb_${act}(${x})`,
           sub: `|Orb| = ${members.length}${members.length === A.n ? ' \\cdot 传递（就是整个 \\Omega ）' : ''}`,
@@ -2445,7 +2606,8 @@ export const OPS: OpDef[] = [
           ok: true,
           value: {
             type: 'set',
-            set: { group: A.group, label: `不动点_${act}`, members: picked },
+            // 母群跟着 Ω 走（U53，同 `轨道`）
+            set: { group: A.omega.group, label: `不动点_${act}`, members: picked },
           },
           label: `Fix_${act}`,
           sub: `|Fix| = ${pts.length}`,
@@ -3361,6 +3523,13 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
       if (v.type !== 'group') return false
       return groupAsSet(v.group)
     }
+    case 'omegaOrInt': {
+      // Ω **或**它的点数（U53）：画布给得了的那些与 `omega` 一模一样，
+      // 给不了的那一支（一个整数）由文本 / 编辑器补 —— 那一支不是 `GalValue`，走不到这儿。
+      if (v.type === 'set' || v.type === 'elements') return true
+      if (v.type !== 'group') return false
+      return groupAsSet(v.group)
+    }
     case 'subset': {
       // **单个**数集。`subgroups` 只在恰好一个成员时收——那时它等于一个子群
       //（`闭包(S)` / `商(G, N)` 这类就是这么用的）。
@@ -3407,8 +3576,12 @@ export function opsFor(selection: GalValue[]): OpDef[] {
     if (selection.length > op.params.length) return false
     for (let i = 0; i < selection.length; i++) {
       const p = op.params[i]
-      // 标量参数不能由画布提供，所以它不可能落在选中前缀里
-      if (isScalarParam(p.type)) return false
+      /*
+       * ⚠️ **U53**：这里原来还有一句"标量参数不能由画布提供 ⇒ 直接 return false"。
+       * 它是 `paramAccepts` 的**冗余替身**（那个 switch 对四个标量类型本来就回 false），
+       * 但 `omegaOrInt` 同时是"能空着"与"能吃画布上的集合"——那句替身会把
+       * "选中 G 与一个集合"整条路误杀。删掉它，逐项交给 `paramAccepts` 真判。
+       */
       if (!paramAccepts(p.type, selection[i], selection.slice(0, i))) return false
     }
     for (let i = selection.length; i < op.params.length; i++) {
@@ -3468,7 +3641,11 @@ const TEMPLATES: Record<string, string> = {
   cosetAction: '陪集作用(G, P)',
   // U52：不给这一条，径向菜单那个 `<code>` 会退到 `notation`（一长串占位符），
   // 而模板的意思是"**照这个敲就能跑**"——给个真能跑的短例子。
+  // U53：第二参改成 `4` 或 `点集(4)` 都行，模板给短的（数字）。
   customAction: '自定义作用(G, 4, a -> (1 2 3 4))',
+  // U53：凭空造集合的两条 —— 它们不需要任何对象，所以只可能在"照这个敲"的地方露面
+  pointSet: '点集(5)',
+  labeledSet: '集合(a, b, c)',
   automorphismGroup: 'Aut(G)',
   intersection: 'A \\cap B',
   union: 'A \\cup B',

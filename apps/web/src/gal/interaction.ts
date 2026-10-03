@@ -137,6 +137,9 @@ const MENU_LABEL: Record<string, string> = {
   // U52：显式写出来，别靠 `menuLabel` 的兜底（`notation` 里切 `(` 之前那段）。
   // 兜底在这次恰好给出「自定义作用」，但那是**巧合**，不是约定。
   customAction: '自定义作用',
+  // U53：凭空造集合的两条 —— 同样显式写，别靠兜底（`点集` / `集合` 恰好也是兜底结果）
+  pointSet: '点集',
+  labeledSet: '集合',
   orbits: '轨道',
   stabilizers: '稳定子',
   fixedPoints: '不动点',
@@ -160,6 +163,8 @@ export const PARAM_LABEL: Record<ParamType, string> = {
   subset: '元素集 / 子群',
   setlike: '集合 / 子群集',
   omega: '集合 \\Omega',
+  // U53：Ω 或它的点数 —— 补参条上就是这个意思（画布给不了就填个数字）
+  omegaOrInt: '点集 \\Omega 或点数',
   action: '作用',
   map: '映射',
   element: '元素记号',
