@@ -134,7 +134,7 @@ const mulStatus = await status()
 ok('积集不再是红字（预览成功）', !mulStatus.includes('不在'), mulStatus)
 ok(
   '积集写明"翻译过"并给出配方',
-  mulStatus.includes('自动取') && mulStatus.includes('闭包(A, (12)(34), (13)(24))'),
+  mulStatus.includes('自动取') && mulStatus.includes('closure(A, (12)(34), (13)(24))'),
   mulStatus,
 )
 ok('|A_4 · V_4| = 12', mulStatus.includes('12'), mulStatus)
@@ -150,7 +150,7 @@ ok(
 )
 
 // 交：从前**静默给空集**（id 空间不通），现在对齐后是 A_4 里那个 Klein
-ok('I = 交(A, V) 提交', await addLine('I', '交(A, V)'))
+ok('I = intersection(A, V) 提交', await addLine('I', 'intersection(A, V)'))
 ok('点得中 I 这一行', await clickRow('I'))
 await openTab('元素')
 const capRows = await tableRows()
@@ -165,20 +165,20 @@ await page.screenshot({ path: '../../docs/assets/u32-setops.png' })
 // 记号串号（U33）：`C_3 ∩ C_7` 从前给"3 个元素的假交集"，现在报"没有共同的母群"并指路
 ok('K = C_3 提交', await addLine('K3', 'C_3'))
 ok('M = C_7 提交', await addLine('M7', 'C_7'))
-await typeExpr('交(K3, M7)')
+await typeExpr('intersection(K3, M7)')
 const crossWorld = await status()
 ok(
   'C_3 ∩ C_7 不再给假交集（报"没有共同的母群"）',
   crossWorld.includes('共同的母群'),
   crossWorld,
 )
-ok('并指出路（先放进共同的大群）', crossWorld.includes('闭包'), crossWorld)
+ok('并指出路（先放进共同的大群）', crossWorld.includes('closure'), crossWorld)
 
-// 画布上下文（U34）：把 F₂₁ 摆上，同样的 `积集(C_3, C_7)` 就不再需要闭包了
+// 画布上下文（U34）：把 F₂₁ 摆上，同样的 `productSet(C_3, C_7)` 就不再需要闭包了
 ok('F = F_21 提交', await addLine('F', 'F_21'))
-await typeExpr('积集(K3, M7)')
+await typeExpr('productSet(K3, M7)')
 const withCanvas = await status()
-ok('F₂₁ 摆着时：`积集(C_3, C_7)` 直接算出来（21 阶）', withCanvas.includes('21'), withCanvas)
+ok('F₂₁ 摆着时：`productSet(C_3, C_7)` 直接算出来（21 阶）', withCanvas.includes('21'), withCanvas)
 ok('披露写明取的是 F 里的子群（候选结果相同）', withCanvas.includes('结果相同'), withCanvas)
 
 // 商：A_4 里与 V_4 同构的正规子群**恰有一个** -> 直接翻译（S₄/V₄ 的同类场景）
@@ -187,7 +187,7 @@ const qStatus = await status()
 ok('商不再问"要用哪一个"', !qStatus.includes('指明'), qStatus)
 ok(
   '商自动取唯一同构的正规子群（配方写出来）',
-  qStatus.includes('自动取') && qStatus.includes('闭包(A, (12)(34), (13)(24))'),
+  qStatus.includes('自动取') && qStatus.includes('closure(A, (12)(34), (13)(24))'),
   qStatus,
 )
 ok('商的预览是成功的：|G/N| = 3', qStatus.includes('|G/N| = 3'), qStatus)
@@ -206,7 +206,7 @@ ok('A_4 里 3 个 C_2 都不正规 -> 照实说', noNormal.includes('没有一�
 
 /* ── ③ 配方照旧可照抄，且真能算对 ───────────────────── */
 
-ok('K = 闭包(A, (12)(34), (13)(24)) 提交', await addLine('K', '闭包(A, (12)(34), (13)(24))'))
+ok('K = closure(A, (12)(34), (13)(24)) 提交', await addLine('K', 'closure(A, (12)(34), (13)(24))'))
 ok('Q = A / K 提交', await addLine('Q', 'A / K'))
 ok('点得中 Q 这一行', await clickRow('Q'))
 await openTab('元素')

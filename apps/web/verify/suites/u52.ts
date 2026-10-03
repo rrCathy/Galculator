@@ -127,7 +127,7 @@ export function run(): void {
 
   suite('u52 \\cdot 自定义作用：给每个生成元一个置换')
   {
-    const lines = ['G = C_4', 'A = 自定义作用(G, 4, a -> (1 2 3 4))']
+    const lines = ['G = C_4', 'A = customAction(G, 4, a -> (1 2 3 4))']
     const b = build(lines)
     eq('能建出来', b.err('A'), null)
     const A = actionOf(b, 'A')
@@ -157,19 +157,19 @@ export function run(): void {
     audit([{ what: '成功路（4-循环）', text: sub }])
 
     /* C_4 的 4 个下游 */
-    const d = build([...lines, 'O = 轨道(A, 1)', 'S = 稳定子(A, 1)', 'F = 不动点(A)'])
-    eq('轨道(A, 1) 能算', d.err('O'), null)
+    const d = build([...lines, 'O = orbits(A, 1)', 'S = stabilizer(A, 1)', 'F = fix(A)'])
+    eq('orbits(A, 1) 能算', d.err('O'), null)
     const O = d.byId('O')
     eq('轨道是 4 个点（传递）', O?.value.type === 'set' ? O.value.set.members.length : -1, 4)
-    eq('稳定子(A, 1) 是平凡群（4-循环固定不住任何点）', d.byId('S')?.value.type === 'group' ? (d.byId('S')!.value as { group: Group }).group.order : -1, 1)
-    eq('不动点(A) 是空集', d.byId('F')?.value.type === 'set' ? d.byId('F')!.value.type === 'set' && (d.byId('F')!.value as { set: { members: unknown[] } }).set.members.length : -1, 0)
+    eq('stabilizer(A, 1) 是平凡群（4-循环固定不住任何点）', d.byId('S')?.value.type === 'group' ? (d.byId('S')!.value as { group: Group }).group.order : -1, 1)
+    eq('fix(A) 是空集', d.byId('F')?.value.type === 'set' ? d.byId('F')!.value.type === 'set' && (d.byId('F')!.value as { set: { members: unknown[] } }).set.members.length : -1, 0)
   }
 
   /* ══ 2 · 非忠实必须披露（核 = ⟨a²⟩）══════════════════════ */
 
   suite('u52 \\cdot 非忠实作用：核的大小要说出来')
   {
-    const lines = ['G = C_4', 'A = 自定义作用(G, 4, a -> (12)(34))']
+    const lines = ['G = C_4', 'A = customAction(G, 4, a -> (12)(34))']
     const b = build(lines)
     eq('能建出来（非忠实是合法作用，不是错误）', b.err('A'), null)
     const A = actionOf(b, 'A')
@@ -190,25 +190,25 @@ export function run(): void {
     eq('不忠实那条是醒目语气（key）', kern?.tone, 'key')
 
     /* 非忠实作用上的轨道 / 稳定子照样要能算 */
-    const d = build([...lines, 'O = 轨道(A, 1)', 'S = 稳定子(A, 1)', 'F = 不动点(A)'])
-    eq('轨道(A, 1) 能算', d.err('O'), null)
+    const d = build([...lines, 'O = orbits(A, 1)', 'S = stabilizer(A, 1)', 'F = fix(A)'])
+    eq('orbits(A, 1) 能算', d.err('O'), null)
     eq('轨道大小 2（{1,2}）', d.byId('O')?.value.type === 'set' ? (d.byId('O')!.value as { set: { members: unknown[] } }).set.members.length : -1, 2)
-    eq('稳定子(A, 1) = 2 阶（⟨a^2⟩）', d.byId('S')?.value.type === 'group' ? (d.byId('S')!.value as { group: Group }).group.order : -1, 2)
-    eq('不动点(A) 空（(12)(34) 一个点都不固定）', d.byId('F')?.value.type === 'set' ? (d.byId('F')!.value as { set: { members: unknown[] } }).set.members.length : -1, 0)
+    eq('stabilizer(A, 1) = 2 阶（⟨a^2⟩）', d.byId('S')?.value.type === 'group' ? (d.byId('S')!.value as { group: Group }).group.order : -1, 2)
+    eq('fix(A) 空（(12)(34) 一个点都不固定）', d.byId('F')?.value.type === 'set' ? (d.byId('F')!.value as { set: { members: unknown[] } }).set.members.length : -1, 0)
   }
 
   /* ══ 3 · 平凡作用（`e` 是恒等的唯一写法）═════════════════ */
 
   suite('u52 \\cdot 恒等写 e（core 的循环记号解析器不认 (1)）')
   {
-    const b = build(['G = C_4', 'A = 自定义作用(G, 3, a -> e)'])
+    const b = build(['G = C_4', 'A = customAction(G, 3, a -> e)'])
     eq('e 认作恒等', b.err('A'), null)
     const A = actionOf(b, 'A')
     eq('核 = G（全映成恒等）', A ? kernelOrder(A) : -1, 4)
     eq('3 个轨道（每个点一个）', A ? actionInsights(A)[0].text : '', '|\\Omega| = 3 = 1 + 1 + 1')
 
     // core 的 parseCycleNotation 对纯不动点一律回 null —— 报错语要把 e 这条出路说出来
-    const f = failOf(['G = C_4', 'B = 自定义作用(G, 4, a -> (1))'])
+    const f = failOf(['G = C_4', 'B = customAction(G, 4, a -> (1))'])
     ok('(1) 被判为不是循环记号', f.err.includes('不是 4 点上的循环记号'), f.err)
     ok('hint 给出恒等的写法', f.hint.includes(IDENTITY_TOKEN), f.hint)
     audit([
@@ -218,7 +218,7 @@ export function run(): void {
     ok('error / hint 里没有反斜杠（纯文本面不写 LaTeX 命令）', !f.err.includes('\\') && !f.hint.includes('\\'), `${f.err} | ${f.hint}`)
 
     // n = 1：Ω 只有一个点，恒等是唯一可能的像
-    const one = build(['G = C_4', 'A = 自定义作用(G, 1, a -> e)'])
+    const one = build(['G = C_4', 'A = customAction(G, 1, a -> e)'])
     eq('n = 1 也能建', one.err('A'), null)
     eq('n = 1 时核 = G', actionOf(one, 'A') ? kernelOrder(actionOf(one, 'A')!) : -1, 4)
   }
@@ -228,7 +228,7 @@ export function run(): void {
   suite('u52 \\cdot 手算锚点：自然作用与符号同态')
   {
     // S_4：换位 + 4-循环生成整个 S_4 ⇒ 忠实
-    const s4 = build(['G = S_4', 'A = 自定义作用(G, 4, s12 -> (12), c -> (1234))'])
+    const s4 = build(['G = S_4', 'A = customAction(G, 4, s12 -> (12), c -> (1234))'])
     eq('S_4 自然作用能建', s4.err('A'), null)
     const A4 = actionOf(s4, 'A')
     eq('|im| = 24（忠实）', A4 ? kernelOrder(A4) : -1, 1)
@@ -236,24 +236,24 @@ export function run(): void {
     eq('传递（1 个轨道）', A4 ? actionInsights(A4)[0].text : '', '|\\Omega| = 4 = 4')
 
     // V_4：三个非平凡元素 ↦ 三个不同对换之积 —— Klein 四元群
-    const v4 = build(['G = V_4', 'A = 自定义作用(G, 4, a -> (12)(34), b -> (13)(24))'])
+    const v4 = build(['G = V_4', 'A = customAction(G, 4, a -> (12)(34), b -> (13)(24))'])
     eq('V_4 能建', v4.err('A'), null)
     eq('V_4 忠实', actionOf(v4, 'A') ? kernelOrder(actionOf(v4, 'A')!) : -1, 1)
     eq('V_4 上的作用传递', actionOf(v4, 'A') ? actionInsights(actionOf(v4, 'A')!)[0].text : '', '|\\Omega| = 4 = 4')
 
     // D_4：正方形 4 个顶点上的自然作用
-    const d4 = build(['G = D_4', 'A = 自定义作用(G, 4, r -> (1234), s -> (12)(34))'])
+    const d4 = build(['G = D_4', 'A = customAction(G, 4, r -> (1234), s -> (12)(34))'])
     eq('D_4 的正方形顶点作用能建（关系 srs = r^-1 被闭包检查认下）', d4.err('A'), null)
     eq('忠实', actionOf(d4, 'A') ? kernelOrder(actionOf(d4, 'A')!) : -1, 1)
 
     // Q_8：全体生成元 ↦ 同一个对换 = Q_8 到 C_2 的商映射
-    const q8 = build(['G = Q_8', 'A = 自定义作用(G, 2, i -> (12), j -> (12))'])
+    const q8 = build(['G = Q_8', 'A = customAction(G, 2, i -> (12), j -> (12))'])
     eq('Q_8 的单像作用能建', q8.err('A'), null)
     eq('核 = ⟨k⟩（4 阶）', actionOf(q8, 'A') ? kernelOrder(actionOf(q8, 'A')!) : -1, 4)
     eq('2 个点上传递', actionOf(q8, 'A') ? actionInsights(actionOf(q8, 'A')!)[0].text : '', '|\\Omega| = 2 = 2')
 
     // S_3：两个对换 ↦ 同一个对换 = 符号同态
-    const s3 = build(['G = S_3', 'A = 自定义作用(G, 2, s12 -> (12), s23 -> (12))'])
+    const s3 = build(['G = S_3', 'A = customAction(G, 2, s12 -> (12), s23 -> (12))'])
     eq('符号同态能建', s3.err('A'), null)
     eq('核 = A_3（3 阶）', actionOf(s3, 'A') ? kernelOrder(actionOf(s3, 'A')!) : -1, 3)
   }
@@ -263,7 +263,7 @@ export function run(): void {
   suite('u52 \\cdot 报错语：阶不整除 / 缺像 / 记号不存在 / 闭包不自洽')
   {
     // 阶不整除：3 ∤ 4
-    const od = failOf(['G = C_4', 'A = 自定义作用(G, 4, a -> (1 2 3))'])
+    const od = failOf(['G = C_4', 'A = customAction(G, 4, a -> (1 2 3))'])
     ok('说的是"阶是 4 / 像的阶是 3"', od.err.includes('阶是 4') && od.err.includes('阶是 3'), od.err)
     ok('hint 讲清判据（像的阶必须整除生成元的阶）', od.hint.includes('不整除') && od.hint.includes('必须整除'), od.hint)
     audit([
@@ -273,17 +273,17 @@ export function run(): void {
     ok('阶不整除：error / hint 无反斜杠', !od.err.includes('\\') && !od.hint.includes('\\'), od.hint)
 
     // 缺像：S_4 有两个生成元
-    const miss = failOf(['G = S_4', 'A = 自定义作用(G, 4, s12 -> (12))'])
+    const miss = failOf(['G = S_4', 'A = customAction(G, 4, s12 -> (12))'])
     ok('点名缺了哪个生成元', miss.err.includes('还有 1 个生成元没给像') && miss.err.includes('c'), miss.err)
     audit([{ what: '缺像 error', text: miss.err }, { what: '缺像 hint', text: miss.hint }])
 
     // 生成元记号不存在
-    const noGen = failOf(['G = S_4', 'A = 自定义作用(G, 4, q -> (12), c -> (1234))'])
+    const noGen = failOf(['G = S_4', 'A = customAction(G, 4, q -> (12), c -> (1234))'])
     ok('说的是"G 里没有生成元 q"', noGen.err.includes('没有生成元 q'), noGen.err)
     ok('hint 列出真有的生成元', noGen.hint.includes('s12') && noGen.hint.includes('c'), noGen.hint)
 
     // 闭包不自洽（必要性过、关系不过）—— Q_8 的 i² = j² 对不上
-    const closure = failOf(['G = Q_8', 'A = 自定义作用(G, 4, i -> (1234), j -> (13)(24))'])
+    const closure = failOf(['G = Q_8', 'A = customAction(G, 4, i -> (1234), j -> (13)(24))'])
     ok('报"这组像不构成同态"', closure.err.includes('不构成同态'), closure.err)
     ok('hint 指出**在哪个点**上对不上', /第 [0-9]+ 个点/.test(closure.hint), closure.hint)
     ok('闭包失败 hint 里没有 LaTeX 的 \\sigma 原串', !closure.hint.includes('\\'), closure.hint)
@@ -293,11 +293,11 @@ export function run(): void {
     ])
 
     // 一个像都没给
-    const none = failOf(['G = C_4', 'A = 自定义作用(G, 4)'])
+    const none = failOf(['G = C_4', 'A = customAction(G, 4)'])
     ok('一个像都不给要拦', none.err.includes('至少要给一个生成元的像'), none.err)
 
     // 像对写法不对（连箭头都没有）
-    const bad = failOf(['G = C_4', 'A = 自定义作用(G, 4, a(1 2 3 4))'])
+    const bad = failOf(['G = C_4', 'A = customAction(G, 4, a(1 2 3 4))'])
     ok('像对写法不对要拦', bad.err.includes('像对的写法不对'), bad.err)
   }
 
@@ -306,11 +306,11 @@ export function run(): void {
   suite('u52 \\cdot 预算：点数与 |G| x n 各有上限')
   {
     // n 必须是正整数
-    eq('n = 0 被拦', failOf(['G = C_4', 'A = 自定义作用(G, 0, a -> e)']).err.includes('必须是正整数'), true)
-    eq('n = 1.5 被拦', failOf(['G = C_4', 'A = 自定义作用(G, 1.5, a -> e)']).err.includes('必须是正整数'), true)
+    eq('n = 0 被拦', failOf(['G = C_4', 'A = customAction(G, 0, a -> e)']).err.includes('必须是正整数'), true)
+    eq('n = 1.5 被拦', failOf(['G = C_4', 'A = customAction(G, 1.5, a -> e)']).err.includes('必须是正整数'), true)
 
     // 点数上限
-    const bigN = failOf([`G = C_2`, `A = 自定义作用(G, ${CUSTOM_ACTION_POINT_CAP + 1}, a -> e)`])
+    const bigN = failOf([`G = C_2`, `A = customAction(G, ${CUSTOM_ACTION_POINT_CAP + 1}, a -> e)`])
     ok(`n > ${CUSTOM_ACTION_POINT_CAP} 被拦`, bigN.err.includes(`超过上限 ${CUSTOM_ACTION_POINT_CAP}`), bigN.err)
 
     /*
@@ -346,9 +346,10 @@ export function run(): void {
     eq('V_4（同一个群）的生成元可分', gv4 ? generatorsDistinct(gv4) : false, true)
 
     // 两条路都要拦：文本路与编辑器（编辑器走的是同一个 `planCustomAction`）
-    const f = failOf(['G = C_2^2', 'A = 自定义作用(G, 4, a -> (12)(34))'])
+    const f = failOf(['G = C_2^2', 'A = customAction(G, 4, a -> (12)(34))'])
     ok('文本路拦下并说清理由', f.err.includes('分不开'), f.err)
-    ok('hint 指向内置作用', f.hint.includes('正则作用'), f.hint)
+    // U54：提示里点的那个名字必须是**用户敲得出来的 ASCII 名**（从前写的是「正则作用」）
+    ok('hint 指向内置作用 leftAction', f.hint.includes('leftAction'), f.hint)
     audit([{ what: '生成元不可分 error', text: f.err }, { what: '生成元不可分 hint', text: f.hint }])
 
     /*
@@ -378,15 +379,15 @@ export function run(): void {
       ['C_4', 'C_4', 4],
       ['D_4', 'D_4', 2],
     ] as const) {
-      const b = build([`G = ${src}`, 'A = 共轭作用(G)'])
+      const b = build([`G = ${src}`, 'A = conjAction(G)'])
       const A = actionOf(b, 'A')
       eq(`共轭作用的核 = |Z(${nm})| = ${want}`, A ? kernelOrder(A) : -1, want)
     }
     // 左正则作用必然忠实（Cayley）
-    const reg = build(['G = S_3', 'A = 正则作用(G)'])
+    const reg = build(['G = S_3', 'A = leftAction(G)'])
     eq('左正则作用的核 = 1（Cayley 定理）', actionOf(reg, 'A') ? kernelOrder(actionOf(reg, 'A')!) : -1, 1)
 
-    const A = actionOf(build(['G = D_4', 'A = 共轭作用(G)']), 'A')
+    const A = actionOf(build(['G = D_4', 'A = conjAction(G)']), 'A')
     const kern = A ? actionInsights(A).find((x) => x.label === '同态的核') : undefined
     eq('结论层把共轭作用的核点名为 Z(G)', kern?.detail.includes('中心 Z(G)'), true)
   }
@@ -411,14 +412,14 @@ export function run(): void {
       '不进 multiOps（它只要一个对象）',
       !multiOps().some((o) => o.id === 'customAction'),
     )
-    eq('菜单标签认表（不退到 notation）', op ? menuLabel(op) : '', '自定义作用')
-    eq('模板给的是能照抄的一行', op ? opTemplate(op) : '', '自定义作用(G, 4, a -> (1 2 3 4))')
+    eq('菜单标签 = notation 前缀（U54 起不再靠手工表）', op ? menuLabel(op) : '', 'customAction')
+    eq('模板给的是能照抄的一行', op ? opTemplate(op) : '', 'customAction(G, 4, a -> (1 2 3 4))')
 
     // 一行文字往返：编辑器编出来的行必须能被同一条求值路径吃回去。
     // 箭头用的是 `\to`（与 `映射` 同一条 `composeMapLine`）—— 定义行是**输入面**，
     // 反斜杠在这儿是"照抄就能跑"的形态，不是纯文本面的泄漏。
     const expr = composeMapLine(op as OpDef, ['G', '4'], [{ gen: 'a', img: '(1 2 3 4)' }])
-    eq('编辑器编出的行', expr, '自定义作用(G, 4, a\\to (1 2 3 4))')
+    eq('编辑器编出的行', expr, 'customAction(G, 4, a\\to (1 2 3 4))')
     const rt = build(['G = C_4', `A = ${expr}`])
     eq('编出来的行能原样求值（一条路径）', rt.err('A'), null)
     eq('往返之后还是忠实 + 传递', actionOf(rt, 'A') ? kernelOrder(actionOf(rt, 'A')!) : -1, 1)
@@ -449,14 +450,14 @@ export function run(): void {
   suite('u52 \\cdot 纯文本面零泄漏（与 e2e/no-unicode-leak 同一判据）')
   {
     const cases: { what: string; lines: string[] }[] = [
-      { what: '唯一就建', lines: ['G = C_4', 'A = 自定义作用(G, 4, a -> (1 2 3 4))'] },
-      { what: '非忠实披露', lines: ['G = C_4', 'A = 自定义作用(G, 4, a -> (12)(34))'] },
-      { what: '平凡作用', lines: ['G = C_4', 'A = 自定义作用(G, 3, a -> e)'] },
-      { what: '缺像', lines: ['G = S_4', 'A = 自定义作用(G, 4, s12 -> (12))'] },
-      { what: '记号不存在', lines: ['G = S_4', 'A = 自定义作用(G, 4, q -> (12), c -> (1234))'] },
-      { what: '阶不整除', lines: ['G = C_4', 'A = 自定义作用(G, 4, a -> (1 2 3))'] },
-      { what: '分不开', lines: ['G = C_2^3', 'A = 自定义作用(G, 8, a -> (12))'] },
-      { what: 'n 非法', lines: ['G = C_4', 'A = 自定义作用(G, 0, a -> e)'] },
+      { what: '唯一就建', lines: ['G = C_4', 'A = customAction(G, 4, a -> (1 2 3 4))'] },
+      { what: '非忠实披露', lines: ['G = C_4', 'A = customAction(G, 4, a -> (12)(34))'] },
+      { what: '平凡作用', lines: ['G = C_4', 'A = customAction(G, 3, a -> e)'] },
+      { what: '缺像', lines: ['G = S_4', 'A = customAction(G, 4, s12 -> (12))'] },
+      { what: '记号不存在', lines: ['G = S_4', 'A = customAction(G, 4, q -> (12), c -> (1234))'] },
+      { what: '阶不整除', lines: ['G = C_4', 'A = customAction(G, 4, a -> (1 2 3))'] },
+      { what: '分不开', lines: ['G = C_2^3', 'A = customAction(G, 8, a -> (12))'] },
+      { what: 'n 非法', lines: ['G = C_4', 'A = customAction(G, 0, a -> e)'] },
     ]
     const strings: { what: string; text: string }[] = []
     for (const c of cases) {

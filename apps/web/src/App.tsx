@@ -47,7 +47,7 @@ import type { GalValue, NormalizedSubgroup } from './gal/value'
 /**
  * 默认示范（U0–U2 能力清单）：
  *   `G = D_4` 记号建群 · `Z(G)` 子群升级为**真群对象**（圆 → 方，于是 `Z(Z(G))` 合法）
- *   `换位子群(G)` 迭代闭包 · `Z ∩ C` 集合运算 · `G / Z` 商群 · `Sub(G)` 枚举 · `ord` 数值进栈
+ *   `commutator(G)` 迭代闭包 · `Z ∩ C` 集合运算 · `G / Z` 商群 · `Sub(G)` 枚举 · `ord` 数值进栈
  */
 const DEFAULT_LINES = [
   // Sylow III 的完整故事（MVP 的落点）：
@@ -55,10 +55,10 @@ const DEFAULT_LINES = [
   // 打开就能看到交换图：`G ↷ Ω`、`Orb(H) = Ω`（传递）、`N_G(H) ↪ G`
   'G = S_4',
   'Syl = Syl_p(G, 3)',
-  'Omega= 底集(Syl)',
-  'A = 共轭作用在(G, Omega)',
-  'O = 轨道(A, 1)',
-  'N = 稳定子(A, 1)',
+  'Omega= asSet(Syl)',
+  'A = conjOn(G, Omega)',
+  'O = orbits(A, 1)',
+  'N = stabilizer(A, 1)',
 ]
 
 /* ── 设置（缺口 ⑭）：本地持久化，跟钉住位置同一个待遇 ───────────── */
@@ -507,18 +507,18 @@ export default function App() {
       const v = focusedObj?.value
       if (!v || v.type !== 'subgroups') return
       // 上下文群必须取**群**那一行的名字——子群集那一行（S）本身不是群，
-      // 拿它当 `闭包(S, …)` 的上下文会被求值器拒掉（真浏览器走查抓到的）。
+      // 拿它当 `closure(S, …)` 的上下文会被求值器拒掉（真浏览器走查抓到的）。
       const parent = objects.find(
         (o) => o.value.type === 'group' && o.value.group === v.group,
       )
       if (!parent) return
       const name = nextAutoName(objects.map((o) => o.id))
-      // 平凡子群没有生成元，用单位元记号兜底（`闭包(G, e)` 合法）
+      // 平凡子群没有生成元，用单位元记号兜底（`closure(G, e)` 合法）
       const gens =
         sub.generators.length > 0
           ? sub.generators.map((g) => g.label)
           : [v.group.identity.label]
-      setLines((p) => [...p, `${name} = 闭包(${parent.id}, ${gens.join(', ')})`])
+      setLines((p) => [...p, `${name} = closure(${parent.id}, ${gens.join(', ')})`])
       setNotice(null)
     },
     [focusedObj, objects],
@@ -570,9 +570,9 @@ export default function App() {
    * 「这个顺序求值走得通吗」—— UI 手势的**顺序兜底**判据（拖拽连线 / pending 收尾共用）。
    *
    * 拖拽不表达顺序，而参数是有序的：`pairOps` 只能按类型匹配猜一次，
-   * 对 `包含(H, G)` 这种**两位同型**的操作猜不出谁该在前
+   * 对 `contains(H, G)` 这种**两位同型**的操作猜不出谁该在前
    * （`(S₄, A₄)` 与 `(A₄, S₄)` 都能填进两个 `group` 槽），于是"把 S₄ 拖到 A₄ 上"
-   * 会拼出 `包含(S₄, A₄)` —— 那是错的。pending 收尾同理：顺序 = **点击顺序**，
+   * 会拼出 `contains(S₄, A₄)` —— 那是错的。pending 收尾同理：顺序 = **点击顺序**，
    * 而用户点第一个对象时想的是"拿它做什么"，不是"它是第一参"。
    *
    * **只在 UI 手势上兜**：手打的 `R = S_4 ⊆ A_4` 要照样报错，不许替用户改（U21）。
@@ -623,7 +623,7 @@ export default function App() {
         return
       }
       const slots = scalarSlots(op)
-      // 停下来的判据用 `maxObjectArity`（**含可选对象位**）：`像(f, H)` 选满 f
+      // 停下来的判据用 `maxObjectArity`（**含可选对象位**）：`image(f, H)` 选满 f
       // 之后不是直接算，而是进 pending 等一个**可选**的 H —— 用户点它就变
       // `f(H)`，不点（点条上的「不填 H，直接执行」/ 回车）就还是 `im f`。
       // 需要"还差一个对象"的 op（`商` 这种）行为不变。
@@ -743,7 +743,7 @@ export default function App() {
       setNotice(null)
       if (inter.kind === 'pending' && pendOp) {
         const picked = [...inter.picked, id]
-        // 上界是 `maxObjectArity`（含可选对象位）：`像(f, ·)` 停在 pending 时，
+        // 上界是 `maxObjectArity`（含可选对象位）：`image(f, ·)` 停在 pending 时，
         // 再点一个群 = 把可选位 H 填上（点满就执行）；不点就走条上的"直接执行"。
         if (picked.length < maxObjectArity(pendOp)) {
           setInter({ kind: 'pending', opId: pendOp.id, picked })
@@ -777,7 +777,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       /**
-       * 「选够了就回车」：pending 里必需位已满、只剩可选对象位时（`像(f, ·)`），
+       * 「选够了就回车」：pending 里必需位已满、只剩可选对象位时（`image(f, ·)`），
        * 回车 = 直接执行（`im f`）。**打字时不抢**——输入框里的回车归输入框。
        */
       const t = e.target as HTMLElement | null
@@ -838,7 +838,7 @@ export default function App() {
   const banner = (() => {
     if (!pendOp) return null
     if (inter.kind === 'pending') {
-      // 必需位已满、只剩**可选**对象位（`像(f, ·)` 的 H）：给一个"直接执行"的出口 ——
+      // 必需位已满、只剩**可选**对象位（`image(f, ·)` 的 H）：给一个"直接执行"的出口 ——
       // 没有它，进到这一步的用户会以为卡住了（Esc 之外无路可走）。
       const optionalSlot =
         inter.picked.length >= objectArity(pendOp) && inter.picked.length < maxObjectArity(pendOp)

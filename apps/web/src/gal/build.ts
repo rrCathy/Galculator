@@ -186,7 +186,7 @@ function firstIsoObjects(objects: GalObject[]): GalObject[] {
           sources: [o.id],
           value: { type: 'group', group: Q },
           opId: 'firstIso',
-          recipe: '第一同构定理：G/ker \\varphi \\cong im \\varphi',
+          recipe: '第一同构定理：quotient(G, ker) 同构于 im（G/ker 同构于 im）',
         })
       }
     }
@@ -216,7 +216,7 @@ function firstIsoObjects(objects: GalObject[]): GalObject[] {
           group: rememberParent(buildSubgroupGroup(m.codomain, im, symbol ?? `im ${o.id}`), m.codomain),
         },
         opId: 'firstIsoImage',
-        recipe: '第一同构定理：G/ker \\varphi \\cong im \\varphi',
+        recipe: '第一同构定理：quotient(G, ker) 同构于 im（G/ker 同构于 im）',
       })
     }
   }

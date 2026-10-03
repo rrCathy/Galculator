@@ -155,7 +155,7 @@ const addLine = async (line) => {
 // 剧本注意（U17 的设计）：**不要**手建 `K = ker(f)` —— 手建后 firstIso 的整条
 // 故事线（f/ker 顶点 + π + ≅）交还用户，`≅` 就不补了。这里让 f 自动补全，
 // 商群用 `A_4` 当参数（与 f 的 ker 无关，两条 π 各去各的靶）。
-for (const line of ['G = S_4', 'H = S_3', 'f = 映射(G, H, s12->23, c->13)', 'N = A_4', 'Q = 商(G, N)']) {
+for (const line of ['G = S_4', 'H = S_3', 'f = map(G, H, s12->23, c->13)', 'N = A_4', 'Q = quotient(G, N)']) {
   await addLine(line)
 }
 await page.waitForTimeout(400)

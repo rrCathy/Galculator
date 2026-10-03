@@ -5,15 +5,15 @@
  *
  *   「逗我吗，连任意阶集合都创建不了，怎么创建自定义群作用？你做了半天做了什么？」
  *
- * 实测确认用户是对的：`{1,2,3}` / `集合(1,2,3)` / `点集(5)` 全不通，而唯一能造 `set`
- * 的 `底集(S)` 要求 `S` **已经存在**（子群集 / 元素集 / 群）—— 集合的点必须从
- * 某个已存在的群里借。于是「自定义作用」的 Ω 只能是内核硬造的 `{1..n}`。
+ * 实测确认用户是对的：`{1,2,3}` / `labeledSet(1,2,3)` / `pointSet(5)` 全不通，而唯一能造 `set`
+ * 的 `asSet(S)` 要求 `S` **已经存在**（子群集 / 元素集 / 群）—— 集合的点必须从
+ * 某个已存在的群里借。于是 `customAction` 的 Ω 只能是内核硬造的 `{1..n}`。
  *
  * 本套钉的是**用户真能摸到的六件事**：
- *   ① **凭空造集合**：输入球里敲 `点集(5)` / `集合(红, 绿, 蓝, 黄)` 就长出集合节点
- *      （`点集(5)` 的点号是 `1..5`；`集合(5)` 两种读法都通 ⇒ 红字拦下并指路）；
+ *   ① **凭空造集合**：输入球里敲 `pointSet(5)` / `labeledSet(红, 绿, 蓝, 黄)` 就长出集合节点
+ *      （`pointSet(5)` 的点号是 `1..5`；`labeledSet(5)` 两种读法都通 ⇒ 红字拦下并指路）；
  *   ② **Ω 那一格收三种写法**：一个数字（U52 老行为）· 一个点集表达式 · 画布上的集合一键挑；
- *   ③ **标号能写进循环记号**：Ω = `集合(a, b, c)` 时填 `(a b)` 认得出，
+ *   ③ **标号能写进循环记号**：Ω = `labeledSet(a, b, c)` 时填 `(a b)` 认得出，
  *      状态行的示例也跟着用标号（屏幕上写着 `a`，示例就该写 `a`）；
  *   ④ **老行为不坏**：Ω 填 `4` 时的一切读数与 U52 逐字一致；
  *   ⑤ **确认后不另造一个 Ω**：Ω 是画布上已有的集合时，节点**不多**、作用线直接连过去；
@@ -261,7 +261,7 @@ const scanPlain = async (stage) => {
 }
 
 /* ══════════════════════════════════════════════════════════
- * ① 凭空造集合：`点集(5)` / `集合(红, 绿, 蓝, 黄)`
+ * ① 凭空造集合：`pointSet(5)` / `labeledSet(红, 绿, 蓝, 黄)`
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
@@ -269,7 +269,7 @@ console.log('== ① 输入球里凭空造集合（不借任何群）==')
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
-ok('建 `P = 点集(5)`', await addLine('P', '点集(5)'))
+ok('建 `P = pointSet(5)`', await addLine('P', 'pointSet(5)'))
 await page.keyboard.press('Escape')
 await page.waitForTimeout(420)
 {
@@ -277,14 +277,14 @@ await page.waitForTimeout(420)
   ok('点集长成了画布节点', ids.includes('P'), ids.join(','))
   ok('点得中 P', await selectNode('P'))
   const rows = await inspRows()
-  // 手算：`点集(5)` 就是 5 个抽象点，点号 1..5
+  // 手算：`pointSet(5)` 就是 5 个抽象点，点号 1..5
   ok('  基数 = 5', rows.some((r) => r.k === '基数' && r.v === '5'), JSON.stringify(rows))
   const tags0 = await inspTags()
   ok('  点号就是 1..5', tags0.join(',') === '1,2,3,4,5', tags0.join(','))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 
-  ok('建 `X = 集合(红, 绿, 蓝, 黄)`', await addLine('X', '集合(红, 绿, 蓝, 黄)'))
+  ok('建 `X = labeledSet(红, 绿, 蓝, 黄)`', await addLine('X', 'labeledSet(红, 绿, 蓝, 黄)'))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(420)
   ok('集合也长成节点', (await nodeIds()).includes('X'), (await nodeIds()).join(','))
@@ -300,24 +300,24 @@ await page.waitForTimeout(420)
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ② `集合(5)` 两种读法都通 -> 不许猜，指路 点集(5) ==')
+console.log('== ② `labeledSet(5)` 两种读法都通 -> 不许猜，指路 pointSet(5) ==')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(300)
 {
-  await typeExpr('集合(5)')
+  await typeExpr('labeledSet(5)')
   const s = await status()
   ok('红字拦下', s.cls.includes('bad'), `${s.cls} :: ${s.text}`)
   ok('  说清两种读法', s.text.includes('5 个点') && s.text.includes('一个叫 5 的点'), s.text)
-  ok('  指路 点集(5)', s.text.includes('点集(5)'), s.text)
+  ok('  指路 pointSet(5)', s.text.includes('pointSet(5)'), s.text)
 
-  await typeExpr('点集(401)')
+  await typeExpr('pointSet(401)')
   const s2 = await status()
-  ok('点集(401) 超上限拦下', s2.cls.includes('bad') && s2.text.includes('超过上限'), s2.text)
+  ok('pointSet(401) 超上限拦下', s2.cls.includes('bad') && s2.text.includes('超过上限'), s2.text)
   ok('  理由说是"手写记号"（不是算不动）', s2.text.includes('敲'), s2.text)
 
-  await typeExpr('点集(0)')
+  await typeExpr('pointSet(0)')
   const s3 = await status()
-  ok('点集(0) 拦下（点数必须是正整数）', s3.cls.includes('bad') && s3.text.includes('必须是正整数'), s3.text)
+  ok('pointSet(0) 拦下（点数必须是正整数）', s3.cls.includes('bad') && s3.text.includes('必须是正整数'), s3.text)
   await scanPlain('状态行（点集报错三连）')
   await page.screenshot({ path: '../../docs/assets/u53-point-set.png' })
 }
@@ -330,10 +330,10 @@ console.log('')
 console.log('== ③ Ω 一格收三种写法：数字 / 点集表达式 / 画布上的集合 ==')
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
-ok('建 `P = 点集(5)`（给下面那排一键按钮准备一个集合）', await addLine('P', '点集(5)'))
+ok('建 `P = pointSet(5)`（给下面那排一键按钮准备一个集合）', await addLine('P', 'pointSet(5)'))
 await page.keyboard.press('Escape')
 await page.waitForTimeout(360)
-ok('建 `X = 集合(a, b, c)`', await addLine('X', '集合(a, b, c)'))
+ok('建 `X = labeledSet(a, b, c)`', await addLine('X', 'labeledSet(a, b, c)'))
 await page.keyboard.press('Escape')
 await page.waitForTimeout(360)
 ok('建 `G = C_4`', await addLine('G', 'C_4'))
@@ -343,8 +343,8 @@ await page.waitForTimeout(420)
 await openOpsPanel('G')
 {
   const labels = await orbOpLabels()
-  ok('单对象操作面板里有「自定义作用」', labels.includes('自定义作用'), labels.join(' | '))
-  ok('点得中「自定义作用」', await clickOrbOp('自定义作用'))
+  ok('单对象操作面板里有「customAction」（U54 前叫「自定义作用」）', labels.includes('customAction'), labels.join(' | '))
+  ok('点得中「customAction」', await clickOrbOp('customAction'))
   await page.waitForTimeout(500)
 
   let s = await editorState()
@@ -366,23 +366,23 @@ await openOpsPanel('G')
   s = await editorState()
   ok('填 (1 2 3 4) -> 是同态 - 传递 - 忠实', !!s && s.cls.includes('ok') && s.check.includes('传递') && s.check.includes('忠实'), s?.check)
 
-  /* ── `点集(8)`：凭空造 8 个点 ── */
-  await setOmega('点集(8)')
+  /* ── `pointSet(8)`：凭空造 8 个点 ── */
+  await setOmega('pointSet(8)')
   await setCycle(0, '(1 2 3 4)(5 6 7 8)')
   s = await editorState()
-  ok('Ω = 点集(8) 收下了', (s?.summary ?? '').startsWith('点集 8 个点'), s?.summary)
+  ok('Ω = pointSet(8) 收下了', (s?.summary ?? '').startsWith('点集 8 个点'), s?.summary)
   ok('  读数截断用 ASCII 三个点（不是省略号）', (s?.summary ?? '').includes('...'), s?.summary)
   ok('  8 个点上两个 4-循环 -> 2 个轨道 - 忠实', !!s && s.cls.includes('ok') && s.check.includes('2 个轨道') && s.check.includes('忠实'), s?.check)
 
-  /* ── `集合(a, b, c)`：标号，且记号里就能写标号 ── */
-  await setOmega('集合(a, b, c)')
+  /* ── `labeledSet(a, b, c)`：标号，且记号里就能写标号 ── */
+  await setOmega('labeledSet(a, b, c)')
   s = await editorState()
-  ok('Ω = 集合(a, b, c) 收下了', s?.summary === '点集 3 个点：a b c', s?.summary)
+  ok('Ω = labeledSet(a, b, c) 收下了', s?.summary === '点集 3 个点：a b c', s?.summary)
   await setCycle(0, '(a b)')
   s = await editorState()
   ok('像写标号 (a b) 认得出来（不是"不是点集里的点"）', !!s && !s.check.includes('不是点集里的点'), s?.check)
   ok('  状态说是同态', !!s && s.cls.includes('ok'), s?.check)
-  await scanPlain('编辑器（Ω = 集合(a,b,c)）')
+  await scanPlain('编辑器（Ω = labeledSet(a,b,c)）')
   await page.screenshot({ path: '../../docs/assets/u53-omega-editor.png' })
 
   /* ── 一键挑画布上的集合 ── */
@@ -448,10 +448,10 @@ console.log('== ⑤ 下游：轨道 / 稳定子 在自由点集上照样算 ==')
 {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
-  ok('建 `O = 轨道(A, a)`', await addLine('O', '轨道(A, a)'))
+  ok('建 `O = orbits(A, a)`', await addLine('O', 'orbits(A, a)'))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(360)
-  ok('建 `S = 稳定子(A, a)`', await addLine('S', '稳定子(A, a)'))
+  ok('建 `S = stabilizer(A, a)`', await addLine('S', 'stabilizer(A, a)'))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(420)
   ok('两条都没报错', (await errRows()).length === 0, JSON.stringify(await errRows()))

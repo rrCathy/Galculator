@@ -96,7 +96,7 @@ export function singleOpsFor(value: GalValue): OpDef[] {
  * 而"多对象操作"恰恰是"参数还没填满"的那些，用 `opsFor` 筛必然为空。
  * （U2 就是栽在这儿：菜单里的「造」类恒空。）
  *
- * 判据用 `maxObjectArity`（**含可选对象参数**）：`像(f, H)` 必需位只有 1 个
+ * 判据用 `maxObjectArity`（**含可选对象参数**）：`image(f, H)` 必需位只有 1 个
  * （f），但第二位 H 是"可以再点一个对象"的 —— 它得在这里出现，
  * 否则 `f(H)` 除了拖拽 / 打字就没有入口（用户实测的正是这条）。
  */
@@ -105,72 +105,44 @@ export function multiOps(): OpDef[] {
 }
 
 /**
- * 悬浮球面板里的短标签：一圈放不下 `pSub(G, p)` 这种全记法。
+ * 悬浮球面板里的短标签。
  *
- * ⚠️ **这一张表里不许写 LaTeX 命令**（2026-09-27 起）。这一圈标签在按钮上是
- * **纯文本**显示，写了 `\times` 用户就会看到一串反斜杠；而如果改成走渲染，
- * 数学模式又会把 `中心 Z` 里的空格吃掉（KaTeX 在数学模式下忽略空格）。
- * 所以这里的形态就是**中文 + ASCII**：`交`、`并`、`包含` 这些词已经说清了操作，
- * 不需要再挂一个符号。要挂符号就得把标签拆成"文字 + 数学"两段渲染 —— 不值得。
+ * ⚠️ **这张表在 U54 被删掉了** —— 它从前是一张"每个 op 手写一条中文短标签"的表，
+ * 漏写一条就退到 `op.notation`。那时的 `notation` 是 LaTeX 源（`N \rtimes H`），
+ * 退过去就是把反斜杠当纯文本贴按钮上（U51 踩过）。于是表只增不减，
+ * 每加一个 op 都得记得同步 —— 而"记得同步"从来不是一条能靠得住的纪律。
+ *
+ * 现在 `notation` 本身就是**纯 ASCII 函数式**（`directProduct(A, B)`，见 ops.ts），
+ * 兜底切出 `(` 之前那段正好就是用户要敲的英文名。所以**兜底即正解**：
+ * 一张需要手工同步的表，不如一个不会漂移的派生。
+ *
+ * ⚠️ 唯一的约束：`notation` 里不许再出现 LaTeX 命令或非 ASCII（回归里有一条断言守着）。
  */
-const MENU_LABEL: Record<string, string> = {
-  directProduct: '直积',
-  // U51：与 `directProduct` 同款 —— 不写这一条，菜单会退到 `op.notation`，
-  // 也就是把 `N \rtimes H` 原样当**纯文本**贴出来（按钮上是反斜杠，不是符号）。
-  semidirectProduct: '半直积',
-  quotient: '商 /',
-  intersection: '交',
-  union: '并',
-  difference: '差',
-  productSet: '积集',
-  center: '中心 Z',
-  centralizer: '中心化子 C_G',
-  normalizer: '正规化子 N_G',
-  commutatorGroup: '换位子群 [G,G]',
-  automorphismGroup: '自同构 Aut',
-  subgroups: '所有子群',
-  pSubgroups: 'p-子群',
-  sylow: 'Sylow p-子群',
-  normalSubgroups: '正规子群',
-  conjugationAction: '共轭作用',
-  leftTranslationAction: '正则作用',
-  // U52：显式写出来，别靠 `menuLabel` 的兜底（`notation` 里切 `(` 之前那段）。
-  // 兜底在这次恰好给出「自定义作用」，但那是**巧合**，不是约定。
-  customAction: '自定义作用',
-  // U53：凭空造集合的两条 —— 同样显式写，别靠兜底（`点集` / `集合` 恰好也是兜底结果）
-  pointSet: '点集',
-  labeledSet: '集合',
-  orbits: '轨道',
-  stabilizers: '稳定子',
-  fixedPoints: '不动点',
-  kernel: '核 ker',
-  image: '像 f(H)',
-  closure: '生成子群 <S>',
-  elementOrder: '元素阶 ord',
-  map: '映射 f: G -> H',
-  contains: '包含',
-  isomorphism: '同构',
-}
-
 export function menuLabel(op: OpDef): string {
-  if (MENU_LABEL[op.id]) return MENU_LABEL[op.id]
   const paren = op.notation.indexOf('(')
   return paren > 0 ? op.notation.slice(0, paren) : op.notation
 }
 
+/**
+ * 补参条 / 提示里的**参数类型**说明。
+ *
+ * 这是**说明文字**（告诉用户"该选什么"），不是标识符 —— 所以保持中文 UI 语言。
+ * 但同样**不许写 LaTeX**：`pendingHint` 把它拼进纯文本串（`选择「A」（群）`），
+ * 写了 `\Omega` 用户看见的就是反斜杠。写 `Omega`。
+ */
 export const PARAM_LABEL: Record<ParamType, string> = {
   group: '群',
   subset: '元素集 / 子群',
   setlike: '集合 / 子群集',
-  omega: '集合 \\Omega',
+  omega: '集合 Omega',
   // U53：Ω 或它的点数 —— 补参条上就是这个意思（画布给不了就填个数字）
-  omegaOrInt: '点集 \\Omega 或点数',
+  omegaOrInt: '点集 Omega 或点数',
   action: '作用',
   map: '映射',
   element: '元素记号',
   prime: '素数',
   int: '整数',
-  genImage: '生成元 \\to 像',
+  genImage: '生成元 -> 像',
 }
 
 /** 该操作凑齐对象参数后要不要弹编辑器（映射构建器）。 */
@@ -182,7 +154,7 @@ export function needsEditor(op: OpDef): boolean {
 export function pendingHint(op: OpDef, pickedCount: number): string {
   const p = op.params[pickedCount]
   if (!p) return '选择参数'
-  // 必需位**已经选满**、还剩可选对象位（`像(f, ·)` 的 H）：这不是"还差一个"，
+  // 必需位**已经选满**、还剩可选对象位（`image(f, ·)` 的 H）：这不是"还差一个"，
   // 而是"可以再点一个"——措辞得让"不选也行"一眼可见，否则用户以为卡住了。
   if (pickedCount >= objectArity(op)) {
     return `可选：「${p.name}」（${PARAM_LABEL[p.type]}）----不选就直接执行`
@@ -214,7 +186,7 @@ export interface PairCandidate {
   /**
    * `true` = 参数顺序与"从 A 拖到 B"相反（B 当第一参）。
    *
-   * 拖拽天然不表达顺序，而参数是**有序**的（`像(f, H)` 的 f 必须在前面）。
+   * 拖拽天然不表达顺序，而参数是**有序**的（`image(f, H)` 的 f 必须在前面）。
    * 所以两个方向都试、各自记下顺序 —— 于是"从 H 拖向 f"和"从 f 拖向 H"都能成，
    * 用户不必记住哪个该在前面。
    */
@@ -253,7 +225,7 @@ const PAIR_PRIORITY = [
  *
  * ## 两个方向都试
  *
- * 参数有序而拖拽无序：`像(f, H)` 与 `包含(H, G)` 都是两参，但先后不能反。
+ * 参数有序而拖拽无序：`image(f, H)` 与 `contains(H, G)` 都是两参，但先后不能反。
  * 于是正反各试一次、合并去重（同一 op 只留先匹配上的那个顺序）。
  */
 export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
@@ -339,7 +311,7 @@ export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
 /**
  * 两个群凑在一起、候选里却**没有「包含」**时的一句解释（U38）。
  *
- * 背景：菜单**不撒谎** —— `包含(H, G)` 只有真判得出包含关系时才会出现在候选里。
+ * 背景：菜单**不撒谎** —— `contains(H, G)` 只有真判得出包含关系时才会出现在候选里。
  * 但"没列出来"和"为什么没列出来"是两件事：用户实测把 `C_3` 拖到 `V_4` 上，
  * 菜单里只有直积 / 映射，没有任何地方说一句"3 不整除 4"。
  *

@@ -48,18 +48,22 @@ G = S_4
 |---|---|---|
 | `G = S_4` · `G = D_4` · `G = C_2 x C_2` | 记号建群 | 群节点 |
 | `P = G x H` · `Q = G / Z` | 原子构造（直积 / 商群） | 群节点 + π / π₁π₂ 伴生箭头 |
-| `A = 共轭作用(G)` · `A = 共轭作用在(G, Ω)` · `A = 陪集作用(G, H)` | 原子构造（作用） | 作用对象 + 作用线（可点选，直接铺出轨道 / 稳定子） |
-| `Z = Z(G)` · `Cg = [G,G]` · `N_G(G, H)` · `C_G(G, x)` · `Inn(G)` | 作用导出（子群） | 群节点（子群是**真群对象**，所以 `Z(Z(G))` 合法） |
+| `N : H`（中缀）· `semidirectProduct(N, H)` | 原子构造（半直积） | 群节点（`⋊` 的作用欠定时**列候选**，不替你挑） |
+| `A = conjAction(G)` · `A = conjOn(G, Omega)` · `A = cosetAction(G, H)` · `A = leftAction(G)` | 原子构造（作用） | 作用对象 + 作用线（可点选，直接铺出轨道 / 稳定子） |
+| `A = customAction(G, 4, a -> (1 2 3 4))` | 原子构造（自定义作用） | 作用对象（逐个生成元给像，编辑器里「边填边看」） |
+| `Z = Z(G)` · `Cg = commutator(G)` · `N_G(G, H)` · `C_G(G, x)` · `Inn(G)` | 作用导出（子群） | 群节点（子群是**真群对象**，所以 `Z(Z(G))` 合法） |
 | `I = A \cap B` · `∪` · `\setminus` · `\cdot` | 集合运算 | 集合节点（∩ 与 · 若结果是子群，升级为群对象） |
-| `R = A \subseteq B` · `R = A \cong B` | 声明关系 | 画布上一条可点选的 `⊴` / `↪` / `≅` 边（正规性由工具判，不由你声明） |
-| `K = <J>` · `闭包(G, r2)` | 迭代（闭包） | 群节点 |
-| `f = 映射(G, H, r→0, s→0)` | 原子构造（同态） | 实线箭头（不占节点，**可点选** → 环绕出 `ker` / `im`） |
-| `O = 轨道(A, r)` · `稳定子(A, r)` · `Fix(A)` · `轨道数(A)` | 作用导出 / Burnside | 集合节点 / 数值（Burnside 平均式当场对账） |
-| `S = Sub(G)` · `pSub(G, 2)` · `Syl(G, 2)` · `极大子群(G)` | 枚举 + 筛 | 子群集（每一项都能「取出为对象」） |
-| `ord(G, (123))` · `C(12, 4)` · `Cmod(12, 4, 2)` · `gcd` · `lcm` · `phi(12)` | 属性 / 算术 | 数值（左下数值区） |
+| `V = pointSet(5)` · `L = labeledSet(a, b, c)` · `S = asSet(Syl(G, 3))` | 原子构造（集合） | 集合节点（被作用的舞台 Ω —— 凭空造任意阶集合） |
+| `R = A \subseteq B` · `R = A \cong B` · `contains(H, G)` | 声明关系 | 画布上一条可点选的 `⊴` / `↪` / `≅` 边（正规性由工具判，不由你声明） |
+| `K = <J>` · `K = closure(G, r2)` | 迭代（闭包） | 群节点 |
+| `f = map(G, H, r -> e, s -> s)` | 原子构造（同态） | 实线箭头（不占节点，**可点选** → 环绕出 `ker` / `im`） |
+| `O = orbits(A, x)` · `stabilizer(A, x)` · `fix(A)` · `burnside(A)` | 作用导出 / Burnside | 集合节点 / 数值（Burnside 平均式当场对账） |
+| `S = Sub(G)` · `pSub(G, 2)` · `Syl(G, 2)` · `maximalSubgroups(G)` · `normalSubgroups(G)` | 枚举 + 筛 | 子群集（每一项都能「取出为对象」） |
+| `ord(G, (123))` · `C(12, 4)` · `Cmod(12, 4, 2)` · `gcd(12, 18)` · `lcm(4, 6)` · `phi(12)` · `factor(24)` · `Aut(G)` | 属性 / 算术 | 数值 / 群（左下数值区） |
 
 元素参数走 core 的 `resolveElement`：`id` / `label` / 循环记号都命中，所以 `ord(S_4, (123))` 合法。
-全部 39 条操作在 [`apps/web/src/gal/ops.ts`](apps/web/src/gal/ops.ts) 的注册表里（每条声明机制、命名参数与类型，菜单由 `opsFor(selection)` 派生）。
+**操作名一律 ASCII 英文**（`directProduct` / `customAction` / `maximalSubgroups` …），菜单标签就是从名字派生的，所以「菜单上看到的」就是「敲得出来的」。
+全部 43 条操作在 [`apps/web/src/gal/ops.ts`](apps/web/src/gal/ops.ts) 的注册表里（每条声明机制、命名参数与类型，菜单由 `opsFor(selection)` 派生）。
 
 ## 界面上有什么
 
@@ -134,13 +138,13 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器走查：几何、marker
 
 ## 状态与边界
 
-**已落地**：U0–U42 的界面与交互迭代、M0–M3 里程碑（含 5 条定理模板逐步演示）。逐批的取舍与验收账在 [docs/ROADMAP.md](docs/ROADMAP.md) 与 [docs/USABILITY.md](docs/USABILITY.md)，本文件不复述。
+**已落地**：U0–U54 的界面与交互迭代、M0–M3 里程碑（含 5 条定理模板逐步演示）。逐批的取舍与验收账在 [docs/ROADMAP.md](docs/ROADMAP.md) 与 [docs/USABILITY.md](docs/USABILITY.md)，本文件不复述。
 
-**还没有的**：Cayley 定理的模板（缺「忠实作用 ⇒ 嵌入」在图上的落点）· 集合构造器 · 宏 · 工具条与群目录 · 后端计算栈（GAP 推迟，目前全靠 `@groupviz/core` 的前端原语）。
+**还没有的**：Cayley 定理的模板（缺「忠实作用 ⇒ 嵌入」在图上的落点）· 集合的**描述式**构造（分面表格 + 属性谓词 `{x in A_4 : x^2 = e}`；凭空造点集已经有了）· 宏 · 工具条与群目录 · 后端计算栈（GAP 推迟，目前全靠 `@groupviz/core` 的前端原语）。
 
 **已知边界**（有意为之，不是待修的 bug）：
 
-- `像(f, H)` 在 H 有多个嵌入时**不自动翻译** —— `f(H)` 是一个具体的子群，「取哪个嵌入的像」说不准。
+- `image(f, H)` 在 H 有多个嵌入时**不自动翻译** —— `f(H)` 是一个具体的子群，「取哪个嵌入的像」说不准。
 - 大群有硬上限（子群枚举 / 结构节 `|G| ≤ 60`）。超限时**明说「没算」**，不会拿一个错答案糊过去。
 - 正规性跳不过元素：`H ⊴ G` 问的是「G 里那个具体拷贝稳不稳」，裸群说不出是哪一个 —— 这时如实回「未判定」。
 

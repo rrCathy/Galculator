@@ -303,7 +303,7 @@ function EdgeSection({ edge }: { edge: { edge: GalEdge; info: StructuralEdge } }
       <div className="rel-note">
         这条箭头是操作的伴生（由某个操作顺手长出来的），不是一等对象：
         它不能当参数、也不列可做的操作。要一条能引用、能删、能进证明的包含，
-        自己写一行「R = 包含(A, B)」。
+        自己写一行「R = contains(A, B)」。
       </div>
     </>
   )
@@ -721,7 +721,7 @@ function SubgroupsTab({ group }: { group: Group }) {
 
       <div className="insp-note dim">
         这一屏里有 {normalCount} 个正规（共轭类口径）。要看全部子群 / 全部正规子群：
-        用「操作」抽屉里的 Sub(G) 与 正规子群(G)（正规子群会把平凡群与 G 自身也算进来）。
+        用「操作」抽屉里的 Sub(G) 与 normalSubgroups(G)（正规子群会把平凡群与 G 自身也算进来）。
       </div>
     </div>
   )
@@ -762,7 +762,7 @@ function SubgroupRow({ sub }: { sub: CosetSub }) {
  * （`C_2 x9` / `C_4 x3` / `D_4 x3`…）之后，一眼就是"这个群里有哪些种类的子群、
  * 各有多少个"；点开某一组才摊成员（成员按钮照旧能取出为对象）。
  *
- * 组数 ≤ 2 时**默认摊开** —— 免得两个组也包一层壳（`正规子群(A_4)` 那种短列表）。
+ * 组数 ≤ 2 时**默认摊开** —— 免得两个组也包一层壳（`normalSubgroups(A_4)` 那种短列表）。
  */
 function SubgroupTagList({
   group,

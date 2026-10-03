@@ -10,10 +10,10 @@
  * 修法是给它加第二关（嵌入）：G 里有没有与 H 同构的子群。
  *
  * 这一套只验**用户看得见的那条路**：
- *   ① 真指针拖 V₄ → S₄：菜单里有「包含」，点一下长出 `V₄ ⊆ S₄` 的边
+ *   ① 真指针拖 V₄ → S₄：菜单里有「contains」，点一下长出 `V₄ ⊆ S₄` 的边
  *   ② 拖 C₃ → S₄：同样能拉出来
  *   ③ 拖 C₃ → V₄：**不该**列出包含（3 ∤ 4），但菜单里要说清"为什么"
- *   ④ 手打 `包含(V_4, S_4)` 也成；`包含(C_3, V_4)` 报拉格朗日
+ *   ④ 手打 `contains(V_4, S_4)` 也成；`contains(C_3, V_4)` 报拉格朗日
  *   ⑤ 信息面板的「子群」折叠节：同构类分组 + ⊴ 渲染 + 文案不泄漏
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/batch10.mjs`
@@ -196,10 +196,10 @@ console.log('== ① 拖 V₄ → S₄（用户报的那条）==')
   )
   const items = await menuItems()
   ok('弹出了候选菜单', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  ok('菜单第一条是「包含」（按数学意图排序）', (items[0] ?? '').includes('包含'), items.join(' | '))
+  ok('菜单第一条是「contains」（按数学意图排序；U54 前叫「包含」）', (items[0] ?? '').includes('contains'), items.join(' | '))
   ok('菜单里**没有**那句"为什么没有包含"（因为已经列出来了）', (await menuMiss()) === null)
 
-  // 点第一条（包含）
+  // 点第一条（contains）
   await page.click('.connect-menu .connect-item', { timeout: 6000 })
   await page.waitForTimeout(700)
 
@@ -228,8 +228,8 @@ console.log('== ①b 对照：A₄ → S₄（判得出正规）==')
   )
   const items = await menuItems()
   ok('弹出候选菜单', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  const idx = items.findIndex((t) => t.includes('包含'))
-  ok('菜单里有「包含」', idx >= 0, items.join(' | '))
+  const idx = items.findIndex((t) => t.includes('contains'))
+  ok('菜单里有「contains」', idx >= 0, items.join(' | '))
   await page.locator('.connect-menu .connect-item').nth(idx).click()
   await page.waitForTimeout(700)
   const after = await canvasState()
@@ -256,8 +256,8 @@ console.log('== ② 拖 C₃ → S₄ ==')
   )
   const items = await menuItems()
   ok('弹出候选菜单', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  ok('菜单里有「包含」', items.some((t) => t.includes('包含')), items.join(' | '))
-  const idx = items.findIndex((t) => t.includes('包含'))
+  ok('菜单里有「contains」', items.some((t) => t.includes('contains')), items.join(' | '))
+  const idx = items.findIndex((t) => t.includes('contains'))
   await page.locator('.connect-menu .connect-item').nth(idx).click()
   await page.waitForTimeout(700)
   const after = await canvasState()
@@ -278,23 +278,23 @@ console.log('== ③ 拖 C₃ → V₄（3 ∤ 4，本来就不该有）==')
   )
   const items = await menuItems()
   ok('菜单弹出来了（直积 / 映射）', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  ok('菜单里**没有**「包含」（菜单不撒谎）', !items.some((t) => t.includes('包含')), items.join(' | '))
+  ok('菜单里**没有**「contains」（菜单不撒谎）', !items.some((t) => t.includes('contains')), items.join(' | '))
   const miss = await menuMiss()
   ok('但菜单里给了一句解释', !!miss, String(miss))
   ok('解释里点明"不整除 + 拉格朗日"', !!miss && miss.includes('不整除') && miss.includes('拉格朗日'), String(miss))
   await closeMenu()
 }
 
-/* ── ④ 手打：`包含(V_4, S_4)` 成、`包含(C_3, V_4)` 报拉格朗日 ── */
+/* ── ④ 手打：`contains(V_4, S_4)` 成、`contains(C_3, V_4)` 报拉格朗日 ── */
 
 console.log('')
 console.log('== ④ 手打的声明包含 ==')
 {
-  const good = await addLine('R1', '包含(V, S4)')
-  ok('`包含(V_4, S_4)` 求值成功（U38 第二关）', good.enabled === true, `enabled=${good.enabled} status=${good.status}`)
+  const good = await addLine('R1', 'contains(V, S4)')
+  ok('`contains(V_4, S_4)` 求值成功（U38 第二关）', good.enabled === true, `enabled=${good.enabled} status=${good.status}`)
 
-  const bad = await addLine('R2', '包含(C, V)', true)
-  ok('`包含(C_3, V_4)` 被拦（提交按钮禁用）', bad.enabled === false, `enabled=${bad.enabled}`)
+  const bad = await addLine('R2', 'contains(C, V)', true)
+  ok('`contains(C_3, V_4)` 被拦（提交按钮禁用）', bad.enabled === false, `enabled=${bad.enabled}`)
   ok('报错点明"不整除 + 拉格朗日"', !!bad.status && bad.status.includes('不整除') && bad.status.includes('拉格朗日'), String(bad.status))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
@@ -347,12 +347,12 @@ console.log('== ⑤ 信息面板「子群」这一节：⊴ 渲染 + 文案不�
 console.log('')
 console.log('== ⑦ 商群（陪集层）：拖 C₃ → S₄/V₄ ==')
 {
-  const built = await addLine('Q', '商(S4, V)')
-  ok('`商(S4, V_4)` 建得出来（V₄ 自动翻译成 S₄ 里的 Klein）', built.enabled === true, `enabled=${built.enabled}`)
+  const built = await addLine('Q', 'quotient(S4, V)')
+  ok('`quotient(S4, V_4)` 建得出来（V₄ 自动翻译成 S₄ 里的 Klein）', built.enabled === true, `enabled=${built.enabled}`)
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 
-  // 建出来就是 6 阶商群；拖 C₃ 上去，菜单里该有「包含」
+  // 建出来就是 6 阶商群；拖 C₃ 上去，菜单里该有 contains
   const qNode = await page.evaluate(() => {
     const el = document.querySelector('svg.canvas g.gnode[data-id="Q"] .gnode-hit')
     if (!el) return null
@@ -380,8 +380,8 @@ console.log('== ⑦ 商群（陪集层）：拖 C₃ → S₄/V₄ ==')
       return [...m.querySelectorAll('button')].map((b) => b.textContent.trim())
     })
     ok(
-      '拖 C₃ → S₄/V₄：菜单里列出「包含」（用户报的这条，U38 修好）',
-      !!items && items.some((t) => t.includes('包含')),
+      '拖 C₃ → S₄/V₄：菜单里列出「contains」（用户报的这条，U38 修好）',
+      !!items && items.some((t) => t.includes('contains')),
       JSON.stringify(items),
     )
     await page.keyboard.press('Escape')

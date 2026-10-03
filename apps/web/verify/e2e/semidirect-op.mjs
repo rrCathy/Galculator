@@ -14,11 +14,15 @@
  *      候选用**不变量**列出来（同一个记号下各候选的符号一模一样）；
  *   ③ **算不动要说清卡在哪**：`C_2^5 : C_3` → 「本地不跑」+ 压力数字，
  *      且**不许**出现「后端 / 待接入」（本项目没有后端）；
- *   ④ **四个入口自动获得**：拖 `C_2^2` 到 `C_3` 上 → 菜单里有「半直积」→ 点一下建出 12 阶；
- *   ⑤ **菜单不撒谎**：`A_4` 拖到 `S_4`（288 阶，超规模线）→ 菜单里**没有**「半直积」，
- *      但「直积」照列 —— 列出来点下去必被预算拦住，就是撒谎；
+ *   ④ **四个入口自动获得**：拖 `C_2^2` 到 `C_3` 上 → 菜单里有 `semidirectProduct` → 点一下建出 12 阶；
+ *   ⑤ **菜单不撒谎**：`A_4` 拖到 `S_4`（288 阶，超规模线）→ 菜单里**没有** `semidirectProduct`，
+ *      但 `directProduct` 照列 —— 列出来点下去必被预算拦住，就是撒谎；
  *   ⑥ **纯文本面零泄漏**：状态行 / 连线菜单 / ⊕ 面板的文本全是「键盘打得出」的字符
  *      （判据与 `e2e/no-unicode-leak.mjs` 的 `ALLOWED` 逐字相同）。
+ *
+ * ⚠️ 菜单标签的期望值（U54 起）：标签是**从 `OpDef.notation` 派生**的英文名
+ * （`semidirectProduct` / `directProduct` / `contains` / `Z` / `Syl` …），
+ * 不再是一张手写的中文表。改这一套时别照抄源码注释里的旧中文名。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/semidirect-op.mjs`
  */
@@ -252,11 +256,11 @@ await typeExpr('C_2^5 : C_3')
 }
 
 /* ══════════════════════════════════════════════════════════
- * ④ 四个入口自动获得：连线菜单里就有「半直积」
+ * ④ 四个入口自动获得：连线菜单里就有 `semidirectProduct`
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ④ 拖两个群 -> 菜单里有「半直积」 ==')
+console.log('== ④ 拖两个群 -> 菜单里有 semidirectProduct ==')
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
@@ -285,15 +289,15 @@ const before = await canvasState()
     await dragPointer(a, b, true)
     const labels = await menuLabels()
     ok('弹出了候选菜单（多候选，没有静默执行）', labels.length > 0, JSON.stringify(labels))
-    ok('菜单里有「半直积」（op 从注册表派生，画布上自动就有）', labels.includes('半直积'), labels.join(' | '))
+    ok('菜单里有「semidirectProduct」（op 从注册表派生，画布上自动就有；U54 前叫「半直积」）', labels.includes('semidirectProduct'), labels.join(' | '))
     ok('标签不是原样贴出的 LaTeX（不许出现反斜杠）', labels.every((l) => !l.includes('\\')), labels.join(' | '))
     ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
     await page.screenshot({ path: '../../docs/assets/u51-semidirect-connect-menu.png' })
 
-    // 点「半直积」—— 菜单不撒谎：列出来就得真跑得动
+    // 点 semidirectProduct —— 菜单不撒谎：列出来就得真跑得动
     await page.evaluate(() => {
       const b2 = [...document.querySelectorAll('.connect-item')].find((x) =>
-        x.querySelector('.connect-label')?.textContent?.trim() === '半直积',
+        x.querySelector('.connect-label')?.textContent?.trim() === 'semidirectProduct',
       )
       b2?.click()
     })
@@ -321,11 +325,11 @@ const before = await canvasState()
 }
 
 /* ══════════════════════════════════════════════════════════
- * ⑤ 菜单不撒谎：超规模线的一对不列「半直积」
+ * ⑤ 菜单不撒谎：超规模线的一对不列 semidirectProduct
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ⑤ `A_4` 拖到 `S_4` -> 不列「半直积」 ==')
+console.log('== ⑤ `A_4` 拖到 `S_4` -> 不列 semidirectProduct ==')
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
@@ -353,9 +357,9 @@ await page.waitForTimeout(480)
     const labels = await menuLabels()
     ok('弹出候选菜单', labels.length > 0, JSON.stringify(labels))
     // 手算：|A_4| x |S_4| = 12 x 24 = 288 > 256（本地规模线）—— 列出来点下去必被预算拦住
-    ok('菜单里**没有**「半直积」（列出来就是撒谎）', !labels.includes('半直积'), labels.join(' | '))
-    ok('同一对下「直积」照列（别把预检做成"一律不列"）', labels.includes('直积'), labels.join(' | '))
-    ok('「包含」也在（A_4 正常规于 S_4，这是真判据）', labels.includes('包含'), labels.join(' | '))
+    ok('菜单里**没有**「semidirectProduct」（列出来就是撒谎）', !labels.includes('semidirectProduct'), labels.join(' | '))
+    ok('同一对下「directProduct」照列（别把预检做成"一律不列"）', labels.includes('directProduct'), labels.join(' | '))
+    ok('「contains」也在（A_4 正规于 S_4，这是真判据）', labels.includes('contains'), labels.join(' | '))
     ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
 
     // 真拖两次同一个东西也不该把 14 秒的活悄悄塞给用户：菜单里没有它，就没法误点

@@ -32,7 +32,7 @@ function factorsOf(sym: string): string {
   return (f?.composition?.factors ?? []).map((x) => prettySymbol(x)).join(',')
 }
 
-/** 最后一个对象的数值（`n = 轨道数(A)` 这类）。 */
+/** 最后一个对象的数值（`n = burnside(A)` 这类）。 */
 function lastNumber(lines: string[]): number | null {
   const r = build(lines)
   const last = r.objects[r.objects.length - 1]
@@ -46,7 +46,7 @@ function lastGroup(lines: string[]) {
   return last?.value.type === 'group' ? last.value.group : null
 }
 
-/** 最后一个对象的子群列表（`M = 极大子群(G)` 这类）。 */
+/** 最后一个对象的子群列表（`M = maximalSubgroups(G)` 这类）。 */
 function lastSubgroups(lines: string[]) {
   const r = build(lines)
   const last = r.objects[r.objects.length - 1]
@@ -107,7 +107,7 @@ export function run(): void {
       lastObject(['n = phi(12)']).label,
       '\\varphi(12)',
     )
-    eq('中文调用名也对（欧拉函数）', lastNumber(['n = 欧拉函数(12)']), 4)
+    eq('中文调用名也对（欧拉函数）', lastNumber(['n = eulerPhi(12)']), 4)
 
     // 参数守卫：负数 / 0 各有专门的说法（不许静默算个错的）
     ok(
@@ -131,7 +131,7 @@ export function run(): void {
       ['D_6', 6],
     ]
     for (const [sym, want] of CONJ) {
-      const lines = [`G = ${sym}`, 'A = 共轭作用(G)', 'k = 轨道数(A)']
+      const lines = [`G = ${sym}`, 'A = conjAction(G)', 'k = burnside(A)']
       eq(`${sym} 的共轭类数 = ${want}`, lastNumber(lines), want)
       // 交叉核对：core 自己的共轭类实现（两条独立的路径给出同一个数）
       eq(
@@ -145,23 +145,23 @@ export function run(): void {
     // D₄ 共轭作用手算 Σ|Fix(g)|：|Fix(g)| = |C_G(g)| ——
     //   e: 8；r, r³: 4, 4；r²（中心）: 8；四个反射 sr^k: 各 4
     //   -> 8 + 4 + 4 + 8 + 4·4 = 40；40 / 8 = 5 ✓（与直接数的 5 对上）
-    const sub = lastObject(['G = D_4', 'A = 共轭作用(G)', 'k = 轨道数(A)']).sub ?? ''
+    const sub = lastObject(['G = D_4', 'A = conjAction(G)', 'k = burnside(A)']).sub ?? ''
     ok('副行给出 Burnside 的平均式', sub.includes('Burnside'), sub)
     ok('  且两条路对上了（v）', sub.includes('v'), sub)
     ok('  40 / 8 = 5（上面注释里逐步手算过）', sub.includes('40 / 8 = 5'), sub)
 
     // 传递作用（正则作用）只有 1 条轨道
-    eq('正则作用(S_3) 的轨道数 = 1（传递）', lastNumber(['G = S_3', 'A = 正则作用(G)', 'k = 轨道数(A)']), 1)
-    // 嵌套写法也得对（TASKS.md 里的那一行就是 `轨道数(共轭作用(G))`）
-    eq('嵌套：轨道数(共轭作用(G)) 也对', lastNumber(['G = D_4', 'k = 轨道数(共轭作用(G))']), 5)
+    eq('leftAction(S_3) 的轨道数 = 1（传递）', lastNumber(['G = S_3', 'A = leftAction(G)', 'k = burnside(A)']), 1)
+    // 嵌套写法也得对（TASKS.md 里的那一行就是 `burnside(conjAction(G))`）
+    eq('嵌套：burnside(conjAction(G)) 也对', lastNumber(['G = D_4', 'k = burnside(conjAction(G))']), 5)
     // 陪集作用也传递：S₄ 对 ⟨(12)⟩ 的 12 个左陪集
     eq(
-      '陪集作用(S_4, H) 的轨道数 = 1（传递）',
-      lastNumber(['G = S_4', 'H = 闭包(G, (12))', 'A = 陪集作用(G, H)', 'k = 轨道数(A)']),
+      'cosetAction(S_4, H) 的轨道数 = 1（传递）',
+      lastNumber(['G = S_4', 'H = closure(G, (12))', 'A = cosetAction(G, H)', 'k = burnside(A)']),
       1,
     )
     {
-      const r = build(['G = S_4', 'H = 闭包(G, (12))', 'A = 陪集作用(G, H)'])
+      const r = build(['G = S_4', 'H = closure(G, (12))', 'A = cosetAction(G, H)'])
       const a = r.byId('A')?.value
       eq('  Ω 的基数 = [S₄:H] = 12', a?.type === 'action' ? a.action.n : -1, 12)
     }
@@ -172,7 +172,7 @@ export function run(): void {
   suite('structure \\cdot 极大子群（子群格的直接下层）')
   {
     {
-      const subs = lastSubgroups(['G = S_4', 'M = 极大子群(G)'])
+      const subs = lastSubgroups(['G = S_4', 'M = maximalSubgroups(G)'])
       eq('S_4 的极大子群 8 个', subs.length, 8)
       eq(
         '  阶的多重集 = A₄(12) + 三个 D₄(8) + 四个 S₃(6)',
@@ -182,29 +182,29 @@ export function run(): void {
       eq('  其中只有 A₄ 正规（指数 2）', subs.filter((s) => s.isNormal).map((s) => s.order).join(','), '12')
     }
     {
-      const subs = lastSubgroups(['G = D_4', 'M = 极大子群(G)'])
+      const subs = lastSubgroups(['G = D_4', 'M = maximalSubgroups(G)'])
       eq('D₄ 的极大子群 3 个', subs.length, 3)
       eq('  全是阶 4（指数 2 -> 全正规）', subs.map((s) => s.order).join(','), '4,4,4')
       eq('  且全正规', subs.filter((s) => s.isNormal).length, 3)
     }
     {
-      const subs = lastSubgroups(['G = A_4', 'M = 极大子群(G)'])
+      const subs = lastSubgroups(['G = A_4', 'M = maximalSubgroups(G)'])
       eq('A₄ 的极大子群 5 个 = V₄ + 四个 C₃', subs.length, 5)
       eq('  阶的多重集', subs.map((s) => s.order).sort((a, b) => b - a).join(','), '4,3,3,3,3')
       eq('  只有 V₄ 正规', subs.filter((s) => s.isNormal).map((s) => s.order).join(','), '4')
     }
     {
-      const subs = lastSubgroups(['G = C_12', 'M = 极大子群(G)'])
+      const subs = lastSubgroups(['G = C_12', 'M = maximalSubgroups(G)'])
       eq('C₁₂ 的极大子群 2 个 = C₆ + C₄', subs.map((s) => s.order).sort((a, b) => b - a).join(','), '6,4')
     }
     {
-      const subs = lastSubgroups(['G = C_7', 'M = 极大子群(G)'])
+      const subs = lastSubgroups(['G = C_7', 'M = maximalSubgroups(G)'])
       eq('C₇ 的极大子群只有 {e}（素数阶）', subs.map((s) => s.order).join(','), '1')
     }
 
     // 半份判据：挡住"把 G 自己也列进来"这类错
     {
-      const r = build(['G = S_4', 'M = 极大子群(G)'])
+      const r = build(['G = S_4', 'M = maximalSubgroups(G)'])
       const g = r.byId('G')?.value
       const v = r.byId('M')?.value
       const order = g?.type === 'group' ? g.group.order : 0
@@ -216,7 +216,7 @@ export function run(): void {
     // 超限守卫：core 的格超限时会**静默退化成 {e} 与 G 两点**（实测 216 阶），
     // 照单全收会把平凡子群当成极大子群 —— 所以这条守卫必须自己判，且要**说出来**
     {
-      const over = lastLine(['G = S_3', 'H = S_3', 'P = G x H', 'Q = P x S_3', 'M = 极大子群(Q)'])
+      const over = lastLine(['G = S_3', 'H = S_3', 'P = G x H', 'Q = P x S_3', 'M = maximalSubgroups(Q)'])
       ok('> 枚举线时明说算不了（不静默给出错的答案）', (over.error ?? '').includes('超过子群枚举线'), over.error)
     }
   }

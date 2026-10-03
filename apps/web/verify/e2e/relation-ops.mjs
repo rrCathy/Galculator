@@ -6,14 +6,14 @@
  *   "f(A₄) 怎么创建？直接拖到 f 上？没这个功能"
  *
  * 这里在真浏览器里把两条都做出来，并验几何层：
- *   - `FA = 像(f, A)` 长出 `f(A) \\trianglelefteq S₃` 的顶点与边（`A_3 \\trianglelefteq S_3`，指数 2）
+ *   - `FA = image(f, A)` 长出 `f(A) \\trianglelefteq S₃` 的顶点与边（`A_3 \\trianglelefteq S_3`，指数 2）
  *   - `R = A \\subseteq G` 长出**可点选**的关系边（A₄ \\trianglelefteq S₄ \\to 标签 `\\trianglelefteq`）
  *   - 点那条边 \\to 信息面板给出「关系」的账（指数 24/12 = 2）
  *   - D₄ \\subseteq S₄ 现在建得出来（U38 嵌入判定：指数 3、非正规 \\to 单射钩）
  *
  * U31 增补：`f(H)` 的**菜单入口**（从前只有拖拽 / 打字两条路，用户"找不到入口"）——
  *   ① 点箭头 f → 悬浮球「im」（U44 起：信息面板那行「可做」已砍，改走同一条 singleOps）→ 条上停在"可选 H"（有"不填，直接执行"）
- *      \\to 再点 A₄ = `像(f, A)`（命中已有的 FA）；
+ *      \\to 再点 A₄ = `image(f, A)`（命中已有的 FA）；
  *   ② ⊕ 球 \\to 像 f(H) \\to 先点箭头 f \\to 点"不填 H，直接执行" \\to 长出 `im f`（6 阶）。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/relation-ops.mjs`
@@ -153,10 +153,10 @@ const infoState = async () => {
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12->23, c->13)')
+await addLine('f', 'map(G, H, s12->23, c->13)')
 await addLine('K', 'ker(f)')
 await addLine('A', 'A_4')
-await addLine('FA', '像(f, A)')
+await addLine('FA', 'image(f, A)')
 await addLine('R', 'A \\subseteq G')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(400)
@@ -284,7 +284,7 @@ await page.waitForTimeout(420)
   ok('条上有「不填 H，直接执行」', (skip ?? '').includes('不填 H'), skip ?? '')
   await page.screenshot({ path: '../../docs/assets/u31-image-entry.png' })
 
-  // 再点 A₄ = 把可选位 H 填上 → 组装出 `像(f, A)` → 命中已有的 FA（同一次推导只留一个对象）
+  // 再点 A₄ = 把可选位 H 填上 → 组装出 `image(f, A)` → 命中已有的 FA（同一次推导只留一个对象）
   const before = await nodeIds()
   ok('点得中 A₄ 顶点', await clickSvg('g.gnode[data-id="A"] .gnode-hit'))
   await page.waitForTimeout(440)
@@ -294,21 +294,21 @@ await page.waitForTimeout(420)
     document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
   )
   ok(
-    '提示说"FA 已经是这个对象"（证明组装出来的就是 像(f, A)）',
+    '提示说"FA 已经是这个对象"（证明组装出来的就是 image(f, A)）',
     notice.includes('FA') && notice.includes('已经是这个对象'),
     notice,
   )
 }
 
-/* ── ② ⊕ 球：像 f(H) → 先点 f → "不填 H，直接执行" = im f（新顶点，6 阶） ── */
+/* ── ② ⊕ 球：image → 先点 f → "不填 H，直接执行" = im f（新顶点，6 阶） ── */
 
 await page.keyboard.press('Escape')
 await page.waitForTimeout(300)
 await page.click('.multi-orb .orb-center')
 await page.waitForTimeout(300)
 {
-  const item = page.locator('.orb-center-panel .orb-op', { hasText: '像 f(H)' }).first()
-  ok('⊕ 多对象菜单里有「像 f(H)」', (await item.count()) > 0)
+  const item = page.locator('.orb-center-panel .orb-op', { hasText: 'image' }).first()
+  ok('⊕ 多对象菜单里有「image」（U54 前叫「像 f(H)」）', (await item.count()) > 0)
   await item.click()
   await page.waitForTimeout(320)
   const bar1 = await barText()

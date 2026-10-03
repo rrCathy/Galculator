@@ -303,10 +303,10 @@ export function run(): void {
     ok('Sub(S_6) 说"超过子群枚举线"', sub6.err.includes('超过子群枚举线'), sub6.err)
     ok('理由写的是"本地跑不完"，不是"待后端"', !sub6.err.includes('后端'), sub6.err)
 
-    const norm6 = failOf(['G = S_6', 'A = 正规子群(G)'])
-    ok('正规子群(S_6) 同样拦住且不说"待后端"', norm6.err.includes('超过子群枚举线') && !norm6.err.includes('后端'), norm6.err)
+    const norm6 = failOf(['G = S_6', 'A = normalSubgroups(G)'])
+    ok('normalSubgroups(S_6) 同样拦住且不说"待后端"', norm6.err.includes('超过子群枚举线') && !norm6.err.includes('后端'), norm6.err)
 
-    const max6 = failOf(['G = S_3', 'H = S_3', 'P = G x H', 'Q = P x S_3', 'M = 极大子群(Q)'])
+    const max6 = failOf(['G = S_3', 'H = S_3', 'P = G x H', 'Q = P x S_3', 'M = maximalSubgroups(Q)'])
     ok('极大子群超线也拦住', max6.err.includes('超过子群枚举线'), max6.err)
 
     /*
@@ -328,7 +328,7 @@ export function run(): void {
       'G3 = S_6',
       'R3 = Sub(G3)',
       'G4 = S_6',
-      'R4 = 正规子群(G4)',
+      'R4 = normalSubgroups(G4)',
     ])
     let scanned = 0
     for (const st of r.lineStates) {

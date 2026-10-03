@@ -28,10 +28,10 @@
  *
  * | 写法 | Ω |
  * |---|---|
- * | `自定义作用(C_4, 4, a -> (1 2 3 4))` | 4 个抽象点，点号 `1..4`（`group: null`）|
- * | `自定义作用(S_4, 点集(5), s12 -> (1 2))` | 同上，点数由点集给 |
- * | `自定义作用(S_4, 集合(a, b, c), s12 -> (a b))` | 标号由点集给，**记号里就用标号写** |
- * | `自定义作用(S_4, 底集(Syl(S_4, 3)), s12 -> (1 2 3 4))` | 现成的集合：标号是子群记号（写不进循环记号）⇒ 数字按**位置**读 |
+ * | `customAction(C_4, 4, a -> (1 2 3 4))` | 4 个抽象点，点号 `1..4`（`group: null`）|
+ * | `customAction(S_4, pointSet(5), s12 -> (1 2))` | 同上，点数由点集给 |
+ * | `customAction(S_4, labeledSet(a, b, c), s12 -> (a b))` | 标号由点集给，**记号里就用标号写** |
+ * | `customAction(S_4, asSet(Syl(S_4, 3)), s12 -> (1 2 3 4))` | 现成的集合：标号是子群记号（写不进循环记号）⇒ 数字按**位置**读 |
  *
  * 点记号 → 位置号的解析在 `pointSet.ts#labelCycleToNumeric`（**标签优先、位置兜底**），
  * 语法仍然由 core 的 `parseCycleNotation` 负责 —— 不另写一份循环记号解析器。
@@ -79,7 +79,7 @@ const nm = (g: Group): string => prettySymbol(g.symbol)
  * Ω 的点数上限 —— **与 `pointSet.ts` 的 `POINT_SET_MAX` 是同一个数**
  * （手写循环记号的边界，不是算力的边界）。
  *
- * U53 起这个数归 `pointSet.ts` 所有（`点集(n)` 与这里共用一个上限），
+ * U53 起这个数归 `pointSet.ts` 所有（`pointSet(n)` 与这里共用一个上限），
  * 这里只是沿用原来的名字，免得下游（`ActionBuilder` / 回归套件）改引用。
  */
 export const CUSTOM_ACTION_POINT_CAP = POINT_SET_MAX
@@ -230,14 +230,14 @@ export interface GenImageDraft {
  * Ω 的两种给法（U53）。
  *
  * 从前只有 `count` —— 也就是"Ω 只能是内核硬造的 `{1..n}`"，于是
- * "让 G 作用在**你自己的**集合上"表达不出来（`自定义作用(S_4, 底集(Syl(S_4,3)), …)`
+ * "让 G 作用在**你自己的**集合上"表达不出来（`customAction(S_4, asSet(Syl(S_4,3)), …)`
  * 报「作用点集的基数 n 必须是正整数」）。现在多一条：直接给一个集合对象。
  *
  * 纯 `number` 也被接受（= `count`）—— 那是 U52 的写法，契约不改。
  */
 export type OmegaSpec =
   | { kind: 'count'; n: number }
-  /** 一个现成的集合（`点集(5)` / `集合(a,b,c)` / `底集(Syl_p(G))` …） */
+  /** 一个现成的集合（`pointSet(5)` / `labeledSet(a,b,c)` / `asSet(Syl_p(G))` …） */
   | { kind: 'set'; set: GalSet; ref?: string }
 
 export interface CustomActionPlanOk {
@@ -273,13 +273,13 @@ export type CustomActionPlan = CustomActionPlanOk | CustomActionPlanBlocked
 /**
  * 一个**值**能不能当 Ω；能就给出 `OmegaSpec`。
  *
- * **op 与作用编辑器共用这一条判据**（U53）：手打的 `自定义作用(G, 底集(Syl_p(G)), …)`
- * 与编辑器里填 `底集(Syl_p(G))` 必须对同一个东西给出同一个答案。
+ * **op 与作用编辑器共用这一条判据**（U53）：手打的 `customAction(G, asSet(Syl_p(G)), …)`
+ * 与编辑器里填 `asSet(Syl_p(G))` 必须对同一个东西给出同一个答案。
  * 两处各写一份筛选，迟早出现"编辑器收而 op 不收"那种最难查的错。
  *
  * 收三种：
- *   · `set` —— `点集(5)` / `集合(a,b,c)` / `底集(Syl_p(G))` 的产物
- *   · `elements` —— 元素集（`中心(S_4)` / `轨道(A,1)`）
+ *   · `set` —— `pointSet(5)` / `labeledSet(a,b,c)` / `asSet(Syl_p(G))` 的产物
+ *   · `elements` —— 元素集（`Z(S_4)` / `orbits(A,1)`）
  *   · `group` —— 群本身（当"它的底集"读，与 `共轭作用在` 的 Ω 同理）
  */
 export function omegaSpecOfValue(v: GalValue, name: string, ref?: string): OmegaSpec | null {
@@ -289,7 +289,7 @@ export function omegaSpecOfValue(v: GalValue, name: string, ref?: string): Omega
       kind: 'set',
       set: {
         group: v.group,
-        label: `底集(${name})`,
+        label: `asSet(${name})`,
         members: v.elements.map((e) => ({ label: e.label })),
         from: ref,
       },
@@ -301,7 +301,7 @@ export function omegaSpecOfValue(v: GalValue, name: string, ref?: string): Omega
       kind: 'set',
       set: {
         group: v.group,
-        label: `底集(${name})`,
+        label: `asSet(${name})`,
         members: v.group.elements.map((e) => ({ label: e.label })),
         from: ref,
       },
@@ -347,9 +347,9 @@ export function planCustomAction(
   const spec: OmegaSpec = typeof omega === 'number' ? { kind: 'count', n: omega } : omega
   /*
    * 点数那一支的校验**不在这里另写一份** —— 交给 `pointSet.ts#planCountPointSet`
-   * （`点集(n)` 与这里共用同一个上限、同一批报错语）。
+   * （`pointSet(n)` 与这里共用同一个上限、同一批报错语）。
    * 下面那道 `n > CUSTOM_ACTION_POINT_CAP` 是给**集合**那一支留的：
-   * `底集(C_1000)` 这种现成集合的点数由集合自己决定，不走 `点集(n)`。
+   * `asSet(C_1000)` 这种现成集合的点数由集合自己决定，不走 `pointSet(n)`。
    */
   const om = omegaOf(spec)
   if ('error' in om) return { ok: false, error: om.error, hint: om.hint }
@@ -384,7 +384,7 @@ export function planCustomAction(
     return {
       ok: false,
       error: `${generatorCollisionReason(G)}，给不了它们不同的像`,
-      hint: '想让 G 作用在自己身上用「正则作用」，其余三种内置作用也各有现成的路',
+      hint: '想让 G 作用在自己身上用 leftAction，其余三种内置作用也各有现成的路',
     }
   }
 

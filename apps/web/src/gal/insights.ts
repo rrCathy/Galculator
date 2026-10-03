@@ -10,7 +10,7 @@ import {
   type GroupElement,
   type Subgroup,
 } from '@groupviz/core'
-import { prettySymbol, superscript } from './pretty'
+import { asciiSymbol, prettySymbol, superscript } from './pretty'
 import { groupFingerprint } from './identity'
 // 作用的核（U52）：判据只有一份 —— 与「自定义作用」的披露共用同一个函数
 import { actionKernel } from './customAction'
@@ -72,7 +72,7 @@ function canonSymbol(s: string): string {
  */
 const ISO_COMMON_NAME: Record<string, string> = {
   'C_{2}\\times C_{2}': '也写作 V_4（Klein 四元群）',
-  'C_{2}\\times C_{2}\\times C_{2}': '初等交换 2-群（每元阶 \\le 2）',
+  'C_{2}\\times C_{2}\\times C_{2}': '初等交换 2-群（每个元素的阶都不超过 2）',
   'S_{3}': '最小的非交换群（也是 D_3）',
   'S_{4}': '4 元对称群',
   'A_{4}': '4 元交错群（最小的非交换可解群）',
@@ -183,7 +183,7 @@ export interface Insight {
  * ## 说不说，分三种情形（都不说废话）
  *
  *   - **构造出来的**（有 `opId`）→ 一律说。它的符号本身就是结构记号
- *     （`ker f` 的符号是 `C_{2}`、`闭包(G,r)` 的是 `C_{4}`），不说不回答"K 是什么"。
+ *     （`ker f` 的符号是 `C_{2}`、`closure(G,r)` 的是 `C_{4}`），不说不回答"K 是什么"。
  *   - **手写但库里有惯用名**（`C_2 x C_2` → V₄）→ 说，把惯用名当答案。
  *   - **手写且再没别的可说**（`G = C_6`）→ 闭嘴（`C₆ = C₆` 是废话）。
  *
@@ -232,7 +232,7 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
        *   - **手写的群**（`G = S₄`）：符号就是用户自己敲的答案，只补**惯用名**
        *     （`→ 4 元对称群`）。**不给库里编号** —— 见函数头那段注：这个库的编号
        *     不是 GAP 那套，摆出来会把人引到别的群上。
-       *   - **构造物**（`ker f` / `闭包(…)`）：符号是**副产品**，用户本来就不知道
+       *   - **构造物**（`ker f` / `closure(…)`）：符号是**副产品**，用户本来就不知道
        *     "这是哪个群"，所以补**库内坐标** `SmallGroup(阶, 编号)`。
        *   - **真同构**（`!same`，如 `F ≅ C₂`）：同前，坐标是"它落在库里哪儿"。
        */
@@ -270,7 +270,7 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
       tone: 'note',
       tex: `\\lvert G\\rvert = ${group.order} = ${tex}`,
       text: `|G| = ${group.order} = ${text}`,
-      detail: fs.length > 1 ? '素因子分解（Sylow 分析的入口）' : '素数阶 \\to 循环群',
+      detail: fs.length > 1 ? '素因子分解（Sylow 分析的入口）' : '素数阶 -> 循环群',
     })
   }
 
@@ -307,7 +307,7 @@ export function mapInsights(map: GalMap): Insight[] {
       tone: 'key',
       tex: `${G.symbol}/\\ker f \\;\\cong\\; ${H.symbol}`,
       text: `${prettySymbol(G.symbol)}/ker f \\cong ${prettySymbol(H.symbol)}`,
-      detail: `满射 \\to 商群与靶群同构${qIso ? `（识别为 ${prettySymbol(qIso)}）` : ''}`,
+      detail: `满射 -> 商群与靶群同构${qIso ? `（识别为 ${asciiSymbol(qIso)}）` : ''}`,
     })
   } else if (qIso) {
     out.push({
@@ -429,14 +429,14 @@ export function actionInsights(A: GalAction): Insight[] {
         tone: 'key',
         tex: `n_{${p}} = [G : N_G(H)] = ${G.order} / ${stab.length} = ${G.order / stab.length}`,
         text: `n_${p} = [G : N_G(H)] = |G| / |N_G(H)| = ${G.order} / ${stab.length} = ${G.order / stab.length}`,
-        detail: `|Orb| \\cdot|Stab| = ${np} \\cdot ${stab.length} = ${np * stab.length} = |G| ${ok ? 'v' : 'x'}`,
+        detail: `|Orb| * |Stab| = ${np} * ${stab.length} = ${np * stab.length} = |G| ${ok ? 'v' : 'x'}`,
       })
     }
 
     out.push(
       np === 1
         ? {
-            label: '正规 \\iff 唯一',
+            label: '正规 iff 唯一',
             tone: 'key',
             tex: `n_{${p}} = 1 \;\\Longrightarrow\; H \\trianglelefteq G`,
             text: `n_${p} = 1 \\implies 唯一的 Sylow ${p}-子群 H 是正规子群`,

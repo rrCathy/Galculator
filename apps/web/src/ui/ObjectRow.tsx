@@ -68,7 +68,7 @@ export function ObjectRow({
           <button
             type="button"
             className={`ops${openOps ? ' on' : ''}`}
-            title={`这个对象能做的操作（${ops.length} 个）—— 它不上画布，没有悬浮球`}
+            title={`这个对象能做的操作（${ops.length} 个）---- 它不上画布，没有悬浮球`}
             onClick={(e) => {
               e.stopPropagation()
               setOpenOps((v) => !v)

@@ -28,48 +28,48 @@ function cosetKey(group: { elements: { id: string; cosetMemberLabels?: string[] 
 const CASES: { name: string; lines: string[]; want: number }[] = [
   {
     name: 'C_12, N=\\langle 6\\rangle, K=\\langle 2\\rangle（K/N 的陪集序与 G/N 错位）',
-    lines: ['G = C_12', 'N = 闭包(G, 6)', 'K = 闭包(G, 2)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+    lines: ['G = C_12', 'N = closure(G, 6)', 'K = closure(G, 2)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
     want: 2,
   },
   {
     name: 'C_12, N=\\langle 6\\rangle, K=\\langle 3\\rangle',
-    lines: ['G = C_12', 'N = 闭包(G, 6)', 'K = 闭包(G, 3)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+    lines: ['G = C_12', 'N = closure(G, 6)', 'K = closure(G, 3)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
     want: 3,
   },
   {
     name: 'D_4, N=\\langle r^2\\rangle, K=\\langle r\\rangle',
-    lines: ['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+    lines: ['G = D_4', 'N = closure(G, r2)', 'K = closure(G, r)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
     want: 2,
   },
   {
     name: 'D_4, N=\\langle r^2\\rangle, K=\\langle r^2, s\\rangle',
-    lines: ['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r2, s)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+    lines: ['G = D_4', 'N = closure(G, r2)', 'K = closure(G, r2, s)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
     want: 2,
   },
   {
     name: 'D_4, N=\\langle r^2\\rangle, K=\\langle r^2, sr_1\\rangle',
-    lines: ['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r2, sr1)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+    lines: ['G = D_4', 'N = closure(G, r2)', 'K = closure(G, r2, sr1)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
     want: 2,
   },
   {
     name: 'D_6, N=\\langle r^2\\rangle, K=\\langle r\\rangle',
-    lines: ['G = D_6', 'N = 闭包(G, r2)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+    lines: ['G = D_6', 'N = closure(G, r2)', 'K = closure(G, r)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
     want: 2,
   },
   {
     name: 'D_6, N=\\langle r^3\\rangle, K=\\langle r\\rangle',
-    lines: ['G = D_6', 'N = 闭包(G, r3)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+    lines: ['G = D_6', 'N = closure(G, r3)', 'K = closure(G, r)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
     want: 2,
   },
   {
     name: 'S_4, N=V_4, K=A_4',
     lines: [
       'G = S_4',
-      'N = 闭包(G, (12)(34), (13)(24))',
-      'K = 闭包(G, (123), (12)(34), (13)(24))',
-      'GN = 商(G, N)',
-      'KN = 商(K, N)',
-      'Q = 商(GN, KN)',
+      'N = closure(G, (12)(34), (13)(24))',
+      'K = closure(G, (123), (12)(34), (13)(24))',
+      'GN = quotient(G, N)',
+      'KN = quotient(K, N)',
+      'Q = quotient(GN, KN)',
     ],
     want: 2,
   },
@@ -77,11 +77,11 @@ const CASES: { name: string; lines: string[]; want: number }[] = [
     name: 'A_4, N=V_4, K=A_4（退化：商为平凡群）',
     lines: [
       'G = A_4',
-      'N = 闭包(G, (12)(34), (13)(24))',
-      'K = 闭包(G, (123), (12)(34), (13)(24))',
-      'GN = 商(G, N)',
-      'KN = 商(K, N)',
-      'Q = 商(GN, KN)',
+      'N = closure(G, (12)(34), (13)(24))',
+      'K = closure(G, (123), (12)(34), (13)(24))',
+      'GN = quotient(G, N)',
+      'KN = quotient(K, N)',
+      'Q = quotient(GN, KN)',
     ],
     want: 1,
   },
@@ -99,7 +99,7 @@ export function run(): void {
 
   // ── 根因证据：同名 `qcoset-i` 在两个商群里是**不同陪集** ──
   {
-    const b = build(['G = C_12', 'N = 闭包(G, 6)', 'K = 闭包(G, 2)', 'GN = 商(G, N)', 'KN = 商(K, N)'])
+    const b = build(['G = C_12', 'N = closure(G, 6)', 'K = closure(G, 2)', 'GN = quotient(G, N)', 'KN = quotient(K, N)'])
     const gn = b.byId('GN')
     const kn = b.byId('KN')
     if (gn?.value.type === 'group' && kn?.value.type === 'group') {
@@ -118,11 +118,11 @@ export function run(): void {
   {
     const b = build([
       'G = C_12',
-      'N = 闭包(G, 6)',
-      'K = 闭包(G, 2)',
-      'GN = 商(G, N)',
-      'KN = 商(K, N)',
-      'Q = 商(GN, KN)',
+      'N = closure(G, 6)',
+      'K = closure(G, 2)',
+      'GN = quotient(G, N)',
+      'KN = quotient(K, N)',
+      'Q = quotient(GN, KN)',
     ])
     const edges = deriveCanvas(b.objects).edges.map((e) => `${e.from} -${e.label ?? '\\varnothing'}-> ${e.to} [${e.kind}:${e.arrow}]`)
     // 标签是**现场判定**的：这组里 K ⊴ G（指数 2）⇒ K/N ⊴ G/N —— 所以是 `\\trianglelefteq`
@@ -135,7 +135,7 @@ export function run(): void {
 
   // ── 反例：**不是**子群就仍然要拦（对齐不等于放宽判定）──
   {
-    const b = build(['G = C_12', 'N = 闭包(G, 6)', 'K = 闭包(G, 2)', 'GN = 商(G, N)', 'Q = 商(GN, K)'])
+    const b = build(['G = C_12', 'N = closure(G, 6)', 'K = closure(G, 2)', 'GN = quotient(G, N)', 'Q = quotient(GN, K)'])
     ok('拿 G 的子群去商 G/N -> 报错', b.err('Q') !== null, `err=${b.err('Q')}`)
     ok('错误信息说明了原因', (b.err('Q') ?? '').includes('不是'), `err=${b.err('Q')}`)
   }
@@ -177,7 +177,7 @@ export function run(): void {
   // ── 边界：**没有 `G/K` 这个顶点就不凭空画** ──
   //    `(G/N)/(K/N)` 算得出来，但画布上没有 `G/K`，就无从连那条 `≅`（不替用户造顶点）。
   {
-    const b = build(['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'])
+    const b = build(['G = D_4', 'N = closure(G, r2)', 'K = closure(G, r)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'])
     const iso = deriveCanvas(b.objects).edges.filter((e) => e.label === '\\cong')
     ok('`G/K` 不在画布上 → 不画那条 `≅`', iso.length === 0, iso.map((e) => `${e.from}->${e.to}`).join(' | '))
   }

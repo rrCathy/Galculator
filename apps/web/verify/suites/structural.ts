@@ -37,7 +37,7 @@ export function run(): void {
 
   {
     // S_4 / A_4 \cong C_2：|Q| = 24 / 12 = 2
-    const b = build(['G = S_4', 'N = A_4', 'Q = 商(G, N)'])
+    const b = build(['G = S_4', 'N = A_4', 'Q = quotient(G, N)'])
     const es = edgesOf(b.objects)
     const pis = withInfo(es).filter((e) => e.label === '\\pi')
     eq('商群给一条 \\pi', pis.length, 1)
@@ -89,9 +89,9 @@ export function run(): void {
     const b = build([
       'G = S_4',
       'Syl = Syl_p(G, 3)',
-      'Omega = 底集(Syl)',
-      'A = 共轭作用在(G, Omega)',
-      'O = 轨道(A, 1)',
+      'Omega = asSet(Syl)',
+      'A = conjOn(G, Omega)',
+      'O = orbits(A, 1)',
     ])
     const es = edgesOf(b.objects)
     const eqs = withInfo(es).filter((e) => e.info?.kind === 'equality')
@@ -106,7 +106,7 @@ export function run(): void {
 
   {
     // C_6 -> C_6，a |-> 2：|ker| = 2、|im| = 3、G/ker \cong im \cong C_3
-    const b = build(['G = C_6', 'H = C_6', 'f = 映射(G, H, a->2)'])
+    const b = build(['G = C_6', 'H = C_6', 'f = map(G, H, a->2)'])
     const es = edgesOf(b.objects)
     const iso = withInfo(es).filter((e) => e.label === '\\cong')
     eq('补出一条 \\cong', iso.length, 1)
@@ -138,7 +138,7 @@ export function run(): void {
   suite('structural \\cdot edgeFocusId 的三分支')
 
   {
-    const b = build(['G = S_4', 'H = S_3', 'f = 映射(G, H, s12->23, c->13)', 'Q = 商(G, H)'])
+    const b = build(['G = S_4', 'H = S_3', 'f = map(G, H, s12->23, c->13)', 'Q = quotient(G, H)'])
     const es = edgesOf(b.objects)
 
     const mapEdge = es.find((e) => e.id === `map:f`)

@@ -117,9 +117,9 @@ export function run(): void {
 
   // ── ③ 面板文本的数字 = 图上对象的阶 ──
   const textOf = (line: string) => steps.find((s) => s.line === line)?.text ?? ''
-  const pText = textOf('P = 闭包(G, (12)(34), (13)(24))')
-  const orbText = textOf('O = 轨道(A, 1)')
-  const stabText = textOf('S = 稳定子(A, 1)')
+  const pText = textOf('P = closure(G, (12)(34), (13)(24))')
+  const orbText = textOf('O = orbits(A, 1)')
+  const stabText = textOf('S = stabilizer(A, 1)')
   const ostText = steps.find((s) => s.text.includes('orbit-stabilizer'))?.text ?? ''
   const concludeText = steps[steps.length - 1].text
 
@@ -136,7 +136,7 @@ export function run(): void {
   // ── ④ 计数那两步的数论 ──
   const binomText = textOf('c = Cmod(12, 4, 2)')
   ok('|X| = C(12,4) = 495 且 495 mod 2 = 1', binomText.includes('495') && binomText.includes('mod 2 = 1'), binomText)
-  const factorText = textOf('n = 分解(12)')
+  const factorText = textOf('n = factorize(12)')
   ok('阶分解说 12 = 2^2\\cdot 3', factorText.includes('12 = 2^2\\cdot 3'), factorText)
 
   // ── ⑤ 高亮：走到的每一步都知道该看谁 ──
@@ -145,7 +145,7 @@ export function run(): void {
     return proofHighlight(steps, i)
   }
   eq('建群那步高亮 G', hi('G = A_4').join(','), 'G')
-  eq('闭包那步高亮 P', hi('P = 闭包(G, (12)(34), (13)(24))').join(','), 'P')
+  eq('闭包那步高亮 P', hi('P = closure(G, (12)(34), (13)(24))').join(','), 'P')
   eq('结论步仍高亮 S', proofHighlight(steps, steps.length - 1).join(','), 'S')
   eq('没有行的步不给高亮', proofHighlight(steps, 2).length, 0)
 
@@ -196,8 +196,8 @@ export function run(): void {
     // 文本的数字 = 图上对象的数
     const t = (line: string) => s2.find((s) => s.line === line)?.text ?? ''
     ok('枚举那步说 n_3 = 4', t('S = Syl_p(G, 3)').includes(`n_3 = ${subs}`), t('S = Syl_p(G, 3)'))
-    ok('轨道那步说 |O| = |\\Omega|', t('O = 轨道(A, 1)').includes(`|O| = ${subs} = |\\Omega|`))
-    ok('稳定子那步说 |N_G(P)| = 3', t('N = 稳定子(A, 1)').includes(`|N_G(P)| = ${b.orderOf('N')}`))
+    ok('轨道那步说 |O| = |\\Omega|', t('O = orbits(A, 1)').includes(`|O| = ${subs} = |\\Omega|`))
+    ok('稳定子那步说 |N_G(P)| = 3', t('N = stabilizer(A, 1)').includes(`|N_G(P)| = ${b.orderOf('N')}`))
     ok('结论明说「两两共轭」', s2[s2.length - 1].text.includes('两两共轭'))
   }
 
@@ -228,15 +228,15 @@ export function run(): void {
 
     // 文本里的数字 = 图上对象的数
     const t = (line: string) => s3.find((s) => s.line === line)?.text ?? ''
-    ok('不动点那步说 |Fix| = 1', t('F = 不动点(B)').includes(`|Fix| = ${fix}`), t('F = 不动点(B)'))
+    ok('不动点那步说 |Fix| = 1', t('F = fix(B)').includes(`|Fix| = ${fix}`), t('F = fix(B)'))
     // 序号由 build() 按 P 在 \\Omega 里的位置算出来，所以按前缀找那一步，不写死下标
-    const obStep = s3.find((s) => s.line?.startsWith('OB = 轨道(')) ?? s3[0]
+    const obStep = s3.find((s) => s.line?.startsWith('OB = orbits(')) ?? s3[0]
     ok('其余轨道那步说长 3', obStep.text.includes(`长 ${ob}`), obStep.text)
     const last = s3[s3.length - 1].text
     ok('结论同时说 n_3 \\equiv 1 (mod 3) 与 n_3 | m', last.includes('\\equiv 1 (mod 3)') && last.includes('| m'), last)
     ok(
       '「换主角」那步用的是子群 P 的作用',
-      s3.some((s) => s.line === 'B = 共轭作用在(P, Omega)'),
+      s3.some((s) => s.line === 'B = conjOn(P, Omega)'),
     )
 
     /**
@@ -387,17 +387,17 @@ export function run(): void {
       s2[s2.length - 1].text,
     )
 
-    // 生成元记号：`P = 闭包(G, …)` 的实参必须真的写进去了
+    // 生成元记号：`P = closure(G, …)` 的实参必须真的写进去了
     // （这一环断得最晚——tsc 与"数字都对"都拦不住，只有求值器会拒）
-    const pLine = s2.find((s) => s.line?.startsWith('P = 闭包('))?.line ?? ''
-    ok(`Sylow II ${c.g}/p=${c.p}：闭包行带上了生成元`, /^P = 闭包\(G, \S/.test(pLine), pLine)
+    const pLine = s2.find((s) => s.line?.startsWith('P = closure('))?.line ?? ''
+    ok(`Sylow II ${c.g}/p=${c.p}：闭包行带上了生成元`, /^P = closure\(G, \S/.test(pLine), pLine)
 
     // 置换群：core 把单循环写成 `234`，定义行里必须是课本记号 `(234)`
     //（否则画布上会飘一个 `\\langle 234\\rangle`——看着像个整数）
     if (/^[SA]_/.test(c.g)) {
       ok(
         `Sylow II ${c.g}/p=${c.p}：生成元写成课本循环记号`,
-        /^P = 闭包\(G, \([0-9]+\)/.test(pLine),
+        /^P = closure\(G, \([0-9]+\)/.test(pLine),
         pLine,
       )
     }
@@ -509,8 +509,8 @@ export function run(): void {
 
       // ── 文本里的数字 = 图上对象的数 ──
       const txt = (line: string) => steps.find((s) => s.line === line)?.text ?? ''
-      const orbText = txt(`O = 轨道(A, ${c.x})`)
-      const stabText = txt(`S = 稳定子(A, ${c.x})`)
+      const orbText = txt(`O = orbits(A, ${c.x})`)
+      const stabText = txt(`S = stabilizer(A, ${c.x})`)
       ok(`OST ${c.g}/${c.x}：轨道那步写的 |O| 与图上一致`, orbText.includes(`|O| = ${c.orbit}`), orbText)
       ok(
         `OST ${c.g}/${c.x}：稳定子那步写的 |Stab| 与图上一致`,
@@ -717,7 +717,7 @@ export function run(): void {
         !lines.some((l) => /ker|im/.test(l)),
         lines.join(' | '),
       )
-      eq('\\varphi 那一行原样可回认', lines[2], '\\varphi = 映射(G, H, a\\to 2)')
+      eq('\\varphi 那一行原样可回认', lines[2], '\\varphi = map(G, H, a\\to 2)')
     }
 
     // ── 「开始」按钮的判据 ──

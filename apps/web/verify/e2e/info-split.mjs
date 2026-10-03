@@ -123,8 +123,8 @@ async function boot(page) {
   }
   await addLine('G', 'S_4')
   /* 再造两个子群：让「子群」这一节里有真东西可看（同构类分组要成得了组） */
-  await addLine('A', '闭包(G, (123), (234))')
-  await addLine('V', '闭包(G, (12)(34), (13)(24))')
+  await addLine('A', 'closure(G, (123), (234))')
+  await addLine('V', 'closure(G, (12)(34), (13)(24))')
   if ((await page.locator('.composer-card').count())) {
     await page.click('.composer-orb .orb-center')
     await page.waitForTimeout(250)

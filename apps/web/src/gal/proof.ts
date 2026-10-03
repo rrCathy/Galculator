@@ -33,7 +33,7 @@ import { prettySymbol, subscript, superscript } from './pretty'
  *
  * ## 设计取舍：step-through 就是"替用户一行行写定义"
  *
- * 每一步 `compute` 携带**一整行定义**（`P = 闭包(G, (12)(34), (13)(24))`）。
+ * 每一步 `compute` 携带**一整行定义**（`P = closure(G, (12)(34), (13)(24))`）。
  * 「下一步」= 把那一行追加进定义表 —— 于是：
  *
  *   - 走完一遍，画布上就长出了完整的证明图（用户**看见**证明在画布上展开）；
@@ -339,7 +339,7 @@ function subKey(els: GroupElement[]): string {
  * 再不行退回 `id`（core 一定认）。
  *
  * 这条是整个 U15 的地基，M3 的「点 x」也吃它：模板把元素**写成文本**塞进定义行
- *（`P = 闭包(G, …)` / `O = 轨道(A, (123))`），文本一旦解不开，后面整条链就断在
+ *（`P = closure(G, …)` / `O = orbits(A, (123))`），文本一旦解不开，后面整条链就断在
  * 求值器里——而且断得很晚（tsc 与"数字都对"都拦不住）。
  */
 function elemText(g: Group, e: GroupElement): string {
@@ -393,7 +393,7 @@ interface SylowStage {
  * Sylow II / III 共用的舞台（**全部真算**，与求值器同一条 core 路径）。
  *
  * 关键约定：`points` 的顺序与 `Syl_p(G, p)` 这个操作**逐项一致**——两边都是
- * 直接调 `findSylowSubgroups`。模板要写 `轨道(B, k)` 这种"第 k 个点"时，
+ * 直接调 `findSylowSubgroups`。模板要写 `orbits(B, k)` 这种"第 k 个点"时，
  * 靠的就是这条同序关系（断言在 `verify/suites/proof.ts` 里盯着）。
  *
  * 具体那个 P 一律取 **Ω 的第 1 号点**（`pIdx` 恒为 1）：顺序既然已经对齐，
@@ -413,7 +413,7 @@ function sylowStage(info: StageInfo, p: number): SylowStage | string {
 
   const genTexts = gensOfSubgroup(g, points[0])
   if (!genTexts) {
-    return `Syl_${p}(${info.sym}) 里的子群需要多于 3 个生成元，模板的「闭包(G, g_1, g_2, g_3)」写法接不下`
+    return `Syl_${p}(${info.sym}) 里的子群需要多于 3 个生成元，模板的「closure(G, g_1, g_2, g_3)」写法接不下`
   }
 
   return {
@@ -431,7 +431,7 @@ function sylowStage(info: StageInfo, p: number): SylowStage | string {
 }
 
 /**
- * P 在 Ω（点 = 子群）上的**轨道分解**。与 `共轭作用在(P, Ω)` 同算法：
+ * P 在 Ω（点 = 子群）上的**轨道分解**。与 `conjOn(P, Ω)` 同算法：
  * 共轭在**母群**里做，只是拿来乘的元素限定为 P 的元素。
  *
  * 模板要在文本里写出"其余轨道长 3"这种话，就得自己算一遍；
@@ -537,7 +537,7 @@ export const SYLOW_I: ProofTemplate = {
         kind: 'compute',
         text: `${sym} 的阶是 ${order} = ${info.orderUni} \\implies p = ${pp}，k = ${k}，${PK} = ${pk}，m = ${m}`,
         tex: `|${sym}| = ${order} = ${info.orderTex}`,
-        line: `n = 分解(${order})`,
+        line: `n = factorize(${order})`,
       },
       {
         kind: 'claim',
@@ -565,28 +565,28 @@ export const SYLOW_I: ProofTemplate = {
         kind: 'compute',
         text: `取一个具体的 ${PK} 元子集作实例：P = \\langle ${gensLine}\\rangle （它就是 ${sym} 的 ${pk} 阶子群）`,
         tex: `P = \\langle ${gensTex} \\rangle,\\qquad|P| = ${pk} = p^k`,
-        line: `P = 闭包(G, ${gensLine})`,
+        line: `P = closure(G, ${gensLine})`,
         highlight: ['P'],
       },
       {
         kind: 'compute',
         text: `G 左乘作用在 P 的左陪集上：共 [G : P] = ${coset.n} 个点`,
         tex: `G \\curvearrowright G/P,\\qquad|G/P| = [G:P] = ${coset.n}`,
-        line: `A = 陪集作用(G, P)`,
+        line: `A = cosetAction(G, P)`,
         highlight: ['A'],
       },
       {
         kind: 'compute',
         text: `左乘作用在陪集上是传递的：轨道就是整个 \\Omega ，|O| = ${orbitSize}；${pp} \\nmid ${orbitSize} v`,
         tex: `|O(P)| = ${orbitSize},\\qquad ${pp} \\nmid ${orbitSize}`,
-        line: `O = 轨道(A, 1)`,
+        line: `O = orbits(A, 1)`,
         highlight: ['O'],
       },
       {
         kind: 'compute',
         text: `稳定子 Stab(P) = P（左乘作用下 gP = P \\iff g \\in P），|Stab| = ${stabSize}`,
         tex: `\\operatorname{Stab}_{G}(P) = P,\\qquad|{\\operatorname{Stab}}| = ${stabSize}`,
-        line: `S = 稳定子(A, 1)`,
+        line: `S = stabilizer(A, 1)`,
         highlight: ['S'],
       },
       {
@@ -671,21 +671,21 @@ export const SYLOW_II: ProofTemplate = {
         kind: 'claim',
         text: `把子群集「升格为对象」 \\Omega ---- 它才是作用要作用的那个集合（|\\Omega| = ${n}）。`,
         tex: `\\Omega = \\operatorname{Syl}_${pp}(${sym}),\\qquad|\\Omega| = ${n}`,
-        line: 'Omega = 底集(S)',
+        line: 'Omega = asSet(S)',
         highlight: ['Omega'],
       },
       {
         kind: 'compute',
         text: `让 G 通过共轭 g\\cdot H\\cdot g^-^1 作用在 \\Omega 上 ---- Sylow 定理的全部动力都在这一条作用里。`,
         tex: `${sym} \\curvearrowright \\Omega,\\qquad g \\cdot H = gHg^{-1}`,
-        line: 'A = 共轭作用在(G, Omega)',
+        line: 'A = conjOn(G, Omega)',
         highlight: ['A'],
       },
       {
         kind: 'compute',
         text: `取 \\Omega 的 1 号点算它的轨道：|O| = ${n} = |\\Omega| ---- 一个轨道就吃下整个 \\Omega ，作用是「传递」的。`,
         tex: `|O| = ${n} = |\\Omega|`,
-        line: 'O = 轨道(A, 1)',
+        line: 'O = orbits(A, 1)',
         highlight: ['O'],
       },
       {
@@ -697,7 +697,7 @@ export const SYLOW_II: ProofTemplate = {
         kind: 'compute',
         text: `顺带把稳定子算出来：Stab(1 号点) = N_G(P)，|N_G(P)| = ${stab}`,
         tex: `\\operatorname{Stab}_{G}(P) = N_{G}(P),\\qquad|N_{G}(P)| = ${stab}`,
-        line: 'N = 稳定子(A, 1)',
+        line: 'N = stabilizer(A, 1)',
         highlight: ['N'],
       },
       {
@@ -709,7 +709,7 @@ export const SYLOW_II: ProofTemplate = {
         kind: 'compute',
         text: `取一个「具体的」 Sylow ${pp}-子群 P = \\langle ${gensLine}\\rangle （\\Omega 里的第 ${pIdx} 号点）`,
         tex: `P = \\langle ${gensLine} \\rangle,\\qquad|P| = ${pk}`,
-        line: `P = 闭包(G, ${gensLine})`,
+        line: `P = closure(G, ${gensLine})`,
         highlight: ['P'],
       },
       {
@@ -791,28 +791,28 @@ export const SYLOW_III: ProofTemplate = {
         kind: 'compute',
         text: `\\Omega = Syl${subscript(String(pp))}(G) 升格为集合对象（${n} 个点）`,
         tex: `\\Omega = \\operatorname{Syl}_${pp}(${sym}),\\qquad|\\Omega| = ${n}`,
-        line: 'Omega = 底集(S)',
+        line: 'Omega = asSet(S)',
         highlight: ['Omega'],
       },
       {
         kind: 'compute',
         text: `第一条路：G 通过共轭作用在 \\Omega 上`,
         tex: `${sym} \\curvearrowright \\Omega,\\qquad g \\cdot H = gHg^{-1}`,
-        line: 'A = 共轭作用在(G, Omega)',
+        line: 'A = conjOn(G, Omega)',
         highlight: ['A'],
       },
       {
         kind: 'compute',
         text: `G 的作用只有一个轨道（|O| = ${n}）：Sylow II 的共轭性`,
         tex: `|O| = ${n} = |\\Omega|`,
-        line: 'O = 轨道(A, 1)',
+        line: 'O = orbits(A, 1)',
         highlight: ['O'],
       },
       {
         kind: 'compute',
         text: `稳定子是正规化子：|N_G(P)| = ${stab}，于是 ${nUni(pp)} = [G : N_G(P)] = ${order}/${stab} = ${n}`,
         tex: `${nTex(pp)} = [G : N_{G}(P)] = ${n}`,
-        line: 'N = 稳定子(A, 1)',
+        line: 'N = stabilizer(A, 1)',
         highlight: ['N'],
       },
       {
@@ -829,28 +829,28 @@ export const SYLOW_III: ProofTemplate = {
         kind: 'compute',
         text: `取一个具体的 P = \\langle ${gensLine}\\rangle （\\Omega 的第 ${pIdx} 号点），让它作用`,
         tex: `P = \\langle ${gensLine} \\rangle,\\qquad|P| = ${pk}`,
-        line: `P = 闭包(G, ${gensLine})`,
+        line: `P = closure(G, ${gensLine})`,
         highlight: ['P'],
       },
       {
         kind: 'compute',
         text: `P 作用在 \\Omega 上：P \\curvearrowright \\Omega （作用群是子群 P，\\Omega 的成员仍是母群 ${sym} 的子群）`,
         tex: `P \\curvearrowright \\Omega,\\qquad|\\Omega| = ${n}`,
-        line: 'B = 共轭作用在(P, Omega)',
+        line: 'B = conjOn(P, Omega)',
         highlight: ['B'],
       },
       {
         kind: 'compute',
         text: `P 的不动点只有一个：|Fix| = ${fixed} ---- 只有 P 自己被 P 正规化`,
         tex: `|\\operatorname{Fix}_{P}(\\Omega)| = ${fixed}`,
-        line: 'F = 不动点(B)',
+        line: 'F = fix(B)',
         highlight: ['F'],
       },
       {
         kind: 'compute',
         text: `其余 ${others.length} 条轨道长 ${others.join(' + ')} ---- 轨道长整除 |P| = ${pk} 且 > 1，故都被 p = ${pp} 整除`,
         tex: `\\sum|P \\cdot Q| = ${others.join(' + ')},\\qquad ${pp} \\mid ${restSum}`,
-        line: `OB = 轨道(B, ${otherIdx})`,
+        line: `OB = orbits(B, ${otherIdx})`,
         highlight: ['OB'],
       },
       {
@@ -873,7 +873,7 @@ export const SYLOW_III: ProofTemplate = {
 const OST_DEFAULTS: ProofParams = { group: 'S_4' }
 
 /** 「点 x」该填什么（面板的占位提示与报错共用一句话）。 */
-const X_HINT = '\\Omega = G 自身，填一个元素记号，如 (123)'
+const X_HINT = 'Omega = G 自身，填一个元素记号，如 (123)'
 
 interface ConjStage {
   g: Group
@@ -891,7 +891,7 @@ interface ConjStage {
 /**
  * 共轭作用在自身上的舞台（**真算**）。
  *
- * 走的是与 `共轭作用(G)` + `轨道(A, x)` + `稳定子(A, x)` 完全相同的 core 函数
+ * 走的是与 `conjAction(G)` + `orbits(A, x)` + `stabilizer(A, x)` 完全相同的 core 函数
  * （`computeConjugationPerms` / `computeOrbits` / `computeStabilizers`），
  * 所以模板文本里的数不会与画布上的对象分家。
  */
@@ -902,7 +902,7 @@ function conjStage(info: StageInfo, xRaw: string): ConjStage | string {
   const xLine = (xRaw ?? '').trim()
   if (!xLine) return `还没填点 x（${X_HINT}）`
   const x = resolveElementLoose(g, xLine)
-  if (!x) return `\\Omega = G = ${info.sym} 里没有元素「${xLine}」`
+  if (!x) return `Omega = G = ${info.sym} 里没有元素「${xLine}」`
 
   const perms = computeConjugationPerms(g)
   const { orbits, orbitOf } = computeOrbits(perms, g.order)
@@ -995,7 +995,7 @@ export const ORBIT_STABILIZER: ProofTemplate = {
         kind: 'compute',
         text: `让 G 通过共轭 g\\cdot x = gxg^-^1 作用在自身：\\Omega = G，|\\Omega| = ${order}。`,
         tex: `G \\curvearrowright G,\\qquad g\\cdot x = gxg^{-1}`,
-        line: 'A = 共轭作用(G)',
+        line: 'A = conjAction(G)',
         highlight: ['A'],
       },
       {
@@ -1007,7 +1007,7 @@ export const ORBIT_STABILIZER: ProofTemplate = {
             : ''
         }`,
         tex: `O_{x} = x^{G},\\qquad|O_{x}| = ${orbit}`,
-        line: `O = 轨道(A, ${xLine})`,
+        line: `O = orbits(A, ${xLine})`,
         highlight: ['O'],
       },
       {
@@ -1018,7 +1018,7 @@ export const ORBIT_STABILIZER: ProofTemplate = {
             : ` ---- 但中心化子单独算是 ${centralizer}，两者对不上，要查`
         }。`,
         tex: `\\operatorname{Stab}_{G}(x) = C_{G}(x),\\qquad|C_{G}(x)| = ${stab}`,
-        line: `S = 稳定子(A, ${xLine})`,
+        line: `S = stabilizer(A, ${xLine})`,
         highlight: ['S'],
       },
       {
@@ -1069,7 +1069,7 @@ interface MapStage {
 }
 
 /**
- * 由"源群 + 靶群 + 生成元的像"把同态造出来（**真算**，与 `映射(G, H, …)`
+ * 由"源群 + 靶群 + 生成元的像"把同态造出来（**真算**，与 `map(G, H, …)`
  * 走同一批 core 函数：`extendFromGenerators` → `verifyHomomorphism`）。
  *
  * 注意 `extendFromGenerators` 收的 Map 键是**生成元元素的 id**（不是名字）——
@@ -1271,7 +1271,7 @@ export const FIRST_ISO: ProofTemplate = {
         kind: 'compute',
         text: `由生成元的像定出 \\varphi ：${st.images}（同态由生成元的像唯一决定）。`,
         tex: `\\varphi :\\; ${st.images.replace(/\\to /g, ' \\mapsto')}`,
-        line: `${ISO_MAP_ID} = 映射(G, H, ${st.images})`,
+        line: `${ISO_MAP_ID} = map(G, H, ${st.images})`,
         highlight: [ISO_MAP_ID],
       },
       {

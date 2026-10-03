@@ -76,13 +76,13 @@ export function run(): void {
 
     /* ── 独立 V₄ 的正确姿势：先在 A₄ 里把它构造出来 ───── */
     eq(
-      'C_G(A_4, 闭包(A_4, (12)(34), (13)(24))) = Klein（4 阶）',
-      order('C_G(B, 闭包(B, (12)(34), (13)(24)))'),
+      'C_G(A_4, closure(A_4, (12)(34), (13)(24))) = Klein（4 阶）',
+      order('C_G(B, closure(B, (12)(34), (13)(24)))'),
       4,
     )
     eq(
-      'N_G(A_4, 闭包(...)) = A_4（Klein 正规）',
-      order('N_G(B, 闭包(B, (12)(34), (13)(24)))'),
+      'N_G(A_4, closure(...)) = A_4（Klein 正规）',
+      order('N_G(B, closure(B, (12)(34), (13)(24)))'),
       12,
     )
   }
@@ -90,7 +90,7 @@ export function run(): void {
   suite('batch9 \\cdot ㉑ 画布上不该出现 0 阶的"群"')
 
   {
-    const b = build(['A = S_4', 'B = A_4', 'V = V_4', 'Q = 商(A, B)'])
+    const b = build(['A = S_4', 'B = A_4', 'V = V_4', 'Q = quotient(A, B)'])
     const byId = new Map(b.objects.map((o) => [o.id, o]))
     const probe = [
       'N_G(B, A)', 'N_G(A, V)', 'N_G(B, V)', 'N_G(V, A)',
@@ -107,7 +107,7 @@ export function run(): void {
   suite('batch9 \\cdot ㉓ 商群（陪集层）的元素记号')
 
   {
-    const b = build(['A = S_4', 'B = A_4', 'Q = 商(A, B)', 'R = 商(A, V_4)'])
+    const b = build(['A = S_4', 'B = A_4', 'Q = quotient(A, B)', 'R = quotient(A, V_4)'])
     const byId = new Map(b.objects.map((o) => [o.id, o]))
 
     const num = (e: string) => {
@@ -121,7 +121,7 @@ export function run(): void {
 
     // 陪集层：core 给单位元的 label 是 `e, \dots`，pretty 回认命不中 ⇒ 曾被桥当生成元
     eq('商群里 ord(e) = 1（从前是 2）', num('ord(Q, e)'), 1)
-    eq('商群里 闭包(Q, e) = 平凡群（从前是 2 阶）', ord2('闭包(Q, e)'), 1)
+    eq('商群里 closure(Q, e) = 平凡群（从前是 2 阶）', ord2('closure(Q, e)'), 1)
     eq('普通群 ord(e) 照旧 = 1', num('ord(B, e)'), 1)
     eq('生成元的阶照旧 = 2（Q ≅ C_2）', num('ord(Q, qcoset-1)'), 2)
     eq('另一条商链上的单位元也是 1', num('ord(R, e)'), 1)
@@ -130,18 +130,18 @@ export function run(): void {
   suite('batch9 \\cdot ㉒ 求值的异常兜底（core 崩了也要给人话）')
 
   {
-    const b = build(['A = S_4', 'B = A_4', 'Q = 商(A, B)'])
+    const b = build(['A = S_4', 'B = A_4', 'Q = quotient(A, B)'])
     const byId = new Map(b.objects.map((o) => [o.id, o]))
     /**
      * 加固之后**已知的崩点都没了**，所以这里测的不是"某条错输入会崩"，
      * 而是**求值层对任何怪输入都不许把异常漏出去** —— 真实用户会打各种半截表达式。
      */
     const junk = [
-      'N_G(', '来(', '商(商(商(A, B), B), B)', '闭包(闭包(闭包(A, e), e), e)',
+      'N_G(', '来(', 'quotient(quotient(quotient(A, B), B), B)', 'closure(closure(closure(A, e), e), e)',
       'G / / N', '()', '((()))', 'A \\cap', '\\cong \\cong', 'Z(', 'Z()',
-      'N_G(N_G(A, B), C_G(A, B))', '商(交(并集(A, B), 差集(A, B)), B)',
-      'ord(ord(A, e), e)', 'x'.repeat(300), '', '   ', '像(商(A, B), A)',
-      '轨道(商(A, B), e)', '稳定子(共轭作用(A), e)',
+      'N_G(N_G(A, B), C_G(A, B))', 'quotient(intersection(union(A, B), difference(A, B)), B)',
+      'ord(ord(A, e), e)', 'x'.repeat(300), '', '   ', 'image(quotient(A, B), A)',
+      'orbits(quotient(A, B), e)', 'stabilizer(conjAction(A), e)',
     ]
     for (const j of junk) {
       let threw: string | null = null
@@ -160,11 +160,11 @@ export function run(): void {
     const s = memStorage()
     eq('没存过 → null（回落到默认示范）', loadBoardLines(s), null)
 
-    saveBoardLines(['A = S_4', 'B = 商(A, V_4)'], s)
+    saveBoardLines(['A = S_4', 'B = quotient(A, V_4)'], s)
     const back = loadBoardLines(s)
     eq('存进去两行', back?.length, 2)
     eq('第一行原样回来', back?.[0], 'A = S_4')
-    eq('第二行原样回来', back?.[1], 'B = 商(A, V_4)')
+    eq('第二行原样回来', back?.[1], 'B = quotient(A, V_4)')
 
     /**
      * 空画布不能删档 —— 删了就回到"从来没存过"，刷新时默认示范页**又冒出来**

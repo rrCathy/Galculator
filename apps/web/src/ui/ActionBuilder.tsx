@@ -69,9 +69,9 @@ interface ActionBuilderProps {
  * | 填 | Ω |
  * |---|---|
  * | `4` | 4 个抽象点，点号 `1..4`（数就是点数，U52 的老行为）|
- * | `点集(5)` | 同上，点数由点集给 |
- * | `集合(a, b, c)` | 3 个点，标号 `a b c` —— **循环记号里就能写 `(a b)`** |
- * | `底集(Syl(S_4, 3))` | 现成的集合（标号是子群记号 ⇒ 数字按位置读）|
+ * | `pointSet(5)` | 同上，点数由点集给 |
+ * | `labeledSet(a, b, c)` | 3 个点，标号 `a b c` —— **循环记号里就能写 `(a b)`** |
+ * | `asSet(Syl(S_4, 3))` | 现成的集合（标号是子群记号 ⇒ 数字按位置读）|
  * | 画布上一个集合的名字（下面那排按钮）| 就引用那个对象（作用线连到它）|
  */
 export function ActionBuilder(props: ActionBuilderProps) {
@@ -97,7 +97,7 @@ export function ActionBuilder(props: ActionBuilderProps) {
   if (g && !generatorsDistinct(g)) {
     return (
       <div className="insp-line dim">
-        {generatorCollisionReason(g)}，没法给它们分别指定像。想让 G 作用在自己身上用「正则作用」，
+        {generatorCollisionReason(g)}，没法给它们分别指定像。想让 G 作用在自己身上用 leftAction，
         其余三种内置作用也各有现成的路。
       </div>
     )
@@ -128,7 +128,7 @@ function cycleNotation(perm: readonly number[]): string {
 
 /**
  * 状态行里的示例循环记号：点集有**写得进记号**的标号时就用它的标号。
- * `集合(a, b, c)` 的示例因此是 `(a b)` 而不是 `(1 2)` —— 屏幕上写着 `a`，示例就该写 `a`。
+ * `labeledSet(a, b, c)` 的示例因此是 `(a b)` 而不是 `(1 2)` —— 屏幕上写着 `a`，示例就该写 `a`。
  */
 function sampleCycle(labels: readonly string[]): string {
   const usable = labels.filter((l) => l.trim() !== '' && !/[\s(),]/.test(l))
@@ -181,7 +181,7 @@ function ActionBuilderEditor({ op, src, objects, onSubmit, onCancel }: ActionBui
       return {
         kind: 'bad',
         error: `点集「${t}」认不出来：它${r.value.type === 'number' ? '只是一个数' : '不是集合'}`,
-        hint: '点集如 点集(5) / 集合(a, b, c) / 底集(Syl(G, 3))；只要点数就直接填一个数字（如 4）',
+        hint: '点集如 pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))；只要点数就直接填一个数字（如 4）',
       }
     }
     return {
@@ -206,7 +206,7 @@ function ActionBuilderEditor({ op, src, objects, onSubmit, onCancel }: ActionBui
 
   const check = useMemo<Check>(() => {
     if (!G) return { state: 'bad', error: '作用的作用群必须是群' }
-    if (omega.kind === 'empty') return { state: 'empty', message: '先填作用点集：一个点数（如 4），或一个点集表达式（如 点集(5) / 集合(a, b, c)）' }
+    if (omega.kind === 'empty') return { state: 'empty', message: '先填作用点集：一个点数（如 4），或一个点集表达式（如 pointSet(5) / labeledSet(a, b, c)）' }
     if (omega.kind === 'bad') return { state: 'bad', error: omega.error, hint: omega.hint }
     if (omega.n < 1) return { state: 'empty', message: '点数得是正整数' }
     const filled = gens.filter((g) => (images[g.gen.name] ?? '').trim())
@@ -271,7 +271,7 @@ function ActionBuilderEditor({ op, src, objects, onSubmit, onCancel }: ActionBui
       gen: g.gen.name,
       img: (images[g.gen.name] ?? '').trim(),
     }))
-    // 第二参原样写回用户填的那一格：`4` / `点集(5)` / `集合(a, b, c)` / 画布上某个集合的名字
+    // 第二参原样写回用户填的那一格：`4` / `pointSet(5)` / `labeledSet(a, b, c)` / 画布上某个集合的名字
     const expr = composeMapLine(op, [src.id, omegaDraft.trim()], pairs)
     onSubmit(`${normalizeName(nameDraft.trim()) || autoName} = ${expr}`)
   }
@@ -319,7 +319,7 @@ function ActionBuilderEditor({ op, src, objects, onSubmit, onCancel }: ActionBui
           value={omegaDraft}
           onChange={(e) => setOmegaDraft(e.target.value)}
           placeholder="4"
-          title="点数（如 4），或一个点集（点集(5) / 集合(a, b, c) / 底集(Syl(G, 3))）"
+          title="点数（如 4），或一个点集（pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))）"
           spellCheck={false}
           autoComplete="off"
         />
@@ -329,7 +329,7 @@ function ActionBuilderEditor({ op, src, objects, onSubmit, onCancel }: ActionBui
 
       {/*
         画布上已有的集合做成**一键按钮**（U53）：不想打字就从这儿挑 ——
-        `底集(Syl_p(G))` 这种名字本来就长，而且挑过来的还自带对象引用
+        `asSet(Syl_p(G))` 这种名字本来就长，而且挑过来的还自带对象引用
         （作用线直接连到那个集合节点，而不是再造一个）。
         只列 `set` / `elements`：**作用群 G 自己不列**（那是作用的起点不是舞台）。
         类名用 `ab-set-chip` 而不是 `mb-auto` —— 后者是「一键起点」那一排的类名，

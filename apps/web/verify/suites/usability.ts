@@ -78,7 +78,7 @@ export function run(): void {
 
     // 由操作构造出来的群：即使符号与识别结果**归一后相同**，也要说
     //（`ker f` 的符号本来就是 `C_{6}`，不说的话信息面板里只剩一个"阶"）
-    const ker = groupInsOf(['G = C_6', 'H = C_6', 'f = 映射(G, H, a\\to 2)', 'K = ker(f)'])
+    const ker = groupInsOf(['G = C_6', 'H = C_6', 'f = map(G, H, a\\to 2)', 'K = ker(f)'])
     ok('`K = ker(f)` 有「识别」条（不再沉默）', ker.labels.includes('识别'), ker.labels.join(','))
     ok(
       '识别条把符号（ker f = C_2）当答案',
@@ -93,8 +93,8 @@ export function run(): void {
     ok('但会给「识别」+ V_4 的惯用名', klein.labels.includes('识别') && klein.insights.some((i) => (i.detail ?? '').includes('V_4')), JSON.stringify(klein.insights.map((i) => i.detail)))
 
     // 符号与识别结果真的不同 \\to 是「同构」（真结论）
-    const q = groupInsOf(['G = S_4', 'N = 闭包(G, (12)(34), (13)(24))', 'Q = 商(G, N)'])
-    ok('`商(G,N)`（符号 S_4/N）说「同构」', q.labels.includes('同构'), q.labels.join(','))
+    const q = groupInsOf(['G = S_4', 'N = closure(G, (12)(34), (13)(24))', 'Q = quotient(G, N)'])
+    ok('`quotient(G,N)`（符号 S_4/N）说「同构」', q.labels.includes('同构'), q.labels.join(','))
     ok(
       '那条写着 \\cong S_3',
       q.insights.some((i) => i.text.includes('S_3')),
@@ -102,7 +102,7 @@ export function run(): void {
     )
 
     // 闭包 / 自同构群也一样（它们都是"构造出来的"）
-    ok('`闭包(G,r)` 有识别条', groupInsOf(['G = D_4', 'H = 闭包(G, r)']).labels.includes('识别'))
+    ok('`closure(G,r)` 有识别条', groupInsOf(['G = D_4', 'H = closure(G, r)']).labels.includes('识别'))
     const aut = groupInsOf(['G = S_4', 'A = Aut(G)'])
     ok('`Aut(S_4)` 说「同构」（Aut(S_4) \\cong S_4）', aut.labels.includes('同构'), aut.labels.join(','))
     ok('Aut 的识别带 SmallGroup(24, 11)', aut.insights.some((i) => (i.detail ?? '').includes('SmallGroup(24, 11)')), aut.insights.map((i) => i.detail).join(' | '))
@@ -137,13 +137,13 @@ export function run(): void {
 
   suite('usability \\cdot 报错文案（缺口 ⑨）')
   {
-    // 2026-09-28（U27）起 `极大子群(G)` / `Burnside(A)` 都已接线 —— 换 `Hall子群(G)` 当
+    // 2026-09-28（U27）起 `maximalSubgroups(G)` / `Burnside(A)` 都已接线 —— 换 `HallSub(G)` 当
     // "没这功能"的样本（它仍在 `TASKS.md` 的缺口清单里）
-    const tm = lastLine(['G = S_4', 'M = Hall子群(G)'])
+    const tm = lastLine(['G = S_4', 'M = HallSub(G)'])
     ok('未支持的操作报「没有名为…的操作」', (tm.error ?? '').includes('没有名为'), tm.error)
     ok('并猜一个相近的（Hall子群 -> Sub(G)）', (tm.hint ?? '').includes('Sub(G)'), tm.hint ?? '')
 
-    const comp = lastLine(['G = D_4', 'A = 共轭作用(G)', 'n = 着色数(A)'])
+    const comp = lastLine(['G = D_4', 'A = conjAction(G)', 'n = 着色数(A)'])
     ok('着色数 报「没有这个操作」而不是「群记号认不出」', (comp.error ?? '').includes('没有名为'), comp.error)
     ok('不再把操作名当群记号（提示里没有"可用的群记号"）', !(comp.hint ?? '').includes('群记号'), comp.hint ?? '')
 
@@ -157,7 +157,7 @@ export function run(): void {
     ok('gcd 现在跑得通', gcd.ok === true, gcd.error ?? '')
 
     // `f(K)`：`f` 是个已定义的对象 —— 说清楚，别让用户以为打错了名字
-    const fk = lastLine(['G = C_6', 'H = C_6', 'f = 映射(G, H, a\\to 2)', 'K = 闭包(G, 1)', 'I = f(K)'])
+    const fk = lastLine(['G = C_6', 'H = C_6', 'f = map(G, H, a\\to 2)', 'K = closure(G, 1)', 'I = f(K)'])
     ok('`f(K)` 报「f 是已定义的对象，不能当函数调用」', (fk.error ?? '').includes('已定义的对象'), fk.error)
     ok('并点明这个功能还没有', (fk.hint ?? '').includes('还没有'), fk.hint ?? '')
 
@@ -171,7 +171,7 @@ export function run(): void {
   suite('usability \\cdot 关系行与漏等号（缺口 ④ 的提示）')
   {
     for (const rel of ['H \\subseteq G', 'N \\trianglelefteq G', 'A \\cong B']) {
-      const s = lastLine(['G = S_4', 'H = 闭包(G, r)', 'N = 正规子群(G)', 'A = C_6', 'B = C_6', rel])
+      const s = lastLine(['G = S_4', 'H = closure(G, r)', 'N = normalSubgroups(G)', 'A = C_6', 'B = C_6', rel])
       ok(`「${rel}」报「这是一个关系，不是定义」`, (s.error ?? '').includes('关系'), s.error)
       // 提示**必须跟着功能走**：U20 之后 `\\subseteq` 已经能写了，老话"还没有对应操作"就成了假话
       ok(`「${rel}」的提示里说清哪条能写`, (s.hint ?? '').includes('\\subseteq'), s.hint ?? '')
@@ -197,9 +197,9 @@ export function run(): void {
     const sub = build(['G = S_4', 'S = Sub(G)']).byId('S')
     const total = sub?.value.type === 'subgroups' ? sub.value.subgroups.length : -1
     eq('`Sub(G)` 给 29 条（不含 G 自身）', total, 29)
-    const norm = build(['G = S_4', 'N = 正规子群(G)']).byId('N')
+    const norm = build(['G = S_4', 'N = normalSubgroups(G)']).byId('N')
     const normals = norm?.value.type === 'subgroups' ? norm.value.subgroups.length : -1
-    eq('`正规子群(G)` 给 4 个（含平凡与自身）', normals, 4)
+    eq('`normalSubgroups(G)` 给 4 个（含平凡与自身）', normals, 4)
     // 两个操作的定义域不同：这正是"列表会骗人"的根源
     ok('两个操作的定义域确实不同（29 vs 4）', total !== normals)
   }
@@ -226,7 +226,7 @@ export function run(): void {
       const objs = buildLines([
         'G = S_4',
         'H = S_3',
-        'f = 映射(G, H, s12->23, c->13)',
+        'f = map(G, H, s12->23, c->13)',
         'K = ker(f)',
       ]).objects
       const gv = objs.find((o) => o.id === 'G')!.value
@@ -306,60 +306,60 @@ export function run(): void {
    *   "f(A₄) 怎么创建？直接拖到 f 上？没这个功能"
    *
    * 这一套钉住两个新操作，以及一条**判据同源**纪律：
-   * `包含(H, G)` 用的一定是 U19 那份 `containment()` —— 声明的和算出来的不许有两种说法。
+   * `contains(H, G)` 用的一定是 U19 那份 `containment()` —— 声明的和算出来的不许有两种说法。
    */
   suite('usability \\cdot 子群像 f(H) 与声明包含 H \\subseteq G（缺口 ③④）')
   {
-    const STAGE = ['G = S_4', 'H = S_3', 'f = 映射(G, H, s12->23, c->13)', 'K = ker(f)', 'A = A_4']
+    const STAGE = ['G = S_4', 'H = S_3', 'f = map(G, H, s12->23, c->13)', 'K = ker(f)', 'A = A_4']
 
     /* ── ① 子群像 ── */
 
     // f: S₄ \\twoheadrightarrow S₃（ker = V₄），A₄ \\subseteq S₄。A₄ 的像 = S₃ 里唯一的 3 阶子群 = C₃
     //（课本说法：A₄/V₄ \\cong C₃ —— 而 A₄ 的像就是 A₄V₄/V₄ = S₃ 的那个 C₃）
-    const fa = build([...STAGE, 'FA = 像(f, A)'])
+    const fa = build([...STAGE, 'FA = image(f, A)'])
     const faV = fa.byId('FA')?.value
-    ok('`像(f, A_4)` 建出来了', faV?.type === 'group', faV?.type)
+    ok('`image(f, A_4)` 建出来了', faV?.type === 'group', faV?.type)
     eq('f(A_4) 的阶 = 3（手算：A_4 的像 \\cong C_3）', faV?.type === 'group' ? faV.group.order : -1, 3)
     eq('f(A_4) 的符号是 C_3', faV?.type === 'group' ? faV.group.symbol : '', 'C_{3}')
     eq('来源记了 (f, A_4) 两个', fa.byId('FA')?.sources.join(','), 'f,A')
     eq('命中 op 是 image', fa.byId('FA')?.opId, 'image')
 
     // 单参形态没被破坏（U14 就有：`im f` 是整个像）
-    const whole = build([...STAGE, 'I = 像(f)'])
+    const whole = build([...STAGE, 'I = image(f)'])
     const iv = whole.byId('I')?.value
-    eq('`像(f)` 仍是整个像（S_4->>S_3 满射 -> 6 阶）', iv?.type === 'group' ? iv.group.order : -1, 6)
+    eq('`image(f)` 仍是整个像（S_4->>S_3 满射 -> 6 阶）', iv?.type === 'group' ? iv.group.order : -1, 6)
 
     // 不是定义域的子群 \\to 拦住
-    const notSub = build([...STAGE, 'H2 = 像(f, H)'])
+    const notSub = build([...STAGE, 'H2 = image(f, H)'])
     ok(
-      '`像(f, S_3)` 被拦（S_3 不是 S_4 的子群）',
+      '`image(f, S_3)` 被拦（S_3 不是 S_4 的子群）',
       notSub.byId('H2') === undefined,
       describeValue(notSub.byId('H2')?.value),
     )
-    const tooBig = build([...STAGE, 'C = C_24', 'X = 像(f, C)'])
+    const tooBig = build([...STAGE, 'C = C_24', 'X = image(f, C)'])
     ok(
-      '`像(f, C_24)`（比定义域还大）被拦',
+      '`image(f, C_24)`（比定义域还大）被拦',
       tooBig.byId('X') === undefined,
       describeValue(tooBig.byId('X')?.value),
     )
 
     // U31（接入时补的诚实报错）：第二位给了、却是**非群**（从"选 H"的 pending
     // 里误点一个映射就会这样）—— 不许静默当没给、算成 `im f`（"点了跟没点一样"）
-    const wrong = build([...STAGE, 'W = 像(f, f)'])
-    ok('`像(f, f)`（第二参不是群）被拦', wrong.byId('W') === undefined, describeValue(wrong.byId('W')?.value))
+    const wrong = build([...STAGE, 'W = image(f, f)'])
+    ok('`image(f, f)`（第二参不是群）被拦', wrong.byId('W') === undefined, describeValue(wrong.byId('W')?.value))
     ok(
       '  报错点明第二参得是群',
       (wrong.line('W')?.error ?? '').includes('第二个参数得是群'),
       wrong.line('W')?.error,
     )
     // 空第二参（留空写法）仍按"没给"处理 —— 那是"跳过 H"的组装形态
-    const blank = build([...STAGE, 'B2 = 像(f, )'])
+    const blank = build([...STAGE, 'B2 = image(f, )'])
     const bv = blank.byId('B2')?.value
-    eq('`像(f, )`（空第二参）仍算整个像（6 阶）', bv?.type === 'group' ? bv.group.order : -1, 6)
+    eq('`image(f, )`（空第二参）仍算整个像（6 阶）', bv?.type === 'group' ? bv.group.order : -1, 6)
 
     /* ── ② 声明包含：三种写法等价 ── */
 
-    const forms = ['R = A \\subseteq G', 'R = A\\subseteq G', 'R = 包含(A, G)']
+    const forms = ['R = A \\subseteq G', 'R = A\\subseteq G', 'R = contains(A, G)']
     for (const line of forms) {
       const b = build([...STAGE, line])
       const r = b.byId('R')?.value
@@ -449,7 +449,7 @@ export function run(): void {
     /* ── ⑤ 正规性由工具判定：非正规的画 `\\hookrightarrow` 而不是 `\\trianglelefteq` ── */
 
     {
-      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P \\subseteq G'])
+      const b = build(['G = S_3', 'P = closure(G, (12))', 'R = P \\subseteq G'])
       const r = b.byId('R')?.value
       eq('S_3 里 2 阶子群判为非正规', r?.type === 'relation' ? r.relation.isNormal : null, false)
       eq('指数 = 6/2 = 3', r?.type === 'relation' ? r.relation.index : -1, 3)
@@ -463,7 +463,7 @@ export function run(): void {
     /* ── ⑥ 声明的包含压过自动生成的同向 \\hookrightarrow（不叠两条箭头） ── */
 
     {
-      const b = build(['G = S_3', 'P = 闭包(G, (12))', 'R = P \\subseteq G'])
+      const b = build(['G = S_3', 'P = closure(G, (12))', 'R = P \\subseteq G'])
       const g = deriveCanvas(b.objects)
       const between = g.edges.filter((e) => e.from === 'P' && e.to === 'G')
       eq('P->G 上只剩一条边', between.length, 1)
@@ -511,7 +511,7 @@ export function run(): void {
     const STAGE = [
       'G = S_4',
       'H = S_3',
-      'f = 映射(G, H, s12->23, c->13)',
+      'f = map(G, H, s12->23, c->13)',
       'K = ker(f)',
       'A = A_4',
       'Syl = Syl_p(G, 3)',
@@ -527,8 +527,8 @@ export function run(): void {
     const fa = pair('A', 'f')
     eq('拖 A_4 到 f 上：只有 1 个候选', fa.length, 1)
     eq('那个候选是「像」', fa[0]?.op.id, 'image')
-    // 拖拽不表达顺序：从 A₄ 起拖，而 `像(f, H)` 的 f 必须在前面 \\to
-    // 候选要自己标出"参数得反过来摆"，否则会拼出 `像(A₄, f)` 而报错
+    // 拖拽不表达顺序：从 A₄ 起拖，而 `image(f, H)` 的 f 必须在前面 \\to
+    // 候选要自己标出"参数得反过来摆"，否则会拼出 `image(A₄, f)` 而报错
     eq('标了 swapped（参数要反过来摆）', fa[0]?.swapped, true)
     eq('从 f 起拖就不用反（同一个 op，两个方向都认）', pair('f', 'A')[0]?.swapped, false)
 
@@ -630,11 +630,11 @@ export function run(): void {
       ok('子群集的「可做」里有 底集', one.includes('underlyingSet'), one.join(','))
 
       // 缺口 ⑤ 的判据：那一步**点得出来**，而且点出来之后下一环真的接得上
-      const chain = build([...STAGE, '\\Omega = 底集(Syl)', 'Act = 共轭作用在(G, \\Omega)'])
+      const chain = build([...STAGE, '\\Omega = asSet(Syl)', 'Act = conjOn(G, \\Omega)'])
       const omega = chain.byId('\\Omega')?.value
-      eq('`底集(Syl)` 产出集合', omega?.type, 'set')
+      eq('`asSet(Syl)` 产出集合', omega?.type, 'set')
       eq('集合基数 = n_3 = 4（手算）', omega?.type === 'set' ? omega.set.members.length : -1, 4)
-      ok('接着 `共轭作用在(G, \\Omega)` 能建出来', chain.byId('Act')?.value.type === 'action')
+      ok('接着 `conjOn(G, \\Omega)` 能建出来', chain.byId('Act')?.value.type === 'action')
       eq(
         '作用点集的基数就是 n_3（Sylow III 的主角动作据此算出来）',
         chain.byId('Act')?.value.type === 'action' ? chain.byId('Act')!.value.action.n : -1,
@@ -656,7 +656,7 @@ export function run(): void {
       const sv = single?.value
       eq('`Syl_2(A_4)` 恰好一个成员（n_2 = 1）', sv?.type === 'subgroups' ? sv.subgroups.length : -1, 1)
       ok(
-        '而"恰好一个成员"的子群集当单个数集读（`商(G,N)` 就靠这条）',
+        '而"恰好一个成员"的子群集当单个数集读（`quotient(G,N)` 就靠这条）',
         !!sv && paramAccepts('subset', sv, []),
         sv?.type,
       )

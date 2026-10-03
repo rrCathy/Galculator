@@ -30,7 +30,7 @@ export function run(): void {
 
   // ── ① 非满射 \\to **正方形**（本轮新增的半个图）──
   {
-    const b = build(['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)'])
+    const b = build(['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)'])
     eq('非满射时补出 im \\varphi 顶点', ids(b.objects).join(' '), 'G H \\varphi \\varphi/im \\varphi/ker')
     eq('|im \\varphi| = 3', b.orderOf('\\varphi/im'), 3)
     eq('|G/ker \\varphi| = 3', b.orderOf('\\varphi/ker'), 3)
@@ -53,7 +53,7 @@ export function run(): void {
 
   // ── ② 满射 \\to 三角形（`im \\varphi = H`，不补重复顶点）──
   {
-    const b = build(['G = C_6', 'H = C_3', '\\varphi = 映射(G, H, a->1)'])
+    const b = build(['G = C_6', 'H = C_3', '\\varphi = map(G, H, a->1)'])
     eq('满射时不补 im \\varphi', ids(b.objects).join(' '), 'G H \\varphi \\varphi/ker')
     eq(
       '三角形三条边（\\cong 直指靶群）',
@@ -64,21 +64,21 @@ export function run(): void {
 
   // ── ③ 平凡映射（ker = G）：退化不画 ──
   {
-    const b = build(['G = C_6', 'H = C_3', '\\varphi = 映射(G, H, a->0)'])
+    const b = build(['G = C_6', 'H = C_3', '\\varphi = map(G, H, a->0)'])
     eq('全群核时不补任何顶点', ids(b.objects).join(' '), 'G H \\varphi')
     eq('画布上只剩用户画的那条 \\varphi（满射不成立 -> 普通箭头）', edgesOf(b.objects).join(' | '), 'G -\\varphi-> H [map]')
   }
 
   // ── ④ 用户自己建了 ker \\to 整条线路交还给他，不再自动补 ──
   {
-    const b = build(['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)', 'K = ker(\\varphi)'])
+    const b = build(['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)', 'K = ker(\\varphi)'])
     eq('手建 ker 后不再补 \\varphi/ker 与 \\varphi/im', ids(b.objects).join(' '), 'G H K \\varphi')
     eq('手建的 ker 阶正确', b.orderOf('K'), 2)
   }
 
   // ── ⑤ 单射（嵌入）：ker = \\langle e\\rangle，真正方形 ──
   {
-    const b = build(['G = C_3', 'H = C_6', '\\varphi = 映射(G, H, a->2)'])
+    const b = build(['G = C_3', 'H = C_6', '\\varphi = map(G, H, a->2)'])
     eq('单射时两个顶点都补', ids(b.objects).join(' '), 'G H \\varphi \\varphi/im \\varphi/ker')
     eq('|G/ker \\varphi| = 3', b.orderOf('\\varphi/ker'), 3)
     eq('|im \\varphi| = 3', b.orderOf('\\varphi/im'), 3)

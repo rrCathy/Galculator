@@ -10,55 +10,55 @@
  * | 写法 | 实测 |
  * |---|---|
  * | `{1,2,3}` | 「无法识别的群记号」 |
- * | `集合(1,2,3)` / `点集(5)` | 「没有这个操作」 |
- * | `底集(S)` | 要 `S` **已经存在**（子群集 / 元素集 / 群）|
+ * | `labeledSet(1,2,3)` / `pointSet(5)` | 「没有这个操作」 |
+ * | `asSet(S)` | 要 `S` **已经存在**（子群集 / 元素集 / 群）|
  *
  * 也就是说能造 `set` 的只有 `底集`，而它要求**集合的点从某个已存在的群里借**。
  * 后果直接打在 U52 上：`自定义作用` 的第二参是个数字 `n`，
  * 于是 Ω 永远是内核 `omegaOf()` 硬造的 `{1..n}`，**"让 G 作用在你自己的集合上"
- * 根本表达不出来**（`自定义作用(S_4, 底集(Syl(S_4, 3)), s12 -> (12))`
+ * 根本表达不出来**（`customAction(S_4, asSet(Syl(S_4, 3)), s12 -> (12))`
  * 报「作用点集的基数 n 必须是正整数」）。
  *
  * 用户拍板范围 = **集合构造器 + Ω 当参数**，两条一起才闭环。
  *
  * ── 本套守的判据 ───────────────────────────────────────────────
- *   ① **凭空造点集**：`点集(5)` / `集合(a, b, c)` 不借任何群；
+ *   ① **凭空造点集**：`pointSet(5)` / `labeledSet(a, b, c)` 不借任何群；
  *      `GalSet.group` 从此可以是 **`null`**（别退化成"母群 = `C_1`"）；
- *   ② **歧义不许猜**：`集合(5)` 两种读法都通 ⇒ 报错指路 `点集(5)`；
+ *   ② **歧义不许猜**：`labeledSet(5)` 两种读法都通 ⇒ 报错指路 `pointSet(5)`；
  *   ③ **标号优先，但数字段归 core**：`(a b c)` 按标号翻，`(12)(34)` **原样**
  *      （紧凑写法是 core 的主力形态，切成"记号 12"会把"点 1 和点 2"读错 —— 实测踩过）；
  *   ④ **同一个作用两条路定义必须得到同一个置换表**（手算锚点写在下面）；
- *   ⑤ **老写法不坏**：`自定义作用(C_4, 4, …)` 逐字照旧（U52 的契约）；
+ *   ⑤ **老写法不坏**：`customAction(C_4, 4, …)` 逐字照旧（U52 的契约）；
  *   ⑥ **纯文本面零泄漏**（与 `e2e/no-unicode-leak.mjs` 的 `ALLOWED` 逐字同一套）。
  *
  * ⚠️ **期望值全部手算**，不从运行结果抄。手算过程：
  *
- *   `点集(5)`：5 个抽象点，点号 `1..5`，`group = null`（不属于任何群）。
+ *   `pointSet(5)`：5 个抽象点，点号 `1..5`，`group = null`（不属于任何群）。
  *
- *   `集合(a, b, c)`：3 个点，标号就是 `a b c`。
+ *   `labeledSet(a, b, c)`：3 个点，标号就是 `a b c`。
  *
- *   `自定义作用(C_4, 4, a -> (1 2 3 4))`（老写法）：
+ *   `customAction(C_4, 4, a -> (1 2 3 4))`（老写法）：
  *     `a` 阶 4、像也是 4 阶 ⇒ 单射 ⇒ 忠实；4-循环在 4 个点上只有一个轨道 ⇒ 传递。
  *
- *   `自定义作用(C_4, 点集(8), a -> (1 2 3 4)(5 6 7 8))`：
+ *   `customAction(C_4, pointSet(8), a -> (1 2 3 4)(5 6 7 8))`：
  *     像的阶 = lcm(4, 4) = 4 = `a` 的阶 ⇒ 忠实；两个 4-循环 ⇒ **2 个轨道**（各 4 点）。
  *
- *   `自定义作用(S_3, 集合(a, b, c), s12 -> (a b), s23 -> (b c))`：
+ *   `customAction(S_3, labeledSet(a, b, c), s12 -> (a b), s23 -> (b c))`：
  *     标号 `a b c` 的位置号是 `1 2 3`，所以这就是 S_3 在 3 个点上的**自然作用**
  *     ——`s12` 与 `s23` 一起生成 S_3 ⇒ 忠实、传递（1 个轨道、3 个点）。
  *
- *   `自定义作用(C_4, 8, a -> (1 2 3 4)(5 6 7 8))` 上的下游（手算）：
- *     · `轨道(A, 1)` = `{1,2,3,4}`（4 个点）
- *     · `稳定子(A, 1)` = 1 阶（`a` 把 1 送到 2、`a²` 送到 3、`a³` 送到 4，只有 `e` 不动它）
- *     · `不动点(A)` = 空（8 个点全被 `a` 搬走）
- *     · `轨道数(A)` —— Burnside：`(8 + 0 + 0 + 0) / 4 = 2`
+ *   `customAction(C_4, 8, a -> (1 2 3 4)(5 6 7 8))` 上的下游（手算）：
+ *     · `orbits(A, 1)` = `{1,2,3,4}`（4 个点）
+ *     · `stabilizer(A, 1)` = 1 阶（`a` 把 1 送到 2、`a²` 送到 3、`a³` 送到 4，只有 `e` 不动它）
+ *     · `fix(A)` = 空（8 个点全被 `a` 搬走）
+ *     · `burnside(A)` —— Burnside：`(8 + 0 + 0 + 0) / 4 = 2`
  *
- *   `S_3` 在 `集合(a, b, c)` 上（同上那个作用）：
- *     · `轨道(A, a)` = 全部 3 个点（传递）
- *     · `稳定子(A, c)` = `{e, s12}`（`s12` 换 a/b 不动 c；`s23` 动 c）⇒ **2 阶**
+ *   `S_3` 在 `labeledSet(a, b, c)` 上（同上那个作用）：
+ *     · `orbits(A, a)` = 全部 3 个点（传递）
+ *     · `stabilizer(A, c)` = `{e, s12}`（`s12` 换 a/b 不动 c；`s23` 动 c）⇒ **2 阶**
  *
  *   **交叉核对**（本套最硬的一条）：`S_4` 上的共轭作用在它的 4 个 Sylow 3-子群上，
- *   用「现成的集合」（`底集(Syl(S_4, 3))`）当 Ω 手给两个生成元的像，
+ *   用「现成的集合」（`asSet(Syl(S_4, 3))`）当 Ω 手给两个生成元的像，
  *   必须与内置的 `共轭作用在` 得到**同一张置换表**。手算锚点：
  *     Ω = `{H1=⟨(234)⟩, H2=⟨(123)⟩, H3=⟨(124)⟩, H4=⟨(134)⟩}`
  *     · `s12 = (12)`：`H1 ↦ H4`（`(12)(234)(12)` 生成 `(134)`）· `H2 ↦ H2` ·
@@ -152,12 +152,12 @@ function audit(strings: { what: string; text: string }[]): void {
 }
 
 export function run(): void {
-  /* ══ 1 · 凭空造点集：`点集(n)` ═══════════════════════════ */
+  /* ══ 1 · 凭空造点集：`pointSet(n)` ═══════════════════════════ */
 
-  suite('u53 \\cdot 点集(n)：凭空造 n 个抽象点')
+  suite('u53 \\cdot pointSet(n)：凭空造 n 个抽象点')
 
   {
-    const b = build(['P = 点集(5)'])
+    const b = build(['P = pointSet(5)'])
     eq('能建出来', b.err('P'), null)
     const S = setOf(b, 'P')
     ok('产出的是集合值', !!S)
@@ -170,31 +170,31 @@ export function run(): void {
        * `G 与 Ω 来自不同的群` 那道关也一起骗过。
        */
       ok('没有母群（不是取 C_1 糊过去）', S.group === null, S.group ? '有母群' : 'null')
-      eq('展示名', S.label, '点集(5)')
+      eq('展示名', S.label, 'pointSet(5)')
     }
-    eq('副行说清点号范围', shownOf(['P = 点集(5)']).sub, '|\\Omega| = 5 \\cdot 点号 1 到 5')
+    eq('副行说清点号范围', shownOf(['P = pointSet(5)']).sub, '|Omega| = 5, 点号 1 到 5')
 
-    const one = build(['P = 点集(1)'])
-    eq('点集(1) 也建得出（单点舞台）', one.err('P'), null)
+    const one = build(['P = pointSet(1)'])
+    eq('pointSet(1) 也建得出（单点舞台）', one.err('P'), null)
     eq('  点数 1', setOf(one, 'P')?.members.length, 1)
   }
 
-  /* ══ 2 · 凭空造点集：`集合(a, b, c)` ═════════════════════ */
+  /* ══ 2 · 凭空造点集：`labeledSet(a, b, c)` ═════════════════════ */
 
-  suite('u53 \\cdot 集合(·)：标号由你定，标号能写进循环记号')
+  suite('u53 \\cdot labeledSet(·)：标号由你定，标号能写进循环记号')
 
   {
-    const b = build(['X = 集合(a, b, c)'])
+    const b = build(['X = labeledSet(a, b, c)'])
     eq('能建出来', b.err('X'), null)
     const S = setOf(b, 'X')
     eq('3 个点', S?.members.length, 3)
     eq('标号就是写的那串', S?.members.map((m) => m.label).join(','), 'a,b,c')
     ok('同样没有母群', S?.group === null)
-    eq('展示名带上标号', S?.label, '集合(a, b, c)')
-    eq('副行列出点号', shownOf(['X = 集合(a, b, c)']).sub, '|\\Omega| = 3 \\cdot 点号 a b c')
+    eq('展示名带上标号', S?.label, 'labeledSet(a, b, c)')
+    eq('副行列出点号', shownOf(['X = labeledSet(a, b, c)']).sub, '|Omega| = 3, 点号 a b c')
 
     // 中文标号也认（`no-unicode-leak` 放行中文，所以这不是泄漏面）
-    const cn = build(['X = 集合(红, 绿)'])
+    const cn = build(['X = labeledSet(红, 绿)'])
     eq('中文标号能建', cn.err('X'), null)
     eq('  2 个点', setOf(cn, 'X')?.members.length, 2)
     eq('  标号保真', setOf(cn, 'X')?.members.map((m) => m.label).join(','), '红,绿')
@@ -205,37 +205,37 @@ export function run(): void {
   suite('u53 \\cdot 点集的报错语：歧义与非法标号都指路')
 
   {
-    // `集合(5)`：两种读法都通 ⇒ 不许猜，指路 `点集(5)`
-    const amb = shownOf(['X = 集合(5)'])
-    ok('集合(5) 拦下', amb.err.includes('读不出来'), amb.err)
+    // `labeledSet(5)`：两种读法都通 ⇒ 不许猜，指路 `pointSet(5)`
+    const amb = shownOf(['X = labeledSet(5)'])
+    ok('labeledSet(5) 拦下', amb.err.includes('读不出来'), amb.err)
     ok('  说清两种读法', amb.err.includes('5 个点') && amb.err.includes('一个叫 5 的点'), amb.err)
-    ok('  hint 指路 点集(5)', amb.hint.includes('点集(5)'), amb.hint)
+    ok('  hint 指路 pointSet(5)', amb.hint.includes('pointSet(5)'), amb.hint)
 
     // 重复标号
-    const dup = shownOf(['X = 集合(a, a)'])
+    const dup = shownOf(['X = labeledSet(a, a)'])
     ok('标号重复拦下', dup.err.includes('出现了两次'), dup.err)
     ok('  hint 说清规则', dup.hint.includes('互不相同'), dup.hint)
 
     // 标号写不进循环记号（空格 / 圆括号 / 逗号是记号自己的语法）
-    const bad = shownOf(['X = 集合(a b)'])
+    const bad = shownOf(['X = labeledSet(a b)'])
     ok('带空格的标号拦下', bad.err.includes('写不进循环记号'), bad.err)
     ok('  hint 点名三个禁用字符', bad.hint.includes('空格') && bad.hint.includes('逗号'), bad.hint)
 
     // 空集合
-    const empty = shownOf(['X = 集合()'])
-    ok('集合() 拦下', empty.err.includes('至少要给一个点'), empty.err)
+    const empty = shownOf(['X = labeledSet()'])
+    ok('labeledSet() 拦下', empty.err.includes('至少要给一个点'), empty.err)
 
     // 点数：0 / 小数各说同一句"必须是正整数"；超线单独一句
-    const zero = shownOf(['P = 点集(0)'])
-    ok('点集(0) 拦下', zero.err.includes('必须是正整数'), zero.err)
-    ok('  hint 给出照抄就能跑的写法', zero.hint.includes('点集(5)'), zero.hint)
-    const frac = shownOf(['P = 点集(2.5)'])
-    ok('点集(2.5) 同样拦下（小数不是点数）', frac.err.includes('必须是正整数'), frac.err)
+    const zero = shownOf(['P = pointSet(0)'])
+    ok('pointSet(0) 拦下', zero.err.includes('必须是正整数'), zero.err)
+    ok('  hint 给出照抄就能跑的写法', zero.hint.includes('pointSet(5)'), zero.hint)
+    const frac = shownOf(['P = pointSet(2.5)'])
+    ok('pointSet(2.5) 同样拦下（小数不是点数）', frac.err.includes('必须是正整数'), frac.err)
     ok('  报错里带上收到的那个数', frac.err.includes('2.5'), frac.err)
-    const neg = shownOf(['P = 点集(0 - 3)'])
+    const neg = shownOf(['P = pointSet(0 - 3)'])
     ok('负数同样拦下', neg.err.includes('必须是正整数'), neg.err)
-    const big = shownOf([`P = 点集(${POINT_SET_MAX + 1})`])
-    ok(`点集(${POINT_SET_MAX + 1}) 超过上限`, big.err.includes(`超过上限 ${POINT_SET_MAX}`), big.err)
+    const big = shownOf([`P = pointSet(${POINT_SET_MAX + 1})`])
+    ok(`pointSet(${POINT_SET_MAX + 1}) 超过上限`, big.err.includes(`超过上限 ${POINT_SET_MAX}`), big.err)
     ok('  上限理由说清是"手写记号"而不是"算不动"', big.hint.includes('敲'), big.hint)
 
     // 报错语全是纯文本面
@@ -254,17 +254,17 @@ export function run(): void {
 
   {
     // 老写法（U52 契约）：数字 = 点数
-    const old = build(['G = C_4', 'A = 自定义作用(G, 4, a -> (1 2 3 4))'])
+    const old = build(['G = C_4', 'A = customAction(G, 4, a -> (1 2 3 4))'])
     eq('数字当点数照样能建（U52 契约不改）', old.err('A'), null)
     const Ao = actionOf(old, 'A')
     eq('  Omega 的点号仍是 1..4', (Ao?.setLabels ?? []).join(','), '1,2,3,4')
-    eq('  点集展示名', Ao?.omega?.label, '点集(4)')
+    eq('  点集展示名', Ao?.omega?.label, 'pointSet(4)')
     ok('  忠实（4-循环单射）', (Ao?.perms.size ?? 0) === 4, String(Ao?.perms.size))
     eq('  生成元 4 个元素全都算出来了', Ao?.perms.size, 4)
 
-    // `点集(n)` 当 Ω
-    const ps = build(['G = C_4', 'A = 自定义作用(G, 点集(8), a -> (1 2 3 4)(5 6 7 8))'])
-    eq('点集(8) 能当 Omega', ps.err('A'), null)
+    // `pointSet(n)` 当 Ω
+    const ps = build(['G = C_4', 'A = customAction(G, pointSet(8), a -> (1 2 3 4)(5 6 7 8))'])
+    eq('pointSet(8) 能当 Omega', ps.err('A'), null)
     const Ap = actionOf(ps, 'A')
     eq('  点数跟点集走 = 8', Ap?.n, 8)
     eq('  标号 = 1..8', (Ap?.setLabels ?? []).join(','), '1,2,3,4,5,6,7,8')
@@ -273,7 +273,7 @@ export function run(): void {
     eq('  每条轨道 4 个点', Ap ? computeOrbits(Ap.perms, Ap.n).orbits.map((o) => o.elements.length).join(',') : '', '4,4')
 
     // 标号点集 + 记号里写标号
-    const lb = build(['G = S_3', 'A = 自定义作用(G, 集合(a, b, c), s12 -> (a b), s23 -> (b c))'])
+    const lb = build(['G = S_3', 'A = customAction(G, labeledSet(a, b, c), s12 -> (a b), s23 -> (b c))'])
     eq('带标号的点集能当 Omega，记号里写标号', lb.err('A'), null)
     const Al = actionOf(lb, 'A')
     eq('  标号传给作用', (Al?.setLabels ?? []).join(','), 'a,b,c')
@@ -284,17 +284,17 @@ export function run(): void {
     const viaSet = build([
       'G = S_4',
       'S = Syl(G, 3)',
-      'Om = 底集(S)',
-      'A = 自定义作用(G, Om, s12 -> (1 4), c -> (1 4 3 2))',
+      'Om = asSet(S)',
+      'A = customAction(G, Om, s12 -> (1 4), c -> (1 4 3 2))',
     ])
     eq('现成的集合能当 Omega', viaSet.err('A'), null)
     eq('  Omega 是 4 个点（S_4 的 Sylow 3-子群数）', actionOf(viaSet, 'A')?.n, 4)
 
     // 第三个参数既不是数字也不是集合 -> 点名报错，**不静默当点数 1**
-    const na = shownOf(['G = C_4', 'A = 自定义作用(G, abc, a -> e)'])
+    const na = shownOf(['G = C_4', 'A = customAction(G, abc, a -> e)'])
     ok('"abc" 两者都不是 -> 拦下', na.err.includes('两者都不是'), na.err)
-    ok('  hint 给出两条照抄就能跑的写法', na.hint.includes('点集(5)') && na.hint.includes('4'), na.hint)
-    const missing = shownOf(['G = C_4', 'A = 自定义作用(G)'])
+    ok('  hint 给出两条照抄就能跑的写法', na.hint.includes('pointSet(5)') && na.hint.includes('4'), na.hint)
+    const missing = shownOf(['G = C_4', 'A = customAction(G)'])
     // 一个 Omega 都不给 = 通用参数个数门拦下（`arity = 2` 不变，只是第二个槽变宽了）
     ok('一个 Omega 都不给 -> 拦下（参数个数不够）', !!missing.err && missing.err.includes('需要 2+ 个参数'), missing.err)
 
@@ -307,7 +307,7 @@ export function run(): void {
       ok('空集合要拦（说清是空集，不是"算不动"）', !e1.ok && e1.error.includes('空集'), e1.ok ? 'ok（不该）' : e1.error)
       const tooBig: GalSet = {
         group: null,
-        label: `点集(${POINT_SET_MAX + 1})`,
+        label: `pointSet(${POINT_SET_MAX + 1})`,
         members: Array.from({ length: POINT_SET_MAX + 1 }, (_, i) => ({ label: String(i + 1) })),
       }
       const e2 = planCustomAction(G4, { kind: 'set', set: tooBig }, [{ genText: 'a', cycle: IDENTITY_TOKEN }])
@@ -327,8 +327,8 @@ export function run(): void {
   {
     const P = build([
       'G = S_4',
-      'builtin = 共轭作用在(G, 底集(Syl(G, 3)))',
-      'mine = 自定义作用(G, 底集(Syl(G, 3)), s12 -> (1 4), c -> (1 4 3 2))',
+      'builtin = conjOn(G, asSet(Syl(G, 3)))',
+      'mine = customAction(G, asSet(Syl(G, 3)), s12 -> (1 4), c -> (1 4 3 2))',
     ])
     eq('内置路能建', P.err('builtin'), null)
     eq('手给路能建', P.err('mine'), null)
@@ -368,9 +368,9 @@ export function run(): void {
       }
     }
 
-    // 同一件事用「点集(4)」写也行（数字与点集两条路等价）
-    const num = build(['G = S_4', 'A = 自定义作用(G, 点集(4), s12 -> (1 4), c -> (1 4 3 2))'])
-    eq('点集(4) 与底集(Syl) 都能当 Omega', num.err('A'), null)
+    // 同一件事用「pointSet(4)」写也行（数字与点集两条路等价）
+    const num = build(['G = S_4', 'A = customAction(G, pointSet(4), s12 -> (1 4), c -> (1 4 3 2))'])
+    eq('pointSet(4) 与asSet(Syl) 都能当 Omega', num.err('A'), null)
     eq('  点数 4', actionOf(num, 'A')?.n, 4)
   }
 
@@ -413,7 +413,7 @@ export function run(): void {
     eq('小点集逐个列', labelsHint(['a', 'b', 'c']), '点集有 3 个点：1 a，2 b，3 c')
     ok('大点集截断并报总数', labelsHint(Array.from({ length: 20 }, (_, i) => `v${i}`)).includes('共 20 个'))
 
-    // 内核实跑：`点集(5)` 的标号与 `labelCycleToNumeric` 接得上
+    // 内核实跑：`pointSet(5)` 的标号与 `labelCycleToNumeric` 接得上
     const plan = planCountPointSet(5)
     ok('内核 planCountPointSet(5) ok', plan.ok)
     if (plan.ok) {
@@ -426,7 +426,7 @@ export function run(): void {
     ok('内核报错也守纯文本面', !dupPlan.ok && leakChars(dupPlan.error).length === 0)
 
     // 记号里的点不在 Ω 里 -> 报错语点出**是哪个记号**
-    const outsider = shownOf(['G = S_3', 'A = 自定义作用(G, 集合(a, b, c), s12 -> (a z), s23 -> (b c))'])
+    const outsider = shownOf(['G = S_3', 'A = customAction(G, labeledSet(a, b, c), s12 -> (a z), s23 -> (b c))'])
     ok('记号里有点集外的点 -> 拦下', outsider.err.includes('不是点集里的点'), outsider.err)
     ok('  报错里点名那个记号 z', outsider.err.includes('z'), outsider.err)
     ok('  hint 列出 Ω 的点', outsider.hint.includes('点集有 3 个点'), outsider.hint)
@@ -438,16 +438,16 @@ export function run(): void {
 
   {
     const b = build([
-      'A = 自定义作用(C_4, 8, a -> (1 2 3 4)(5 6 7 8))',
-      'O = 轨道(A, 1)',
-      'S = 稳定子(A, 1)',
-      'F = 不动点(A)',
-      'N = 轨道数(A)',
+      'A = customAction(C_4, 8, a -> (1 2 3 4)(5 6 7 8))',
+      'O = orbits(A, 1)',
+      'S = stabilizer(A, 1)',
+      'F = fix(A)',
+      'N = burnside(A)',
     ])
-    eq('轨道(A, 1) 能算', b.err('O'), null)
-    eq('稳定子(A, 1) 能算', b.err('S'), null)
-    eq('不动点(A) 能算', b.err('F'), null)
-    eq('轨道数(A) 能算', b.err('N'), null)
+    eq('orbits(A, 1) 能算', b.err('O'), null)
+    eq('stabilizer(A, 1) 能算', b.err('S'), null)
+    eq('fix(A) 能算', b.err('F'), null)
+    eq('burnside(A) 能算', b.err('N'), null)
 
     const O = setOf(b, 'O')
     eq('轨道是 4 个点（{1,2,3,4}）', O?.members.length, 4)
@@ -463,9 +463,9 @@ export function run(): void {
 
     // 标号点集：按**标号**引用点（不是按位置号）
     const lb = build([
-      'A = 自定义作用(S_3, 集合(a, b, c), s12 -> (a b), s23 -> (b c))',
-      'O = 轨道(A, a)',
-      'S = 稳定子(A, c)',
+      'A = customAction(S_3, labeledSet(a, b, c), s12 -> (a b), s23 -> (b c))',
+      'O = orbits(A, a)',
+      'S = stabilizer(A, c)',
     ])
     eq('按标号引用点能算轨道', lb.err('O'), null)
     const Ol = setOf(lb, 'O')
@@ -476,7 +476,7 @@ export function run(): void {
     eq('  Stab(c) = 2 阶（{e, s12}）', lb.orderOf('S'), 2)
 
     // 引用不存在的点 -> 报错（不许静默取第 1 个点）
-    const noPoint = build(['A = 自定义作用(C_4, 8, a -> (1 2 3 4)(5 6 7 8))', 'O = 轨道(A, 99)'])
+    const noPoint = build(['A = customAction(C_4, 8, a -> (1 2 3 4)(5 6 7 8))', 'O = orbits(A, 99)'])
     ok('引用 Omega 里没有的点要拦', !!noPoint.err('O'), String(noPoint.err('O')))
   }
 
@@ -501,19 +501,19 @@ export function run(): void {
     eq('集合走 atomic', ls?.mechanism, 'atomic')
     eq('params 长度 == arity + optional（点集）', ps?.params.length, (ps?.arity ?? 0) + (ps?.optional ?? 0))
     eq('params 长度 == arity + optional（集合）', ls?.params.length, (ls?.arity ?? 0) + (ls?.optional ?? 0))
-    eq('集合靠 variadic 收点', ls?.variadic?.name, '点')
+    eq('集合靠 variadic 收点', ls?.variadic?.name, 'point')
     eq('集合的 arity = 0（点全在 variadic 里）', ls?.arity, 0)
-    eq('菜单标签认表（点集）', ps ? menuLabel(ps) : '', '点集')
-    eq('菜单标签认表（集合）', ls ? menuLabel(ls) : '', '集合')
-    eq('模板照抄就能跑（点集）', ps ? opTemplate(ps) : '', '点集(5)')
-    eq('模板照抄就能跑（集合）', ls ? opTemplate(ls) : '', '集合(a, b, c)')
+    eq('菜单标签 = notation 前缀（点集）', ps ? menuLabel(ps) : '', 'pointSet')
+    eq('菜单标签 = notation 前缀（集合）', ls ? menuLabel(ls) : '', 'labeledSet')
+    eq('模板照抄就能跑（点集）', ps ? opTemplate(ps) : '', 'pointSet(5)')
+    eq('模板照抄就能跑（集合）', ls ? opTemplate(ls) : '', 'labeledSet(a, b, c)')
     ok(
       '两个都不进 multiOps（它们不是"两个对象之间的操作"）',
       !multiOps().some((o) => o.id === 'pointSet' || o.id === 'labeledSet'),
     )
 
     // Ω 参数的类型：`omegaOrInt` 必须**同时**满足"能空着"与"能吃画布上的集合"
-    const b = build(['G = C_4', 'X = 集合(a, b)'])
+    const b = build(['G = C_4', 'X = labeledSet(a, b)'])
     const g = b.byId('G')?.value
     const x = b.byId('X')?.value
     const onlyG = g ? opsFor([g]).map((o) => o.id) : []
@@ -531,7 +531,7 @@ export function run(): void {
       const spec = omegaSpecOfValue({ type: 'group', group: G3 }, 'H')
       eq('群对象能当 Omega（按底集读）', spec?.kind, 'set')
       eq('  底集成员数 = 群的阶', spec?.kind === 'set' ? spec.set.members.length : -1, 3)
-      eq('  展示名按底集命名', spec?.kind === 'set' ? spec.set.label : '', '底集(H)')
+      eq('  展示名按底集命名', spec?.kind === 'set' ? spec.set.label : '', 'asSet(H)')
     }
   }
 
@@ -541,18 +541,18 @@ export function run(): void {
 
   {
     const cases: { what: string; lines: string[] }[] = [
-      { what: '点集(5)', lines: ['P = 点集(5)'] },
-      { what: '集合(a, b, c)', lines: ['X = 集合(a, b, c)'] },
-      { what: '集合(5) 歧义', lines: ['X = 集合(5)'] },
-      { what: '标号重复', lines: ['X = 集合(a, a)'] },
-      { what: '点集(0)', lines: ['P = 点集(0)'] },
-      { what: '点数超线', lines: [`P = 点集(${POINT_SET_MAX + 1})`] },
-      { what: '数字当 Omega', lines: ['G = C_4', 'A = 自定义作用(G, 4, a -> (1 2 3 4))'] },
-      { what: '点集当 Omega', lines: ['G = C_4', 'A = 自定义作用(G, 点集(8), a -> (1 2 3 4)(5 6 7 8))'] },
-      { what: '标号当 Omega', lines: ['G = S_3', 'A = 自定义作用(G, 集合(a, b, c), s12 -> (a b), s23 -> (b c))'] },
-      { what: 'Omega 两者都不是', lines: ['G = C_4', 'A = 自定义作用(G, abc, a -> e)'] },
-      { what: '记号里有点集外的点', lines: ['G = S_3', 'A = 自定义作用(G, 集合(a, b, c), s12 -> (a z), s23 -> (b c))'] },
-      { what: '轨道按标号引用', lines: ['A = 自定义作用(S_3, 集合(a, b, c), s12 -> (a b), s23 -> (b c))', 'O = 轨道(A, a)'] },
+      { what: 'pointSet(5)', lines: ['P = pointSet(5)'] },
+      { what: 'labeledSet(a, b, c)', lines: ['X = labeledSet(a, b, c)'] },
+      { what: 'labeledSet(5) 歧义', lines: ['X = labeledSet(5)'] },
+      { what: '标号重复', lines: ['X = labeledSet(a, a)'] },
+      { what: 'pointSet(0)', lines: ['P = pointSet(0)'] },
+      { what: '点数超线', lines: [`P = pointSet(${POINT_SET_MAX + 1})`] },
+      { what: '数字当 Omega', lines: ['G = C_4', 'A = customAction(G, 4, a -> (1 2 3 4))'] },
+      { what: '点集当 Omega', lines: ['G = C_4', 'A = customAction(G, pointSet(8), a -> (1 2 3 4)(5 6 7 8))'] },
+      { what: '标号当 Omega', lines: ['G = S_3', 'A = customAction(G, labeledSet(a, b, c), s12 -> (a b), s23 -> (b c))'] },
+      { what: 'Omega 两者都不是', lines: ['G = C_4', 'A = customAction(G, abc, a -> e)'] },
+      { what: '记号里有点集外的点', lines: ['G = S_3', 'A = customAction(G, labeledSet(a, b, c), s12 -> (a z), s23 -> (b c))'] },
+      { what: '轨道按标号引用', lines: ['A = customAction(S_3, labeledSet(a, b, c), s12 -> (a b), s23 -> (b c))', 'O = orbits(A, a)'] },
     ]
     const strings: { what: string; text: string }[] = []
     for (const c of cases) {

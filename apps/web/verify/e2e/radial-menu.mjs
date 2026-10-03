@@ -106,7 +106,7 @@ const addLine = async (name, expr) => {
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12->23, c->13)')
+await addLine('f', 'map(G, H, s12->23, c->13)')
 await addLine('A', 'A_4')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(450)
@@ -177,9 +177,9 @@ console.log('== ④ 「操作」铺出单对象操作 ==')
   st = await ui()
   ok('操作面板出现了', st.opsPanel === 1)
   ok('列出的条数够多（群上的单对象操作有一串）', st.ops.length >= 8, `${st.ops.length} 条：${st.ops.join(' / ')}`)
-  ok('里面有「中心 Z」', st.ops.includes('中心 Z'), st.ops.join(','))
-  ok('里面有「换位子群 [G,G]」', st.ops.includes('换位子群 [G,G]'), st.ops.join(','))
-  ok('下面那一列是「元素阶 ord」不该在（产数值的不进菜单）', !st.ops.includes('元素阶 ord'), st.ops.join(','))
+  ok('里面有「Z」', st.ops.includes('Z'), st.ops.join(','))
+  ok('里面有「commutator」（U54 前叫「换位子群 [G,G]」）', st.ops.includes('commutator'), st.ops.join(','))
+  ok('下面那一列是「ord」不该在（产数值的不进菜单；U54 前叫「元素阶 ord」）', !st.ops.includes('ord'), st.ops.join(','))
 
   await page.screenshot({ path: '../../docs/assets/u2-radial-menu.png' })
 }
@@ -192,12 +192,12 @@ console.log('== ⑤ 点一下直接创建 ==')
   const before = (await ui()).nodes.length
   const clicked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')]
-    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === '中心 Z')
+    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'Z')
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('点得中「中心 Z」', clicked)
+  ok('点得中「Z」', clicked)
   await page.waitForTimeout(520)
 
   st = await ui()
@@ -218,18 +218,18 @@ console.log('== ⑥ 多对象球：进 pending ==')
   st = await ui()
   ok('多对象面板出现了', st.centerPanel === 1)
   ok('列的是"多对象操作"', st.centerOps.length >= 10, `${st.centerOps.length} 条：${st.centerOps.join(' / ')}`)
-  ok('里面有「商 /」', st.centerOps.includes('商 /'), st.centerOps.join(','))
-  ok('单对象操作没混进来（中心 Z 不该在这儿）', !st.centerOps.includes('中心 Z'), st.centerOps.join(','))
+  ok('里面有「quotient」', st.centerOps.includes('quotient'), st.centerOps.join(','))
+  ok('单对象操作没混进来（Z 不该在这儿）', !st.centerOps.includes('Z'), st.centerOps.join(','))
 
-  // 点「商 /」\\to 参数要 (G, N)，还没选任何对象 \\to pending
+  // 点「quotient」\\to 参数要 (G, N)，还没选任何对象 \\to pending
   const picked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-center-panel .orb-op')]
-    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === '商 /')
+    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'quotient')
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('点得中「商 /」', picked)
+  ok('点得中「quotient」', picked)
   await page.waitForTimeout(420)
 
   st = await ui()
@@ -271,12 +271,12 @@ console.log('== ⑧ 缺标量的操作进补参条 ==')
   await clickEl('.orb-sat:text-is("操作")')
   const clicked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')]
-    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'Sylow p-子群')
+    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'Syl')
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('点得中「Sylow p-子群」', clicked)
+  ok('点得中「Syl」', clicked)
   await page.waitForTimeout(420)
 
   const st2 = await ui()

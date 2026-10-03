@@ -5,7 +5,7 @@ import type { Group } from '@groupviz/core'
  *
  * 子群升格成真群对象（`buildSubgroupGroup`）之后，**它自己**就是 `group`；
  * 于是"这两样东西该在哪个群里做运算"这条信息就丢了。实测病征（2026-09-29）：
- *   - `闭包(S_4,(12)) · 闭包(S_4,(34))` 误报"两边不是同一个群里的子群"（其实都在 S₄ 里，
+ *   - `closure(S_4,(12)) · closure(S_4,(34))` 误报"两边不是同一个群里的子群"（其实都在 S₄ 里，
  *     只是拿 K₁ 当上下文群去乘 K₂ 的元素，乘不动）；
  *   - 独立构造的 `V_4` 与 `A_4` 做交 / 并 / 差 / 积集时，母群只能瞎猜一边。
  *
@@ -29,7 +29,7 @@ export function parentOf(g: Group): Group | null {
 }
 
 /**
- * 一路回溯到最外层那个群（`闭包(闭包(G,…),…)` 也要能追到 G）。
+ * 一路回溯到最外层那个群（`closure(closure(G,…),…)` 也要能追到 G）。
  * 有环也停得住（防御性：真出现环时最多走 64 层就放弃）。
  */
 export function rootOf(g: Group): Group {
@@ -60,8 +60,8 @@ export function sameGroup(a: Group, b: Group): boolean {
  * 只按 id 判会把 `C_3 ∩ C_7` 算成"3 个元素"（既不是子群、也不是真交集）。
  *
  * 判据：**根相同**（`sameGroup(rootOf(a), rootOf(b))`）。两种情形都照顾到：
- *   - 同一条母群链上的子群（`闭包(G,(12))` 与 `闭包(G,(34))`）→ 根都是 G ✓；
- *   - 内联记号与具名对象（`闭包(S_4, 34, 12)` 与 `G = S_4`）→ 根不同但 sameGroup 成立 ✓。
+ *   - 同一条母群链上的子群（`closure(G,(12))` 与 `closure(G,(34))`）→ 根都是 G ✓；
+ *   - 内联记号与具名对象（`closure(S_4, 34, 12)` 与 `G = S_4`）→ 根不同但 sameGroup 成立 ✓。
  */
 export function sameWorld(a: Group, b: Group): boolean {
   return sameGroup(rootOf(a), rootOf(b))

@@ -122,16 +122,16 @@ ok('默认示范长出了图（>=3 个对象）', def.nodes.length >= 3, `nodes=
 
 // 第三同构：曾经的问题是 `G \\twoheadrightarrow G/N` 从 `\\langle r^2\\rangle` 身上穿过（真截图抓到的）
 await inspect(
-  ['G = D_4', 'N = 闭包(G, r2)', 'K = 闭包(G, r)', 'GN = 商(G, N)', 'KN = 商(K, N)', 'Q = 商(GN, KN)'],
+  ['G = D_4', 'N = closure(G, r2)', 'K = closure(G, r)', 'GN = quotient(G, N)', 'KN = quotient(K, N)', 'Q = quotient(GN, KN)'],
   'u11-third-iso',
 )
 
 // 第一同构正方形
-await inspect(['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)'], 'u11-first-iso-square')
+await inspect(['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)'], 'u11-first-iso-square')
 
 // 两条用户映射共用一个端点（`G`）—— 链式列序：H \\leftarrow G \\leftarrow B
 await inspect(
-  ['G = C_6', 'H = C_3', 'phi = 映射(G, H, a->1)', 'B = C_6', 'psi = 映射(B, G, a->3)'],
+  ['G = C_6', 'H = C_3', 'phi = map(G, H, a->1)', 'B = C_6', 'psi = map(B, G, a->3)'],
   'u20-shared-endpoint',
 )
 
@@ -140,10 +140,10 @@ await inspect(
   [
     'G = S_4',
     'H = S_3',
-    'f = 映射(G, H, s12->23, c->13)',
+    'f = map(G, H, s12->23, c->13)',
     'K = ker(f)',
     'A = A_4',
-    'FA = 像(f, A)',
+    'FA = image(f, A)',
     'R = A \\subseteq G',
   ],
   'u20-relation-chain',

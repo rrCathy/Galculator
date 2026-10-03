@@ -245,7 +245,7 @@ export function run(): void {
      * 这时的作用**唯一且由 G 内的共轭给定** —— 不该被外路径报成"有 3 类"。
      * 手算：|A_4| x |C_2| = 24 = |S_4| ✓、A_4 ⊴ S_4 ✓、A_4 ∩ C_2 = 1 ✓（C_2 由奇置换生成）。
      */
-    const inner = build(['G = S_4', 'N = 闭包(G, (123), (124))', 'K = 闭包(G, (12))', 'P = N \\rtimes K'])
+    const inner = build(['G = S_4', 'N = closure(G, (123), (124))', 'K = closure(G, (12))', 'P = N \\rtimes K'])
     eq('N = A_4（12 阶）', groupOfId(inner, 'N')?.order ?? null, 12)
     eq('K = C_2（2 阶）', groupOfId(inner, 'K')?.order ?? null, 2)
     eq('P = 24 阶', groupOfId(inner, 'P')?.order ?? null, 24)
@@ -256,14 +256,14 @@ export function run(): void {
      * 内半直积**不成立**时必须披露是哪一条不成立，而且不许静默换成外半直积的答案
      * （换群是静默改题）。四个分支各来一个：
      */
-    const byOrder = build(['G = S_4', 'K = 闭包(G, (12), (34))', 'L = 闭包(G, (13), (24))', 'P = K \\rtimes L'])
+    const byOrder = build(['G = S_4', 'K = closure(G, (12), (34))', 'L = closure(G, (13), (24))', 'P = K \\rtimes L'])
     ok('阶乘不出来：note 说清 |N| x |H| 与母群阶不等', (byOrder.byId('P')?.note ?? '').includes('阶不等'), String(byOrder.byId('P')?.note))
     ok('且副行标明"按外半直积算"（不许静默改题）', (byOrder.byId('P')?.sub ?? '').includes('外半直积'), String(byOrder.byId('P')?.sub))
 
-    const byMeet = build(['G = D_4', 'N = 闭包(G, r)', 'K = 闭包(G, r2)', 'P = N \\rtimes K'])
+    const byMeet = build(['G = D_4', 'N = closure(G, r)', 'K = closure(G, r2)', 'P = N \\rtimes K'])
     ok('交不平凡：note 说"相交于 2 个元素"', (byMeet.byId('P')?.note ?? '').includes('相交于 2 个元素'), String(byMeet.byId('P')?.note))
 
-    const byNormal = build(['G = S_4', 'N = 闭包(G, (12))', 'K = 闭包(G, (123), (124))', 'P = N \\rtimes K'])
+    const byNormal = build(['G = S_4', 'N = closure(G, (12))', 'K = closure(G, (123), (124))', 'P = N \\rtimes K'])
     const nNote = byNormal.byId('P')?.note ?? ''
     ok('左边不正规：note 说"不正规"', nNote.includes('不正规'), nNote)
     ok('并指出右边反过来正规、对调即可（省用户一次试错）', nNote.includes('对调'), nNote)
@@ -282,7 +282,7 @@ export function run(): void {
      * 不借 `findAllNormalSubgroups`（那条路在 144 阶以上直接不判）。
      * D_100：|N| = 100（⟨r⟩ 正规）、|K| = 2（⟨s⟩）、100 x 2 = 200 = |D_100| ✓。
      */
-    const big = build(['G = D_100', 'N = 闭包(G, r)', 'K = 闭包(G, s)', 'P = N \\rtimes K'])
+    const big = build(['G = D_100', 'N = closure(G, r)', 'K = closure(G, s)', 'P = N \\rtimes K'])
     eq('母群 200 阶（远超子群枚举线）照样判出内半直积', groupOfId(big, 'P')?.order ?? null, 200)
     ok('P 就是 D_100 本身', groupOfId(big, 'P') === groupOfId(big, 'G'))
   }
@@ -295,7 +295,7 @@ export function run(): void {
     eq('两个参数、无可选', `${def?.arity}/${def?.optional ?? 0}/${def?.params.map((p) => p.type).join(',')}`, '2/0/group,group')
     eq('产出群', def?.result, 'group')
     ok('中缀收 `\\rtimes`', (def?.infix ?? []).includes('\\rtimes'), String(def?.infix))
-    ok('调用名收中文「半直积」', (def?.call ?? []).includes('半直积'), String(def?.call))
+    ok('调用名全是 ASCII（U54 起不收中文别名）', (def?.call ?? []).every((c) => /^[\x21-\x7e]+$/.test(c)), String(def?.call))
     eq('面板模板可照抄（G \\rtimes H）', opTemplate(def!), 'G \\rtimes H')
     eq('面板模板真的打得出结果（同一个注册表）', (() => {
       const r = build(['G = C_3', 'H = C_3', 'P = G \\rtimes H'])
@@ -365,7 +365,7 @@ export function run(): void {
     const shown: Array<[string, Built]> = [
       ['唯一就建（C_2^2 : C_3）', build(['P = C_2^2 \\rtimes C_3'])],
       ['退成直积（C_2 : C_2）', build(['P = C_2 \\rtimes C_2'])],
-      ['内半直积（S_4 里挑两个子群）', build(['G = S_4', 'N = 闭包(G, (123), (124))', 'K = 闭包(G, (12))', 'P = N \\rtimes K'])],
+      ['内半直积（S_4 里挑两个子群）', build(['G = S_4', 'N = closure(G, (123), (124))', 'K = closure(G, (12))', 'P = N \\rtimes K'])],
     ]
     for (const [tag, r] of shown) {
       const o = r.byId('P')

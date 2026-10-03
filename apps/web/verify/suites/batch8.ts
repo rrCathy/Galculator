@@ -28,20 +28,20 @@ export function run(): void {
   suite('batch8 \\cdot ⑯ 对象同一性（同一次推导只会有一个对象）')
 
   {
-    const b = build(['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)', 'K = ker(\\varphi)', 'I = im(\\varphi)'])
+    const b = build(['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)', 'K = ker(\\varphi)', 'I = im(\\varphi)'])
     const byId = new Map(b.objects.map((o) => [o.id, o]))
     ok('K 的指纹是「kernel + 参数 \\varphi」', byId.get('K')?.callKey === 'kernel::@\\varphi', byId.get('K')?.callKey)
     eq('I 的指纹是「image + 参数 \\varphi」', byId.get('I')?.callKey, 'image::@\\varphi')
 
-    // 悬浮球点出来的那一下，编出来的表达式是 `im(\varphi)`；手打可能写 `像(\varphi)`。
+    // 悬浮球点出来的那一下，编出来的表达式是 `im(\varphi)`；手打可能写 `image(\varphi)`。
     // 两种写法必须**归到同一个对象**（这就是用户撞上的那个坑）。
-    const alias = evalExpr('像(\\varphi)', byId)
-    ok('别名写法 `像(\\varphi)` 求值成功', alias.ok, alias.ok ? '' : alias.error)
+    const alias = evalExpr('image(\\varphi)', byId)
+    ok('别名写法 `image(\\varphi)` 求值成功', alias.ok, alias.ok ? '' : alias.error)
     if (alias.ok) {
       eq('别名与原名的指纹相同', alias.callKey, byId.get('I')?.callKey)
       const hit = findExistingObject(b.objects, {
         callKey: alias.callKey,
-        def: '像(\\varphi)',
+        def: 'image(\\varphi)',
         label: alias.label,
       })
       eq('于是它认出的就是 I（不会再长第二份）', hit?.id, 'I')
@@ -49,8 +49,8 @@ export function run(): void {
 
     // 中缀写法与函数写法也是同一次推导
     const infix = evalExpr('G / K', byId)
-    const call = evalExpr('商(G, K)', byId)
-    ok('中缀 `G / K` 与 `商(G, K)` 指纹相同', !!infix.ok && !!call.ok && infix.callKey === call.callKey, `${infix.ok ? infix.callKey : infix.error}`)
+    const call = evalExpr('quotient(G, K)', byId)
+    ok('中缀 `G / K` 与 `quotient(G, K)` 指纹相同', !!infix.ok && !!call.ok && infix.callKey === call.callKey, `${infix.ok ? infix.callKey : infix.error}`)
 
     // 标量参数不同 = 不同的对象（别把 pSub(G, 2) 与 pSub(G, 3) 合并）
     const p2 = evalExpr('pSub(G, 2)', byId)
@@ -65,7 +65,7 @@ export function run(): void {
   suite('batch8 \\cdot ⑰ 同构关系（声明 A \\cong B）')
 
   {
-    const b = build(['A = S_4', 'N = A_4', 'Q = 商(A, N)', 'Z = C_2', 'R = Q \\cong Z'])
+    const b = build(['A = S_4', 'N = A_4', 'Q = quotient(A, N)', 'Z = C_2', 'R = Q \\cong Z'])
     eq('Q \\cong Z 求值成功', b.err('R'), null)
     const v = b.byId('R')?.value
     eq('值类型是关系', v?.type, 'relation')
@@ -89,7 +89,7 @@ export function run(): void {
      * 画不出这条线。关系对象本身照旧存在、信息面板照旧能看。
      * 这与 U20 的 `包含` 是同一条规矩（边由对象派生，凭空的内联记号没有顶点）。
      */
-    const b = build(['A = S_4', 'N = A_4', 'Q = 商(A, N)', 'R = Q \\cong C_2'])
+    const b = build(['A = S_4', 'N = A_4', 'Q = quotient(A, N)', 'R = Q \\cong C_2'])
     eq('内联记号那侧的声明照样求值成功', b.err('R'), null)
     eq('但画布上画不出这条边（那侧没有节点）', deriveCanvas(b.objects).edges.filter((e) => e.kind === 'relation').length, 0)
   }
@@ -131,13 +131,13 @@ export function run(): void {
   suite('batch8 \\cdot ⑱ 标签展开（显示数学，不显示变量名）')
 
   {
-    const b = build(['A = S_4', 'N = A_4', 'Q = 商(A, N)'])
+    const b = build(['A = S_4', 'N = A_4', 'Q = quotient(A, N)'])
     eq('商节点显示 S_4 / A_4（不是 A / N）', b.byId('Q')?.label, 'S_4 / A_4')
   }
 
   {
     // 用户的原case（换个已验证过的映射）：`A = S_4`、`D = ker(...)`，想看到的是 D 展开
-    const b = build(['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)', 'D = ker(\\varphi)', 'J = G / D'])
+    const b = build(['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)', 'D = ker(\\varphi)', 'J = G / D'])
     const j = b.byId('J')?.label ?? ''
     ok('商的分母展开成 ker(\\varphi)', j.includes('ker(\\varphi)'), j)
     ok('商的分子展开成 C_6', j.startsWith('C_6'), j)
@@ -150,11 +150,11 @@ export function run(): void {
 
   {
     // 改名时同步改写别处的引用（缺口 ⑱）—— 纯函数，直接测边界
-    const lines = ['A = S_4', 'J = A / K', 'M = 直积(A, B)', 'T = \\Alpha_1', 'U = AB']
+    const lines = ['A = S_4', 'J = A / K', 'M = directProduct(A, B)', 'T = \\Alpha_1', 'U = AB']
     const r = renameRefs(lines, 0, 'A', 'S')
     eq('改到了引用它的两行', r.touched.join(','), '1,2')
     eq('商里的 A 改了', r.lines[1], 'J = S / K')
-    eq('直积里的 A 改了', r.lines[2], 'M = 直积(S, B)')
+    eq('直积里的 A 改了', r.lines[2], 'M = directProduct(S, B)')
     eq('\\Alpha_1 不动（那是命令名，不是引用）', r.lines[3], 'T = \\Alpha_1')
     eq('AB 不动（那是另一个名字）', r.lines[4], 'U = AB')
     eq('被改的那一行本身不动', r.lines[0], 'A = S_4')
@@ -163,9 +163,9 @@ export function run(): void {
   suite('batch8 \\cdot ⑭ 自动补第一同构顶点的开关')
 
   {
-    const on = buildLines(['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)'])
+    const on = buildLines(['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)'])
     eq('默认开着：补出两个顶点', ids(on.objects), 'G H \\varphi \\varphi/im \\varphi/ker')
-    const off = buildLines(['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)'], { autoFirstIso: false })
+    const off = buildLines(['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)'], { autoFirstIso: false })
     eq('关掉之后只长 \\varphi 自己', ids(off.objects), 'G H \\varphi')
   }
 }

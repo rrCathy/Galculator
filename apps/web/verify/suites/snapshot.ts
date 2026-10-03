@@ -30,7 +30,7 @@ const badChars = (s: string) => [...new Set([...s].filter((c) => !ALLOWED.test(c
 
 const SAMPLE: Snapshot = {
   v: SNAPSHOT_VERSION,
-  lines: ['G = S_4', 'Syl = Syl_p(G, 3)', 'Omega= 底集(Syl)', 'A = 共轭作用在(G, Omega)'],
+  lines: ['G = S_4', 'Syl = Syl_p(G, 3)', 'Omega= asSet(Syl)', 'A = conjOn(G, Omega)'],
   pins: { A: { x: 120, y: -48 }, Omega: { x: 0, y: 0 } },
   view: { k: 1.25, tx: 12, ty: -30 },
   autoFirstIso: false,
@@ -110,7 +110,7 @@ export function run(): void {
   {
     // 钉住的 id 就是**画布节点 id**（对象名）—— 换一套定义行，id 也跟着换。
     // 这条钉住的是"快照与图靠同一个名字对齐"，导错了名字就是导错了图。
-    const b = build(['G = S_4', 'Syl = Syl_p(G, 3)', 'Omega= 底集(Syl)', 'A = 共轭作用在(G, Omega)'])
+    const b = build(['G = S_4', 'Syl = Syl_p(G, 3)', 'Omega= asSet(Syl)', 'A = conjOn(G, Omega)'])
     const snap: Snapshot = { v: 1, lines: b.lineStates.map((s) => s.raw), pins: { A: { x: 0, y: 60 } }, view: null }
     const r = parseSnapshot(serializeSnapshot(snap))
     ok('真实定义行也能量进快照', r.ok, r.ok ? '' : r.error)

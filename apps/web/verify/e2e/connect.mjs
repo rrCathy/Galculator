@@ -3,16 +3,16 @@
  *
  * 用户提的两件事：
  *   \\cdot"把 H 移到 f 上做 f(H)"（`USABILITY.md` 缺口 ③ 的原话）
- *   \\cdot`Syl_p(G) \\to 底集(S) \\to 共轭作用在` 那条链**中间必须打字**（缺口 ⑤）
+ *   \\cdot`Syl_p(G) \\to asSet(S) \\to 共轭作用在` 那条链**中间必须打字**（缺口 ⑤）
  *
  * 这一套用真 `page.mouse` 拖（不是 dispatchEvent）——手势走的是
  * `onPointerDown` + window 上的原生 move/up，只有真事件能验到那条通路。
  *
  * 验证的四条：
  *   ① 唯一候选**直接执行**：把 A₄ 拖到 `f` 那条箭头上 \\to 立刻长出 `f(A)`
- *   ② 多候选**弹菜单**：把 A₄ 拖到 S₄ 上 \\to 菜单第一条是「包含 \\subseteq」\\to 点它长出关系边
+ *   ② 多候选**弹菜单**：把 A₄ 拖到 S₄ 上 \\to 菜单第一条是「contains」\\to 点它长出关系边
  *   ③ 落点可以是**边**（映射不占节点，但正是要拖过去的目标）
- *   ④ 子群集的操作入口（U44）：`Syl` 那一行的「操作」→ 一键 `底集`
+ *   ④ 子群集的操作入口（U44）：`Syl` 那一行的「操作」→ 一键 `asSet`
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/connect.mjs`
  */
@@ -162,7 +162,7 @@ const dragPointer = async (a, b, shift = false) => {
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12->23, c->13)')
+await addLine('f', 'map(G, H, s12->23, c->13)')
 await addLine('A', 'A_4')
 await addLine('Syl', 'Syl_p(G, 3)')
 await page.keyboard.press('Escape')
@@ -211,7 +211,7 @@ if (menu === 0) {
 const items = await page.evaluate(() =>
   [...document.querySelectorAll('.connect-item .connect-label')].map((e) => e.textContent.trim()),
 )
-ok('菜单第一条是「包含 \\subseteq」（按数学意图排序）', (items[0] ?? '').includes('包含'), items.join(' | '))
+ok('菜单第一条是「contains」（按数学意图排序；U54 前叫「包含 \subseteq」）', (items[0] ?? '').includes('contains'), items.join(' | '))
 
 if (menu === 1) {
   await page.screenshot({ path: '../../docs/assets/u21-connect-menu.png' })
@@ -220,7 +220,7 @@ if (menu === 1) {
 await page.waitForTimeout(420)
 const afterTwo = await canvasState()
 const relEdge = afterTwo.edges.find((e) => e.cls.includes('gedge-relation'))
-ok('点「包含」后长出关系边', !!relEdge, afterTwo.edges.map((e) => e.label).join(','))
+ok('点「contains」后长出关系边', !!relEdge, afterTwo.edges.map((e) => e.label).join(','))
 ok('关系边标签是 \\trianglelefteq（A_4 \\trianglelefteq S_4，正规性是算出来的）', relEdge?.label === '\\trianglelefteq', relEdge?.label)
 ok('对象表里多了一行（那条关系是个一等对象）', (await rowIds()).length > idsBefore, (await rowIds()).join(','))
 ok('没有错误行', (await rowErrs()).length === 0, JSON.stringify(await rowErrs()))
@@ -237,17 +237,17 @@ const ops = await page.evaluate(() =>
   [...document.querySelectorAll('.row-ops .row-op')].map((e) => e.textContent.trim()),
 )
 ok('展开后列出它能做的操作', ops.length > 0, ops.join(' | '))
-ok('里面就有「底集」(underlyingSet)', ops.some((x) => x.includes('底集')), ops.join(' | '))
+ok('里面就有「asSet」(underlyingSet；U54 前叫「底集」)', ops.some((x) => x.includes('asSet')), ops.join(' | '))
 
 await page.screenshot({ path: '../../docs/assets/u44-row-ops.png' })
 
 const nodesBefore = (await canvasState()).nodes.length
-await page.locator('.row-ops .row-op', { hasText: '底集' }).first().click()
+await page.locator('.row-ops .row-op', { hasText: 'asSet' }).first().click()
 await page.waitForTimeout(460)
 const afterSet = await canvasState()
 ok(
-  '点一下就长出「底集」那一行（Sylow 链的中间那步）',
-  afterSet.nodes.some((n) => /底集/.test(n.label)),
+  '点一下就长出「asSet」那一行（Sylow 链的中间那步）',
+  afterSet.nodes.some((n) => /asSet\(/.test(n.label)),
   afterSet.nodes.map((n) => n.label).join(' | '),
 )
 ok('画布上多出一个集合节点 \\Omega', afterSet.nodes.length > nodesBefore, `${nodesBefore} -> ${afterSet.nodes.length}`)

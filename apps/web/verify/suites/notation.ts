@@ -92,7 +92,7 @@ export function run(): void {
     ok('两种写法给出同一个值', vals[0] !== null && vals[0] === vals[1], JSON.stringify(vals))
 
     // 数学：\\langle\\alpha₂\\rangle 的阶就是 \\alpha₂ 的阶
-    const B = build(['A = Aut(S_4)', 'n = ord(A, \\alpha_2)', 'B = 闭包(A, \\alpha_2)'])
+    const B = build(['A = Aut(S_4)', 'n = ord(A, \\alpha_2)', 'B = closure(A, \\alpha_2)'])
     eq('|\\langle\\alpha_2\\rangle| = ord(\\alpha_2)', B.orderOf('B'), vals[0])
   }
 
@@ -156,7 +156,7 @@ export function run(): void {
     eq('希腊字母', scanNotAscii(PHI)?.kind, 'greek')
     eq('数学符号', scanNotAscii(CAP)?.kind, 'symbol')
     eq('纯 ASCII 不报', scanNotAscii('S_4'), null)
-    eq('中文放行（那是用户写的内容）', scanNotAscii('闭包(G)'), null)
+    eq('中文放行（那是用户写的内容）', scanNotAscii('closure(G)'), null)
     eq('中文标点也放行（—— … 是输入法的标准标点）', scanNotAscii('A —— B …'), null)
 
     // ② 建议是**整串真折过**的结果，不是模板 —— 做法借自 GroupViz 的 canonical.ts
@@ -205,7 +205,7 @@ export function run(): void {
 
     // ⑥ 折叠函数本身：纯 ASCII 恒等
     eq('foldToAscii 对纯 ASCII 恒等', foldToAscii('S_4'), 'S_4')
-    eq('foldToAscii 不动中文', foldToAscii('闭包(G)'), '闭包(G)')
+    eq('foldToAscii 不动中文', foldToAscii('closure(G)'), 'closure(G)')
   }
 
   /* ══ 群记号：ASCII 形态建得出、Unicode 形态被拦 ═══════════════ */

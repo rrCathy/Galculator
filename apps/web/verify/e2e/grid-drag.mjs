@@ -173,7 +173,7 @@ const addLine = async (name, expr) => {
 
 await addLine('G', 'S_4')
 await addLine('H', 'S_3')
-await addLine('f', '映射(G, H, s12->23, c->13)')
+await addLine('f', 'map(G, H, s12->23, c->13)')
 await addLine('A', 'A_4')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(400)

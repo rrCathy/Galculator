@@ -31,7 +31,7 @@ import { OPS, opsFor, paramAccepts } from '../../src/gal/ops'
 import { eq, ok, suite } from '../harness'
 
 /** 手边的一台小舞台：S₄ \\twoheadrightarrow S₃（带核）+ 手打的 A₄。 */
-const STAGE = buildLines(['G = S_4', 'H = S_3', 'A = A_4', 'f = 映射(G, H, s12->23, c->13)'])
+const STAGE = buildLines(['G = S_4', 'H = S_3', 'A = A_4', 'f = map(G, H, s12->23, c->13)'])
 const val = (id: string) => STAGE.objects.find((o) => o.id === id)!.value
 const G = val('G')
 const H = val('H')
@@ -149,17 +149,17 @@ export function run(): void {
   suite('interaction \\cdot canPick（pending 态的可点判据）')
   {
     // 合法：商要求 (群, 数集)
-    ok('`商(G, N)` 第 1 位收得下 G', canPick(opOf('quotient'), 0, [], G))
+    ok('`quotient(G, N)` 第 1 位收得下 G', canPick(opOf('quotient'), 0, [], G))
     ok('第 2 位收得下 G 自己（非真子群也算子群）', canPick(opOf('quotient'), 1, [G], G))
 
     // 标量位：画布上**选不出来**（这正是它要返回 false 的原因）
     eq('`Syl_p(G, p)` 的 p 是标量位 -> 点不动', canPick(opOf('sylow'), 1, [G], G), false)
     eq('`ord(G, g)` 的 g 是标量位 -> 点不动', canPick(opOf('elementOrder'), 1, [G], G), false)
-    eq('`闭包(S, g_1…)` 的生成元位也是标量', canPick(opOf('closure'), 1, [G], G), false)
+    eq('`closure(S, g_1…)` 的生成元位也是标量', canPick(opOf('closure'), 1, [G], G), false)
 
     // 类型不匹配
     eq('`ker(f)` 的 f 位填不上一个群', canPick(opOf('kernel'), 0, [], G), false)
-    eq('`映射(G, H)` 的第 2 位填不上一个映射', canPick(opOf('map'), 1, [G], F), false)
+    eq('`map(G, H)` 的第 2 位填不上一个映射', canPick(opOf('map'), 1, [G], F), false)
 
     // 越界
     eq('没有第 3 位（map 只有 2 个参数）', canPick(opOf('map'), 2, [G, H], G), false)
@@ -192,23 +192,24 @@ export function run(): void {
     eq('群', PARAM_LABEL.group, '群')
     eq('单个数集（含"恰好一个成员"的列表）', PARAM_LABEL.subset, '元素集 / 子群')
     eq('整个子群集列表', PARAM_LABEL.setlike, '集合 / 子群集')
-    eq('作用对象 \\Omega', PARAM_LABEL.omega, '集合 \\Omega')
-    eq('生成元 -> 像（编辑器专用）', PARAM_LABEL.genImage, '生成元 \\to 像')
+    eq('作用对象 Omega', PARAM_LABEL.omega, '集合 Omega')
+    eq('生成元 -> 像（编辑器专用）', PARAM_LABEL.genImage, '生成元 -> 像')
   }
 
   /* ══ ⑥ menuLabel：一圈放不下全记法，得给短标签 ═══════════ */
 
-  suite('interaction \\cdot menuLabel（悬浮球上的短标签）')
+  suite('interaction - menuLabel（悬浮球上的短标签）')
   {
-    // 菜单标签是**纯文本**面上的字（按钮里直接显示）→ 一律中文 + ASCII，不写 LaTeX
-    eq('映射：手写的短标签（不是截 notation）', menuLabel(opOf('map')), '映射 f: G -> H')
-    eq('包含：手写的', menuLabel(opOf('contains')), '包含')
-    eq('像：手写的', menuLabel(opOf('image')), '像 f(H)')
+    // 菜单标签是**纯文本**面上的字（按钮里直接显示）→ 一律 ASCII，不写 LaTeX。
+    // U54 起这张手工表**删掉了**：标签一律从 `notation` 切「(」之前派生，
+    // 于是"漏补一条就退到 LaTeX"那个坑从根上没有了（派生不会漂移）。
+    eq('map：标签 = notation 前缀', menuLabel(opOf('map')), 'map')
+    eq('contains：同上', menuLabel(opOf('contains')), 'contains')
+    eq('image：同上', menuLabel(opOf('image')), 'image')
 
-    // 没手写标签的 \\to 截「(」之前
-    eq('共轭作用在(G, \\Omega) -> 共轭作用在', menuLabel(opOf('conjugationOnSet')), '共轭作用在')
-    eq('陪集作用(G, H) -> 陪集作用', menuLabel(opOf('cosetAction')), '陪集作用')
-    eq('底集(S) -> 底集', menuLabel(opOf('underlyingSet')), '底集')
+    eq('conjOn(G, Omega) -> conjOn', menuLabel(opOf('conjugationOnSet')), 'conjOn')
+    eq('cosetAction(G, H) -> cosetAction', menuLabel(opOf('cosetAction')), 'cosetAction')
+    eq('asSet(S) -> asSet', menuLabel(opOf('underlyingSet')), 'asSet')
 
     // 一定要每个 op 都拿得到标签（空标签 = 球上一个看不见的按钮）
     const blank = OPS.filter((op) => menuLabel(op).trim().length === 0)

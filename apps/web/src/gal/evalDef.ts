@@ -12,7 +12,7 @@ import {
   type OpContext,
   type OpDef,
 } from './ops'
-import { asciiClean, prettySymbol, scanNotAscii } from './pretty'
+import { asciiClean, asciiSymbol, prettySymbol, scanNotAscii } from './pretty'
 // 「已知群」不能当输入（U48）：结论表给的群只有符号 + 阶，没有元素表
 import { isKnownGroup } from './known'
 import type { GalValue } from './value'
@@ -54,13 +54,13 @@ const UNICODE_ALIASES: [RegExp, string][] = []
 
 
 /**
- * `⟨S⟩` → `闭包(S)`（记号包裹 → 函数调用，注册表的 call 名）。
+ * `⟨S⟩` → `closure(S)`（记号包裹 → 函数调用，注册表的 call 名）。
  *
  * 两条边界：
  *   ① 只改写**不带逗号**的形态：带逗号的 `⟨(12),(34)⟩` 是「由置换生成群」的记号，
- *      母群未定，留给 `parseGroupNotation`。要按上下文群生成就写 `闭包(G, (12), (34))`。
- *   ② 只改写**括号外的**（depth 0）：`K = ⟨J⟩` 要变 `闭包(J)`，
- *      但 `稳定子(A, ⟨r⟩)` 里的 `⟨r⟩` 是 Ω 上**某个点的记号**
+ *      母群未定，留给 `parseGroupNotation`。要按上下文群生成就写 `closure(G, (12), (34))`。
+ *   ② 只改写**括号外的**（depth 0）：`K = ⟨J⟩` 要变 `closure(J)`，
+ *      但 `stabilizer(A, ⟨r⟩)` 里的 `⟨r⟩` 是 Ω 上**某个点的记号**
  *      （Sylow III 的 Ω 成员就长这样），改写掉就再也点不到那个点了。
  */
 function normalizeAngle(s: string): string {
@@ -83,7 +83,7 @@ function normalizeAngle(s: string): string {
       if (end > i + 1) {
         const inner = s.slice(i + 1, end)
         if (!/[<>(),]/.test(inner)) {
-          out += `闭包(${inner.trim()})`
+          out += `closure(${inner.trim()})`
           i = end
           continue
         }
@@ -98,7 +98,7 @@ function normalizeAngle(s: string): string {
  * Unicode 运算符 → 规范化 ASCII 形态（`C_2 × C_3` → `C_2 x C_3`）。
  *
  * `angle: false` 时不改写 `⟨⟩` —— **实参位置上的 `⟨H⟩` 是 Ω 里那个点的记号**，
- * 不能解释成闭包：`稳定子(A, ⟨r⟩)` 里的 `⟨r⟩` 指 Ω 的成员，
+ * 不能解释成闭包：`stabilizer(A, ⟨r⟩)` 里的 `⟨r⟩` 指 Ω 的成员，
  * 而 Sylow III 的 Ω = `Syl_p(G)` 成员正是这种写法。
  */
 export function normalizeExpr(s: string, angle = true): string {
@@ -111,7 +111,7 @@ export function normalizeExpr(s: string, angle = true): string {
    *
    * 这是"输入与匹配"闭环的另一半，缺了它就是这条真漏洞：
    * 建对象时名字归一了（`ComposerOrb` 过 `normalizeName`），**引用时却没有** ——
-   * 于是 `φ = 映射(…)` 建出来的对象，用 `ker(\phi)` 引不到（"需要一个映射对象"），
+   * 于是 `φ = map(…)` 建出来的对象，用 `ker(\phi)` 引不到（"需要一个映射对象"），
    * 而用 `ker(φ)` 就行；用户看到的只是"有时候好使有时候不好使"。
    *
    * 归一之后 `\phi` / `\varphi` / `φ` / `ϕ` 四种写法**处处等价**——对象名、引用、
@@ -131,7 +131,7 @@ export function toNotationForm(t: string): string {
 
 /* ── 函数式调用：name(a, b, …) ─────────────────────────── */
 
-/** 调用名允许中日韩字符（`共轭作用(G)`）与下划线（`C_G(G, S)`）。 */
+/** 调用名允许中日韩字符（`conjAction(G)`）与下划线（`C_G(G, S)`）。 */
 const CALL_HEAD = /^([^\s(),]+)\s*\(/
 
 function matchingParen(s: string, open: number): number {
@@ -263,7 +263,7 @@ export function resolveArg(raw: string, objects: Map<string, GalObject>): OpArg 
  *
  * 规范化做两件事，正好对上用户撞上的那两个岔路：
  *   · **对象参数取"引用名"**（`a.ref`）而不是它当时写出来的文本 ——
- *     于是 `像(\phi)` 与 `im(\phi)`、`商(A, K)` 与 `A / K` 归一成同一个指纹；
+ *     于是 `image(\phi)` 与 `im(\phi)`、`quotient(A, K)` 与 `A / K` 归一成同一个指纹；
  *   · 标量参数取原文并 trim（`pSub(G, 2)` 与 `pSub(G, 3)` 必须是两个对象）。
  *
  * 无引用的实参（内联表达式，如 `Z(G)` 当参数）退回它的展示标签 ——
@@ -278,7 +278,7 @@ function callKeyOf(op: OpDef, args: OpArg[]): string {
  * 画布上下文（U34）：把**已有对象里的群**整理成候选母群，交给 `op.run` 的第二参。
  *
  * 只放群值（按定义顺序、去重）—— 目前只有集合运算用它：找不到共同母群时，
- * 画布上摆着的那个大群就是最可能的"家"（`交(C_3, C_7)` 在 F₂₁ 旁边不该失败）。
+ * 画布上摆着的那个大群就是最可能的"家"（`intersection(C_3, C_7)` 在 F₂₁ 旁边不该失败）。
  */
 function opContextOf(objects: Map<string, GalObject>): OpContext {
   const groups: { ref: string; group: Group }[] = []
@@ -308,7 +308,7 @@ function runOp(op: OpDef, args: OpArg[], objects: Map<string, GalObject>): EvalR
    * 「已知群」**只能当结果看，不能当输入算**（U48）。
    *
    * 它是结论表给的（`Aut(S_6)` 只有符号与阶 1440，本地建不出那个群），
-   * `elements` 是空数组 —— 放它进操作会**静默算在空集上**（`闭包(它)` 会得到一个
+   * `elements` 是空数组 —— 放它进操作会**静默算在空集上**（`closure(它)` 会得到一个
    * 看不出错的平凡结果），这比报错难查得多。所以在**唯一的分发口**拦下，
    * 而不是赌每个 op 都记得自己查一遍。
    */
@@ -354,6 +354,72 @@ export function looksLikeRelation(s: string): boolean {
 }
 
 /**
+ * **老写法 → 现在的名字**（U54）。表里全是 U53 之前的中文操作名。
+ *
+ * U54 把 42 个 op 的中文别名删掉了（操作名统一成 ASCII 英文）。删掉是**我们**改的，
+ * 于是老笔记 / 老截图 / 肌肉记忆一定会撞上「没有名为「直积」的操作」——
+ * 只回一句"没有这个操作"就是把用户甩在原地。
+ *
+ * 所以这里**给指路**：命中就直接说"改叫 X 了"。这也是 `similarOps` 的**前置**：
+ * 模糊匹配在中文名上必然零命中（别名已经全 ASCII），兜不住这一类。
+ *
+ * ⚠️ 表只增不减地放着，等哪天确认没人再写中文名了再删 —— 它不是兼容层
+ * （解析器**不认**这些名字），只是一句人话的提示。
+ */
+export const RENAMED_OPS: Record<string, string> = {
+  直积: 'directProduct',
+  半直积: 'semidirectProduct',
+  商: 'quotient',
+  商群: 'quotient',
+  映射: 'map',
+  同态: 'map',
+  共轭作用: 'conjAction',
+  正则作用: 'leftAction',
+  左正则作用: 'leftAction',
+  共轭作用在: 'conjOn',
+  陪集作用: 'cosetAction',
+  自定义作用: 'customAction',
+  自同构群: 'Aut',
+  交: 'intersection',
+  交集: 'intersection',
+  并: 'union',
+  并集: 'union',
+  差: 'difference',
+  差集: 'difference',
+  积集: 'productSet',
+  底集: 'asSet',
+  点集: 'pointSet',
+  集合: 'labeledSet',
+  中心: 'Z',
+  内自同构群: 'Inn',
+  中心化子: 'C_G',
+  正规化子: 'N_G',
+  轨道: 'orbits',
+  稳定子: 'stabilizer',
+  不动点: 'fix',
+  轨道数: 'burnside',
+  核: 'ker',
+  像: 'im',
+  包含: 'include',
+  同构: 'isomorphic',
+  子群: 'Sub',
+  极大子群: 'maximalSubgroups',
+  p子群: 'pSub',
+  正规子群: 'normalSubgroups',
+  换位子群: 'commutator',
+  闭包: 'closure',
+  生成子群: 'closure',
+  元素阶: 'ord',
+  分解: 'factor',
+  组合数: 'C',
+  组合数模: 'Cmod',
+  最大公因数: 'gcd',
+  最大公约数: 'gcd',
+  最小公倍数: 'lcm',
+  欧拉函数: 'phi',
+}
+
+/**
  * 找不到操作时，猜几个"用户可能想用的"。
  *
  * 判据只有一条：别名与输入**互相包含**（`极大子群` 含 `子群`）。只给 3 个——
@@ -382,7 +448,7 @@ function similarOps(name: string): string[] {
 /**
  * "长得像操作调用，但注册表里没这个名字"的报错。
  *
- * 从前这一路会掉进**记号建群**的最后一级，于是 `极大子群(G)` 被当成**群记号**去解析，
+ * 从前这一路会掉进**记号建群**的最后一级，于是 `maximalSubgroups(G)` 被当成**群记号**去解析，
  * 回一句"无法识别的群记号 …… 可用写法：C₁₂ · S₃ · D₄ ……"——**完全误导**：
  * 用户会以为是自己群记号写错了。未支持的功能与打错字必须能分开。
  */
@@ -393,6 +459,15 @@ function unknownOpError(name: string, objects: Map<string, GalObject>): EvalResu
       ok: false,
       error: `「${name}」是一个已定义的对象，不能当函数调用`,
       hint: '形如 f(H) 的「把子群送进映射」目前还没有对应操作',
+    }
+  }
+  // U54：老中文名先查改名表 —— 用户抄的是自己的旧笔记，得被告知"改叫 X 了"
+  const renamed = RENAMED_OPS[name]
+  if (renamed) {
+    return {
+      ok: false,
+      error: `「${name}」改叫「${renamed}」了`,
+      hint: `操作名从 U54 起统一成 ASCII 英文，照这个写：${renamed}(...)`,
     }
   }
   const near = similarOps(name)
@@ -440,7 +515,7 @@ function evalExprGuarded(raw: string, objects: Map<string, GalObject>): EvalResu
     return {
       ok: false,
       error: '这一步把引擎算崩了（是工具的 bug，不是你写错了）',
-      hint: `算式：${asciiClean(raw)} · 原始信息：${asciiClean(detail).slice(0, 120)}`,
+      hint: `算式：${asciiClean(raw)}；原始信息：${asciiClean(detail).slice(0, 120)}`,
     }
   }
 }
@@ -554,7 +629,15 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
       }
     }
     // core 的报错文案里带 `·`（列表分隔点）与 `\times`，`·` 键盘打不出来 → 过一道
-    return { ok: false, error: `无法识别：${t}`, hint: n.hint ? asciiClean(n.hint) : undefined }
+    // core 的文案里带 `\times` / `C_{2}` 这类 **LaTeX 源**（纯文本面上就是反斜杠），
+    // 先过 `asciiClean`（外部 Unicode 装饰）再 `asciiSymbol`（LaTeX → ASCII 词）。
+    // ⚠️ 顺序不能反：`asciiClean` 管 `·` / `—`，`asciiSymbol` 管命令，两者不相交但
+    // 都要过 —— 只过一道就是 U54 之前的样子（hint 里明晃晃一个 `\\times`）。
+    return {
+      ok: false,
+      error: `无法识别：${t}`,
+      hint: n.hint ? asciiSymbol(asciiClean(n.hint)) : undefined,
+    }
   }
   if (!n.symbol) {
     /*
@@ -582,7 +665,7 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
        * 所以这里只能诚实说"本地构造器没覆盖到"，不拿"待接入"当理由（那是用户看不见的承诺）。
        * 也别把 `gapExpr` 摆到界面上：`DihedralGroup(2000)` 这种串对用户是噪音。
        */
-      hint: `本地构造器只覆盖到常见小规模族 —— 这个记号要么规模超出本地能画的线，要么族还没写`,
+      hint: `本地构造器只覆盖到常见小规模族 ---- 这个记号要么规模超出本地能画的线，要么族还没写`,
     }
   }
   const g = createGroupFromSymbol(n.symbol)
@@ -593,7 +676,7 @@ function evalExprInner(raw: string, objects: Map<string, GalObject>): EvalResult
      * 这种"半直积形状的记号"正好是分诊能接的活，别把它甩给用户当"建群失败"。
      */
     if (splitTopLevel(n.canonical ?? '', ':').length === 2) return evalSemidirectNotation(t, n.canonical)
-    return { ok: false, error: `本地建群失败：${n.symbol}`, hint: n.hint }
+    return { ok: false, error: `本地建群失败：${asciiSymbol(n.symbol)}`, hint: n.hint }
   }
   return {
     ok: true,
@@ -688,7 +771,7 @@ function evalSemidirectNotation(text: string, canonical: string): EvalResult {
       hint:
         `候选（按不变量区分）：${list}` +
         (plan.sampled ? `（候选较多，本地做了分层抽样，"${plan.options.length}" 是下界）` : '') +
-        `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群做内半直积`,
+        `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群，走 semidirectProduct（内半直积）`,
     }
   }
   return { ok: false, error: `${text} 本地算不了`, hint: plan.why }

@@ -42,13 +42,13 @@ import {
   type HomomorphismMap,
   type Subgroup,
 } from '@groupviz/core'
-import { prettySymbol, subscript, superscript } from './pretty'
+import { asciiSymbol, prettySymbol, subscript, superscript } from './pretty'
 import { idsComparable, rememberParent, rootOf, sameGroup } from './parents'
 import { elementSemanticKey } from './semantic'
 // 「G 里有没有与 H 同构的子群」—— 求商 / 陪集作用的自动翻译（U30）、报错时的配方（U29）、
 // 集合运算的候选对齐（U32），以及 `containment` 的嵌入关（U38）**共用同一份搜索**
 import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
-// 自定义作用（U52）：`自定义作用(G, n, a\to (1 2 3 4))`。
+// 自定义作用（U52）：`customAction(G, n, a\to (1 2 3 4))`。
 // 生成元记号的对齐（`resolveGenerator`）也在这边 —— 一条判据只留一份，
 // 编辑器的下拉与手打的字形因此永远给出同一个答案。
 import {
@@ -61,7 +61,7 @@ import {
   type GenImageDraft,
   type OmegaSpec,
 } from './customAction'
-// 点集（U53）：凭空造「任意阶集合」——`点集(5)` / `集合(a, b, c)`。
+// 点集（U53）：凭空造「任意阶集合」——`pointSet(5)` / `labeledSet(a, b, c)`。
 // 这是 U52 缺的那一层：没有它，「自定义作用」的 Ω 只能是内核硬造的 `{1..n}`。
 import { planCountPointSet, planLabeledPointSet } from './pointSet'
 // `Aut` 的搜索预算 + 建群路（2026-10-01 事故：`Aut(S_6)` 在按键预览里跑 240s 没完 = 死机；
@@ -79,7 +79,7 @@ import { humanFingerprint, planInnerSemidirect, planSemidirect, semidirectBudget
 // 已知结论层（U48）：课本有闭式的族**先查表再谈计算** —— `Aut(S_6) = 1440` 是背下来的结论，
 // 不是现场搜索出来的（用户：「说 S6 搜不动我不是很认可」）
 import { isKnownGroup, knownFacts, realizeKnownGroup, type KnownGroupSpec } from './known'
-// 包含判据与信息面板的「关系」层（U19）**共用同一份** —— `包含(H, G)` 声明出来的
+// 包含判据与信息面板的「关系」层（U19）**共用同一份** —— `contains(H, G)` 声明出来的
 // 关系，与面板里"算出来"的关系永远一致，不会出现两种说法。
 // `embeddingSearchBlocked` = 「嵌入那条路被守卫挡下了」（U38），报错语据此说"未判定"
 import { containment, embeddingSearchBlocked } from './relations'
@@ -139,7 +139,7 @@ export const MECHANISM_ORDER: Mechanism[] = [
  * |---|---|---|
  * | `group` | 群节点 | |
  * | `subset` | 圆节点（元素集）/ 群节点 | **单个**数集（`∩ ∪ ∖ ·`、`商`、`C_G`、`N_G`、`闭包` 都是它）：元素集 / 集合 / 群（当集合读，且须是前缀里某个群的子群）；`subgroups` 只在**恰好一个成员**时收（那等于一个子群，与 `subgroupArgOf` 一致）|
- * | `setlike` | 圆节点 / 群节点 | **把子群集列表整体当集合读**——**只有 `底集` 用它**（Sylow 链的 `底集(Syl_p(G))` 靠这条；`∩ ∪ ∖ ·` 走的是 `subgroupArgOf`，只收单个数集）|
+ * | `setlike` | 圆节点 / 群节点 | **把子群集列表整体当集合读**——**只有 `底集` 用它**（Sylow 链的 `asSet(Syl_p(G))` 靠这条；`∩ ∪ ∖ ·` 走的是 `subgroupArgOf`，只收单个数集）|
  * | `omega` | 集合 / 元素集节点 / 群节点 | 作用的作用对象 Ω —— 恰好是 `omegaArgOf` 收的那几种 |
  * | `omegaOrInt` | 集合 / 元素集节点 / 群节点 | **Ω 或它的点数**（U53）：填不出节点时由文本 / 编辑器补一个整数（`自定义作用` 用它）|
  * | `action` | 作用节点 | |
@@ -223,8 +223,8 @@ export type OpOutcome =
  * 求值时能看到的**画布上下文**（U34）。
  *
  * 只放"跟这次计算无关、但可能用得上的**已有对象**" —— 目前是画布上的群：
- * 集合运算找不到共同母群时，会拿它们当候选（`交(C_3, C_7)` 在 F₂₁ 摆着的时候
- * 就该算出 {e}，而不是逼用户去写 `闭包(F, a)`——用户原话："我还得弄闭包……"）。
+ * 集合运算找不到共同母群时，会拿它们当候选（`intersection(C_3, C_7)` 在 F₂₁ 摆着的时候
+ * 就该算出 {e}，而不是逼用户去写 `closure(F, a)`——用户原话："我还得弄闭包……"）。
  */
 export interface OpContext {
   /** 画布上的群对象（带引用名，报错与披露里用） */
@@ -254,7 +254,7 @@ export interface OpDef {
    */
   params: OpParam[]
   /**
-   * 末尾**可变参数**（0..n 个）——`映射(G, H, r2→e, s→s)` 的像对就是这么来的。
+   * 末尾**可变参数**（0..n 个）——`map(G, H, r2→e, s→s)` 的像对就是这么来的。
    * 声明在 `params` 之外（不计入 arity），填不填都不影响 `opsFor` 的匹配。
    */
   variadic?: OpParam
@@ -279,7 +279,7 @@ export interface OpDef {
    * 实现必须容忍它：**判不了就返回 `true`**，不许对 `undefined` 抛错，也不许因为
    * "参数没齐"而返回 `false`（那会把一条只是还没选完的操作从菜单里抹掉）。
    *
-   * 收紧要读 U52 那一处：单对象 op（`自定义作用(G, n, ...)`）的参数里夹着标量 `n`，
+   * 收紧要读 U52 那一处：单对象 op（`customAction(G, n, ...)`）的参数里夹着标量 `n`，
    * `opsFor` 永远等不到 `selection.length === params.length`（画布给不了 `n`），
    * 于是"只在参数凑齐时预检"这条旧写法**对它永远不触发** —— 直积群上
    * 「自定义作用」照列，点开却只得到一句"做不了"。菜单不撒谎，所以这一钩子
@@ -372,7 +372,7 @@ function labelText(a: OpArg | undefined): string {
 
 /** 素数校验：恰好一个素因子 ⇔ 素数的幂；这里要求 p 本身是素数。 */
 function checkPrime(p: number, notation: string): string | null {
-  if (p < 2) return `${notation} 的 p 必须 \\ge 2`
+  if (p < 2) return `${notation} 的 p 必须 >= 2`
   if (factorizeOrder(p).length !== 1 || factorizeOrder(p)[0].exponent !== 1) {
     return `${notation} 要求 p 是素数，收到 ${p}`
   }
@@ -398,7 +398,7 @@ function elementListHint(group: Group, cap = 24): string {
  *
  * core 的 `resolveElement` 认 id / label / value / 循环记号 `(123)`，但 core 的 `C_n`
  * 是加法群（生成元叫 `a`、元素是 `0..n-1`），而课本写的是**乘法循环群** `r^k`。
- * 于是用户写 `闭包(G, r4)` 时 `r4` 解析不了——而这正是最常见的写法。
+ * 于是用户写 `closure(G, r4)` 时 `r4` 解析不了——而这正是最常见的写法。
  *
  * 四级回退：
  *   ⓪ **展示形态回认**：`prettySymbol(label)` 的唯一命中（`α₂` → `\alpha_2`，
@@ -436,7 +436,7 @@ export function resolveElementLoose(group: Group, text: string): GroupElement | 
    * 必须在下面那截"循环群单生成元的桥"**之前**短路。反例（实测，陪集层）：
    * core 给商群单位元的 label 是 `e, \dots`（陪集成员列表拼出来的），所以
    * `prettySymbol(label) <=> "e"` 回认不命中 ⇒ 一路掉到桥里 ⇒ 而 `C_2` 的商群
-   * **只有一个生成元** ⇒ `e` 被当成生成元 ⇒ **`闭包(Q, e)` 返回整个 Q（2 阶）、
+   * **只有一个生成元** ⇒ `e` 被当成生成元 ⇒ **`closure(Q, e)` 返回整个 Q（2 阶）、
    * `ord(Q, e)` = 2**（单位元的阶居然不是 1），而且不报错。
    *
    * 放在这里不改其它群的行为：常见群里的 `e` 在上面 `resolveElement`
@@ -618,7 +618,7 @@ function alignElementSet(target: Group, els: GroupElement[]): GroupElement[] | n
  *
  * 分诊**不只是改措辞**：还要给出路。同一个母群里"长得像"的子群往往不止一种
  * 造法，用户手里那个（`V_4`）常常就是想用这里面的某一个 —— 所以顺手在 `G` 里
- * 找同构的子群：**恰好一个**时给出可照抄的 `闭包(...)`（唯一性由数学保证，
+ * 找同构的子群：**恰好一个**时给出可照抄的 `closure(...)`（唯一性由数学保证，
  * 不是猜），多个 / 都不是正规（`requireNormal`）时照实说为什么没法唯一。
  *
  * `requireNormal` 是**商**这类只认正规子群的路传进来的筛子（积集 / 陪集作用不传）。
@@ -635,7 +635,7 @@ function foreignSubgroupFail(
   return fail(
     `${hRef} 的元素不在 ${gRef} 里，两者不是同一个群里的子群`,
     isoSubgroupHint(G, S, gRef, hRef, requireNormal) ??
-      `${hRef} 是独立构造的群，元素和 ${gRef} 对不上；想用 ${gRef} 里的子群，请从它构造（如 闭包(${gRef}, 生成元)）`,
+      `${hRef} 是独立构造的群，元素和 ${gRef} 对不上；想用 ${gRef} 里的子群，请从它构造（如 closure(${gRef}, 生成元)）`,
   )
 }
 
@@ -659,7 +659,7 @@ function crossWorldFail(
   return fail(
     `${hRef} 与 ${gRef} 是两个各自构造的群，元素记号碰巧重合，不是同一个群里的子群`,
     isoSubgroupHint(G, S, gRef, hRef, requireNormal) ??
-      `想用 ${gRef} 里的子群，先从它构造（如 闭包(${gRef}, 生成元)）`,
+      `想用 ${gRef} 里的子群，先从它构造（如 closure(${gRef}, 生成元)）`,
   )
 }
 
@@ -705,7 +705,7 @@ function foreignElementSetFail(
 ): OpOutcome | null {
   if (S.elements.length === 0) {
     return fail(
-      `${hRef} 里一个元素都没有 —— 空集不是群，也算不出中心化子 / 正规化子`,
+      `${hRef} 里一个元素都没有 ---- 空集不是群，也算不出中心化子 / 正规化子`,
       `检查一下 ${hRef} 是不是哪一步算空了（0 阶的对象不是群）`,
     )
   }
@@ -715,20 +715,20 @@ function foreignElementSetFail(
     subgroupMisdiagnosis(gRef, G, hRef, S, false) ??
     fail(
       `${hRef} 的元素对不上 ${gRef}`,
-      `想用 ${gRef} 里的子群，先从它构造（如 闭包(${gRef}, 生成元)）`,
+      `想用 ${gRef} 里的子群，先从它构造（如 closure(${gRef}, 生成元)）`,
     )
   )
 }
 
 /**
- * 子群的**可照抄**写法：`闭包(G, g_1, g_2)`（生成元走 `prettySymbol`；
- * 平凡子群写成 `闭包(G)`）。错误语 / 状态行都是**纯文本面**，这里不带 LaTeX 命令。
+ * 子群的**可照抄**写法：`closure(G, g_1, g_2)`（生成元走 `prettySymbol`；
+ * 平凡子群写成 `closure(G)`）。错误语 / 状态行都是**纯文本面**，这里不带 LaTeX 命令。
  */
 function subgroupRecipe(G: Group, gRef: string, h: Subgroup): string {
   const gens = h.generators
     .filter((g) => g.id !== G.identity.id)
     .map((g) => prettySymbol(g.label))
-  return `闭包(${gRef}${gens.length > 0 ? `, ${gens.join(', ')}` : ''})`
+  return `closure(${gRef}${gens.length > 0 ? `, ${gens.join(', ')}` : ''})`
 }
 
 /**
@@ -742,7 +742,7 @@ function subgroupRecipe(G: Group, gRef: string, h: Subgroup): string {
  *
  * 两道边界：
  *   · **只认普通元素**：任一边带着陪集元素（商群）就停 —— 否则
- *     `商(G/N, K)` 这种"层级错了"的行会被静默翻译成另一个问题
+ *     `quotient(G/N, K)` 这种"层级错了"的行会被静默翻译成另一个问题
  *     （第三同构的反例钉着这条：要求它继续报错）；
  *   · 超限 / 结构符号算不出 → `null`（`isomorphicSubgroupsIn` 的守卫），退回报错。
  */
@@ -759,7 +759,7 @@ function autoTranslatedSubgroup(
 }
 
 /**
- * 报错时的出路：在 `G` 里找与 `S` 同构的子群，给**可照抄**的 `闭包(...)` 写法。
+ * 报错时的出路：在 `G` 里找与 `S` 同构的子群，给**可照抄**的 `closure(...)` 写法。
  *
  * `requireNormal` = 调用方（商）只认正规子群：候选先按正规性筛一遍，
  * 筛空时**照实说**「有 N 个同构的，但都不是正规子群」—— 别让人去挑一个
@@ -886,8 +886,8 @@ function omegaHint(A: GalAction): string {
   const labels = omegaLabels(A)
   const head = labels.slice(0, 12)
   return A.omega && A.omegaBase === 'object'
-    ? `\\Omega 的 ${labels.length} 个点：${head.map((l, i) => `#${i + 1} ${l}`).join('，')}`
-    : `\\Omega = {${head.join(', ')}}`
+    ? `Omega 的 ${labels.length} 个点：${head.map((l, i) => `#${i + 1} ${l}`).join('，')}`
+    : `Omega = {${head.join(', ')}}`
 }
 
 function omegaLabels(A: GalAction): string[] {
@@ -912,13 +912,13 @@ function subgroupKeyOf(els: GroupElement[]): string {
  * 把一个「被作用的点集 Ω」实参读成结构化形式。
  *
  * 三种来源：
- *   - `set`（`底集(Syl_p(G))` / `点集(5)` 的产物）：成员可能带 `subgroupElements` → **点就是子群**
+ *   - `set`（`asSet(Syl_p(G))` / `pointSet(5)` 的产物）：成员可能带 `subgroupElements` → **点就是子群**
  *   - `elements`：点是 G 的元素（共轭类 / 正规子群集 …）
  *   - `group`：同上（Ω = G 自身）
  *
  * `points` 为 null 表示"点是元素"而不是子群 —— 这两条路走的是两套置换算法。
  *
- * `group` 为 null 表示**这批点不属于任何群**（U53 的合成点集 `点集(5)`）——
+ * `group` 为 null 表示**这批点不属于任何群**（U53 的合成点集 `pointSet(5)`）——
  * 目前只有 `共轭作用在` 用它，那里会把 null 当作"共轭干不了"（共轭作用要的真是子群集）。
  */
 interface OmegaArg {
@@ -945,7 +945,7 @@ function omegaArgOf(a: OpArg | undefined): OmegaArg | null {
   if (v.type === 'elements') {
     return {
       group: v.group,
-      label: `底集(${refText(a)})`,
+      label: `asSet(${refText(a)})`,
       members: v.elements.map((e) => ({ label: e.label })),
       points: null,
     }
@@ -953,7 +953,7 @@ function omegaArgOf(a: OpArg | undefined): OmegaArg | null {
   if (v.type === 'group') {
     return {
       group: v.group,
-      label: `底集(${refText(a)})`,
+      label: `asSet(${refText(a)})`,
       members: v.group.elements.map((e) => ({ label: e.label })),
       points: null,
     }
@@ -984,7 +984,7 @@ function conjugationPermsOnSubgroups(
     if (!index.has(k)) index.set(k, i)
   })
   if (index.size !== keys.length) {
-    return { error: '\\Omega 里有重复的点', hint: '同一个子群在 \\Omega 里出现了两次' }
+    return { error: 'Omega 里有重复的点', hint: '同一个子群在 Omega 里出现了两次' }
   }
   const perms = new Map<string, number[]>()
   for (const g of acting) {
@@ -993,8 +993,8 @@ function conjugationPermsOnSubgroups(
       const j = index.get(subgroupKeyOf(conjugateSubgroup(G, H, g)))
       if (j === undefined) {
         return {
-          error: `${elementLabel(G, g.id)} 把 \\Omega 里的某个子群映到了 \\Omega 之外`,
-          hint: '\\Omega 必须在共轭下封闭（Sylow p-子群的全体就是封闭的）',
+          error: `${elementLabel(G, g.id)} 把 Omega 里的某个子群映到了 Omega 之外`,
+          hint: 'Omega 必须在共轭下封闭（Sylow 子群的全体就是封闭的）',
         }
       }
       perm.push(j)
@@ -1017,7 +1017,7 @@ function conjugationPermsOnElements(
   const posInG = (label: string) => G.elements.findIndex((e) => e.label === label)
   const src = O.members.map((m) => posInG(m.label))
   if (src.some((i) => i < 0)) {
-    return { error: '\\Omega 里有 G 中找不到的元素', hint: '\\Omega 的成员必须是 G 的元素' }
+    return { error: 'Omega 里有 G 中找不到的元素', hint: 'Omega 的成员必须是 G 的元素' }
   }
   const posInO = new Map<string, number>()
   O.members.forEach((m, i) => {
@@ -1032,8 +1032,8 @@ function conjugationPermsOnElements(
       const j = posInO.get(G.elements[p[i]].label)
       if (j === undefined) {
         return {
-          error: `${elementLabel(G, g.id)} 把 \\Omega 里的元素映到了 \\Omega 之外`,
-          hint: '\\Omega 要在共轭下封闭：取共轭类、正规子群或 G 自身',
+          error: `${elementLabel(G, g.id)} 把 Omega 里的元素映到了 Omega 之外`,
+          hint: 'Omega 要在共轭下封闭：取共轭类、正规子群或 G 自身',
         }
       }
       perm.push(j)
@@ -1053,8 +1053,8 @@ function omegaDisplayName(O: OmegaArg): string {
  * 「自定义作用」的第二个实参 → `OmegaSpec`（U53）。
  *
  * 认两种：
- *   · **一个整数** ⇒ 点数（`自定义作用(C_4, 4, a -> (1 2 3 4))`，U52 的老写法，契约不改）；
- *   · **一个集合 / 元素集 / 群对象** ⇒ 就用它当 Ω（`点集(5)` / `集合(a,b,c)` / `底集(Syl_p(G))`）。
+ *   · **一个整数** ⇒ 点数（`customAction(C_4, 4, a -> (1 2 3 4))`，U52 的老写法，契约不改）；
+ *   · **一个集合 / 元素集 / 群对象** ⇒ 就用它当 Ω（`pointSet(5)` / `labeledSet(a,b,c)` / `asSet(Syl_p(G))`）。
  *
  * 值的筛选**不在这里另写一份** —— 交给 `customAction.ts#omegaSpecOfValue`，
  * 那个函数同时供作用编辑器用（"编辑器能填的"与"手打的能吃"必须是同一批）。
@@ -1065,7 +1065,7 @@ function omegaSpecOf(a: OpArg | undefined): OmegaSpec | { error: string; hint?: 
   if (!a) {
     return {
       error: '自定义作用的第二个参数要一个点数或一个点集',
-      hint: '点数如 4；点集如 点集(5) / 集合(a, b, c) / 底集(Syl(G, 3))',
+      hint: '点数如 4；点集如 pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))',
     }
   }
   if (a.kind === 'number') return { kind: 'count', n: a.num }
@@ -1084,11 +1084,11 @@ function omegaSpecOf(a: OpArg | undefined): OmegaSpec | { error: string; hint?: 
   return {
     error: `自定义作用的第二个参数要一个点数或一个点集，「${a.text}」两者都不是`,
     // 例子必须是**照抄就能跑**的：`Syl_p(G)` 只是个数学记号，当输入会报"要 2 个参数"
-    hint: '点数如 4；点集如 点集(5) / 集合(a, b, c) / 底集(Syl(G, 3))；作用在 G 自身上用「正则作用」',
+    hint: '点数如 4；点集如 pointSet(5) / labeledSet(a, b, c) / asSet(Syl(G, 3))；作用在 G 自身上用 leftAction',
   }
 }
 
-const COSET_OMEGA_HINT = '\\Omega 是陪集而非 G 的元素；陪集视图接入后再支持'
+const COSET_OMEGA_HINT = 'Omega 是陪集而非 G 的元素；陪集视图接入后再支持'
 
 /* ── 集合运算 ──────────────────────────────────────────── */
 
@@ -1168,12 +1168,12 @@ const idSetKey = (els: GroupElement[]) => els.map((e) => e.id).sort().join('|')
  *
  * **先对齐，再算**（2026-09-29 重写）。从前这里只按元素 id 相交 / 相乘，三条病征：
  *   - `A_4 ∩ 独立 V_4` 静默给**空集**（id 空间不通，看着像真的，用户实测）；
- *   - `闭包(G,(12)) · 闭包(G,(34))` 误报"不是同一个群"（拿 K₁ 当上下文群去乘 K₂ 的元素）；
+ *   - `closure(G,(12)) · closure(G,(34))` 误报"不是同一个群"（拿 K₁ 当上下文群去乘 K₂ 的元素）；
  *   - 独立构造的 `V_4` 参与运算时好时坏（母群只能猜一边，反序就死）。
  *
  * 现在的规则一句话：**候选上下文群逐个试，第一个"两边都能对齐、且结果说得清"的赢**。
  * 候选按"最像用户正在工作的那个家"排序：显式母群 → 子群对象的**根** → 两边各自的群 →
- * **画布上的其它群**（U34：`交(C_3, C_7)` 在 F₂₁ 摆着时就该算出 {e}，不该逼人写闭包）。
+ * **画布上的其它群**（U34：`intersection(C_3, C_7)` 在 F₂₁ 摆着时就该算出 {e}，不该逼人写闭包）。
  *
  * 一边对不上时允许**翻译**过去，分寸拿两条：
  *   · 同构子群**恰好一个** → 直接翻译（唯一性由数学保证，不是猜），并写进 `sub`；
@@ -1301,8 +1301,8 @@ function setOp(a: OpArg[], kind: SetOpKind, ctx?: OpContext): OpOutcome {
         return fail(
           `${aRef} 与 ${bRef} 不在同一个群里（两者没有共同的母群）`,
           canvasHint
-            ? '画布上现成的群都装不下这两边；先建它们共同的大群，再从里面取子群（如 闭包(大群, 生成元)）'
-            : '先把两边放进共同的大群再算：比如 闭包(大群, 生成元)；或从大群的子群列表里取',
+            ? '画布上现成的群都装不下这两边；先建它们共同的大群，再从里面取子群（如 closure(大群, 生成元)）'
+            : '先把两边放进共同的大群再算：比如 closure(大群, 生成元)；或从大群的子群列表里取',
         )
       }
     }
@@ -1310,7 +1310,7 @@ function setOp(a: OpArg[], kind: SetOpKind, ctx?: OpContext): OpOutcome {
       best?.out ??
       fail(
         `${kind} 的两边不在同一个群里`,
-        '把两边先放进同一个群里（如 闭包(母群, 生成元)），或从子群列表里取',
+        '把两边先放进同一个群里（如 closure(母群, 生成元)），或从子群列表里取',
       )
     )
   }
@@ -1333,7 +1333,7 @@ function setOp(a: OpArg[], kind: SetOpKind, ctx?: OpContext): OpOutcome {
       ok: true,
       value: { type: 'group', group: subgroupGroupOf(group, els, label) },
       label,
-      sub: `|\\cdot| = ${els.length}${structSuffix(group, els)}${said}`,
+      sub: `结果大小 = ${els.length}${structSuffix(group, els)}${said}`,
       note: chosen.said || undefined,
     }
   }
@@ -1342,7 +1342,7 @@ function setOp(a: OpArg[], kind: SetOpKind, ctx?: OpContext): OpOutcome {
     ok: true,
     value: { type: 'elements', group, elements: els },
     label,
-    sub: `|\\cdot| = ${els.length}${said}`,
+    sub: `结果大小 = ${els.length}${said}`,
     note: chosen.said || undefined,
   }
 }
@@ -1401,14 +1401,14 @@ export const OPS: OpDef[] = [
   /* ══ 原子构造 ══════════════════════════════════════════ */
   {
     id: 'directProduct',
-    notation: 'A \\times B',
+    notation: 'directProduct(A, B)',
     mechanism: 'atomic',
     primitive: true,
     doc: '直积：两个群的笛卡尔积，逐分量运算',
     impl: 'createDirectProduct',
     // 中缀用 ASCII：`x`（短、好打）与 `\times`（LaTeX 形态，与显示一致）
     infix: ['x', '\\times'],
-    call: ['直积', 'directProduct', 'product'],
+    call: ['directProduct', 'product'],
     params: [
       { name: 'A', type: 'group' },
       { name: 'B', type: 'group' },
@@ -1430,7 +1430,7 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'semidirectProduct',
-    notation: 'N \\rtimes H',
+    notation: 'semidirectProduct(N, H)',
     mechanism: 'atomic',
     primitive: true,
     doc: '半直积：N 被 H 作用着拼起来。记号定不下作用时分诊：唯一就建、多解列出、算不动说清',
@@ -1441,7 +1441,7 @@ export const OPS: OpDef[] = [
     // 这里收 `\rtimes` 是为了**让参数能是画布对象**（`A \rtimes B`）：
     // 记号解析那条路只认群记号，不认对象名。
     infix: ['\\rtimes'],
-    call: ['半直积', 'semidirectProduct', 'semidirect', 'rtimes'],
+    call: ['semidirectProduct', 'semidirect', 'rtimes'],
     params: [
       { name: 'N', type: 'group' },
       { name: 'H', type: 'group' },
@@ -1465,7 +1465,7 @@ export const OPS: OpDef[] = [
       const H = groupOf(a[1])
       // `fail` 的两个参数都会进 `.composer-status` 这个**纯文本面**（不走 KaTeX）：
       // 不许有 LaTeX 命令（`\rtimes`）、也不许有键盘打不出来的字符（`——` / `⇒` / `·`）。
-      if (!N || !H) return fail('半直积需要两个群', `如 半直积(N, H)：左边当正规子群，右边当作用群`)
+      if (!N || !H) return fail('半直积需要两个群', `如 semidirectProduct(N, H)：左边当正规子群，右边当作用群`)
 
       /*
        * ① **内半直积**：两个参数是同一个母群里的子群 ⇒ 作用由母群内部的共轭定死。
@@ -1524,7 +1524,7 @@ export const OPS: OpDef[] = [
           `${nRef} 与 ${hRef} 的${kindWord}有 ${plan.options.length} 个本质不同的选法，各自给出不同构的群，它不是一个群`,
           `候选（按不变量区分）：${list}` +
             (plan.sampled ? `。候选较多，本地做了分层抽样，"${plan.options.length}"是下界` : '') +
-            `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群做内半直积` +
+            `。要指定作用：改用 SmallGroup(n, i)，或从同一个母群里挑两个子群，走 semidirectProduct（内半直积）` +
             (innerWhy ? `。${innerWhy}` : ''),
         )
       }
@@ -1536,14 +1536,14 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'quotient',
-    notation: 'G / N',
+    notation: 'quotient(G, N)',
     mechanism: 'atomic',
     primitive: true,
     doc: '商群：把正规子群 N 的每个陪集压成一点',
     recipe: '原子构造（不归约）',
     impl: 'computeQuotientGroup',
     infix: ['/'],
-    call: ['商', '商群', 'quotient'],
+    call: ['quotient'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'N', type: 'subset' },
@@ -1564,7 +1564,7 @@ export const OPS: OpDef[] = [
       // 额外一道（2026-09-29）：**陪集层**（跨商群，G4）走语义键对齐；普通元素还要求
       // 两边的 id 能**直接对着读**（同一条母群链，或都是自证式 id 的置换群）——
       // 记号群的 id 跨群会串（`C_3` 的 `e0 e1 e2` 在 `C_7` 里"也有"），
-      // 只看 id 会把 `商(C_7, C_3)` 当成"子群判定失败"，而真相是两边没有共同母群。
+      // 只看 id 会把 `quotient(C_7, C_3)` 当成"子群判定失败"，而真相是两边没有共同母群。
       const cosetLevel = hasCosetElements(S.group)
       const aligned =
         !cosetLevel && !idsComparable(S.group, G) ? null : alignElementSet(G, S.elements)
@@ -1618,24 +1618,24 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'map',
-    notation: '映射(G, H, r2\\to e, ...)',
+    notation: 'map(G, H, r -> e, ...)',
     mechanism: 'atomic',
     primitive: true,
-    doc: '同态 f : G \\to H，由**生成元的像**给出（如 r2\\to e, s\\to s）',
+    doc: '同态 f : G -> H，由**生成元的像**给出（如 r2 -> e, s -> s）',
     impl: 'extendFromGenerators + verifyHomomorphism',
-    call: ['映射', '同态', 'map', 'hom'],
+    call: ['map', 'hom'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'H', type: 'group' },
     ],
-    variadic: { name: '像', type: 'genImage' },
+    variadic: { name: 'genImage', type: 'genImage' },
     arity: 2,
     editor: true,
     result: 'map',
     run: (a) => {
       const G = groupOf(a[0])
       const H = groupOf(a[1])
-      if (!G || !H) return fail('映射需要源群与靶群', '映射(G, H, r2\\to e, s\\to s)')
+      if (!G || !H) return fail('映射需要源群与靶群', 'map(G, H, r2\\to e, s\\to s)')
       const gens = getGeneratorElements(G)
       if (gens.length === 0) return fail(`${refText(a[0])} 没有生成元，无法由生成元的像定义映射`)
 
@@ -1668,7 +1668,7 @@ export const OPS: OpDef[] = [
         pairs.push({ genName: g.genName, genId: g.el.id, image: img })
       }
       if (pairs.length === 0) {
-        return fail('至少要给一个生成元的像', '映射(G, H, r2\\to e)')
+        return fail('至少要给一个生成元的像', 'map(G, H, r2\\to e)')
       }
 
       // core 的延拓 Map 收的是**生成元元素 id**（不是名字）
@@ -1685,7 +1685,7 @@ export const OPS: OpDef[] = [
         const v = res.violation
         if (v) {
           return fail(
-            `不是同态：f(${elementLabel(G, v.a)}\\cdot ${elementLabel(G, v.b)}) \\ne f(${elementLabel(G, v.a)})\\cdot f(${elementLabel(G, v.b)})`,
+            `不是同态：f(${elementLabel(G, v.a)} * ${elementLabel(G, v.b)}) != f(${elementLabel(G, v.a)}) * f(${elementLabel(G, v.b)})`,
             `左 = ${elementLabel(H, v.lhs)}；右 = ${elementLabel(H, v.rhs)}`,
           )
         }
@@ -1707,7 +1707,7 @@ export const OPS: OpDef[] = [
         image,
       }
       const kind = props.isIsomorphism
-        ? '同构 \\cong'
+        ? '同构'
         : props.isInjective
           ? '单射（嵌入）'
           : props.isSurjective
@@ -1717,18 +1717,18 @@ export const OPS: OpDef[] = [
         ok: true,
         value: { type: 'map', map },
         label: `${prettySymbol(G.symbol)} \\to ${prettySymbol(H.symbol)}`,
-        sub: `${kind} \\cdot|ker| = ${kernel.length} \\cdot|im| = ${image.length}`,
+        sub: `${kind}, |ker| = ${kernel.length}, |im| = ${image.length}`,
       }
     },
   },
   {
     id: 'conjugationAction',
-    notation: '共轭作用(G)',
+    notation: 'conjAction(G)',
     mechanism: 'atomic',
     primitive: true,
-    doc: 'G 通过共轭 g\\cdot x\\cdot g^-^1 作用在自身元素上',
+    doc: 'G 通过共轭 g*x*g^-1 作用在自身元素上',
     impl: 'computeConjugationPerms',
-    call: ['共轭作用', 'conjAction', 'conjugation'],
+    call: ['conjAction', 'conjugation'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'action',
@@ -1745,7 +1745,7 @@ export const OPS: OpDef[] = [
         // 元素一个个列出来，面板上就能看到 Ω 是什么。
         omega: {
           group: G,
-          label: `底集(${refText(a[0])})`,
+          label: `asSet(${refText(a[0])})`,
           members: G.elements.map((e) => ({ label: e.label })),
         },
         omegaBase: 'self',
@@ -1753,19 +1753,19 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'action', action },
-        label: `共轭作用(${refText(a[0])})`,
-        sub: `|\\Omega| = ${G.order} \\cdot \\Omega = ${refText(a[0])} 自身`,
+        label: `conjAction(${refText(a[0])})`,
+        sub: `|Omega| = ${G.order}, Omega = ${refText(a[0])} 自身`,
       }
     },
   },
   {
     id: 'leftTranslationAction',
-    notation: '正则作用(G)',
+    notation: 'leftAction(G)',
     mechanism: 'atomic',
     primitive: true,
     doc: 'G 通过左乘作用在自身元素上（Cayley 正则表示）',
     impl: 'computeLeftTranslationPerms',
-    call: ['正则作用', '左正则作用', 'leftAction'],
+    call: ['leftAction'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'action',
@@ -1780,7 +1780,7 @@ export const OPS: OpDef[] = [
         perms,
         omega: {
           group: G,
-          label: `底集(${refText(a[0])})`,
+          label: `asSet(${refText(a[0])})`,
           members: G.elements.map((e) => ({ label: e.label })),
         },
         omegaBase: 'self',
@@ -1788,20 +1788,20 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'action', action },
-        label: `正则作用(${refText(a[0])})`,
-        sub: `|\\Omega| = ${G.order} \\cdot \\Omega = ${refText(a[0])} 自身`,
+        label: `leftAction(${refText(a[0])})`,
+        sub: `|Omega| = ${G.order}, Omega = ${refText(a[0])} 自身`,
       }
     },
   },
   {
     id: 'conjugationOnSet',
-    notation: '共轭作用在(G, \\Omega)',
+    notation: 'conjOn(G, Omega)',
     mechanism: 'atomic',
     primitive: true,
-    doc: 'G 通过共轭 g\\cdot x\\cdot g^-^1 作用在集合 \\Omega 上 ---- Sylow 定理的主角动作（\\Omega = Syl_p(G)）',
+    doc: 'G 通过共轭 g*x*g^-1 作用在集合 Omega 上 ---- Sylow 定理的主角动作（Omega = Syl(G, p)）',
     recipe: '原子构造（作用）',
     impl: 'conjugateSubgroup（core）\\to 点集上的置换',
-    call: ['共轭作用在', 'conjOn', 'conjugationOn'],
+    call: ['conjOn', 'conjugationOn'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'Omega', type: 'omega' },
@@ -1810,12 +1810,12 @@ export const OPS: OpDef[] = [
     result: 'action',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('共轭作用在(\\cdot) 的第一个参数必须是群')
+      if (!G) return fail('conjOn 的第一个参数必须是群')
       const O = omegaArgOf(a[1])
       if (!O) {
         return fail(
-          '共轭作用在(\\cdot) 的第二个参数必须是集合 \\Omega',
-          '如 \\Omega = 底集(Syl(G, 3))：先把子群集取底集成集合，再让 G 作用上去',
+          'conjOn 的第二个参数必须是集合 Omega',
+          '如 conjOn(G, asSet(Syl(G, 3)))：先把子群集取底集成集合，再让 G 作用上去',
         )
       }
       if (G.order > ENUM_LIMIT) {
@@ -1831,13 +1831,13 @@ export const OPS: OpDef[] = [
        * 子群对象又沿用母群的元素 id，所以这里只要判"P 是不是 G 的子群"。
        */
       const ambient = O.group
-      // Ω 是**没有母群的合成点集**（U53 的 `点集(5)` / `集合(a,b,c)`）——
+      // Ω 是**没有母群的合成点集**（U53 的 `pointSet(5)` / `labeledSet(a,b,c)`）——
       // 共轭作用要的是"G 共轭作用在它的一族子群/元素上"，抽象点集没有共轭可言。
       // 这不是"算不动"，是**这个问题在这里不成立**，要说清并指向自定义作用。
       if (!ambient) {
         return fail(
-          '共轭作用在(\\cdot) 要 Ω 是某个群的子群集 / 元素集',
-          `\\Omega = ${O.label} 是一批抽象点，没有被共轭的结构；要给它定作用就用「自定义作用」，G 上的共轭用「共轭作用(G)」`,
+          'conjOn 要 Omega 是某个群的子群集 / 元素集',
+          `Omega = ${O.label} 是一批抽象点，没有被共轭的结构；要给它定作用就用「customAction」，G 上的共轭用「conjAction(G)」`,
         )
       }
       const sameAs = sameGroup(G, ambient)
@@ -1850,7 +1850,7 @@ export const OPS: OpDef[] = [
         )
       if (!sameAs && !asSub) {
         return fail(
-          'G 与 \\Omega 来自不同的群',
+          'G 与 Omega 来自不同的群',
           `${prettySymbol(G.symbol)} 与 ${prettySymbol(ambient.symbol)}`,
         )
       }
@@ -1879,19 +1879,19 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'action', action },
-        label: `共轭作用在(${refText(a[0])}, ${refText(a[1])})`,
-        sub: `|\\Omega| = ${O.members.length} \\cdot ${omegaDisplayName(O)}`,
+        label: `conjOn(${refText(a[0])}, ${refText(a[1])})`,
+        sub: `|Omega| = ${O.members.length}, Omega = ${omegaDisplayName(O)}`,
       }
     },
   },
   {
     id: 'cosetAction',
-    notation: '陪集作用(G, H)',
+    notation: 'cosetAction(G, H)',
     mechanism: 'atomic',
     primitive: true,
     doc: 'G 左乘作用在 H 的左陪集上（共 [G:H] 个点）---- Sylow I 的舞台',
     impl: 'computeCosetActionPerms',
-    call: ['陪集作用', 'cosetAction', 'coset'],
+    call: ['cosetAction', 'coset'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'H', type: 'subset' },
@@ -1900,9 +1900,9 @@ export const OPS: OpDef[] = [
     result: 'action',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('陪集作用(\\cdot) 的第一个参数必须是群', '如 陪集作用(G, P)')
+      if (!G) return fail('cosetAction 的第一个参数必须是群', '如 cosetAction(G, P)')
       const S = subgroupArgOf(a[1])
-      if (!S) return fail('陪集作用(\\cdot) 的第二个参数必须是子群')
+      if (!S) return fail('cosetAction 的第二个参数必须是子群')
       const gRef = refText(a[0])
       const hRef = refText(a[1])
       // 与 `商` 同一条对齐规则 + 同一道"id 能不能对着读"的检查（普通元素才要；陪集层走语义键）
@@ -1945,21 +1945,21 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'action', action },
-        label: `陪集作用(${gRef}, ${hRef})`,
-        sub: `|\\Omega| = ${n} = [G : H]${translated ? `，${translated}` : ''}`,
+        label: `cosetAction(${gRef}, ${hRef})`,
+        sub: `|Omega| = ${n} = [G : H]${translated ? `，${translated}` : ''}`,
         note: translated ?? undefined,
       }
     },
   },
   {
     id: 'customAction',
-    notation: '自定义作用(G, \\Omega, a\\to (1 2 3 4))',
+    notation: 'customAction(G, Omega, a -> (1 2 3 4))',
     mechanism: 'atomic',
     primitive: true,
     doc: 'G 通过你给的置换作用在点集上：每个生成元配一个循环记号（恒等写 e），立刻报是否忠实',
     recipe: '同态 G -> S_n，由生成元的像唯一决定',
     impl: 'gal/customAction 的 planCustomAction（core 备好 extendAndVerifyPerms + parseCycleNotation）',
-    call: ['自定义作用', 'customAction'],
+    call: ['customAction'],
     params: [
       { name: 'G', type: 'group' },
       /*
@@ -1968,7 +1968,7 @@ export const OPS: OpDef[] = [
        * U52 时这里是 `int`：Ω 只能是内核硬造的 `{1..n}`，"让 G 作用在**你自己的**
        * 集合上"根本表达不出来（用户 2026-10-02 当晚的原话是
        * 「逗我吗，连任意阶集合都创建不了，怎么创建自定义群作用？」）。
-       * 现在它同时收**集合对象**：`点集(5)` / `集合(a,b,c)` / `底集(Syl(S_4,3))` 都行。
+       * 现在它同时收**集合对象**：`pointSet(5)` / `labeledSet(a,b,c)` / `asSet(Syl(S_4,3))` 都行。
        *
        * 两件属性都要（见 `SCALAR_PARAM_TYPES` 的注释）：
        *   · 画布上给了集合 ⇒ 前缀匹配得上（只选 G 与一个集合也能列出它）；
@@ -1976,7 +1976,7 @@ export const OPS: OpDef[] = [
        */
       { name: 'Omega', type: 'omegaOrInt' },
     ],
-    variadic: { name: '像', type: 'genImage' },
+    variadic: { name: 'genImage', type: 'genImage' },
     arity: 2,
     editor: true,
     result: 'action',
@@ -1994,14 +1994,14 @@ export const OPS: OpDef[] = [
     },
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('自定义作用的作用群必须是群', '如 自定义作用(C_4, 4, a -> (1 2 3 4))')
+      if (!G) return fail('自定义作用的作用群必须是群', '如 customAction(C_4, 4, a -> (1 2 3 4))')
       // 直积群的生成元在 core 里重名重号（`C_2^3` 是三个 `a`/`1`）—— 那种群上
       // "给每个生成元分别指定像"表达不出来。**先于生成元名字检查**说这件事：
       // 否则用户会先撞上"G 里没有生成元 b"（而对着一串 `a` 他不知道该写什么）。
       if (!generatorsDistinct(G)) {
         return fail(
           `${generatorCollisionReason(G)}，给不了它们不同的像`,
-          '想让 G 作用在自己身上用「正则作用」，其余三种内置作用也各有现成的路',
+          '想让 G 作用在自己身上用 leftAction，其余三种内置作用也各有现成的路',
         )
       }
       const gRef = refText(a[0])
@@ -2026,7 +2026,7 @@ export const OPS: OpDef[] = [
       if (drafts.length === 0) {
         return fail(
           '自定义作用至少要给一个生成元的像',
-          `如 自定义作用(${gRef}, 4, ${generatorNames(G)[0] ?? 'a'} -> (1 2 3 4))`,
+          `如 customAction(${gRef}, 4, ${generatorNames(G)[0] ?? 'a'} -> (1 2 3 4))`,
         )
       }
       // 生成元记号先在这里对一遍 —— 报错要能指名道姓（core 那边只认 symbol，对不上会 THROW）
@@ -2046,12 +2046,12 @@ export const OPS: OpDef[] = [
       const faithfulPart = plan.faithful ? '忠实' : `不忠实，核阶 ${plan.kernelIds.length}`
       // Ω 是**用户给的集合**时把它的名字挂上（`|Ω| = 4` 之外还得说清是哪个 Ω）
       const omegaPart =
-        omega.kind === 'set' ? `|\\Omega| = ${n} \\cdot ${omega.set.label}` : `|\\Omega| = ${n}`
+        omega.kind === 'set' ? `|Omega| = ${n}, Omega = ${omega.set.label}` : `|Omega| = ${n}`
       return {
         ok: true,
         value: { type: 'action', action: plan.action },
-        label: `自定义作用(${gRef})`,
-        sub: `${omegaPart} \\cdot ${transitive ? '传递（1 个轨道）' : `${count} 个轨道`} \\cdot ${faithfulPart}`,
+        label: `customAction(${gRef})`,
+        sub: `${omegaPart}, ${transitive ? '传递（1 个轨道）' : `${count} 个轨道`}, ${faithfulPart}`,
         note: plan.faithful
           ? undefined
           : `${gRef} 到置换群的像只有 ${G.order / plan.kernelIds.length} 阶（G 是 ${G.order} 阶）`,
@@ -2064,15 +2064,15 @@ export const OPS: OpDef[] = [
     mechanism: 'atomic',
     primitive: false,
     doc: '自同构群：G 到自身的同构全体',
-    recipe: '筛( 枚举(G, 自同构), ⊤ )',
+    recipe: '枚举所有映射 -> 留下自同构',
     impl: 'createAutomorphismGroup',
-    call: ['Aut', '自同构群', 'aut'],
+    call: ['Aut', 'aut'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'group',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('Aut(\\cdot) 需要一个群')
+      if (!G) return fail('Aut 需要一个群')
       /**
        * ① **结论表只在本地算不动的时候接手**（U48）。
        *
@@ -2105,7 +2105,7 @@ export const OPS: OpDef[] = [
         if (facts?.aut) return knownGroupOutcome(facts.aut, `|Aut| = ${facts.aut.order}`)
         return fail(
           `${refText(a[0])} 的自同构本地搜不完（阶 ${G.order}，候选 ${found.combos} 组）`,
-          `候选组合数 x 阶超过搜索线 ${AUT_SEARCH_BUDGET} —— 这一步是逐个同阶元素试出来的，本地没有更快的路`,
+          `候选组合数 x 阶超过搜索线 ${AUT_SEARCH_BUDGET} ---- 这一步是逐个同阶元素试出来的，本地没有更快的路`,
         )
       }
       /**
@@ -2126,7 +2126,7 @@ export const OPS: OpDef[] = [
       if (!A) {
         return fail(
           `${refText(a[0])} 的自同构集不自洽，包不成群`,
-          '本地搜出来的那堆映射与群公理对不上 —— 这是内部异常，不是"算不动"',
+          '本地搜出来的那堆映射与群公理对不上 ---- 这是内部异常，不是"算不动"',
         )
       }
       return {
@@ -2139,13 +2139,13 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'intersection',
-    notation: 'A \\cap B',
+    notation: 'intersection(A, B)',
     mechanism: 'atomic',
     primitive: true,
     doc: '交：同时属于两个集合的元素',
     impl: '本地元素集运算',
     infix: ['\\cap'],
-    call: ['交', '交集', 'intersection', 'intersect'],
+    call: ['intersection', 'intersect'],
     params: [
       { name: 'A', type: 'subset' },
       { name: 'B', type: 'subset' },
@@ -2156,13 +2156,13 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'union',
-    notation: 'A \\cup B',
+    notation: 'union(A, B)',
     mechanism: 'atomic',
     primitive: true,
     doc: '并：属于两个集合中至少一个的元素',
     impl: '本地元素集运算',
     infix: ['\\cup'],
-    call: ['并', '并集', 'union'],
+    call: ['union'],
     params: [
       { name: 'A', type: 'subset' },
       { name: 'B', type: 'subset' },
@@ -2173,7 +2173,7 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'difference',
-    notation: 'A \ B',
+    notation: 'difference(A, B)',
     mechanism: 'atomic',
     primitive: true,
     doc: '差：属于 A 但不属于 B 的元素',
@@ -2181,7 +2181,7 @@ export const OPS: OpDef[] = [
     // ⚠️ 用完整的 `\setminus` 而不是孤立的反斜杠：反斜杠现在也是**命令名的开头**
     //（`\varphi` / `\Omega` 都是合法名字），孤零零一个 `\` 当中缀会让歧义面变大。
     infix: ['\\setminus'],
-    call: ['差', '差集', 'difference', 'minus'],
+    call: ['difference', 'minus'],
     params: [
       { name: 'A', type: 'subset' },
       { name: 'B', type: 'subset' },
@@ -2192,13 +2192,13 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'productSet',
-    notation: 'A \\cdot B',
+    notation: 'productSet(A, B)',
     mechanism: 'atomic',
     primitive: true,
-    doc: '积集：{ab : a \\in A, b \\in B}（子群时 |A\\cdot B| = |A||B| / |A\\cap B|）',
+    doc: '积集：{a*b : a in A, b in B}（子群时 |A*B| = |A||B| / |A 交 B|）',
     impl: '本地元素集运算（母群乘法）',
     infix: ['\\cdot'],
-    call: ['积集', 'productSet', 'setProduct'],
+    call: ['productSet', 'setProduct'],
     params: [
       { name: 'A', type: 'subset' },
       { name: 'B', type: 'subset' },
@@ -2210,19 +2210,19 @@ export const OPS: OpDef[] = [
 
   {
     id: 'underlyingSet',
-    notation: '底集(S)',
+    notation: 'asSet(S)',
     mechanism: 'atomic',
     primitive: false,
-    doc: '取底集：忘记结构，只把里面的东西当作点 ---- 这是造 \\Omega （被作用的集合）的正规做法',
+    doc: '取底集：忘记结构，只把里面的东西当作点 ---- 这是造 Omega（被作用的集合）的正规做法',
     recipe: '原子构造（取底集 / 忘记结构）',
     impl: '本地（NormalizedSubgroup / GroupElement \\to SetMember）',
-    call: ['底集', 'asSet', 'underlying'],
+    call: ['asSet', 'underlying'],
     params: [{ name: 'S', type: 'setlike' }],
     arity: 1,
     result: 'set',
     run: (a) => {
       const arg = a[0]
-      if (!arg || arg.kind !== 'object') return fail('底集(\\cdot) 需要一个子群集 / 元素集 / 群')
+      if (!arg || arg.kind !== 'object') return fail('asSet 需要一个子群集 / 元素集 / 群')
       const v = arg.value
       const name = refText(arg)
 
@@ -2242,7 +2242,7 @@ export const OPS: OpDef[] = [
       } else {
         return fail(
           `${name} 没有底集可取`,
-          '底集(\\cdot) 接受子群集（如 Syl(G, 2)）\\cdot 元素集 \\cdot 群',
+          'asSet 接受子群集（如 Syl(G, 2)）、元素集、群',
         )
       }
 
@@ -2250,21 +2250,21 @@ export const OPS: OpDef[] = [
         ok: true,
         value: {
           type: 'set',
-          set: { group, label: `底集(${name})`, members, from: arg.ref },
+          set: { group, label: `asSet(${name})`, members, from: arg.ref },
         },
-        label: `底集(${name})`,
-        sub: `|\\Omega| = ${members.length}`,
+        label: `asSet(${name})`,
+        sub: `|Omega| = ${members.length}`,
       }
     },
   },
   /*
    * ── 点集（U53）：**凭空**造任意阶集合 ────────────────────────────
    *
-   * 上面那个 `底集(S)` 要求 `S` 已经存在（子群集 / 元素集 / 群）——
+   * 上面那个 `asSet(S)` 要求 `S` 已经存在（子群集 / 元素集 / 群）——
    * 也就是说集合的点**必须从某个已存在的群里借**。于是一批抽象点
    * （"G 作用在 5 个点上"、"作用在立方体的 8 个顶点上"）根本造不出来。
    *
-   * 这两个 op 补的就是这一层。分成两个而不是一个，是因为 `集合(5)` 到底指
+   * 这两个 op 补的就是这一层。分成两个而不是一个，是因为 `labeledSet(5)` 到底指
    * "5 个点"还是"一个叫 5 的点"两种读法都通 —— **不许猜**（见 `pointSet.ts` 模块头）。
    *
    * `primitive: false`：它们不是 §3 的 10 个原语，而是「原子构造」机制下的实例
@@ -2272,13 +2272,13 @@ export const OPS: OpDef[] = [
    */
   {
     id: 'pointSet',
-    notation: '点集(n)',
+    notation: 'pointSet(n)',
     mechanism: 'atomic',
     primitive: false,
     doc: '造 n 个抽象点：点号 1 到 n，不属于任何群 ---- 给「自定义作用」准备舞台',
     recipe: '原子构造（凭空给一个集合）',
     impl: 'gal/pointSet 的 planCountPointSet',
-    call: ['点集', 'pointSet', 'points'],
+    call: ['pointSet', 'points'],
     params: [{ name: 'n', type: 'int' }],
     arity: 1,
     result: 'set',
@@ -2290,20 +2290,20 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'set', set: plan.set },
-        label: `点集(${n})`,
-        sub: `|\\Omega| = ${n} \\cdot 点号 1 到 ${n}`,
+        label: `pointSet(${n})`,
+        sub: `|Omega| = ${n}, 点号 1 到 ${n}`,
       }
     },
   },
   {
     id: 'labeledSet',
-    notation: '集合(a, b, c)',
+    notation: 'labeledSet(a, b, c)',
     mechanism: 'atomic',
     primitive: false,
-    doc: '造一个点集，点标号由你定（`集合(a, b, c)`）---- 标号能直接写进循环记号',
+    doc: '造一个点集，点标号由你定（`labeledSet(a, b, c)`）---- 标号能直接写进循环记号',
     recipe: '原子构造（凭空给一个集合）',
     impl: 'gal/pointSet 的 planLabeledPointSet',
-    call: ['集合', 'labeledSet', 'labels'],
+    call: ['labeledSet', 'labels'],
     /*
      * 参数个数不定（1 到 `POINT_SET_MAX` 个点），所以走 variadic 而不是 params：
      * `params` 是"参数表长度"，注册表有一致性断言（`params.length === arity + optional`）。
@@ -2311,7 +2311,7 @@ export const OPS: OpDef[] = [
      * 由这两个 op 自己解释成"点标号"，不走元素解析。
      */
     params: [],
-    variadic: { name: '点', type: 'element' },
+    variadic: { name: 'point', type: 'element' },
     arity: 0,
     result: 'set',
     run: (a) => {
@@ -2327,7 +2327,7 @@ export const OPS: OpDef[] = [
         ok: true,
         value: { type: 'set', set: plan.set },
         label: plan.set.label,
-        sub: `|\\Omega| = ${plan.labels.length} \\cdot 点号 ${plan.labels.slice(0, 8).join(' ')}${plan.labels.length > 8 ? ' ...' : ''}`,
+        sub: `|Omega| = ${plan.labels.length}, 点号 ${plan.labels.slice(0, 8).join(' ')}${plan.labels.length > 8 ? ' ...' : ''}`,
       }
     },
   },
@@ -2339,15 +2339,15 @@ export const OPS: OpDef[] = [
     mechanism: 'action',
     primitive: false,
     doc: '中心：与 G 中所有元素都交换的元素',
-    recipe: '不动点( 共轭作用(G) )',
+    recipe: 'fix( conjAction(G) )',
     impl: 'getGroupCenter \\to buildSubgroupGroup',
-    call: ['Z', '中心', 'center'],
+    call: ['Z', 'center'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'group',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('Z(\\cdot) 需要一个群')
+      if (!G) return fail('Z 需要一个群')
       const els = getGroupCenter(G)
       return {
         ok: true,
@@ -2362,16 +2362,16 @@ export const OPS: OpDef[] = [
     notation: 'Inn(G)',
     mechanism: 'action',
     primitive: false,
-    doc: '内自同构群：共轭作用给出的自同构全体，Inn(G) \\cong G / Z(G)（第一同构定理）',
-    recipe: '商( G, Z(G) )（第一同构定理：G/Z(G) \\cong Inn(G)）',
+    doc: '内自同构群：共轭作用给出的自同构全体，Inn(G) 同构于 G / Z(G)（第一同构定理）',
+    recipe: 'quotient(G, Z(G))，第一同构定理：G/Z(G) 同构于 Inn(G)',
     impl: 'getGroupCenter \\to computeQuotientGroup',
-    call: ['Inn', '内自同构群', 'innerAutomorphisms'],
+    call: ['Inn', 'innerAutomorphisms'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'group',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('Inn(\\cdot) 需要一个群')
+      if (!G) return fail('Inn 需要一个群')
       /**
        * **已知结论接手，但只在本地真算不动的时候**（U48）。
        *
@@ -2414,13 +2414,13 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'centralizer',
-    notation: 'C_G(S)',
+    notation: 'C_G(G, S)',
     mechanism: 'action',
     primitive: false,
     doc: '中心化子：与 S 中每个元素都交换的元素',
-    recipe: '稳定子( 共轭作用(G), S )',
+    recipe: 'stabilizer( conjAction(G), S )',
     impl: 'getCentralizer \\to buildSubgroupGroup',
-    call: ['C_G', '中心化子', 'centralizer'],
+    call: ['C_G', 'centralizer'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'S', type: 'subset' },
@@ -2429,11 +2429,11 @@ export const OPS: OpDef[] = [
     result: 'group',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('C_G(\\cdot) 的第一个参数必须是群')
+      if (!G) return fail('C_G 的第一个参数必须是群')
       const S = elementSetArgOf(a[1], G)
       if (!S) {
         return fail(
-          `C_G(\\cdot) 的第二个参数必须是元素集、群，或一个元素记号`,
+          `C_G 的第二个参数必须是元素集、群，或一个元素记号`,
           `如 C_G(G, H) 或 C_G(G, (12)(34))`,
         )
       }
@@ -2443,7 +2443,7 @@ export const OPS: OpDef[] = [
       // 上面已保证元素能对齐，这里空集只可能是 core 的意外 —— 不许建 0 阶群对象。
       if (els.length === 0) {
         return fail(
-          `C_G 算出来是空集 —— 空集不是群`,
+          `C_G 算出来是空集 ---- 空集不是群`,
           `这通常是元素没对上导致的，请检查 ${refText(a[1])} 是不是 ${refText(a[0])} 里的子集`,
         )
       }
@@ -2457,13 +2457,13 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'normalizer',
-    notation: 'N_G(H)',
+    notation: 'N_G(G, H)',
     mechanism: 'action',
     primitive: false,
     doc: '正规化子：使 gHg^-^1 = H 的元素 g 全体',
-    recipe: '稳定子( 共轭作用在子群集(G), H )',
+    recipe: 'stabilizer( conjOn(G, Omega), H )',
     impl: 'getNormalizer \\to buildSubgroupGroup',
-    call: ['N_G', '正规化子', 'normalizer'],
+    call: ['N_G', 'normalizer'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'H', type: 'subset' },
@@ -2472,15 +2472,15 @@ export const OPS: OpDef[] = [
     result: 'group',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('N_G(\\cdot) 的第一个参数必须是群')
+      if (!G) return fail('N_G 的第一个参数必须是群')
       const S = subgroupArgOf(a[1]) ?? elementSetArgOf(a[1], G)
-      if (!S) return fail('N_G(\\cdot) 的第二个参数必须是子群（或一个元素记号）')
+      if (!S) return fail('N_G 的第二个参数必须是子群（或一个元素记号）')
       const foreign = foreignElementSetFail(refText(a[0]), G, refText(a[1]), S)
       if (foreign) return foreign
       const els = getNormalizer(G, S.elements)
       if (els.length === 0) {
         return fail(
-          `N_G 算出来是空集 —— 空集不是群`,
+          `N_G 算出来是空集 ---- 空集不是群`,
           `正规化子至少含单位元，出现空集说明元素没对上，请检查 ${refText(a[1])} 是不是 ${refText(a[0])} 里的子群`,
         )
       }
@@ -2494,12 +2494,12 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'orbits',
-    notation: '轨道(A, x)',
+    notation: 'orbits(A, x)',
     mechanism: 'action',
     primitive: true,
     doc: 'x 在作用 A 下的轨道：x 能到达的全部点',
     impl: 'computeOrbits',
-    call: ['轨道', 'orbits', 'orb'],
+    call: ['orbits', 'orb'],
     params: [
       { name: 'A', type: 'action' },
       { name: 'x', type: 'element' },
@@ -2508,13 +2508,13 @@ export const OPS: OpDef[] = [
     result: 'elements',
     run: (a) => {
       const A = actionOf(a[0])
-      if (!A) return fail('轨道(\\cdot) 的第一个参数必须是作用', '先用 共轭作用(G) / 正则作用(G) 造一个')
+      if (!A) return fail('orbits 的第一个参数必须是作用', '先用 conjAction(G) / leftAction(G) 造一个')
       const x = refText(a[1])
       // 标签带上**作用的名字**：Sylow III 的图上同时有 `G ↷ Ω` 与 `P ↷ Ω`，
       // 两个轨道若都叫 `Orb(1)`，画布上就出现两个同名节点（真截图抓到的）。
       const act = refText(a[0])
       const idx = omegaIndexOf(A, x)
-      if (idx < 0) return fail(`\\Omega 中没有点 ${x}`, omegaHint(A))
+      if (idx < 0) return fail(`Omega 中没有点 ${x}`, omegaHint(A))
       const { orbits, orbitOf } = computeOrbits(A.perms, A.n)
       const members = orbits[orbitOf[idx]]?.elements ?? []
 
@@ -2526,12 +2526,12 @@ export const OPS: OpDef[] = [
           ok: true,
           value: {
             type: 'set',
-            // 母群**跟着 Ω 走**（U53）：自由点集（`点集(5)`）的轨道也是自由点集，
+            // 母群**跟着 Ω 走**（U53）：自由点集（`pointSet(5)`）的轨道也是自由点集，
             // 别硬填 `A.group` —— 那会让"Ω 的成员是 G 的元素"这句话变成谎
             set: { group: A.omega.group, label: `轨道_${act}(${x})`, members: picked },
           },
           label: `Orb_${act}(${x})`,
-          sub: `|Orb| = ${members.length}${members.length === A.n ? ' \\cdot 传递（就是整个 \\Omega ）' : ''}`,
+          sub: `|Orb| = ${members.length}${members.length === A.n ? '，传递（就是整个 Omega）' : ''}`,
         }
       }
 
@@ -2547,12 +2547,12 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'stabilizers',
-    notation: '稳定子(A, x)',
+    notation: 'stabilizer(A, x)',
     mechanism: 'action',
     primitive: true,
-    doc: 'x 的稳定子：使 g\\cdot x = x 的元素 g 全体（G 的子群）',
+    doc: 'x 的稳定子：使 g*x = x 的元素 g 全体（G 的子群）',
     impl: 'computeStabilizers \\to buildSubgroupGroup',
-    call: ['稳定子', 'stabilizer', 'stab'],
+    call: ['stabilizer', 'stab'],
     params: [
       { name: 'A', type: 'action' },
       { name: 'x', type: 'element' },
@@ -2564,13 +2564,13 @@ export const OPS: OpDef[] = [
     result: 'group',
     run: (a) => {
       const A = actionOf(a[0])
-      if (!A) return fail('稳定子(\\cdot) 的第一个参数必须是作用')
+      if (!A) return fail('stabilizer 的第一个参数必须是作用')
       const x = refText(a[1])
       // 标签带上**作用的名字**：Sylow III 的图上同时有 `G ↷ Ω` 与 `P ↷ Ω`，
       // 两个轨道若都叫 `Orb(1)`，画布上就出现两个同名节点（真截图抓到的）。
       const act = refText(a[0])
       const idx = omegaIndexOf(A, x)
-      if (idx < 0) return fail(`\\Omega 中没有点 ${x}`, omegaHint(A))
+      if (idx < 0) return fail(`Omega 中没有点 ${x}`, omegaHint(A))
       const stabs = computeStabilizers(A.group, A.perms, A.n)
       const ids = new Set(stabs.get(idx) ?? [])
       const els = A.group.elements.filter((e) => ids.has(e.id))
@@ -2584,21 +2584,21 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'fixedPoints',
-    notation: '不动点(A)',
+    notation: 'fix(A)',
     mechanism: 'action',
     primitive: false,
     doc: '作用的全部不动点',
-    recipe: '轨道 的长度 1 特例',
+    recipe: 'fix(A)：orbits 的长度 1 特例',
     impl: 'computeFixedPoints',
-    call: ['不动点', 'fix', 'fixedPoints'],
+    call: ['fix', 'fixedPoints'],
     params: [{ name: 'A', type: 'action' }],
     arity: 1,
     result: 'elements',
     run: (a) => {
       const A = actionOf(a[0])
-      if (!A) return fail('不动点(\\cdot) 需要作用')
+      if (!A) return fail('fix 需要作用')
       const pts = computeFixedPoints(A.perms, A.n)
-      // 标签用**作用自己的名字**：从前写死成 `Fix(A)`，于是 `不动点(B)` 也标成 `Fix(A)`
+      // 标签用**作用自己的名字**：从前写死成 `Fix(A)`，于是 `fix(B)` 也标成 `Fix(A)`
       const act = refText(a[0])
       if (A.omega && A.omegaBase === 'object') {
         const picked = pts.map((i) => A.omega?.members[i]).filter((m): m is SetMember => !!m)
@@ -2625,19 +2625,19 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'orbitCount',
-    notation: '轨道数(A)',
+    notation: 'burnside(A)',
     mechanism: 'action',
     primitive: false,
-    doc: '轨道条数：直接数 = Burnside 引理的平均 (1/|G|) \\cdot \\sum |Fix(g)|（两条路当场互相核对）',
-    recipe: '(1/|G|) \\cdot \\sum_{g \\in G} |Fix(g)|（Burnside 引理）',
+    doc: '轨道条数：直接数 = Burnside 引理的平均 (1/|G|) * sum |Fix(g)|（两条路当场互相核对）',
+    recipe: '(1/|G|) * sum_{g in G} |Fix(g)|（Burnside 引理）',
     impl: 'computeOrbits + computeBurnsideCount',
-    call: ['轨道数', 'burnside', 'Burnside', 'orbitCount'],
+    call: ['burnside', 'Burnside', 'orbitCount'],
     params: [{ name: 'A', type: 'action' }],
     arity: 1,
     result: 'number',
     run: (a) => {
       const A = actionOf(a[0])
-      if (!A) return fail('轨道数(\\cdot) 需要一个作用', '先用 共轭作用(G) / 正则作用(G) 造一个')
+      if (!A) return fail('burnside 需要一个作用', '先用 conjAction(G) / leftAction(G) 造一个')
       const { orbits } = computeOrbits(A.perms, A.n)
       const direct = orbits.length
       /**
@@ -2653,20 +2653,20 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'number', label: `${direct}`, value: direct },
-        label: `轨道数(${refText(a[0])})`,
+        label: `burnside(${refText(a[0])})`,
         sub: `= ${direct}（Burnside: ${sum} / ${A.group.order} = ${average} ${okMark}）`,
       }
     },
   },
   {
     id: 'kernel',
-    notation: 'ker f',
+    notation: 'ker(f)',
     mechanism: 'action',
     primitive: false,
     doc: '核：被 f 映到单位元的元素全体',
-    recipe: '稳定子( 诱导作用(f), e )',
+    recipe: 'stabilizer( 诱导作用(f), e )',
     impl: 'computeKernelFromMapping \\to buildSubgroupGroup',
-    call: ['ker', '核', 'kernel'],
+    call: ['ker', 'kernel'],
     params: [{ name: 'f', type: 'map' }],
     arity: 1,
     result: 'group',
@@ -2686,16 +2686,16 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'image',
-    notation: '像(f, H)',
+    notation: 'image(f, H)',
     mechanism: 'action',
     primitive: false,
-    doc: '像：只给 f \\to 整个像 im f；再给一个子群 H（H \\le 定义域）\\to f(H)，靶群里的子群（第二同构定理的 H\'）',
-    recipe: '把 H 的每个元素过一遍映射表 \\to 靶群的子群',
+    doc: '像：只给 f -> 整个像 im f；再给一个子群 H（H <= 定义域）-> f(H)，靶群里的子群（第二同构定理的 H\'）',
+    recipe: '把 H 的每个元素过一遍映射表 -> 靶群的子群',
     impl: 'computeImageFromMapping（整体）/ 逐元素取像 + buildSubgroupGroup（子群）',
-    call: ['im', '像', 'image'],
+    call: ['im', 'image'],
     params: [
       { name: 'f', type: 'map' },
-      // **可选第二参**：`像(f)` 是整个像（U14 就有），`像(f, H)` 是子群的像（U20 补）。
+      // **可选第二参**：`image(f)` 是整个像（U14 就有），`image(f, H)` 是子群的像（U20 补）。
       // 用同一个 op 而不是新开一个：用户嘴里都叫"像"，且 `像` 这个别名只该指向一条路。
       { name: 'H', type: 'group', optional: true },
     ],
@@ -2707,19 +2707,19 @@ export const OPS: OpDef[] = [
       if (!M) return fail('像需要一个映射对象', '映射由对象编辑器产出（U3）')
       if (!M.mapping) return fail('该映射没有完整映射表', '生成元的像不足以定像，需编辑器补全（U3）')
 
-      // ── 两参形态：`像(f, H) = f(H)`（U20）──
+      // ── 两参形态：`image(f, H) = f(H)`（U20）──
       const S = groupOf(a[1])
       /**
        * 第二位**给了、却不是群**：明确报出来，别静默当成没给。
        *
        * 会撞上的场景：从「像 f(H)」进 pending 后误点了别的对象（映射 / 集合）——
        * 那时用户明明点了一下，系统却一声不吭地算成 `im f`（"点了跟没点一样"最费解）。
-       * 空第二参（`像(f, )` 这种留空写法）仍按"没给"处理。
+       * 空第二参（`image(f, )` 这种留空写法）仍按"没给"处理。
        */
       if (a[1] && !S && textOf(a[1]).trim() !== '') {
         return fail(
           `像的第二个参数得是群（H 是定义域的子群），收到的是「${refText(a[1])}」`,
-          'H 要从定义域里取（如 闭包(定义域, 生成元)）；不给 H 就直接算整个像 im f',
+          'H 要从定义域里取（如 closure(定义域, 生成元)）；不给 H 就直接算整个像 im f',
         )
       }
       if (S) {
@@ -2728,7 +2728,7 @@ export const OPS: OpDef[] = [
         if (S.order > dom.order) {
           return fail(
             `「${refText(a[1])}」比定义域还大，不可能是它的子群`,
-            `子群像要求 H \\le ${prettySymbol(dom.symbol)}`,
+            `子群像要求 H <= ${asciiSymbol(dom.symbol)}`,
           )
         }
         // 表示不通的两态（跨世界 / id 不在）统一走分诊；都在才谈得上"封闭不封闭"
@@ -2766,7 +2766,7 @@ export const OPS: OpDef[] = [
           value: { type: 'group', group: subgroupGroupOf(M.codomain, els, name) },
           label: name,
           sub: `|f(H)| = ${els.length}`,
-          note: `H 在 ${prettySymbol(M.codomain.symbol)} 里的像`,
+          note: `H 在 ${asciiSymbol(M.codomain.symbol)} 里的像`,
         }
       }
 
@@ -2784,14 +2784,14 @@ export const OPS: OpDef[] = [
   /* ══ 关系（U20）═══════════════════════════════════════ */
   {
     id: 'contains',
-    notation: '包含(H, G) / H \\subseteq G',
+    notation: 'contains(H, G)',
     mechanism: 'atomic',
     primitive: false,
     doc: '声明 H 是 G 的子群----画布上长出一条包含箭头（正规性由工具现场判定）',
-    recipe: '子群判定（单位元 + 乘法封闭）\\to 一条关系边',
+    recipe: '子群判定（单位元 + 乘法封闭）-> 一条关系边',
     impl: 'relations.containment（与信息面板的「关系」层同一判据）',
     infix: ['\\subseteq'],
-    call: ['包含', 'include', 'subset'],
+    call: ['contains', 'include', 'subset'],
     params: [
       { name: 'H', type: 'group' },
       { name: 'G', type: 'group' },
@@ -2801,7 +2801,7 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const H = groupOf(a[0])
       const G = groupOf(a[1])
-      if (!H || !G) return fail('包含(\\cdot, \\cdot) 需要两个群对象', '形如 H \\subseteq G')
+      if (!H || !G) return fail('contains 需要两个群对象', '形如 contains(H, G)')
       const hn = refText(a[0])
       const gn = refText(a[1])
       if (H === G) return fail('两边是同一个对象', '包含要求两个不同的群')
@@ -2814,7 +2814,7 @@ export const OPS: OpDef[] = [
       /**
        * **拉格朗日先判**（U38）：子群的阶必须整除母群的阶。
        * 这是**证明**了"没有"，比笼统的"不是子群"有信息量得多——
-       * 用户实测的 `包含(C_3, V_4)` 就该说这句（3 不整除 4），
+       * 用户实测的 `contains(C_3, V_4)` 就该说这句（3 不整除 4），
        * 而不是被含糊地打发成"元素不在同一个群里"。
        *
        * 有一种情形还得**补一句**：H 的 id 全都能在 G 里"找到"、却来自另一个群
@@ -2839,14 +2839,14 @@ export const OPS: OpDef[] = [
       if (!c) {
         /**
          * 守卫挡下过就先说"未判定"（U38）：`containment` 的 `null` 在那种情形下
-         * 只表示"**不知道**"。`包含(C_11, C_2^7)`（|G| = 128 超枚举上限）得说这句，
+         * 只表示"**不知道**"。`contains(C_11, C_2^7)`（|G| = 128 超枚举上限）得说这句，
          * 说"不是子群"是假话。
          */
         if (embeddingSearchBlocked(H, G)) {
           return fail(
             `没能判定「${hn}」是不是「${gn}」的子群`,
             `${prettySymbol(G.symbol)} 太大（阶 ${G.order}）或带陪集元素，没做嵌入枚举；` +
-              `若 ${hn} 的元素本来就取自 ${gn}，请从它构造（如 闭包(${gn}, 生成元)）`,
+              `若 ${hn} 的元素本来就取自 ${gn}，请从它构造（如 closure(${gn}, 生成元)）`,
           )
         }
         /**
@@ -2886,26 +2886,26 @@ export const OPS: OpDef[] = [
           },
         },
         label: `${labelText(a[0])} ${c.normal === true ? '\\trianglelefteq' : '\\subseteq'} ${labelText(a[1])}`,
-        sub: `|H| = ${H.order} \\cdot [G:H] = ${c.index}`,
+        sub: `|H| = ${H.order}, [G:H] = ${c.index}`,
         note:
           c.normal === true
             ? '正规子群（判出来的，不是声明的）'
             : c.normal === null
-              ? '正规性判不准：群太大未枚举，或 H 在 G 里有多个嵌入、正规性不一致（只要有非正规的嵌入，`⊴` 就不是普适的说法）'
+              ? '正规性判不准：群太大未枚举，或 H 在 G 里有多个嵌入、正规性不一致（只要有非正规的嵌入，「非正规」就不是普适的说法）'
               : '非正规子群',
       }
     },
   },
   {
     id: 'isomorphism',
-    notation: '同构(A, B) / A \\cong B',
+    notation: 'isomorphism(A, B)',
     mechanism: 'atomic',
     primitive: false,
     doc: '声明 A 与 B 同构----画布上长出一条双向箭头（同构判据与信息面板那句「同构于」同源）',
-    recipe: '同构识别（阶 \\to 结构不变量）\\to 一条关系边',
+    recipe: '同构识别（阶 -> 结构不变量）-> 一条关系边',
     impl: 'insights.isomorphismOf（与信息面板「同构」结论同一判据）',
     infix: ['\\cong'],
-    call: ['同构', 'isomorphic', 'iso'],
+    call: ['isomorphism', 'isomorphic', 'iso'],
     params: [
       { name: 'A', type: 'group' },
       { name: 'B', type: 'group' },
@@ -2915,7 +2915,7 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const A = groupOf(a[0])
       const B = groupOf(a[1])
-      if (!A || !B) return fail('同构(\\cdot, \\cdot) 需要两个群对象', '形如 A \\cong B')
+      if (!A || !B) return fail('isomorphism 需要两个群对象', '形如 isomorphism(A, B)')
       const an = labelText(a[0])
       const bn = labelText(a[1])
       if (A === B) return fail('两边是同一个对象', '同构要两个不同的群')
@@ -2955,7 +2955,7 @@ export const OPS: OpDef[] = [
         },
         label: `${an} \\cong ${bn}`,
         sub: iso
-          ? `都 \\cong ${prettySymbol(iso)}`
+          ? `都同构于 ${asciiSymbol(iso)}`
           : `阶相同（${A.order}），同构类未识别出`,
         note:
           verdict === 'yes'
@@ -2972,15 +2972,15 @@ export const OPS: OpDef[] = [
     mechanism: 'enumerate',
     primitive: true,
     doc: 'G 的全部子群',
-    recipe: '筛( 枚举(G, 子群), ⊤ )',
+    recipe: '枚举全部子群',
     impl: 'findAllSubgroups',
-    call: ['Sub', '子群', 'subgroups'],
+    call: ['Sub', 'subgroups'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'subgroups',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('Sub(\\cdot) 需要一个群')
+      if (!G) return fail('Sub 需要一个群')
       /**
        * 守卫必须自己判：core 的 `findAllSubgroups` 超限时**不报错**，直接回空数组
        * （720 阶实测 0ms 回 []）——照单全收就是"S_6 有 0 个子群"这种假答案。
@@ -3002,19 +3002,19 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'maximalSubgroups',
-    notation: '极大子群(G)',
+    notation: 'maximalSubgroups(G)',
     mechanism: 'enumerate',
     primitive: false,
     doc: '极大子群：不能落在任何更大的真子群里的真子群（子群格上 G 的直接下层）',
-    recipe: '筛( 格(G) 的覆盖边, 上端 = G )',
+    recipe: '在子群格里找覆盖边（上端 = G）',
     impl: 'computeSubgroupLattice',
-    call: ['极大子群', 'maximalSubgroups', 'maxSub'],
+    call: ['maximalSubgroups', 'maxSub'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'subgroups',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('极大子群(\\cdot) 需要一个群')
+      if (!G) return fail('maximalSubgroups 需要一个群')
       /**
        * 守卫必须**自己**判：core 的 `computeSubgroupLattice` 超限时不报错，
        * 而是退化成"{e} 与 G 两个节点"（实测 216 阶群）——照单全收会把**平凡子群**
@@ -3048,7 +3048,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'subgroups', group: G, subgroups: subs },
-        label: `极大子群(${refText(a[0])})`,
+        label: `maximalSubgroups(${refText(a[0])})`,
         sub: subs.length > 0 ? `${subs.length} 个，最大阶 ${subs[0].order}` : '没有真子群（G 本身平凡）',
       }
     },
@@ -3059,9 +3059,9 @@ export const OPS: OpDef[] = [
     mechanism: 'enumerate',
     primitive: false,
     doc: 'G 的全部 p-子群（阶为 p 的幂）',
-    recipe: '筛( 枚举(G, 子群), 阶 = p^k )',
+    recipe: '枚举子群 -> 留阶 = p^k 的',
     impl: 'findAllPSubgroups',
-    call: ['pSub', 'p子群', 'psub'],
+    call: ['pSub', 'psub'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'p', type: 'prime' },
@@ -3070,9 +3070,9 @@ export const OPS: OpDef[] = [
     result: 'subgroups',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('pSub(\\cdot) 的第一个参数必须是群')
+      if (!G) return fail('pSub 的第一个参数必须是群')
       const p = intOf(a[1])
-      if (p === null) return fail('pSub(\\cdot) 的第二个参数必须是整数')
+      if (p === null) return fail('pSub 的第二个参数必须是整数')
       const bad = checkPrime(p, 'pSub')
       if (bad) return fail(bad)
       const load = pSubgroupLoad(G, p)
@@ -3093,11 +3093,11 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'sylow',
-    notation: 'Syl_p(G)',
+    notation: 'Syl(G, p)',
     mechanism: 'enumerate',
     primitive: false,
     doc: 'Sylow p-子群：阶恰为 p^k 的极大 p-子群',
-    recipe: '筛( 枚举(G, 子群), p-群 \\wedge 极大 )',
+    recipe: '枚举子群 -> 留 p-群 -> 取极大',
     impl: 'findSylowSubgroups',
     call: ['Syl', 'Sylow', 'sylow', 'Syl_p'],
     params: [
@@ -3108,9 +3108,9 @@ export const OPS: OpDef[] = [
     result: 'subgroups',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('Syl_p(\\cdot) 的第一个参数必须是群')
+      if (!G) return fail('Syl 的第一个参数必须是群')
       const p = intOf(a[1])
-      if (p === null) return fail('Syl_p(\\cdot) 的第二个参数必须是整数')
+      if (p === null) return fail('Syl 的第二个参数必须是整数')
       const bad = checkPrime(p, 'Syl_p')
       if (bad) return fail(bad)
       // 同 `pSub`：同一条枚举、同一条线（`Syl_2(S_6)` 实测 45s 没完）
@@ -3133,19 +3133,19 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'normalSubgroups',
-    notation: '正规子群(G)',
+    notation: 'normalSubgroups(G)',
     mechanism: 'enumerate',
     primitive: false,
     doc: 'G 的全部正规子群',
-    recipe: '筛( 枚举(G, 子群), 正规 )',
+    recipe: '枚举子群 -> 留正规的',
     impl: 'findAllNormalSubgroups',
-    call: ['正规子群', 'normalSubgroups', 'SubNormal'],
+    call: ['normalSubgroups', 'SubNormal'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'subgroups',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('正规子群(\\cdot) 需要一个群')
+      if (!G) return fail('normalSubgroups 需要一个群')
       // 同上：core 超限静默回空数组，自己不拦就会说"S_6 没有正规子群"
       if (G.order > ENUMERATION_LIMIT) {
         return fail(
@@ -3157,7 +3157,7 @@ export const OPS: OpDef[] = [
       return {
         ok: true,
         value: { type: 'subgroups', group: G, subgroups: subs },
-        label: `正规子群(${refText(a[0])})`,
+        label: `normalSubgroups(${refText(a[0])})`,
         sub: `${subs.length} 个正规子群`,
       }
     },
@@ -3166,19 +3166,19 @@ export const OPS: OpDef[] = [
   /* ══ 迭代 ══════════════════════════════════════════════ */
   {
     id: 'commutatorGroup',
-    notation: '[G, G]',
+    notation: 'commutator(G)',
     mechanism: 'iterate',
     primitive: false,
     doc: '换位子群：全部换位子 [g,h] 生成的子群',
-    recipe: '闭包( 换位子集(G) ) = 迭代(乘法, 直到封闭)',
+    recipe: 'closure(换位子集) = 迭代乘法直到封闭',
     impl: 'commutatorClosure \\to buildSubgroupGroup',
-    call: ['换位子群', 'commutator'],
+    call: ['commutator'],
     params: [{ name: 'G', type: 'group' }],
     arity: 1,
     result: 'group',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('换位子群(\\cdot) 需要一个群')
+      if (!G) return fail('commutator 需要一个群')
       const els = commutatorClosure(G, G.elements, G.elements)
       const t = refText(a[0])
       return {
@@ -3191,13 +3191,13 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'closure',
-    notation: '\\langle S\\rangle',
+    notation: 'closure(S, g_1, ...)',
     mechanism: 'iterate',
     primitive: false,
-    doc: '生成子群：把 S 在乘法下反复闭合到不再增长；也可写 \\langle G, (123), (12)\\rangle 从记号生成',
+    doc: '生成子群：把 S 在乘法下反复闭合到不再增长；也可写 <G, (123), (12)> 从记号生成',
     recipe: '迭代(乘法, 直到封闭)',
     impl: 'closeUnderMultiply \\to buildSubgroupGroup',
-    call: ['闭包', '生成子群', 'closure', 'generate'],
+    call: ['closure', 'generate'],
     params: [
       { name: 'S', type: 'subset' },
       { name: 'g_1', type: 'element', optional: true },
@@ -3213,9 +3213,9 @@ export const OPS: OpDef[] = [
       let seeds: GroupElement[]
       let genTexts: string[]
       // 「上下文群」形态**只在后面还有元素参数时**才成立：
-      //   `闭包(G, r2)` → G 当上下文，种子来自 r2
-      //   `闭包(J)`     → J 自己就是（子）群对象，**取它的元素当种子**
-      // 之前只判 `if (G0)`，于是 `闭包(J)` 落到"G 当上下文 + 空种子"⇒ 得到平凡群
+      //   `closure(G, r2)` → G 当上下文，种子来自 r2
+      //   `closure(J)`     → J 自己就是（子）群对象，**取它的元素当种子**
+      // 之前只判 `if (G0)`，于是 `closure(J)` 落到"G 当上下文 + 空种子"⇒ 得到平凡群
       // （复现定理的体检抓到的：`Z ∩ C` 阶 2，闭包后变阶 1）。
       if (G0 && a.length > 1) {
         group = G0
@@ -3223,7 +3223,7 @@ export const OPS: OpDef[] = [
         genTexts = a.slice(1).map(refText)
       } else {
         const S = subgroupArgOf(a[0])
-        if (!S) return fail('\\langle S\\rangle 需要一个集合', '也可写 \\langle G, g_1, g_2\\rangle ：群在前当上下文，后面填元素记号')
+        if (!S) return fail('closure 需要一个集合', '也可写 closure(G, g_1, g_2)：群在前当上下文，后面填元素记号')
         group = S.group
         seeds = [...S.elements]
         genTexts = a.map(refText)
@@ -3247,7 +3247,7 @@ export const OPS: OpDef[] = [
         ok: true,
         value: { type: 'group', group: subgroupGroupOf(group, els, label) },
         label,
-        sub: `|\\langle S\\rangle| = ${els.length}${structSuffix(group, els)}`,
+        sub: `|<S>| = ${els.length}${structSuffix(group, els)}`,
       }
     },
   },
@@ -3260,7 +3260,7 @@ export const OPS: OpDef[] = [
     primitive: false,
     doc: '元素 g 的阶：使 g^n = e 的最小正整数 n',
     impl: 'elementOrder',
-    call: ['ord', '元素阶', 'order'],
+    call: ['ord', 'order'],
     params: [
       { name: 'G', type: 'group' },
       { name: 'g', type: 'element' },
@@ -3269,7 +3269,7 @@ export const OPS: OpDef[] = [
     result: 'number',
     run: (a) => {
       const G = groupOf(a[0])
-      if (!G) return fail('ord(\\cdot) 的第一个参数必须是群')
+      if (!G) return fail('ord 的第一个参数必须是群')
       const txt = refText(a[1])
       const el = resolveElementLoose(G, txt)
       if (!el) return fail(`${refText(a[0])} 中没有元素 ${txt}`, `元素：${elementListHint(G)}`)
@@ -3286,37 +3286,37 @@ export const OPS: OpDef[] = [
   /* ══ 算术 ══════════════════════════════════════════════ */
   {
     id: 'factorize',
-    notation: '分解(n)',
+    notation: 'factorize(n)',
     mechanism: 'arithmetic',
     primitive: false,
-    doc: '整数素因子分解 n = \\prod p^e',
+    doc: '整数素因子分解 n = prod p^e',
     impl: 'factorizeOrder',
-    call: ['分解', 'factor', 'factorize'],
+    call: ['factor', 'factorize'],
     params: [{ name: 'n', type: 'int' }],
     arity: 1,
     result: 'number',
     run: (a) => {
       const n = intOf(a[0])
-      if (n === null) return fail('分解(\\cdot) 需要一个整数')
-      if (n < 1) return fail('分解(\\cdot) 只接受正整数')
+      if (n === null) return fail('factorize 需要一个整数')
+      if (n < 1) return fail('factorize 只接受正整数')
       const fs = factorizeOrder(n)
-      const pretty = fs.map((f) => (f.exponent === 1 ? `${f.prime}` : `${f.prime}${superscript(f.exponent)}`)).join('\\cdot ')
+      const pretty = fs.map((f) => (f.exponent === 1 ? `${f.prime}` : `${f.prime}${superscript(f.exponent)}`)).join(' * ')
       return {
         ok: true,
         value: { type: 'number', label: pretty, value: n },
-        label: `分解(${n})`,
+        label: `factorize(${n})`,
         sub: `= ${pretty}`,
       }
     },
   },
   {
     id: 'binomial',
-    notation: 'C(n, k)',
+    notation: 'binomial(n, k)',
     mechanism: 'arithmetic',
     primitive: false,
     doc: '精确组合数 C(n, k)',
     impl: '本地 BigInt',
-    call: ['C', '组合数', 'binomial', 'choose'],
+    call: ['C', 'binomial', 'choose'],
     params: [
       { name: 'n', type: 'int' },
       { name: 'k', type: 'int' },
@@ -3340,12 +3340,12 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'binomialMod',
-    notation: 'C(n, k, p)',
+    notation: 'binomialMod(n, k, p)',
     mechanism: 'arithmetic',
     primitive: false,
     doc: '组合数对 p 取模（Lucas 定理），Wielandt 证明的计数段用它',
     impl: 'binomialMod',
-    call: ['Cmod', '组合数模', 'binomialMod'],
+    call: ['Cmod', 'binomialMod'],
     params: [
       { name: 'n', type: 'int' },
       { name: 'k', type: 'int' },
@@ -3358,8 +3358,8 @@ export const OPS: OpDef[] = [
       const k = intOf(a[1])
       const p = intOf(a[2])
       if (n === null || k === null || p === null) return fail('Cmod(n, k, p) 需要三个整数')
-      if (p < 2) return fail('Cmod(\\cdot) 的 p 必须 \\ge 2')
-      if (n < 0 || k < 0) return fail('Cmod(\\cdot) 只接受非负整数')
+      if (p < 2) return fail('binomialMod 的 p 必须 >= 2')
+      if (n < 0 || k < 0) return fail('binomialMod 只接受非负整数')
       const v = binomialMod(n, k, p)
       return {
         ok: true,
@@ -3374,9 +3374,9 @@ export const OPS: OpDef[] = [
     notation: 'gcd(a, b)',
     mechanism: 'arithmetic',
     primitive: false,
-    doc: '最大公因数（`闭包(G, r6, r4)` 那类"生成元的合成"里天天用到的那一步）',
+    doc: '最大公因数（`closure(G, r6, r4)` 那类"生成元的合成"里天天用到的那一步）',
     impl: '本地（欧几里得）',
-    call: ['gcd', '最大公因数', '最大公约数'],
+    call: ['gcd'],
     params: [
       { name: 'a', type: 'int' },
       { name: 'b', type: 'int' },
@@ -3386,8 +3386,8 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const x = intOf(a[0])
       const y = intOf(a[1])
-      if (x === null || y === null) return fail('gcd(\\cdot) 需要两个整数')
-      if (x < 0 || y < 0) return fail('gcd(\\cdot) 只接受非负整数')
+      if (x === null || y === null) return fail('gcd 需要两个整数')
+      if (x < 0 || y < 0) return fail('gcd 只接受非负整数')
       const v = gcdInt(x, y)
       return {
         ok: true,
@@ -3402,9 +3402,9 @@ export const OPS: OpDef[] = [
     notation: 'lcm(a, b)',
     mechanism: 'arithmetic',
     primitive: false,
-    doc: '最小公倍数（`a \\cdot b = gcd \\cdot lcm`）',
+    doc: '最小公倍数（a*b = gcd*lcm）',
     impl: '本地（gcd \\to lcm）',
-    call: ['lcm', '最小公倍数'],
+    call: ['lcm'],
     params: [
       { name: 'a', type: 'int' },
       { name: 'b', type: 'int' },
@@ -3414,8 +3414,8 @@ export const OPS: OpDef[] = [
     run: (a) => {
       const x = intOf(a[0])
       const y = intOf(a[1])
-      if (x === null || y === null) return fail('lcm(\\cdot) 需要两个整数')
-      if (x < 0 || y < 0) return fail('lcm(\\cdot) 只接受非负整数')
+      if (x === null || y === null) return fail('lcm 需要两个整数')
+      if (x < 0 || y < 0) return fail('lcm 只接受非负整数')
       const v = x === 0 || y === 0 ? 0 : (x / gcdInt(x, y)) * y
       return {
         ok: true,
@@ -3427,19 +3427,19 @@ export const OPS: OpDef[] = [
   },
   {
     id: 'eulerPhi',
-    notation: '\\varphi(n)',
+    notation: 'eulerPhi(n)',
     mechanism: 'arithmetic',
     primitive: false,
-    doc: '欧拉函数：1 \\le k \\le n 里与 n 互素的 k 的个数（= n \\cdot \\prod (1 - 1/p)）',
+    doc: '欧拉函数：1 <= k <= n 里与 n 互素的 k 的个数（= n * prod (1 - 1/p)）',
     impl: '本地（走 factorizeOrder）',
-    call: ['phi', '欧拉函数', 'eulerPhi'],
+    call: ['phi', 'eulerPhi'],
     params: [{ name: 'n', type: 'int' }],
     arity: 1,
     result: 'number',
     run: (a) => {
       const n = intOf(a[0])
-      if (n === null) return fail('\\varphi(\\cdot) 需要一个整数')
-      if (n < 1) return fail('\\varphi(\\cdot) 只接受正整数')
+      if (n === null) return fail('eulerPhi 需要一个整数')
+      if (n < 1) return fail('eulerPhi 只接受正整数')
       let v = n
       for (const f of factorizeOrder(n)) v = (v / f.prime) * (f.prime - 1)
       return {
@@ -3532,7 +3532,7 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
     }
     case 'subset': {
       // **单个**数集。`subgroups` 只在恰好一个成员时收——那时它等于一个子群
-      //（`闭包(S)` / `商(G, N)` 这类就是这么用的）。
+      //（`closure(S)` / `quotient(G, N)` 这类就是这么用的）。
       if (v.type === 'elements' || v.type === 'set') return true
       if (v.type === 'subgroups') return v.subgroups.length === 1
       if (v.type !== 'group') return false
@@ -3636,40 +3636,40 @@ const TEMPLATES: Record<string, string> = {
   directProduct: 'G x H',
   semidirectProduct: 'G \\rtimes H',
   quotient: 'G / N',
-  conjugationAction: '共轭作用(G)',
-  leftTranslationAction: '正则作用(G)',
-  cosetAction: '陪集作用(G, P)',
+  conjugationAction: 'conjAction(G)',
+  leftTranslationAction: 'leftAction(G)',
+  cosetAction: 'cosetAction(G, P)',
   // U52：不给这一条，径向菜单那个 `<code>` 会退到 `notation`（一长串占位符），
   // 而模板的意思是"**照这个敲就能跑**"——给个真能跑的短例子。
-  // U53：第二参改成 `4` 或 `点集(4)` 都行，模板给短的（数字）。
-  customAction: '自定义作用(G, 4, a -> (1 2 3 4))',
+  // U53：第二参改成 `4` 或 `pointSet(4)` 都行，模板给短的（数字）。
+  customAction: 'customAction(G, 4, a -> (1 2 3 4))',
   // U53：凭空造集合的两条 —— 它们不需要任何对象，所以只可能在"照这个敲"的地方露面
-  pointSet: '点集(5)',
-  labeledSet: '集合(a, b, c)',
+  pointSet: 'pointSet(5)',
+  labeledSet: 'labeledSet(a, b, c)',
   automorphismGroup: 'Aut(G)',
   intersection: 'A \\cap B',
   union: 'A \\cup B',
-  difference: 'A \ B',
+  difference: 'A \\setminus B',
   productSet: 'A \\cdot B',
   center: 'Z(G)',
   centralizer: 'C_G(G, S)',
   normalizer: 'N_G(G, H)',
-  orbits: '轨道(A, e)',
-  stabilizers: '稳定子(A, e)',
-  fixedPoints: '不动点(A)',
-  orbitCount: '轨道数(A)',
+  orbits: 'orbits(A, e)',
+  stabilizers: 'stabilizer(A, e)',
+  fixedPoints: 'fix(A)',
+  orbitCount: 'burnside(A)',
   kernel: 'ker(f)',
   image: 'im(f)',
   subgroups: 'Sub(G)',
-  maximalSubgroups: '极大子群(G)',
+  maximalSubgroups: 'maximalSubgroups(G)',
   innerAutomorphismGroup: 'Inn(G)',
   pSubgroups: 'pSub(G, 2)',
   sylow: 'Syl(G, 2)',
-  normalSubgroups: '正规子群(G)',
-  commutatorGroup: '换位子群(G)',
+  normalSubgroups: 'normalSubgroups(G)',
+  commutatorGroup: 'commutator(G)',
   closure: '\\langle G, (123), (12)\\rangle',
   elementOrder: 'ord(G, r2)',
-  factorize: '分解(12)',
+  factorize: 'factorize(12)',
   binomial: 'C(12, 4)',
   binomialMod: 'Cmod(12, 4, 2)',
   gcd: 'gcd(12, 18)',

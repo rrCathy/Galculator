@@ -188,7 +188,7 @@ export interface GalAction {
    * 从前 Ω 只是 `n` 这个数字加一串 `setLabels`——它在图里根本不存在。
    * 但 Sylow 的整条推理链（轨道分解、轨道-稳定子）都以 Ω 为主角，
    * 所以作用把它一并交出来：
-   *   - `omega.from` 指向一个集合对象（`底集(Syl_p(G))`）→ 作用线指向那个节点
+   *   - `omega.from` 指向一个集合对象（`asSet(Syl_p(G))`）→ 作用线指向那个节点
    *   - 没有 `from` 时 Ω = G 自身（共轭 / 正则作用）→ 作用线是 G 上的自环
    */
   omega?: GalSet
@@ -266,7 +266,7 @@ export interface GalSet {
   /**
    * 上下文群（Ω 的成员取自哪里）。
    *
-   * **`null` = 这批点不属于任何群**（U53 的合成点集：`点集(5)` / `集合(a, b, c)`）。
+   * **`null` = 这批点不属于任何群**（U53 的合成点集：`pointSet(5)` / `labeledSet(a, b, c)`）。
    * 别把它退化成"取 `C_1` 当母群"：没有母群和"母群是平凡群"是两件事，
    * 前者任何 G 都能作用上去，后者会把 `G 与 Ω 来自不同的群` 那道关也一起骗过。
    */
@@ -274,7 +274,7 @@ export interface GalSet {
   /** 展示名 */
   label: string
   members: SetMember[]
-  /** 由哪个对象提升而来（`底集(S)` 的 S）*/
+  /** 由哪个对象提升而来（`asSet(S)` 的 S）*/
   from?: string
 }
 

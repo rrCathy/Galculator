@@ -204,10 +204,10 @@ await page.waitForTimeout(300)
 for (const [n, e] of [
   ['G', 'S_4'],
   ['H', 'S_3'],
-  ['\\varphi', '映射(G, H, s12->23, c->13)'],
+  ['\\varphi', 'map(G, H, s12->23, c->13)'],
   ['K', 'ker(\\varphi)'],
   ['A', 'A_4'],
-  ['R', '包含(K, G)'],
+  ['R', 'contains(K, G)'],
 ]) {
   const built = await addLine(n, e)
   ok(`建得出「${n} = ${e}」`, built === true)
@@ -216,9 +216,9 @@ await page.keyboard.press('Escape')
 await page.waitForTimeout(400)
 
 // 中文操作名同样能跑（拦住的是"打不出来的字符"，不是中文）
-await typeExpr('子群(G)')
+await typeExpr('Sub(G)')
 const okZh = await status()
-ok('中文操作名 `子群(G)` 不被拦', !okZh.cls.includes('bad'), `${okZh.cls} :: ${okZh.text}`)
+ok('中文操作名 `Sub(G)` 不被拦', !okZh.cls.includes('bad'), `${okZh.cls} :: ${okZh.text}`)
 await page.keyboard.press('Escape')
 await page.waitForTimeout(300)
 
@@ -293,8 +293,8 @@ for (const id of ['G', 'K', '\\varphi']) {
 
 /* ── 报错面：写一行错的 ── */
 {
-  // 2026-09-28（U27）起 `极大子群(G)` 已接线 —— 换仍在缺口清单里的 `Hall子群(G)`
-  await addLine('X', 'Hall子群(G)')
+  // 2026-09-28（U27）起 `maximalSubgroups(G)` 已接线 —— 换仍在缺口清单里的 `HallSub(G)`
+  await addLine('X', 'HallSub(G)')
   const st = await status()
   ok('「Hall子群」报「没有这个操作」', st.text.includes('没有名为'), st.text)
   await checkVisible('输入框报错（没有这个操作）')

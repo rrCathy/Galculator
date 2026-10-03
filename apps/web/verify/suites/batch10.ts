@@ -155,19 +155,19 @@ export function run(): void {
     // ① 阶不整除 → 点名拉格朗日
     {
       const b = buildLines(['X = C_3', 'Y = V_4', 'R = X \\subseteq Y'])
-      ok('`包含(C_3, V_4)` 停下', !b.lineStates[2]?.ok, b.lineStates[2]?.error)
+      ok('`contains(C_3, V_4)` 停下', !b.lineStates[2]?.ok, b.lineStates[2]?.error)
       ok('理由点明拉格朗日', (b.lineStates[2]?.error ?? '').includes('拉格朗日'), b.lineStates[2]?.error)
     }
     // ② 搜过确实没有 → 说明"已枚举"
     {
       const b = buildLines(['X = Q_8', 'Y = S_4', 'R = X \\subseteq Y'])
-      ok('`包含(Q_8, S_4)` 停下', !b.lineStates[2]?.ok, b.lineStates[2]?.error)
+      ok('`contains(Q_8, S_4)` 停下', !b.lineStates[2]?.ok, b.lineStates[2]?.error)
       ok('说明"S₄ 里没有与 Q₈ 同构的子群（已枚举全部子群）"', (b.lineStates[2]?.hint ?? '').includes('已枚举'), b.lineStates[2]?.hint)
     }
     // ③ 群太大 → 说"没能判定"，**不许**说"不是子群"
     {
       const b = buildLines(['X = C_2', 'Y = C_2xC_2xC_2xC_2xC_2xC_2xC_2', 'R = X \\subseteq Y'])
-      ok('`包含(C_2, C_2^7)` 停下', !b.lineStates[2]?.ok, b.lineStates[2]?.error)
+      ok('`contains(C_2, C_2^7)` 停下', !b.lineStates[2]?.ok, b.lineStates[2]?.error)
       ok('措辞是"没能判定"', (b.lineStates[2]?.error ?? '').includes('没能判定'), b.lineStates[2]?.error)
       ok('并说清"没做嵌入枚举"', (b.lineStates[2]?.hint ?? '').includes('没做嵌入枚举'), b.lineStates[2]?.hint)
     }
@@ -176,7 +176,7 @@ export function run(): void {
       const b = buildLines(['X = V_4', 'Y = S_4', 'R = X \\subseteq Y'])
       const rv = b.objects.find((o) => o.id === 'R')?.value
       const [H, G] = two('V_4', 'S_4')
-      ok('`包含(V_4, S_4)` 建出关系', rv?.type === 'relation', b.lineStates[2]?.error)
+      ok('`contains(V_4, S_4)` 建出关系', rv?.type === 'relation', b.lineStates[2]?.error)
       eq('操作里的指数 = containment 的指数（判据同源）', rv?.type === 'relation' ? rv.relation.index : -1, containment(H!, G!)?.index ?? -1)
       // 正规性说不清时**不许**假装正规（`⊴` 是有断言力的符号）
       eq('正规性未判定 ⇒ isNormal = false（画 `⊆` 而不是 `⊴`）', rv?.type === 'relation' ? rv.relation.isNormal : null, false)
@@ -238,7 +238,7 @@ export function run(): void {
     ok('群太大时说"没做嵌入枚举"', !!h3 && h3.includes('没做嵌入枚举'), String(h3))
 
     // 非"两个群"不给答案（别硬凑一句话误导）
-    const f = val(['G = S_4', 'H = S_3', 'f = 映射(G, H, s12->23, c->13)'], 'f')
+    const f = val(['G = S_4', 'H = S_3', 'f = map(G, H, s12->23, c->13)'], 'f')
     eq('映射 + 群：不给解释（原因太杂）', pairMissHint(f, s4), null)
   }
 

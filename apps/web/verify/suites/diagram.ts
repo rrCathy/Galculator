@@ -24,7 +24,7 @@ export function run(): void {
 
   // ── 商群：\\pi 是满射，且第二个参数（子群）带包含箭头 ──
   {
-    const b = build(['G = D_4', 'N = 闭包(G, r2)', 'Q = 商(G, N)'])
+    const b = build(['G = D_4', 'N = closure(G, r2)', 'Q = quotient(G, N)'])
     eq(
       '商群 \\pi 边与 N \\trianglelefteq G 包含边（商群的前提就是 N 正规）',
       edgesOf(b.objects).join(' | '),
@@ -49,14 +49,14 @@ export function run(): void {
 
   // ── 子群集是"列表"不是"对象"：不上画布 ──
   {
-    const b = build(['G = D_4', 'S = 正规子群(G)'])
+    const b = build(['G = D_4', 'S = normalSubgroups(G)'])
     ok('子群集值类型是 subgroups', b.byId('S')?.value.type === 'subgroups')
     ok('子群集不上画布', !nodesOf(b.objects).includes('S'), `nodes=${nodesOf(b.objects).join(',')}`)
   }
 
   // ── 层级：不上画布的对象（映射）不占行 ──
   {
-    const b = build(['G = C_6', 'H = C_3', '\\varphi = 映射(G, H, a->1)'])
+    const b = build(['G = C_6', 'H = C_3', '\\varphi = map(G, H, a->1)'])
     const lv = computeLevels(b.objects)
     eq('映射自身层级为 0（不占行）', lv.get('\\varphi'), 0)
     eq('商群顶点紧随源群一层', lv.get('\\varphi/ker'), 1)
@@ -66,7 +66,7 @@ export function run(): void {
   // ── 集合运算：结果确是子群时升级为真群对象 ──
   //    \\langle r\\rangle \\cap \\langle r^2, s\\rangle = \\langle r^2\\rangle —— 取这个形状是因为第二同构定理要它（H \\cap N）。
   {
-    const b = build(['G = D_4', 'A = 闭包(G, r)', 'B = 闭包(G, r2, s)', 'I = A \\cap B'])
+    const b = build(['G = D_4', 'A = closure(G, r)', 'B = closure(G, r2, s)', 'I = A \\cap B'])
     ok('A \\cap B 升级为群对象', b.byId('I')?.value.type === 'group')
     eq('|\\langle r\\rangle \\cap \\langle r^2,s\\rangle| = 2（= \\langle r^2\\rangle）', b.orderOf('I'), 2)
     // `A = \langle r\rangle \cong C_4` 是**循环群**（交换）\to 子群必正规
@@ -75,7 +75,7 @@ export function run(): void {
   }
   {
     // 反方向：两个子群只交于单位元时，交是平凡群（阶 1）
-    const b = build(['G = D_4', 'A = 闭包(G, r)', 'B = 闭包(G, s)', 'I = A \\cap B'])
+    const b = build(['G = D_4', 'A = closure(G, r)', 'B = closure(G, s)', 'I = A \\cap B'])
     eq('|\\langle r\\rangle \\cap \\langle s\\rangle| = 1', b.orderOf('I'), 1)
   }
 
@@ -92,7 +92,7 @@ export function run(): void {
     const b = build([
       'G = S_4',
       'C1 = C_G(G, (12)(34))',
-      'H = 闭包(G, (12)(34))',
+      'H = closure(G, (12)(34))',
       'C2 = C_G(G, H)',
       'N1 = N_G(G, (12)(34))',
     ])
@@ -103,10 +103,10 @@ export function run(): void {
 
   // ── 闭包的三形态（G1 / G3b 的回归防线）──
   {
-    const b = build(['G = C_12', 'A = 闭包(G, r4)', 'B = 闭包(G, r6, r4)', 'C = 闭包(A)'])
-    eq('闭包(G, r4)：生成元的幂（C_n 是加法群，课本写乘法 r^k）', b.orderOf('A'), 3)
-    eq('闭包(G, r6, r4)：两者生成的子群 = \\langle gcd(6,4)\\rangle = \\langle 2\\rangle', b.orderOf('B'), 6)
-    eq('闭包(A)：单群参数取它的元素当种子（G3b 防线）', b.orderOf('C'), 3)
-    ok('闭包(G, r4) 不报错', b.err('A') === null)
+    const b = build(['G = C_12', 'A = closure(G, r4)', 'B = closure(G, r6, r4)', 'C = closure(A)'])
+    eq('closure(G, r4)：生成元的幂（C_n 是加法群，课本写乘法 r^k）', b.orderOf('A'), 3)
+    eq('closure(G, r6, r4)：两者生成的子群 = \\langle gcd(6,4)\\rangle = \\langle 2\\rangle', b.orderOf('B'), 6)
+    eq('closure(A)：单群参数取它的元素当种子（G3b 防线）', b.orderOf('C'), 3)
+    ok('closure(G, r4) 不报错', b.err('A') === null)
   }
 }

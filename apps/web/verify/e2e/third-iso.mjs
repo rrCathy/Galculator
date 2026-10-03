@@ -43,11 +43,11 @@ await page.waitForTimeout(1200)
 // N \\trianglelefteq K \\trianglelefteq G：(G/N)/(K/N) \\cong G/K，|G/K| = 2
 const LINES = [
   'G = D_4',
-  'N = 闭包(G, r2)',
-  'K = 闭包(G, r)',
-  'GN = 商(G, N)',
-  'KN = 商(K, N)',
-  'Q = 商(GN, KN)',
+  'N = closure(G, r2)',
+  'K = closure(G, r)',
+  'GN = quotient(G, N)',
+  'KN = quotient(K, N)',
+  'Q = quotient(GN, KN)',
 ]
 await page.click('.composer-orb .orb')
 for (const line of LINES) {

@@ -268,7 +268,7 @@ export function ProofDock({
       ) : (
         <>
           <div className="proof-head">
-            <div className="proof-title">{template.title}</div>
+            <div className="proof-title"><TexOrText text={template.title} /></div>
             <div className="proof-theorem">
               <Tex tex={template.theorem} />
             </div>

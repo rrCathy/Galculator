@@ -15,7 +15,7 @@ export function run(): void {
 
   // ── 同构识别 ──
   {
-    const b = build(['G = S_4', 'N = 闭包(G, (12)(34), (13)(24))', 'Q = 商(G, N)'])
+    const b = build(['G = S_4', 'N = closure(G, (12)(34), (13)(24))', 'Q = quotient(G, N)'])
     const q = b.byId('Q')
     ok('S_4/V_4 是群值', q?.value.type === 'group')
     if (q?.value.type === 'group') eq('S_4/V_4 \\cong S_3', flat(identifyGroup(q.value.group)), 'S3')
@@ -33,7 +33,7 @@ export function run(): void {
 
   // ── 第一同构定理的结论（mapInsights）──
   {
-    const b = build(['G = C_6', 'H = C_3', '\\varphi = 映射(G, H, a->1)'])
+    const b = build(['G = C_6', 'H = C_3', '\\varphi = map(G, H, a->1)'])
     const m = b.byId('\\varphi')
     if (m?.value.type === 'map') {
       const ins = mapInsights(m.value.map)
@@ -53,9 +53,9 @@ export function run(): void {
   {
     const b = build([
       'G = D_4',
-      'H = 闭包(G, r)',
-      'N = 闭包(G, r2, s)',
-      'HN = 闭包(G, r, s)',
+      'H = closure(G, r)',
+      'N = closure(G, r2, s)',
+      'HN = closure(G, r, s)',
       'I = H \\cap N',
       'Q1 = H / I',
       'Q2 = HN / N',
@@ -95,10 +95,10 @@ export function run(): void {
     const b = build([
       `G = ${c.g}`,
       `S = Syl(G, ${c.p})`,
-      '\\Omega = 底集(S)',
-      'A = 共轭作用在(G, \\Omega)',
-      'O = 轨道(A, 1)',
-      'St = 稳定子(A, 1)',
+      '\\Omega = asSet(S)',
+      'A = conjOn(G, \\Omega)',
+      'O = orbits(A, 1)',
+      'St = stabilizer(A, 1)',
     ])
     const err = b.lineStates.find((s) => !s.ok)
     if (err) {
@@ -132,6 +132,6 @@ export function run(): void {
     // 结论层要能把这些话说出来
     const ins = actionInsights(A.value.action)
     ok(`结论层给出 Sylow III：${c.g} p=${c.p}`, ins.some((i) => i.label === 'Sylow III'))
-    if (c.n === 1) ok(`唯一 -> 正规：${c.g} p=${c.p}`, ins.some((i) => i.label === '正规 \\iff 唯一'))
+    if (c.n === 1) ok(`唯一 -> 正规：${c.g} p=${c.p}`, ins.some((i) => i.label === '正规 iff 唯一'))
   }
 }

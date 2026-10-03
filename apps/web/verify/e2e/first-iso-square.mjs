@@ -44,7 +44,7 @@ await page.goto(URL, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
 // ── 铺前置行：C₆ --\\varphi(a\\mapsto 2)--> C₆，非满射（|im| = 3 < |H| = 6）──
-const LINES = ['G = C_6', 'H = C_6', '\\varphi = 映射(G, H, a->2)']
+const LINES = ['G = C_6', 'H = C_6', '\\varphi = map(G, H, a->2)']
 await page.click('.composer-orb .orb')
 for (const line of LINES) {
   await page.fill('.composer-expr', line)

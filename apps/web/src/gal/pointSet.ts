@@ -4,15 +4,15 @@
  * ── 为什么要有它（2026-10-02，用户原话）────────────────────────────────
  * 「逗我吗，连任意阶集合都创建不了，怎么创建自定义群作用？」
  *
- * 实测（`.tmp-u53/probe2.ts`，语义层真跑）：`{1,2,3}` / `集合(1,2,3)` / `点集(5)`
- * **全都不通**，而唯一能造出 `set` 的 `底集(S)` 要求 `S` **已经存在**
+ * 实测（`.tmp-u53/probe2.ts`，语义层真跑）：`{1,2,3}` / `labeledSet(1,2,3)` / `pointSet(5)`
+ * **全都不通**，而唯一能造出 `set` 的 `asSet(S)` 要求 `S` **已经存在**
  * （子群集 / 元素集 / 群）—— 也就是说集合的点**必须从某个已存在的群里借**。
  * 后果就是 U52 那个「自定义作用」的 Ω 只能是内核硬造的 `{1..n}`，
  * 而"让 G 作用在**你自己的**集合上"根本表达不出来：
- * `自定义作用(S_4, 底集(Syl(S_4, 3)), s12 -> (12))` 报「作用点集的基数 n 必须是正整数」。
+ * `customAction(S_4, asSet(Syl(S_4, 3)), s12 -> (12))` 报「作用点集的基数 n 必须是正整数」。
  *
  * 这个模块补两件事：
- *   ① **凭空造点集**：`点集(5)` → 5 个抽象点（点号 `1..5`）；`集合(a, b, c)` → 标号由你定；
+ *   ① **凭空造点集**：`pointSet(5)` → 5 个抽象点（点号 `1..5`）；`labeledSet(a, b, c)` → 标号由你定；
  *   ② **点记号解析**：循环记号里的**非数字**记号 → Ω 的位置下标。
  *      （数字段一律不碰 —— `(12)` 是 core 自己的语法，见 `labelCycleToNumeric` 的注释）
  *
@@ -21,15 +21,15 @@
  * 见 `value.ts` 的 `GalSet.group` 注释：这一点**不许**用"母群 = `C_1`"糊过去。
  *
  * ## 为什么是两个 op 而不是一个
- * `集合(5)` 到底指"5 个点"还是"一个叫 5 的点"？两种读法都通 —— 那就**不许猜**。
- * `点集(n)` 只管点数，`集合(...)` 只管标号，而**单给一个整数**那一支一律报错并指路
+ * `labeledSet(5)` 到底指"5 个点"还是"一个叫 5 的点"？两种读法都通 —— 那就**不许猜**。
+ * `pointSet(n)` 只管点数，`labeledSet(...)` 只管标号，而**单给一个整数**那一支一律报错并指路
  * （见 `planLabeledPointSet`）。这条与 U25「恒等必须写 `e`、留空不算」同源：
  * 静默默认会让用户看不出自己表达错了。
  */
 import type { GalSet } from './value'
 
 /**
- * 点集的点数上限（`点集(n)` 与作用编辑器里那个 `n` **共用一个数**）。
+ * 点集的点数上限（`pointSet(n)` 与作用编辑器里那个 `n` **共用一个数**）。
  *
  * 不是"算不动"（置换表对 n 几乎免费），而是**手写记号**的边界：
  * 循环记号里点号一个个敲，400 个点已经没人真去敲了，超线大概率是数字打错。
@@ -74,7 +74,7 @@ export function planCountPointSet(n: number, label?: string): PointSetPlan {
     return {
       ok: false,
       error: `点数必须是正整数，收到 ${Number.isFinite(n) ? n : '一个不是数字的东西'}`,
-      hint: `如 点集(5)：5 个抽象点，点号 1 到 5；标号自己定写 集合(a, b, c)`,
+      hint: `如 pointSet(5)：5 个抽象点，点号 1 到 5；标号自己定写 labeledSet(a, b, c)`,
     }
   }
   if (n > POINT_SET_MAX) {
@@ -85,33 +85,33 @@ export function planCountPointSet(n: number, label?: string): PointSetPlan {
     }
   }
   const labels = Array.from({ length: n }, (_, i) => String(i + 1))
-  return { ok: true, set: make(labels, label ?? `点集(${n})`), labels }
+  return { ok: true, set: make(labels, label ?? `pointSet(${n})`), labels }
 }
 
 /**
- * 造一个点集，**标号就是你写的那串记号**（`集合(a, b, c)`）。
+ * 造一个点集，**标号就是你写的那串记号**（`labeledSet(a, b, c)`）。
  *
- * 首关挡"只给一个纯整数"那一支：`集合(5)` 读不出你要 5 个点还是要一个叫 `5` 的点，
- * 所以直接报错指路 `点集(5)` —— 见模块头的"为什么是两个 op"。
+ * 首关挡"只给一个纯整数"那一支：`labeledSet(5)` 读不出你要 5 个点还是要一个叫 `5` 的点，
+ * 所以直接报错指路 `pointSet(5)` —— 见模块头的"为什么是两个 op"。
  */
 export function planLabeledPointSet(rawLabels: string[], label?: string): PointSetPlan {
   const labels = rawLabels.map((s) => s.trim()).filter((s) => s !== '')
   if (labels.length === 0) {
     return {
       ok: false,
-      error: '集合() 至少要给一个点',
-      hint: `如 集合(a, b, c)；只要点数就这样写 点集(5)`,
+      error: 'labeledSet() 至少要给一个点',
+      hint: `如 labeledSet(a, b, c)；只要点数就这样写 pointSet(5)`,
     }
   }
   if (labels.length === 1 && /^[0-9]+$/.test(labels[0])) {
     return {
       ok: false,
-      error: `集合(${labels[0]}) 读不出来：是要 ${labels[0]} 个点，还是要一个叫 ${labels[0]} 的点`,
-      hint: `要 ${labels[0]} 个点写 点集(${labels[0]})；要给一个点起名就换个不带歧义的标号，如 集合(a)`,
+      error: `labeledSet(${labels[0]}) 读不出来：是要 ${labels[0]} 个点，还是要一个叫 ${labels[0]} 的点`,
+      hint: `要 ${labels[0]} 个点写 pointSet(${labels[0]})；要给一个点起名就换个不带歧义的标号，如 labeledSet(a)`,
     }
   }
   if (labels.length > POINT_SET_MAX) {
-    return { ok: false, error: `点数 ${labels.length} 超过上限 ${POINT_SET_MAX}`, hint: `如 集合(a, b, c)` }
+    return { ok: false, error: `点数 ${labels.length} 超过上限 ${POINT_SET_MAX}`, hint: `如 labeledSet(a, b, c)` }
   }
   const seen = new Set<string>()
   for (const l of labels) {
@@ -125,10 +125,10 @@ export function planLabeledPointSet(rawLabels: string[], label?: string): PointS
     return {
       ok: false,
       error: `点标号「${bad}」写不进循环记号`,
-      hint: '标号里不能有空格 / 圆括号 / 逗号（那三个是循环记号自己的语法）；如 集合(a, b, c)',
+      hint: '标号里不能有空格 / 圆括号 / 逗号（那三个是循环记号自己的语法）；如 labeledSet(a, b, c)',
     }
   }
-  return { ok: true, set: make(labels, label ?? `集合(${labels.join(', ')})`), labels }
+  return { ok: true, set: make(labels, label ?? `labeledSet(${labels.join(', ')})`), labels }
 }
 
 /**

@@ -6,8 +6,8 @@
  *
  * 这一套从**用户会怎么做**出发，把六条操作与「基本」tab 的新「结构」节走一遍：
  *   ① 数论三件套：`gcd(12, 18)` / `lcm(4, 6)` / `phi(12)` 进数值区（6 / 12 / 4）
- *   ② `轨道数(A)`：Burnside 的平均式**在输入框里就能看到**（纯文本面），两条路打勾
- *   ③ `极大子群(S_4)`：8 个（A₄ + 三个 D₄ + 四个 S₃），信息面板逐个列出来
+ *   ② `burnside(A)`：Burnside 的平均式**在输入框里就能看到**（纯文本面），两条路打勾
+ *   ③ `maximalSubgroups(S_4)`：8 个（A₄ + 三个 D₄ + 四个 S₃），信息面板逐个列出来
  *   ④ 「结构」节：合成列因子 / 导来列 / 分解（S₄ ≅ A₄ ⋊ C₂；A₅ 单群 -> 不可分解）
  *   ⑤ `Inn(D_4)`：画布上一个节点，结论区说它 ≅ 什么
  *
@@ -187,12 +187,12 @@ await openDock('数值')
 console.log('')
 console.log('== ② 轨道数（Burnside） ==')
 
-ok('建 `A = 共轭作用(G)`', await addLine('A', '共轭作用(G)'))
+ok('建 `A = conjAction(G)`', await addLine('A', 'conjAction(G)'))
 await page.keyboard.press('Escape')
 await page.waitForTimeout(240)
 
 // 先只看**预览**（不提交）：`composer-status` 是纯文本面，副行会写 Burnside 的平均式
-await typeExpr('轨道数(A)')
+await typeExpr('burnside(A)')
 {
   const s = await status()
   ok('预览认得出这是数值（绿字）', s.cls.includes('good') && s.text.includes('数值'), `${s.cls} :: ${s.text}`)
@@ -201,12 +201,14 @@ await typeExpr('轨道数(A)')
   ok('且写着 40 / 8 = 5（手算 Σ|Fix| = 40）', s.text.includes('40 / 8 = 5'), s.text)
   ok('两条路打勾（v）', s.text.includes('v'), s.text)
 }
-ok('提交 `n = 轨道数(A)`', await addLine('n', '轨道数(A)'))
+ok('提交 `n = burnside(A)`', await addLine('n', 'burnside(A)'))
 await page.keyboard.press('Escape')
 await page.waitForTimeout(240)
 {
   const rows = await numericRows()
-  ok('数值区多了 5（D₄ 的共轭类数）', rows.some((r) => r.value === '5' && r.label.includes('轨道数')), JSON.stringify(rows))
+  // 数值条目的标签是 `n = <用户敲的那串>`（`gal/numeric.ts#computedNumbers`）⇒
+  // U54 把 op 名改成 ASCII 之后，这里读到的就是 `n = burnside(A)`
+  ok('数值区多了 5（D₄ 的共轭类数）', rows.some((r) => r.value === '5' && r.label.includes('burnside')), JSON.stringify(rows))
 }
 
 /* ══ ③ 极大子群：8 个列在信息面板里 ═════════════════════ */
@@ -215,7 +217,7 @@ console.log('')
 console.log('== ③ 极大子群 ==')
 
 ok('建 `H = S_4`', await addLine('H', 'S_4'))
-ok('建 `M = 极大子群(H)`', await addLine('M', '极大子群(H)'))
+ok('建 `M = maximalSubgroups(H)`', await addLine('M', 'maximalSubgroups(H)'))
 await page.keyboard.press('Escape')
 await page.waitForTimeout(320)
 
@@ -322,10 +324,10 @@ ok('点中 I', await clickRow('I'))
 
 /* ══ ⑥ 输入侧的一条守卫：`Hall子群` 仍未支持（报错要说清"没这功能"） ═══ */
 
-await typeExpr('Hall子群(G)')
+await typeExpr('HallSub(G)')
 {
   const s = await status()
-  ok('`Hall子群(G)` 报「没有名为…的操作」（不是"群记号认不出"）', s.text.includes('没有名为'), s.text)
+  ok('`HallSub(G)` 报「没有名为…的操作」（不是"群记号认不出"）', s.text.includes('没有名为'), s.text)
 }
 
 await browser.close()

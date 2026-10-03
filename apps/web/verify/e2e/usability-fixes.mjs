@@ -130,7 +130,7 @@ const objIds = async () => {
 
 await addLine('G', 'C_6')
 await addLine('H', 'C_6')
-await addLine('\\phi', '映射(G, H, a->2)')
+await addLine('\\phi', 'map(G, H, a->2)')
 await page.waitForTimeout(300)
 
 const ids = await objIds()
@@ -194,14 +194,14 @@ await page.screenshot({ path: '../../docs/assets/u23-greek-phi.png' })
 
 /* ══ ⑨ 报错分清「没这功能」与「打错了」 ═══════════════════ */
 
-// 2026-09-28（U27）起 `极大子群(G)` 已接线 —— 换仍在缺口清单里的 `Hall子群(G)` 当样本
-await typeExpr('Hall子群(G)')
+// 2026-09-28（U27）起 `maximalSubgroups(G)` 已接线 —— 换仍在缺口清单里的 `HallSub(G)` 当样本
+await typeExpr('HallSub(G)')
 const s1 = await status()
-ok('`Hall子群(G)` 报「没有名为…的操作」', s1.text.includes('没有名为'), `${s1.cls} :: ${s1.text}`)
+ok('`HallSub(G)` 报「没有名为…的操作」', s1.text.includes('没有名为'), `${s1.cls} :: ${s1.text}`)
 ok('并给了相近操作（Sub(G)）', s1.text.includes('Sub(G)'), s1.text)
 ok('不再说"可用的群记号"', !s1.text.includes('群记号'), s1.text)
 
-// U27 接线之后的正面判据：`gcd` / `极大子群(G)` / `Inn(G)` 都跑得通
+// U27 接线之后的正面判据：`gcd` / `maximalSubgroups(G)` / `Inn(G)` 都跑得通
 await typeExpr('gcd(12, 18)')
 const sGcd = await status()
 ok('`gcd(12, 18)` 通过校验且预览出值', !sGcd.cls.includes('bad') && sGcd.text.includes('6'), `${sGcd.cls} :: ${sGcd.text}`)
@@ -285,8 +285,8 @@ ok(
   JSON.stringify(subInfo.normals),
 )
 ok(
-  '底部提示指向 正规子群(G)',
-  subInfo.notes.some((n) => n.includes('正规子群(G)')),
+  '底部提示指向 normalSubgroups(G)',
+  subInfo.notes.some((n) => n.includes('normalSubgroups(G)')),
   subInfo.notes.join(' | '),
 )
 

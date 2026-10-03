@@ -6,16 +6,16 @@
  * 而代数上"一个作用"就是"一个同态"，所以定义作用 = 给每个生成元挑一个置换。
  *
  * 本套钉的是**用户真能摸到的五件事**：
- *   ① **点住 G 弹得出编辑器**（悬浮球 -> 操作 -> 自定义作用）—— 菜单不撒谎；
+ *   ① **点住 G 弹得出编辑器**（悬浮球 -> 操作 -> `customAction`）—— 菜单不撒谎；
  *   ② **边填边知道行不行**：填 `(1 2 3 4)` 立刻给「传递 - 忠实」，
  *      填 `(12)(34)` 给「不忠实（核阶 2）」（非忠实是合法作用，必须披露）；
  *   ③ **两个一键起点写进输入框**（平凡 / 左正则）—— 不搞"留空就是恒等"那种静默默认；
  *   ④ **提交真的长出对象**：`A` 节点 + `\Omega` 节点，信息面板有「核」这一行；
- *   ⑤ **产出是一等作用值**：`轨道(A, 1)` / `稳定子(A, 1)` 接着能算。
+ *   ⑤ **产出是一等作用值**：`orbits(A, 1)` / `stabilizer(A, 1)` 接着能算。
  *
  * 外加两条纪律（U38/U51 立的）：
  *   · **菜单不撒谎**：直积群的生成元在 core 里重名重号（`C_2^2` 是三个 `a`），
- *     "分别指定像"表达不出来 ⇒ 菜单里**不列**「自定义作用」，文本路给理由；
+ *     "分别指定像"表达不出来 ⇒ 菜单里**不列** `customAction`，文本路给理由；
  *   · **纯文本面零泄漏**：编辑器的按钮 / title / 状态行，与悬浮球面板的
  *     label / 模板 / 说明，全是键盘打得出的字符（判据与 `e2e/no-unicode-leak.mjs`
  *     的 `ALLOWED` 逐字相同）。
@@ -261,11 +261,11 @@ const scanPlain = async (stage) => {
 }
 
 /* ══════════════════════════════════════════════════════════
- * ① 点住 G -> 悬浮球 -> 「自定义作用」-> 编辑器弹出来
+ * ① 点住 G -> 悬浮球 -> `customAction` -> 编辑器弹出来
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ① 悬浮球里列得出「自定义作用」，点开就是编辑器 ==')
+console.log('== ① 悬浮球里列得出 customAction，点开就是编辑器 ==')
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
@@ -277,15 +277,15 @@ await openOpsPanel('G')
 {
   const ops = await orbOps()
   const labels = ops.map((o) => o.label)
-  ok('单对象操作面板里有「自定义作用」', labels.includes('自定义作用'), labels.join(' | '))
+  ok('单对象操作面板里有「customAction」（U54 前叫「自定义作用」）', labels.includes('customAction'), labels.join(' | '))
   ok('标签不是原样贴出的 LaTeX（不许出现反斜杠）', labels.every((l) => !l.includes('\\')), labels.join(' | '))
-  const mine = ops.find((o) => o.label === '自定义作用')
+  const mine = ops.find((o) => o.label === 'customAction')
   // 模板是"照抄就能跑"的一行：`C_4` 的生成元是 `a`，4 个点上的 4-循环
-  ok('模板给的是能照抄的一行', mine?.tmpl === '自定义作用(G, 4, a -> (1 2 3 4))', String(mine?.tmpl))
+  ok('模板给的是能照抄的一行', mine?.tmpl === 'customAction(G, 4, a -> (1 2 3 4))', String(mine?.tmpl))
   ok('说明里说清了"恒等写 e"', !!mine?.doc && mine.doc.includes('恒等写 e'), String(mine?.doc))
   await page.screenshot({ path: '../../docs/assets/u52-action-menu.png' })
 
-  ok('点得中「自定义作用」', await clickOrbOp('自定义作用'))
+  ok('点得中「customAction」', await clickOrbOp('customAction'))
   await page.waitForTimeout(320)
   const opened = await page.locator('.action-builder').count()
   ok('编辑器弹出来了（不是 pending / 补参条）', opened === 1, `count=${opened}`)
@@ -417,12 +417,12 @@ await page.waitForTimeout(620)
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ⑥ 下游：`轨道(A, 1)` / `稳定子(A, 1)` ==')
+console.log('== ⑥ 下游：`orbits(A, 1)` / `stabilizer(A, 1)` ==')
 {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
-  ok('建 `O = 轨道(A, 1)`', await addLine('O', '轨道(A, 1)'))
-  ok('建 `S = 稳定子(A, 1)`', await addLine('S', '稳定子(A, 1)'))
+  ok('建 `O = orbits(A, 1)`', await addLine('O', 'orbits(A, 1)'))
+  ok('建 `S = stabilizer(A, 1)`', await addLine('S', 'stabilizer(A, 1)'))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(420)
 
@@ -451,7 +451,7 @@ console.log('== ⑥ 下游：`轨道(A, 1)` / `稳定子(A, 1)` ==')
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ⑦ `C_2^2` 的生成元分不开 -> 菜单里不列「自定义作用」 ==')
+console.log('== ⑦ `C_2^2` 的生成元分不开 -> 菜单里不列 customAction ==')
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
@@ -465,18 +465,18 @@ await openOpsPanel('G')
   ok('菜单弹得出来（不是空的）', labels.length > 0, labels.join(' | '))
   // core 给 C_2^2 的生成元起名全是 `a`、记号全是 `1` ⇒ "分别指定像"表达不出来。
   // 列出来点下去只能得到一句"做不了" —— 那就是撒谎（U38/U51 立的规矩）。
-  ok('**不列**「自定义作用」', !labels.includes('自定义作用'), labels.join(' | '))
-  ok('同一张菜单里「正则作用」照列（不是"一律不列"）', labels.includes('正则作用'), labels.join(' | '))
+  ok('**不列**「customAction」', !labels.includes('customAction'), labels.join(' | '))
+  ok('同一张菜单里「leftAction」照列（不是"一律不列"）', labels.includes('leftAction'), labels.join(' | '))
   ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
 
   // 文本路照旧能进去 —— 那时要**说清为什么**，并给出路
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
-  await typeExpr('自定义作用(G, 4, a -> (12)(34))')
+  await typeExpr('customAction(G, 4, a -> (12)(34))')
   const s = await status()
   ok('文本路拦下（红字）', s.cls.includes('bad'), `${s.cls} :: ${s.text}`)
   ok('  说清是"分不开"，不是"没有生成元 b"', s.text.includes('分不开'), s.text)
-  ok('  给出路（正则作用）', s.text.includes('正则作用'), s.text)
+  ok('  给出路（leftAction）', s.text.includes('leftAction'), s.text)
   await scanPlain('状态行（生成元分不开）')
 }
 
@@ -489,7 +489,7 @@ await openOpsPanel('G')
   await page.waitForTimeout(400)
   await openOpsPanel('H')
   const labels = await orbOpLabels()
-  ok('V_4（同一个群、另一种构造）上照列「自定义作用」', labels.includes('自定义作用'), labels.join(' | '))
+  ok('V_4（同一个群、另一种构造）上照列「customAction」', labels.includes('customAction'), labels.join(' | '))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 }
@@ -505,14 +505,14 @@ await page.waitForTimeout(1100)
 ok('建 `G = C_4`', await addLine('G', 'C_4'))
 {
   // 手算：3 阶的像套进 4 阶的生成元里不可能是同态（3 不整除 4）
-  await typeExpr('自定义作用(G, 4, a -> (1 2 3))')
+  await typeExpr('customAction(G, 4, a -> (1 2 3))')
   const s = await status()
   ok('阶不整除 -> 红字拦住', s.cls.includes('bad'), `${s.cls} :: ${s.text}`)
   ok('  说清是"阶是 4 / 像的阶是 3"', s.text.includes('阶是 4') && s.text.includes('阶是 3'), s.text)
   ok('  报错语里没有反斜杠（纯文本面不写 LaTeX 命令）', !s.text.includes('\\'), s.text)
   await scanPlain('状态行（阶不整除）')
 
-  ok('照模板敲的那一行能建', await addLine('A2', '自定义作用(G, 4, a -> (1 2 3 4))'))
+  ok('照模板敲的那一行能建', await addLine('A2', 'customAction(G, 4, a -> (1 2 3 4))'))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(360)
   ok('没有求值失败的行', (await errRows()).length === 0, JSON.stringify(await errRows()))

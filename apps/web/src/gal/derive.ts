@@ -195,14 +195,14 @@ function inclusionLabel(H: Group, G: Group): string {
 /**
  * **第三同构定理** `(G/N)/(K/N) ≅ G/K` 的配对（U36）。
  *
- * 给一个商对象 `Q`，若它长成 `商(X, Y)`、而 `X = 商(G, N)`、`Y = 商(K, N)`
- * （**同一个 N 对象**），就返回画布上 `商(G, K)` 那个节点的 id。
+ * 给一个商对象 `Q`，若它长成 `quotient(X, Y)`、而 `X = quotient(G, N)`、`Y = quotient(K, N)`
+ * （**同一个 N 对象**），就返回画布上 `quotient(G, K)` 那个节点的 id。
  *
- * 判据只看**对象结构**（`opId` + 实参 id），不看文本 —— 于是 `A/B`、`商(A, B)`、
+ * 判据只看**对象结构**（`opId` + 实参 id），不看文本 —— 于是 `A/B`、`quotient(A, B)`、
  * 手点出来的商群一视同仁。
  *
  * 为什么必须"同一个 `N` 对象"：第三同构的前提是 `N ⊴ K ⊴ G` 里那**一个** `N`。
- * 换成 `商(G, N₁) / 商(K, N₂)`（两个不同的正规子群）两边仍然同**阶**，但**不同构** ——
+ * 换成 `quotient(G, N₁) / quotient(K, N₂)`（两个不同的正规子群）两边仍然同**阶**，但**不同构** ——
  * 只按阶/结构符号去猜就会画出一条错的 `≅`。这一条是**结构对应**，不是数值巧合。
  */
 function thirdIsoPartner(objects: GalObject[], q: GalObject): string | null {
@@ -290,7 +290,7 @@ function alongsideEdges(objects: GalObject[], nodeIds: Set<string>): {
       // 所以这里照直画 `Y ↪ X`。第三同构定理的 `K/N ↪ G/N` 靠这一条：
       // 没有它，那个梯形少一条腰（而 `KN` 自己不是子群升级来的对象，
       // 它的 `↪` 不会由别处产生）。
-      // 重复情形（`商(G, N)` 且 N 自己是 `闭包` 等子群升级对象）会被末尾的去重收掉。
+      // 重复情形（`quotient(G, N)` 且 N 自己是 `闭包` 等子群升级对象）会被末尾的去重收掉。
       const second = o.sources.map((s) => byId.get(s))[1]
       const N = second?.value.type === 'group' ? second.value.group : null
       if (g && g.id !== o.id) {
@@ -562,8 +562,8 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
   // Ω 从前只是 `GalAction.n` 这个数字，图里根本不存在；但 Sylow 的整条推理链
   // （轨道分解 / 轨道-稳定子）都以它为主角。这里给它一个家：
   //   ① `omegaBase === 'self'` → Ω = G 自身，家就是 G 的节点（作用线画成自环）
-  //   ② `omega.from` / 同引用 / 同标签 → 用户自己那行 `Ω = 底集(S)` 的节点
-  //   ③ 都没有（`共轭作用在(G, 底集(S))` 内联写法）→ **就地造一个 Ω 节点**
+  //   ② `omega.from` / 同引用 / 同标签 → 用户自己那行 `Ω = asSet(S)` 的节点
+  //   ③ 都没有（`conjOn(G, asSet(S))` 内联写法）→ **就地造一个 Ω 节点**
   const omegaHome = new Map<string, string>()
   for (const o of objects) {
     if (o.value.type !== 'action') continue
@@ -590,7 +590,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
         sources: [o.id],
         value: { type: 'set', set: omega },
         opId: 'omega',
-        recipe: '作用的 \\Omega',
+        recipe: '作用的 Omega',
         shape: 'set',
         level: (levels.get(o.id) ?? 0) + 1,
       })
@@ -727,7 +727,7 @@ export function deriveCanvas(objects: GalObject[]): CanvasGraph {
 
   // 去重（同一 from→to 只留一条；结构伴生优先于来源线）
   //
-  // 先让**声明的关系**压过**自动生成的**同向箭头：`P = 闭包(G, (12))` 会自动
+  // 先让**声明的关系**压过**自动生成的**同向箭头：`P = closure(G, (12))` 会自动
   // 长一条 `P ↪ G`，用户再声明 `R = P ⊆ G` 就叠成两条同向箭头。留声明那条 ——
   // 它可点选、可删、正规时还是 `⊴`，信息严格更多。
   //

@@ -337,8 +337,8 @@ export function run(): void {
     const sub = failOf(['G = S_6', 'A = Sub(G)'])
     ok('Sub(S_6) 说"超过子群枚举线"', sub.err.includes('超过子群枚举线'), sub.err)
 
-    const norm = failOf(['G = S_6', 'A = 正规子群(G)'])
-    ok('正规子群(S_6) 同样拦住', norm.err.includes('超过子群枚举线'), norm.err)
+    const norm = failOf(['G = S_6', 'A = normalSubgroups(G)'])
+    ok('normalSubgroups(S_6) 同样拦住', norm.err.includes('超过子群枚举线'), norm.err)
 
     // 误伤检查：S_5 的 155 个子群照算
     const s5 = calcOf(['G = S_5', 'A = Sub(G)'])

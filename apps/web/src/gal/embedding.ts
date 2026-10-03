@@ -78,7 +78,7 @@ export function isomorphicSubgroupsIn(
     )
     /**
      * `findAllSubgroups` **不含 G 自身** —— 而"与 S 同构的子群"完全可能就是 G 自己：
-     * `商(V_4, 独立 V_4)`（→ 平凡商）、`Klein × 独立 V_4`（↔ V₄ 整个映到它）都要它。
+     * `quotient(V_4, 独立 V_4)`（→ 平凡商）、`Klein × 独立 V_4`（↔ V₄ 整个映到它）都要它。
      * 补进候选：`G ⊴ G` 恒正规，生成元取声明的那组。
      */
     if (

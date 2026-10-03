@@ -94,7 +94,7 @@ export function checkName(raw: string, used: Iterable<string>): NameCheck {
     return {
       ok: false,
       error: '名字只能用字母 / 数字 / 下划线 / 中文，或 LaTeX 命令（如 \\varphi）',
-      hint: '要叫 φ 就写 \\varphi（全是 ASCII，显示时渲染成 φ）',
+      hint: '要显示成希腊字母 phi 就写 \\varphi（敲进去的全是 ASCII，显示时渲染成 phi 的字形）',
     }
   }
   const lower = name.toLowerCase()
@@ -139,7 +139,7 @@ export function nextAutoName(used: Iterable<string>): string {
  * 判据是**独立标识符**：两侧都不能是 `[A-Za-z0-9_\\]`。
  *   · `\Alpha` 不动（前面是反斜杠 ⇒ 那是个命令名，不是引用）
  *   · `AB` / `A_1` 不动（那是**另外的名字**，标识符字符连着）
- *   · `A/K`、`包含(A, G)` 里的 `A` 会被改
+ *   · `A/K`、`contains(A, G)` 里的 `A` 会被改
  *
  * 返回改动过的行下标（面板上可以说清"连带改了几行"——静默改写才是坏文明）。
  */
