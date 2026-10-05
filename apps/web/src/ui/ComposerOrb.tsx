@@ -31,8 +31,9 @@ export function ComposerOrb({
   objects,
   editing = null,
   onAdd,
-  minLeft = 0,
-}: {
+    minLeft = 0,
+    dockRight = false,
+  }: {
   open: boolean
   onToggle: () => void
   objects: GalObject[]
@@ -44,6 +45,16 @@ export function ComposerOrb({
   onAdd: (line: string) => void
   /** 左下数值面板的右边界；球不能被它压住 */
   minLeft?: number
+  /**
+   * **贴到右侧**（P0-1）：对象编辑器常驻时用 —— 那个卡片也在底部居中，
+   * 两者都在 `bottom: 12px` 会重叠，于是输入球让到右边。
+   *
+   * ⚠️ 这一条**必须走 prop 而不能走 CSS**：`.composer-orb` 的 `left` 是**内联 style**
+   * （`max(50%, …)`，用来避开左下数值面板，见 `minLeft`），内联样式压过任何样式表规则 ——
+   * 我第一版写了 `.app.editor-open .composer-orb { left: auto }`，浏览器里量出来仍是 `720px`
+   * （= 居中），白查一轮。**与内联样式共处只有一条路：改它自己。**
+   */
+  dockRight?: boolean
 }) {
   const [nameDraft, setNameDraft] = useState('')
   const [exprDraft, setExprDraft] = useState('')
@@ -105,7 +116,10 @@ export function ComposerOrb({
   }
 
   return (
-    <div className="composer-orb" style={{ left: `max(50%, ${minLeft + 70}px)` }}>
+    <div
+      className="composer-orb"
+      style={dockRight ? { right: 12, left: 'auto' } : { left: `max(50%, ${minLeft + 70}px)` }}
+    >
       <button
         className={`orb orb-center${open ? ' on' : ''}`}
         onClick={onToggle}

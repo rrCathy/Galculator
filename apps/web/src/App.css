@@ -932,6 +932,18 @@ body {
   transform: translateX(-50%);
 }
 
+/*
+ * ⚠️ 编辑器常驻时输入球让位，**但那条规则不能写在这里**（P0-1 第一版就栽了）。
+ * `.composer-orb` 的 `left` 是**内联 style**（`max(50%, …)`，用来避开左下数值面板），
+ * 内联样式压过任何样式表规则 —— 我写了 `.app.editor-open .composer-orb { left: auto }`，
+ * 浏览器里量出来仍是 `720px`（= 居中）。**与内联样式共处只有一条路：改它自己**
+ * ⇒ 走 `ComposerOrb` 的 `dockRight` prop（见该组件的注释）。
+ *
+ * 留这一行注释是为了**下一个人别再写一遍那条无效规则**。
+ * ⚠️ 同样不要动 `.multi-orb`：它在**顶部**居中（`top: 12px`），与底部卡片不冲突；
+ * 而它是 U57 那条入口（作用 / 自定义作用）的家 —— 拦掉它等于砍功能。
+ */
+
 .composer-card {
   position: absolute;
   bottom: 44px;
@@ -1848,9 +1860,27 @@ body {
 
 /* ── 映射构建器（U3 对象编辑器）────────────────────────── */
 
+/*
+ * 三个对象编辑器（`MapBuilder` / `ActionBuilder` / `StructureBuilder`）的**外壳**。
+ *
+ * ⚠️ **P0-1（2026-10-05）：从居中弹层改成底部常驻卡片。**
+ *
+ * 为什么：三个编辑器本来就**共用这一套类名**（只各加一个修饰类 `.action-builder` /
+ * `.struct-builder` 与一个 `chip-*`）⇒ 它们从来不是三套东西，是**同一个骨架的三种配置**。
+ * 而"模态弹层"这个形态逼出了两笔债：
+ *   · `App.tsx` 要写特判防误触（`onBackgroundClick` 里 `if (inter.kind !== 'editor') reset()`）；
+ *   · 填了一半的像被点空白就没了（那正是用户 2026-10-03 报的"只能选择一个对象？"的同源问题）。
+ *
+ * 位置选**底部居中**（不是右侧）：左上被「对象/操作/目录/信息」四抽屉占着、
+ * 右上被「证明」占着、右侧窄窗下要与左上各占一半（见 §窄窗口）——
+ * **底部输入球之上那条带是唯一不挤占任何区的地方**，而编辑器本来就是"输入的一种"。
+ *
+ * 保持 `position: absolute`（与三个抽屉同级）而不是 fixed：它们跟着 `.app` 走，
+ * `.app` 是全屏容器，两者等价，但 absolute 少一层定位上下文。
+ */
 .map-builder {
   position: absolute;
-  top: 46%;
+  bottom: 12px;
   left: 50%;
   z-index: 18;
   display: flex;
@@ -1858,12 +1888,27 @@ body {
   gap: 8px;
   width: 430px;
   max-width: calc(100vw - 24px);
+  /* 底边给底部输入球让位（它 `bottom: 12px` + 自己的高度），别压住那个 ✎ */
+  max-height: calc(100vh - 200px);
   padding: 12px 14px;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  /* 常驻卡片**不要投影**：投影是"浮在上层"的语言（弹层才需要），而它现在贴底常驻 */
+  box-shadow: none;
+  /* 常驻的视觉锚点：**左边一道实线**（颜色跟 op 的 chip 走，三个编辑器各自不同）——
+     没有它，卡片贴着底边会读成"画布底部有个残留物"；有了它读成"这里停着一个编辑器"。 */
+  border-left: 3px solid var(--purple);
+}
+
+/* 三种编辑器各自的主色（与 `chip-*` 对齐，一处定义两处用）。 */
+.map-builder.action-builder {
+  border-left-color: #0f6e56;
+}
+
+.map-builder.struct-builder {
+  border-left-color: #b45309;
 }
 
 .mb-head {

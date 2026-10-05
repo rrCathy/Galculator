@@ -1095,7 +1095,14 @@ export default function App() {
         selectedId={busy ? null : focus}
         onSelect={onNodeClick}
         onBackgroundClick={() => {
-          // 编辑器开着时点空白不关它（填了一半的像不该被误触清掉）
+          /**
+           * 编辑器开着时点空白**不关它**。
+           *
+           * ⚠️ P0-1（2026-10-05）把它从居中弹层改成底部常驻卡片时，**这一道特意留下**：
+           * "填了一半的像不该被误触清掉"在两种形态下都成立 —— 用户还要在填的时候
+           * 点画布看别的对象（那是"边填边看"的一部分，不是"要关掉编辑器"）。
+           * 它与"常驻"不矛盾：常驻说的是**位置与形态**，不是"点哪都不关"。
+           */
           if (inter.kind !== 'editor') reset()
         }}
         onAnchors={onAnchors}
@@ -1258,6 +1265,8 @@ export default function App() {
         editing={editing}
         onAdd={(l) => (editing ? replaceLine(editing.index, l) : setLines((p) => [...p, l]))}
         minLeft={barriers.bottom}
+        // P0-1：编辑器常驻底部居中 ⇒ 输入球让到右边（两者都在 bottom:12px 会重叠）
+        dockRight={inter.kind === 'editor'}
       />
 
       <div className="dock-bottomleft" ref={dockBottomRef}>

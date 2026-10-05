@@ -201,10 +201,87 @@ console.log('\n== 场景 1：入口通 ==')
   ok('名字框留空即可（留空走自动命名 φ）', (m?.nameValue ?? '') === '', JSON.stringify(m?.nameValue))
 }
 
+/* ══ 场景 1b：常驻卡片形态（P0-1）—— 位置与形态，不只是"编辑器在" ═ */
+
+console.log('\n== 场景 1b：常驻卡片形态（P0-1）==')
+{
+  // 场景 1 结束时编辑器正开着，接着量它的位置
+  const box = await page.evaluate(() => {
+    const el = document.querySelector('.map-builder')
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return {
+      top: r.top,
+      bottom: r.bottom,
+      left: r.left,
+      right: r.right,
+      vh: window.innerHeight,
+      vw: window.innerWidth,
+      boxShadow: getComputedStyle(el).boxShadow,
+      appClass: document.querySelector('.app')?.className ?? '',
+    }
+  })
+  ok('卡片在场', box !== null)
+  // 判据：**贴底**（不是居中）—— 底边距视口底 < 40px
+  ok('**贴底常驻**（底边距视口底 < 40px，P0-1 把它从居中弹层改成了贴底）',
+    box !== null && box.vh - box.bottom < 40, `距底 ${box === null ? '?' : Math.round(box.vh - box.bottom)}px`)
+  // 判据：**不再居中**（上边距应显著大于下边距）
+  ok('**不在居中**（上边距 > 下边距，这是从 `top:46%` 改过来的）',
+    box !== null && box.top > box.vh - box.bottom, `top=${box === null ? '?' : Math.round(box.top)} 距底=${box === null ? '?' : Math.round(box.vh - box.bottom)}`)
+  // 判据：**没有投影**（投影是"浮在上层"的语言，常驻卡片不该有）
+  ok('没有投影（常驻卡片的语言不是"浮在上层"）',
+    box !== null && (box.boxShadow === 'none' || box.boxShadow === ''), box?.boxShadow)
+
+  /*
+   * **底部输入球让开了**（否则两者都在 `bottom: 12px` 居中 ⇒ 必然重叠）。
+   *
+   * ⚠️ 这条走的是 `ComposerOrb` 的 **`dockRight` prop**，不是 CSS：
+   * `.composer-orb` 的 `left` 是**内联 style**（`max(50%, …)`，避开左下数值面板），
+   * 内联样式压过任何样式表规则 ⇒ 我第一版写的 `.app.editor-open .composer-orb { left: auto }`
+   * 浏览器里量出来仍是 `720px`（= 居中），**白查一轮**（还以为是 HMR 没生效，先重启了一次 dev server）。
+   * **与内联样式共处只有一条路：改它自己。**
+   */
+  const orb = await page.evaluate(() => {
+    const o = document.querySelector('.composer-orb')
+    if (!o) return null
+    const r = o.getBoundingClientRect()
+    return { left: r.left, right: r.right, bottom: r.bottom, vw: window.innerWidth }
+  })
+  ok('底部输入球让到右侧去了（dockRight prop；不再与卡片同处居中）',
+    orb !== null && orb.left > (box?.vw ?? 0) / 2, orb === null ? '' : `left=${Math.round(orb.left)} vw=${box?.vw}`)
+
+  // **点画布空白不关编辑器**（常驻的核心承诺：用户还要点画布看别的对象）
+  await page.evaluate(() => {
+    const svg = document.querySelector('svg.canvas')
+    svg?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  await page.waitForTimeout(420)
+  ok('**点画布空白不关编辑器**（填了一半不该被误触清掉 —— P0-1 特意保留这道）',
+    (await page.locator('.map-builder').count()) > 0)
+
+  // 右上角「×」仍然能关（常驻不等于关不掉）
+  await page.click('.map-builder .mb-x')
+  await page.waitForTimeout(420)
+  ok('右上角「×」仍然关得掉（常驻 ≠ 不可关）', (await page.locator('.map-builder').count()) === 0)
+  // 关掉后输入球要回到居中（dockRight 跟着退）
+  const orbBack = await page.evaluate(() => {
+    const o = document.querySelector('.composer-orb')
+    if (!o) return null
+    const r = o.getBoundingClientRect()
+    return { left: r.left, vw: window.innerWidth }
+  })
+  ok('关掉后输入球回到居中（dockRight 跟着退）',
+    orbBack !== null && Math.abs(orbBack.left - orbBack.vw / 2) < 40,
+    orbBack === null ? '' : `left=${Math.round(orbBack.left)} vw=${orbBack.vw}`)
+}
+
 /* ══ 场景 2：进去能用（填像 → 边填边判 → 提交长出对象）══════════ */
 
 console.log('\n== 场景 2：进去能用 ==')
 {
+  // 场景 1b 末尾把编辑器关掉了（点 ×）—— 这里重新开一次
+  await openMapEditor('G', 'H')
+  ok('编辑器重新打开（场景 1b 关过它）', (await page.locator('.map-builder').count()) > 0)
   const before = await nodeIds()
   // 手算：a ↦ 2 ⇒ gcd(2,6) = 2 ⇒ |ker| = 2、|im| = 3，判定是「一般同态」（**不是**满射）
   ok('选得到像 `2`', await pickImage('2'))
