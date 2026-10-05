@@ -4,9 +4,11 @@ import { STRUCTURE_LEVEL_LABEL } from '../gal/algebra'
 import { subgroupClassCount } from './infoHelpers'
 import { TexOrText } from './Tex'
 import type { GalObject } from '../gal/types'
-import type { NormalizedSubgroup } from '../gal/value'
+import type { GalValue, NormalizedSubgroup } from '../gal/value'
 import { homeOf } from '../gal/value'
 import type { OpDef } from '../gal/ops'
+import { maxObjectArity } from '../gal/compose'
+import { canPick, PARAM_LABEL } from '../gal/interaction'
 import { BENCH_FAMILIES, benchArity, familyOps } from '../gal/workbench'
 import type { Group } from '@groupviz/core'
 import { isKnownGroup } from '../gal/known'
@@ -49,10 +51,31 @@ import { isKnownGroup } from '../gal/known'
 export interface WorkbenchProps {
   open: boolean
   onToggle: () => void
-  /** 发起一条 op（与球菜单 / 拖拽 / 目录共用同一条路，见 `App.tsx#startOp`）*/
+  /** 发起一条 op（与球菜单 / 拖拽 / 目录共用同一条路，见 `App.tsx#dispatchOp`）*/
   onRunOp: (op: OpDef) => void
   /** 焦点对象（与 `InfoDock` 同一个）*/
   node: GalObject | null
+  /**
+   * **正在等对象的那条 op**（`inter.kind === 'pending'`）。
+   *
+   * ⚠️ 这是 2026-10-05 自查补的，修的是一个**结构性卡死**：
+   * 工作台里发起二元操作（如 `semidirectProduct(N, H)`）⇒ 提示"去画布点 N"
+   * ⇒ **而画布节点全被工作台盖住**（工作台 `top≈380`、节点自动布局在 `y≈450`）
+   * ⇒ 点不动、pending 永远挂着。真机截图里 pending 条让用户"去画布点对象"，
+   * 而画布上一个节点都看不见。
+   *
+   * ⇒ 工作台必须**自己能把对象填进槽位**，不依赖画布。
+   */
+  pending?: { op: OpDef; picked: string[] } | null
+  /** 全部对象（槽位候选的来源）*/
+  objects: GalObject[]
+  /**
+   * 把某个对象**填进当前槽位** —— 直接复用画布点击那条路（`App.tsx#onNodeClick`）。
+   *
+   * 刻意不新写一套"填槽位"逻辑：点画布节点与点槽位候选**在语义上是同一件事**
+   * （"用这个对象"），各写一份必然分家（这个项目反复栽的"判据散多份"）。
+   */
+  onPick: (id: string) => void
   /**
    * **编辑器卡片开着吗**（映射 / 作用 / 运算表那三张）。
    *
@@ -70,7 +93,18 @@ export interface WorkbenchProps {
 /** 升起的最大高度（视口的百分之几）。CSS 里另有 `max-height` 兜底。 */
 const MAX_H_RATIO = 0.52
 
-export function Workbench({ open, onToggle, onRunOp, node, editorBusy, onExtract, viewportH }: WorkbenchProps) {
+export function Workbench({
+  open,
+  onToggle,
+  onRunOp,
+  node,
+  pending,
+  objects,
+  onPick,
+  editorBusy,
+  onExtract,
+  viewportH,
+}: WorkbenchProps) {
   /*
    * 哪几节摊开：**默认全摊**（这正是工作台与抽屉的差别 —— 抽屉默认全收）。
    * 用户可以点标题收掉某节；换对象时回到"全摊"。
@@ -125,7 +159,39 @@ export function Workbench({ open, onToggle, onRunOp, node, editorBusy, onExtract
    * 细节区自己按 `homeOf` 决定给不给内容；任务栏永远在。
    */
   const showDetail = !editorBusy && !!node && homeOf(node.value) === 'bench'
-  const hasContent = open && !!node
+  /*
+   * ⚠️ **`pending` 也算"有内容"**（T1）：槽位区不需要焦点对象 ——
+   * 用户很可能在空画布上先点操作、再选对象（这正是工作台该支持的方向）。
+   * 第一版只写了 `!!node` ⇒ pending 且无焦点时工作台**不升起**、槽位区看不见。
+   */
+  const hasContent = open && (!!node || !!pending)
+
+  /*
+   * **槽位候选**（T1，2026-10-05）。
+   *
+   * 判据用 `canPick` —— 与"画布上点节点"**同一个函数**（见 `App.tsx#pickableFor` 的
+   * 那段注释：`canPick` 复用的就是 `opsFor` 的匹配规则）。所以工作台列出的候选
+   * **与画布上高亮的可点节点完全一致**，不会出现"这里说能选、点下去报错"。
+   */
+  const slotIdx = pending ? pending.picked.length : 0
+  const pickedVals = useMemo<GalValue[]>(
+    () =>
+      pending
+        ? pending.picked
+            .map((id) => objects.find((o) => o.id === id)?.value)
+            .filter((v): v is GalValue => !!v)
+        : [],
+    [pending, objects],
+  )
+  const cands = useMemo(
+    () =>
+      pending
+        ? objects.filter(
+            (o) => !pending.picked.includes(o.id) && canPick(pending.op, slotIdx, pickedVals, o.value),
+          )
+        : [],
+    [pending, objects, slotIdx, pickedVals],
+  )
 
   /**
    * 按钮角标：这个操作要几个对象 / 是不是要填表。
@@ -219,6 +285,64 @@ export function Workbench({ open, onToggle, onRunOp, node, editorBusy, onExtract
                 <br />
                 填完提交，或者点它右上角的 x 取消 —— 左边这 7 类随时可以改主意。
               </p>
+            ) : pending ? (
+              /*
+               * **对象槽位**（T1）—— 工作台自己把参数对象凑齐，**不依赖画布**。
+               *
+               * 为什么必须有它（真机复现过）：工作台升起时 `top≈380`，
+               * 而画布节点自动布局在 `y≈450` ⇒ **全被盖住**。于是
+               * "点一条二元操作 → 按提示去画布点对象" 这条主路径**走不通**：
+               * pending 条让用户去画布点，画布上一个节点都看不见。
+               * ⇒ 槽位区就是那条路的工作台版本。
+               */
+              <div className="bench-slots">
+                <div className="bench-slot-head">
+                  正在选对象：<code>{pending.op.notation}</code>
+                  <span className="bench-slot-hint">（在下面点，不用去画布）</span>
+                </div>
+                <div className="bench-slot-list">
+                  {Array.from({ length: Math.max(maxObjectArity(pending.op), slotIdx) }).map((_, i) => {
+                    const id = pending.picked[i]
+                    const obj = id ? objects.find((o) => o.id === id) : null
+                    const p = pending.op.params[i]
+                    return (
+                      <div
+                        key={i}
+                        className={`bench-slot${obj ? ' filled' : i === slotIdx ? ' want' : ''}`}
+                      >
+                        <span className="bench-slot-n">{i + 1}</span>
+                        {obj ? (
+                          <>
+                            <span className="bench-slot-id">{obj.id}</span>
+                            <span className="bench-slot-def">{obj.def}</span>
+                          </>
+                        ) : (
+                          <span className="bench-slot-want">
+                            待选{p ? `：${p.name}（${PARAM_LABEL[p.type]}）` : ''}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                {cands.length === 0 ? (
+                  <p className="bench-blank">
+                    画布上还没有能填这一位的对象 —— 先造一个（左栏「目录」或输入球）。
+                  </p>
+                ) : (
+                  <>
+                    <div className="bench-cands-title">点一下填进第 {slotIdx + 1} 位：</div>
+                    <div className="bench-cands-list">
+                      {cands.map((o) => (
+                        <button key={o.id} className="bench-cand" onClick={() => onPick(o.id)}>
+                          <span className="bench-cand-id">{o.id}</span>
+                          <span className="bench-cand-def">{o.def}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             ) : !node ? (
               <p className="bench-blank">
                 左边 7 类操作，<b>点一条就能开始</b>，不用先选中什么。
@@ -251,8 +375,9 @@ export function Workbench({ open, onToggle, onRunOp, node, editorBusy, onExtract
                           <span className="info-sec-sum">
                             {struct.carrier.length > 0 ? `${struct.carrier.length} x ${struct.carrier.length}` : ''}
                           </span>
-                        ) : showGroup && (t.id === 'basic' || t.id === 'elements' || t.id === 'subgroups') ? (
-                          /* `sectionSummary` 的 id 窄成那三档（`axioms`/`table` 各有自己的摘要，
+                        ) : showGroup &&
+                          (t.id === 'basic' || t.id === 'elements' || t.id === 'conj' || t.id === 'subgroups') ? (
+                          /* `sectionSummary` 的 id 窄成那四档（`axioms`/`table` 各有自己的摘要，
                              上面两行已单独处理）—— 保持同样的窄化，不去改它的签名 */
                           <span className="info-sec-sum">{sectionSummary(t.id, showGroup, subCount)}</span>
                         ) : null}

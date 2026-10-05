@@ -1313,6 +1313,18 @@ export default function App() {
           dispatchOp(op, use ? [use] : [])
         }}
         node={busy ? null : focusedObj}
+        /*
+         * **槽位**（T1）—— pending 时工作台自己把参数对象凑齐。
+         *
+         * 真机复现过的卡死：工作台升起后画布节点全被盖住（`top≈380` vs 节点 `y≈450`），
+         * 于是"点一条二元操作 → 按提示去画布点对象"这条路走不通。
+         * ⇒ 槽位区列出候选，点一下就填。`onPick` 直接复用 `onNodeClick` ——
+         * **点槽位候选与点画布节点在语义上是同一件事**（"用这个对象"），
+         * 各写一份必然分家。
+         */
+        pending={inter.kind === 'pending' && pendOp ? { op: pendOp, picked: inter.picked } : null}
+        objects={objects}
+        onPick={onNodeClick}
         editorBusy={inter.kind === 'editor'}
         viewportH={canvasSize.h}
         onExtract={extractSubgroup}

@@ -19,7 +19,7 @@
  *
  * 判据（读 DOM 几何，不读截图）：
  *   ① 默认**全收**：三节都收起、零个 body、面板比 540 矮；
- *   ② 标题行**有摘要**：基本 `|G| = 24 - 非交换` · 元素 `24 个元素` · 子群 `7 类`；
+ *   ② 标题行**有摘要**：基本 `|G| = 24 - 非交换` · 元素 `24 个元素` · 共轭类 `5 类` · 子群 `7 类`；
  *   ③ 点「元素」**才**展开，且**单开**（其余自动收）；
  *   ④ 展开的元素表 24 行**一个不落**，由折叠区滚（表格不被压扁）；
  *   ⑤ 再点一次同一节 = **收起**（回全收）；
@@ -78,7 +78,7 @@ const GEO = () => {
     /* 折叠区（滚动容器）自己要不要滚 —— 与 U43 那条"`.etable-wrap` 恒不滚"不同，
        这一层是**真的会滚**的，所以它可以当判据 */
     accScroll: acc ? { c: acc.clientHeight, s: acc.scrollHeight, over: acc.scrollHeight > acc.clientHeight + 1 } : null,
-    /* 三节：展开没有 / 标题行摘要写了什么 */
+    /* 四节：展开没有 / 标题行摘要写了什么 */
     secs: [...body.querySelectorAll('.info-sec')].map((s) => ({
       id: s.dataset.sec,
       on: !!s.querySelector('.info-sec-head.on'),
@@ -161,8 +161,8 @@ await pickNode(page, nodes, 'G')
 const collapsed = await page.evaluate(GEO)
 ok('信息面板在（折叠分区结构就位）', !collapsed.err && collapsed.brief && collapsed.acc, JSON.stringify(collapsed))
 ok(
-  '默认全收：三节都收起、一个 body 都没渲染',
-  collapsed.secs.length === 3 && collapsed.secs.every((s) => !s.on) && collapsed.openBodies === 0,
+  '默认全收：四节都收起、一个 body 都没渲染',
+  collapsed.secs.length === 4 && collapsed.secs.every((s) => !s.on) && collapsed.openBodies === 0,
   JSON.stringify(collapsed.secs),
 )
 ok(
@@ -171,14 +171,15 @@ ok(
   `bodyH=${collapsed.bodyH}`,
 )
 ok(
-  '三个标题行都在面板里（点得中）',
-  collapsed.heads.length === 3 && collapsed.heads.every((h) => h.inBody),
+  '四个标题行都在面板里（点得中）—— 基本/元素/共轭类/子群',
+  collapsed.heads.length === 4 && collapsed.heads.every((h) => h.inBody),
   JSON.stringify(collapsed.heads),
 )
 ok(
-  '标题行带摘要：基本 = 阶 + 交换性 / 元素 = 个数 / 子群 = 同构类数',
+  '标题行带摘要：基本 = 阶 + 交换性 / 元素 = 个数 / 共轭类 = 类数 / 子群 = 同构类数',
   collapsed.secs.find((s) => s.id === 'basic')?.sum === '|G| = 24 - 非交换' &&
     collapsed.secs.find((s) => s.id === 'elements')?.sum === '24 个元素' &&
+    collapsed.secs.find((s) => s.id === 'conj')?.sum === '5 类' &&
     collapsed.secs.find((s) => s.id === 'subgroups')?.sum === '7 类',
   JSON.stringify(collapsed.secs.map((s) => `${s.id}:${s.sum}`)),
 )

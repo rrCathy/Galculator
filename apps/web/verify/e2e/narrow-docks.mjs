@@ -94,7 +94,10 @@ const hit = await page.evaluate(() => {
 ok('画布上的对象点得中（没被证明面板挡住）', hit?.hitId === 'G', JSON.stringify(hit))
 await page.mouse.click(hit.x, hit.y)
 await page.waitForTimeout(500)
-ok('点完之后信息面板起来了', (await page.locator('.info-sec-head').count()) === 3)
+// ⚠️ T3（2026-10-05）加了「共轭类」一节 ⇒ 3 节变 4 节。
+// 这条**数节数**是有意的：它守的是"信息面板真的渲染出来了"，
+// 所以节数变了要跟着改，而不是改成 `>= 3`（那样面板半坏也过得去）。
+ok('点完之后信息面板起来了（4 节：基本/元素/共轭类/子群）', (await page.locator('.info-sec-head').count()) === 4)
 
 /* ── ③ 信息面板的三个折叠标题都点得动（U45 起 tab 条改手风琴）──── */
 const tabsHit = await page.evaluate(() =>
@@ -105,8 +108,8 @@ const tabsHit = await page.evaluate(() =>
   }),
 )
 ok(
-  '三个折叠标题都点得中（没被证明面板盖住）',
-  tabsHit.length === 3 && tabsHit.every((t) => t.reachable),
+  '四个折叠标题都点得中（没被证明面板盖住）',
+  tabsHit.length === 4 && tabsHit.every((t) => t.reachable),
   JSON.stringify(tabsHit),
 )
 

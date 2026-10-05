@@ -28,16 +28,28 @@ import { isKnownGroup, knownFacts, knownGroupInfo } from '../gal/known'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
 import { subgroupClassCount, SUB_COUNT_CAP } from './infoHelpers'
+// 共轭类（T3，2026-10-05）：数据层**复用**元素表那份（`buildElementTable`）——
+// 同一群在「元素」节看到的 classIndex/classSize 与「共轭类」节必须完全一致
+import { buildConjugacyRows, buildElementTable, conjugacyClassCount } from '../gal/summary'
 import { DockPanel } from './DockPanel'
 import type { GalEdge, GalObject, StructuralEdge } from '../gal/types'
 
 const ENUM_CAP = 144
 
-export type InfoTab = 'basic' | 'elements' | 'subgroups' | 'axioms' | 'table'
+export type InfoTab = 'basic' | 'elements' | 'conj' | 'subgroups' | 'axioms' | 'table'
 
 export const INFO_SECTIONS: { id: InfoTab; label: string }[] = [
   { id: 'basic', label: '基本' },
   { id: 'elements', label: '元素' },
+  /*
+   * 「共轭类」（T3，2026-10-05）：紧跟在「元素」后面 —— 它就是**元素的划分**。
+   *
+   * ⚠️ 用户原话点名过：「工作台是专门处理单个或少量对象之间较为细致的结构的地方，
+   * 比如从集合添加结构得到群、群同态、群作用、半直积、自同构、**共轭类**等等」。
+   * 而自查实测：工作台 36 个按钮 / 7 个族里**含"共轭"的 0 个**。
+   * 共轭类是"元素的划分"、不是一条 op ⇒ 它该落在**细节区的一节**，不是任务栏一个按钮。
+   */
+  { id: 'conj', label: '共轭类' },
   { id: 'subgroups', label: '子群' },
 ]
 
@@ -369,6 +381,74 @@ function EdgeSection({ edge }: { edge: { edge: GalEdge; info: StructuralEdge } }
  *
  * ⚠️ **类名一字不改**（`.insp-*` / `.etable` / `.info-*`）—— 50+ 条走查按它们定位。
  */
+/**
+ * 「共轭类」一节（T3，2026-10-05）。
+ *
+ * ## 为什么加这一节
+ *
+ * 用户原话点名过：「工作台是专门处理单个或少量对象之间较为细致的结构的地方，
+ * 比如…**共轭类**等等」。而自查实测：工作台 36 个按钮 / 7 个族里**含"共轭"的 0 个**
+ * —— 只有一个 `conjAction(G)`（那是"造一个共轭作用**对象**"，不是"看共轭类"）。
+ *
+ * 共轭类是"元素的划分"，**不是一条 op** ⇒ 它落在细节区的一节，不是任务栏一个按钮。
+ * 这也正是工作台右栏存在的意义（P1-2 定的：任务栏是入口、细节区是"坐下来看"）。
+ *
+ * ## 数据层只写一份
+ *
+ * 复用 `gal/summary.ts` 的 `buildConjugacyRows` —— 与「元素」节那个 `buildElementTable`
+ * **共用同一个 `ENUM_CAP` 守卫与同一个 `getConjugacyClasses`**。各算一份必然分家
+ *（这个项目反复栽的"判据散多份"）。
+ */
+function ConjugacyTab({ group }: { group: Group }) {
+  const rows = useMemo(() => buildConjugacyRows(group), [group])
+
+  if (isKnownGroup(group)) {
+    return <div className="insp-line dim">已知群没有元素表，共轭类无从枚举</div>
+  }
+  if (!rows) {
+    return (
+      <div className="insp-line dim">
+        |G| = {group.order} 超过枚举上限（{ENUM_CAP}），共轭类未枚举（守卫，不硬算）
+      </div>
+    )
+  }
+  return (
+    <div className="conj">
+      {/* 类方程：|G| = 各类大小之和 —— 手算能直接对账的那一行 */}
+      <div className="conj-eq">
+        <Tex tex={`|G| = ${group.order} = ${rows.map((r) => r.size).join(' + ')}`} />
+        <span className="conj-eq-note">共 {rows.length} 类</span>
+      </div>
+      <table className="conj-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>代表元</th>
+            <th>类大小</th>
+            <th>中心化子</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.index}>
+              <td className="dim">{r.index}</td>
+              <td>
+                <TexOrText text={prettySymbol(r.rep.label)} />
+              </td>
+              <td>{r.size}</td>
+              <td>{r.centralizerOrder}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {/* 一句话点出这张表的来源：每一行都满足 类大小 x 中心化子阶 = |G| */}
+      <div className="conj-note">
+        每行都满足「类大小 x 中心化子阶 = |G| = {group.order}」（轨道-稳定子定理）
+      </div>
+    </div>
+  )
+}
+
 export function SectionBody({
   section,
   group,
@@ -389,6 +469,7 @@ export function SectionBody({
 }) {
   if (section === 'basic' && group && node) return <BasicTab group={group} node={node} />
   if (section === 'elements' && group) return <ElementsTable group={group} />
+  if (section === 'conj' && group) return <ConjugacyTab group={group} />
   if (section === 'subgroups' && group) return <SubgroupsTab group={group} />
   if (section === 'axioms' && struct) return <AxiomArchive structure={struct} />
   if (section === 'table' && struct) return <StructureTable structure={struct} />
@@ -1419,7 +1500,7 @@ function OtherTab({
  *  `Workbench` 复用同一函数 —— 两处显示同一个对象，摘要不许不一样。
  */
 export function sectionSummary(
-  id: 'basic' | 'elements' | 'subgroups',
+  id: 'basic' | 'elements' | 'conj' | 'subgroups',
   group: Group,
   subCount: number | null,
 ): string {
@@ -1433,6 +1514,8 @@ export function sectionSummary(
         return `|G| = ${group.order} - 已知群（无元素表）`
       case 'elements':
         return '无元素表'
+      case 'conj':
+        return '无元素表'
       case 'subgroups':
         return ''
     }
@@ -1442,6 +1525,13 @@ export function sectionSummary(
       return `|G| = ${group.order} - ${group.isAbelian ? '交换' : '非交换'}`
     case 'elements':
       return `${group.order} 个元素`
+    case 'conj':
+      /*
+       * 共轭类数 —— 走同一个 `buildElementTable`（`capped` 时不硬算）。
+       * ⚠️ 不复用 `subCount`：那是**子群**的类数，与共轭类不是一回事
+       *（`S_4`：子群 7 类、共轭类 5 类 —— 混用就是撒谎）。
+       */
+      return conjugacyClassCount(group)
     case 'subgroups':
       return subCount === null ? '' : `${subCount} 类`
   }

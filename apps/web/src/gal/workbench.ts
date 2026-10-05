@@ -30,11 +30,12 @@ import { takesCanvasObject } from './ops'
  *    **互不重叠**。加了新 op 却没归类 ⇒ 加载即抛，而不是"悄悄出现在没人看得见的地方"。
  * ② **不许重**：一条 op 只出现在一族里（用户点得到的位置唯一）。
  *
- * ## 排除名单：8 条刻意**不进**工作台
+ * ## 排除名单：11 条刻意**不进**工作台
  *
  * | 排除 | 为什么 |
  * |---|---|
  * | `pointSet` / `labeledSet` / `smallGroup` | 实参**全是标量**、一个对象都不吃 ⇒ 它们是「**凭空造**」。分工上属「目录」（U56 就是为它们建的），工作台是"处理已有对象之间的细致结构"，两者不是一件事 |
+ * | `contains` / `isomorphism` | **用户 2026-10-05 拍板**：这两个是「**两个对象之间的关系**」（产出 `relation`，画布上落成一条可点的边），按三区定义属**画布**（"画布是用来处理多个对象之间关系的地方"）。入口在 ⊕ 球菜单（`multiOps` 16 条里含这两个）与拖拽连线 |
  * | `factorize` / `binomial` / `binomialMod` / `gcd` / `lcm` / `eulerPhi` | 纯整数算术，与群论无关；U47 定过"计算先不弄"，有输入球与数值区就够 |
  *
  * ⚠️ 这条排除**是判断不是事实**。若哪天用户要"在工作台里随手算个数"，
@@ -114,12 +115,6 @@ export const BENCH_FAMILIES: BenchFamily[] = [
     hint: '两批元素凑一起看（结果若是子群会升级成群对象）',
     ops: ['intersection', 'union', 'difference', 'productSet', 'underlyingSet'],
   },
-  {
-    key: 'rel',
-    label: '关系',
-    hint: '声明"谁是谁的子群 / 同构"，画布上落成一条可点的边',
-    ops: ['contains', 'isomorphism'],
-  },
 ]
 
 /** 刻意**不进**工作台的 op —— 见模块头的排除表。 */
@@ -127,6 +122,8 @@ export const BENCH_EXCLUDED: Record<string, string> = {
   pointSet: '凭空造点集：实参全是标量，一个对象都不吃，属「目录」（U56）',
   labeledSet: '凭空造点集：同 pointSet',
   smallGroup: '从库里挑群：属「目录」（U56）',
+  contains: '两个对象之间的关系（产出 relation）⇒ 属画布；入口在 ⊕ 球菜单与拖拽',
+  isomorphism: '两个对象之间的关系（产出 relation）⇒ 属画布；入口在 ⊕ 球菜单与拖拽',
   factorize: '纯整数算术（U47「计算先不弄」）',
   binomial: '纯整数算术',
   binomialMod: '纯整数算术',

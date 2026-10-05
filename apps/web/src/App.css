@@ -3433,3 +3433,216 @@ body {
 .bench-detail.busy {
   flex: 0 0 auto;
 }
+
+/* ── 工作台对象槽位（T1，2026-10-05）────────────────────────────
+ *
+ * 修的是真机复现过的卡死：工作台升起后 `top≈380`，画布节点自动布局在 `y≈450`
+ * ⇒ **全被盖住**，而 pending 条还让用户"去画布点对象"。槽位区是那条路的工作台版本。
+ *
+ * 三块：头（在做哪条 op）/ 槽位（已填 · 待填）/ 候选（点一下就填）。
+ */
+
+.bench-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.bench-slot-head {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.bench-slot-head code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f3f1ea;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+/* 「不用去画布」这句是**刻意**的：用户刚发现画布点不动，得明确告诉他这条路存在 */
+.bench-slot-hint {
+  margin-left: 6px;
+  color: var(--purple-text);
+  font-size: 11.5px;
+}
+
+.bench-slot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bench-slot {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: #faf9f5;
+  font-size: 12px;
+}
+
+/* 已填：实边框 + 白底（与"待填"一眼分得开）*/
+.bench-slot.filled {
+  border-style: solid;
+  border-color: var(--border-strong);
+  background: #fff;
+}
+
+/* 正等着填的那一位：紫色实边框（与任务按钮 `.bench-op.ed` 同一个视觉语言）*/
+.bench-slot.want {
+  border-style: solid;
+  border-color: var(--purple-text);
+  background: var(--purple-fill);
+}
+
+.bench-slot-n {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.bench-slot.filled .bench-slot-n {
+  background: var(--purple-text);
+  color: #fff;
+}
+
+.bench-slot-id {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.bench-slot-def {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bench-slot-want {
+  color: var(--purple-text);
+  font-size: 11.5px;
+}
+
+.bench-cands-title {
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.bench-cands-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.bench-cand {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.bench-cand:hover {
+  border-color: var(--purple-text);
+  background: var(--purple-fill);
+}
+
+.bench-cand-id {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.bench-cand-def {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 「共轭类」一节（T3，2026-10-05）────────────────────────────
+ *
+ * 用户点名要的「共轭类」落在这里（细节区的一节，不是任务栏一个按钮 ——
+ * 它是"元素的划分"，不是一条 op）。
+ * 排版照 `.etable`（元素表）那一族走：同类东西看着得像同一家的。
+ */
+
+.conj {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 类方程那一行：|G| = 1 + 3 + 6 + 6 + 8 —— 手算能直接对账 */
+.conj-eq {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f3f1ea;
+  font-size: 12.5px;
+}
+
+.conj-eq-note {
+  margin-left: auto;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.conj-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.conj-table th {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+  font-weight: 400;
+  font-size: 11px;
+  text-align: left;
+}
+
+.conj-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #f0eee7;
+}
+
+.conj-table td.dim {
+  color: var(--text-faint);
+  font-family: var(--mono);
+}
+
+.conj-note {
+  color: var(--text-faint);
+  font-size: 11px;
+}

@@ -66,15 +66,48 @@ const addLine = async (name, expr) => {
   await page.waitForTimeout(420)
 }
 
+/**
+ * 点画布上的节点 —— **必须用真实鼠标**（`page.mouse.click`），不能用
+ * `dispatchEvent(new MouseEvent('click'))`。
+ *
+ * ⚠️ 2026-10-05 自查抓到的系统性缺陷：**合成事件绕过命中测试**。
+ * 工作台升起时 `top≈380`，而画布节点自动布局在 `y≈450` ⇒ **全被盖住**，
+ * 真实用户点不到；可 `dispatchEvent` 直接派发到元素上，照样"成功"。
+ * ⇒ 当时 36 套走查里 17 套、50 处用合成点击，**这类遮挡 bug 系统性测不出来**。
+ * 本套改成真实鼠标之后，凡是"被盖住却以为点到了"的断言会当场红。
+ */
+/**
+ * 点槽位候选（真实鼠标）—— T1 加的对象槽位。
+ * 这是"**完全不用碰画布**"那条路的验证入口。
+ */
+const clickCand = async (idx) => {
+  const pt = await page.evaluate((i) => {
+    const el = document.querySelectorAll('.bench-cand')[i]
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  }, idx)
+  if (!pt) return false
+  await page.mouse.click(pt.x, pt.y)
+  await page.waitForTimeout(650)
+  return true
+}
+
 const clickNode = async (id) => {
-  const done = await page.evaluate((nid) => {
+  const pt = await page.evaluate((nid) => {
     const el = document.querySelector(`svg.canvas g.gnode[data-id="${nid}"] .gnode-hit`)
-    if (!el) return false
-    el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    return true
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const x = r.left + r.width / 2
+    const y = r.top + r.height / 2
+    /* 顺手报一下"这个点最上层是谁" —— 失败时能一眼看出被谁挡了 */
+    const top = document.elementFromPoint(x, y)
+    return { x, y, blocker: top?.closest?.('.bench') ? 'bench' : top?.closest?.('.gnode') ? 'node' : (top?.tagName ?? '?') }
   }, id)
+  if (!pt) return false
+  await page.mouse.click(pt.x, pt.y)
   await page.waitForTimeout(480)
-  return done
+  return true
 }
 
 /** 工作台的盒子与状态（一次读完）*/
@@ -197,8 +230,8 @@ console.log('\n== 场景 3：内容 ==')
 {
   const b = await bench()
   const t = b?.text ?? ''
-  ok('列出了三节（基本 / 元素 / 子群）',
-    JSON.stringify(b?.heads) === JSON.stringify(['基本', '元素', '子群']), JSON.stringify(b?.heads))
+  ok('列出了四节（基本 / 元素 / 共轭类 / 子群）',
+    JSON.stringify(b?.heads) === JSON.stringify(['基本', '元素', '共轭类', '子群']), JSON.stringify(b?.heads))
   ok('元素表在场', (b?.tables ?? 0) >= 1, `tables=${b?.tables}`)
 
   // 手算：|S_4| = 24 = 2^3 * 3
@@ -337,9 +370,15 @@ console.log('\n== 场景 6：任务栏（不选对象也能用）==')
       n: Number(x.querySelector('.bench-fam-n')?.textContent?.trim() ?? '0'),
     })),
   )
-  ok('7 族全在场', fams.length === 7, JSON.stringify(fams.map((f) => f.label)))
+  /*
+   * ⚠️ **6 族 / 34 条**（2026-10-05 改动，不是回归）：用户拍板把
+   * `contains` / `isomorphism`（"两个对象之间的关系"）**移出工作台、归画布**
+   * —— 按三区定义"画布是用来处理多个对象之间关系的地方"。
+   * 入口仍在 ⊕ 球菜单（`multiOps` 16 条里含这两个）。
+   */
+  ok('6 族全在场', fams.length === 6, JSON.stringify(fams.map((f) => f.label)))
   const totalOps = fams.reduce((s2, f) => s2 + f.n, 0)
-  ok('按钮总数 36（族头那个数字是真数，不是装饰）', totalOps === 36, `sum=${totalOps}`)
+  ok('按钮总数 34（族头那个数字是真数，不是装饰）', totalOps === 34, `sum=${totalOps}`)
   const labels = fams.map((f) => f.label).join(' / ')
   ok('用户点名的都在里面（加结构 · 群与分解 · 作用与轨道 · 映射的核与像）',
     /结构 \/ 映射 \/ 作用/.test(labels) && /群与分解/.test(labels) &&
@@ -384,12 +423,22 @@ console.log('\n== 场景 6：任务栏（不选对象也能用）==')
   ok('pending 说清下一位要什么（群，第 1 / 1 个对象）',
     /选择/.test(pend.hint) && /1 \/ 1/.test(pend.hint) && /群/.test(pend.hint), pend.hint)
 
-  // ③ 按提示去点一个群 ⇒ 真算出来（手算：Z(S_4) = C_1，阶 1）
+  /*
+   * ③ 凑齐参数 —— **用槽位，不碰画布**（T1）。
+   *
+   * ⚠️ 这里从前写的是 `clickNode('G')`（点画布），而 `clickNode` 用的是合成事件
+   * ⇒ 它**掩盖了真 bug**：工作台升起时画布节点全被盖住，真实用户点不到。
+   * 改成真实鼠标后这条当场红（实测「点完只看到 G」，Z(G) 一直没算出来）。
+   * ⇒ 场景重写成走**槽位**这条路 —— 这才是"不选对象也能用"的真实含义。
+   */
   await addLine('G', 'S_4')
-  await page.waitForTimeout(350)
-  await clickNode('G')
-  await page.waitForTimeout(800)
-  ok('按提示点一个群就真算出来（画布上多了一个对象）',
+  await page.waitForTimeout(400)
+  ok('pending 时工作台出现槽位区（不用去画布）', (await page.locator('.bench-slots').count()) === 1)
+  ok('槽位列出了刚造的 G 当候选', (await page.locator('.bench-cand').count()) >= 1,
+    await page.evaluate(() => [...document.querySelectorAll('.bench-cand')].map((x) => x.textContent.replace(/\s+/g, ' ').trim()).join(' | ')))
+  ok('点槽位候选（真实鼠标）', await clickCand(0))
+  await page.waitForTimeout(700)
+  ok('按槽位选完就真算出来（画布上多了一个对象）',
     (await page.locator('svg.canvas g.gnode').count()) >= 2,
     await page.evaluate(() => [...document.querySelectorAll('svg.canvas g.gnode')].map((g) => g.dataset.id).join(' ')))
   ok('pending 自动收了', (await page.locator('.pending-bar').count()) === 0)
@@ -397,12 +446,14 @@ console.log('\n== 场景 6：任务栏（不选对象也能用）==')
   // ③' 有焦点时点「给这个集合加结构」⇒ 编辑器直接开、**带上那个集合**
   await page.evaluate(() => document.querySelector('.pending-x, .pending-bar .icon-x')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
   await addLine('P', 'labeledSet(a, b, c)')
-  await page.waitForTimeout(350)
-  await clickNode('P')
-  await page.waitForTimeout(500)
+  await page.waitForTimeout(400)
   ok('展开「结构 / 映射 / 作用」', await clickFam('结构 / 映射 / 作用'))
   await page.waitForTimeout(400)
   ok('点「structure(P, table)」', await clickOp('structure(P, table)'))
+  await page.waitForTimeout(700)
+  /* 它要一个载体 ⇒ 走槽位选那个集合（同样不碰画布）*/
+  ok('结构 op 也要槽位（载体）', (await page.locator('.bench-slots').count()) === 1)
+  ok('点槽位候选把 labeledSet 填进去', await clickCand(0))
   await page.waitForTimeout(800)
   const ed = await page.evaluate(() => ({
     open: !!document.querySelector('.struct-builder'),
@@ -417,12 +468,103 @@ console.log('\n== 场景 6：任务栏（不选对象也能用）==')
     /labeledSet/.test(ed.head), ed.head.slice(0, 60))
   ok('表已铺好（3 x 3 = 9 格，手算：载体 3 个元素）', ed.cells === 9, `cells=${ed.cells}`)
   ok('编辑器开着时细节区让位（否则两者贴底重叠）', ed.detailBusy)
-  ok('任务栏仍在（改主意不必先关编辑器）', ed.famsStillThere === 7, `fams=${ed.famsStillThere}`)
+  ok('任务栏仍在（改主意不必先关编辑器）', ed.famsStillThere === 6, `fams=${ed.famsStillThere}`)
 
   // 收工：关掉编辑器
   await page.evaluate(() => document.querySelector('.map-builder .mb-x')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
   await page.waitForTimeout(500)
   ok('x 关得掉', (await page.locator('.map-builder').count()) === 0)
+  ok('全程零 console 错误', logs.length === 0, logs.slice(0, 2).join(' | '))
+}
+
+/* ══ 场景 7：共轭类（T3）+ 关系 op 归画布（T2）═════════════════
+ *
+ * 两条都是 2026-10-05 自查后按用户原话补的：
+ *   · 「共轭类」被点名要，而工作台里**一个含"共轭"的按钮都没有** ⇒ 补成细节区一节；
+ *   · `contains` / `isomorphism` 是"两个对象之间的关系" ⇒ 按"画布处理多对象关系"
+ *     的定义**移出工作台**（入口仍在 ⊕ 球菜单）。
+ */
+
+console.log('\n== 场景 7：共轭类 + 关系 op 归画布 ==')
+{
+  await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
+  await page.waitForTimeout(1500)
+  await addLine('G', 'S_4')
+  await page.waitForTimeout(400)
+  await clickNode('G') // 此刻工作台收起 ⇒ 真实鼠标点得到
+  await page.waitForTimeout(500)
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(700)
+
+  // ① 「共轭类」是细节区的一节（不是任务栏一个按钮）
+  const heads = await page.evaluate(() =>
+    [...document.querySelectorAll('.bench-detail .info-sec-label')].map((x) => x.textContent.trim()),
+  )
+  ok('细节区有「共轭类」一节', heads.includes('共轭类'), JSON.stringify(heads))
+  ok('它紧跟在「元素」后面（共轭类是元素的划分）',
+    heads.indexOf('共轭类') === heads.indexOf('元素') + 1, JSON.stringify(heads))
+  ok('摘要写着 5 类（手算：S_4 有 5 个共轭类）',
+    (await page.evaluate(() => {
+      const h = [...document.querySelectorAll('.bench-detail .info-sec-head')].find(
+        (x) => x.querySelector('.info-sec-label')?.textContent.trim() === '共轭类',
+      )
+      return h?.querySelector('.info-sec-sum')?.textContent?.trim() ?? ''
+    })) === '5 类',
+    await page.evaluate(() => {
+      const h = [...document.querySelectorAll('.bench-detail .info-sec-head')].find(
+        (x) => x.querySelector('.info-sec-label')?.textContent.trim() === '共轭类',
+      )
+      return h?.querySelector('.info-sec-sum')?.textContent ?? ''
+    }))
+
+  /*
+   * ② 类方程 + 逐行读数（手算：1 + 6 + 8 + 3 + 6 = 24）
+   *
+   * ⚠️ **不要点那枚「收起」**：工作台的节**默认是展开的**（与左上 InfoDock 默认全收相反，
+   * 那是 P1 定死的姿态）⇒ 点一下反而把它收起来了。
+   * 第一版写了这点，rows 拿到 `[]`，红 3 条。
+   */
+  if ((await page.locator('.conj-table').count()) === 0) {
+    /* 兜底：万一被前一步收起来了，点一次展开 */
+    await page.evaluate(() => {
+      const h = [...document.querySelectorAll('.bench-detail .info-sec-head')].find(
+        (x) => x.querySelector('.info-sec-label')?.textContent.trim() === '共轭类',
+      )
+      h?.querySelector('.bench-sec')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await page.waitForTimeout(500)
+  }
+  const rows = await page.evaluate(() =>
+    [...document.querySelectorAll('.conj-table tbody tr')].map((r) =>
+      [...r.querySelectorAll('td')].map((c) => c.textContent.trim()),
+    ),
+  )
+  ok('共轭类表 5 行（手算 5 类）', rows.length === 5, JSON.stringify(rows.map((r) => r[1])))
+  ok('类大小集合 = {8,6,6,3,1}（手算 S_4 的类方程）',
+    JSON.stringify(rows.map((r) => Number(r[2])).sort((a, b) => a - b)) === JSON.stringify([1, 3, 6, 6, 8]),
+    JSON.stringify(rows.map((r) => r[2])))
+  ok('每行都满足「类大小 x 中心化子阶 = 24」（轨道-稳定子）',
+    rows.every((r) => Number(r[2]) * Number(r[3]) === 24),
+    JSON.stringify(rows.map((r) => r[2] + 'x' + r[3])))
+  ok('画布上有共轭类节的脚注（说明这条对账关系）',
+    /轨道-稳定子/.test(await page.evaluate(() => document.querySelector('.conj-note')?.textContent ?? '')))
+
+  // ③ 关系 op 不在工作台（T2）
+  for (const f of ['结构 / 映射 / 作用', '群与分解', '子群与正规性', '作用与轨道', '映射的核与像', '集合运算']) {
+    await page.evaluate((x) => {
+      const b = [...document.querySelectorAll('.bench-fam-head')].find(
+        (e) => e.querySelector('.bench-fam-label')?.textContent === x,
+      )
+      if (b && !b.closest('.bench-fam').className.includes('open')) b.click()
+    }, f)
+    await page.waitForTimeout(200)
+  }
+  const opNames = await page.evaluate(() =>
+    [...document.querySelectorAll('.bench-op-name')].map((x) => x.textContent.trim()),
+  )
+  ok('工作台里**没有** contains（它归画布）', !opNames.some((n) => /contains/.test(n)), JSON.stringify(opNames.length))
+  ok('工作台里**没有** isomorphism（它归画布）', !opNames.some((n) => /isomorphism/.test(n)))
+  ok('也没有「关系」这一族了', (await page.locator('.bench-fam').count()) === 6)
   ok('全程零 console 错误', logs.length === 0, logs.slice(0, 2).join(' | '))
 }
 
