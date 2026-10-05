@@ -14,11 +14,18 @@ Desmos 把函数变成曲线，这里把群论计算变成交换图。
 
 ## 定位
 
-| 参照 | 借什么 |
+**群论计算器，不是又一个群论可视化工具。**它回答的是"这个群论问题**算出来是什么**"；
+画布是计算的**操作台**，不是输出端口 —— 你在图上点对象、选运算，运算本身变成图的一部分。
+
+| 参照 | 关系 |
 |---|---|
-| Desmos / GeoGebra | 交互的即时反馈。**但画布的角色相反**：它们是输出，这里的画布是操作台 |
-| Group Explorer | 群论可视化的约定（凯莱图 / 群作用 / 乘法表） |
+| Desmos / GeoGebra | 借它的"交互的即时反馈"。**但画布的角色相反**：它们是输出，这里的画布是操作台 |
+| Group Explorer | **不是同一件事**：它把群**画**出来（凯莱图 / 乘法表），这里把群论**算**出来；它的可视化约定只在"需要展示某个产物"时作参照 |
 | Lean / Coq | **不碰**。形式化证明是另一件事；这里做的是演示性证明 —— 模板人工写，机器在具体群上实例化并画出来 |
+
+因此：**引擎（`@groupviz/react`）的 10 个可视化 Scene 一个都不接**（U51 定案）——
+只复用 `@groupviz/core`（纯算法层）作计算内核的底座。完整方向定案见
+[docs/ROADMAP.md](docs/ROADMAP.md) 开头的「定位」。
 
 目标场景：**用群作用证明 Sylow 定理**，一步步走完，画布跟着长出证明图。
 
@@ -111,10 +118,10 @@ apps/web/                Vite + React 19 + TypeScript（pnpm monorepo）
     pretty.ts / tex.ts   记号归一（全 ASCII）与 LaTeX 渲染
   src/ui/                画布与面板：CanvasView（SVG 交换图）/ 三个抽屉 / 输入球与悬浮球 / 证明面板 / 映射构建器
   verify/                回归线（入库，是资产不是临时物）
-    suites/              语义层断言（16 组，纯逻辑）
-    e2e/                 真浏览器几何走查（24 套，读 DOM 坐标与 marker）
+    suites/              语义层断言（25 组，纯逻辑）
+    e2e/                 真浏览器几何走查（32 套，读 DOM 坐标与 marker）
     README.md            跑法、约定与写断言时的坑
-docs/                    架构 / 交互 / 图规范 / 证明规范 / 可用性审计 / 规划
+docs/                    规范（架构 / 交互 / 图 / 证明）· 核对（清单 / 可用性）· 账本（HISTORY）· 规划（ROADMAP）
 ```
 
 ## 验证
@@ -126,7 +133,7 @@ pnpm dev                                  # 另开一个终端起 dev server
 pnpm --filter @galculator/web verify:e2e  # 真浏览器走查：几何、marker、命中测试
 ```
 
-当前 **1526 条语义断言 + 715 条走查断言（24 套）全绿**。
+当前 **2327 条语义断言 + 1111 条走查断言（32 套）全绿**。
 约定：期望值一律来自**手算**的数学值，不从运行结果里抄。跑法细节见 [apps/web/verify/README.md](apps/web/verify/README.md)。
 
 ## 文档
@@ -138,15 +145,16 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器走查：几何、marker
 | [docs/DIAGRAM_SPEC.md](docs/DIAGRAM_SPEC.md) | 交换图规范：六条硬规范 / 什么对象适合上画布 |
 | [docs/PROOF_SPEC.md](docs/PROOF_SPEC.md) | Proof Spec：模板 schema 与落地形态 |
 | [docs/TASKS.md](docs/TASKS.md) | 群论常见计算 / 证明清单：每行给可粘贴的输入 + 实测结果（输入视角） |
-| [docs/USABILITY.md](docs/USABILITY.md) | 可用性审计（动作视角）：用户会怎么做、那条路通不通 + 逐批修复账 |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | 规划与逐批落地账（U0–U42）· 里程碑 M0–M4 |
+| [docs/USABILITY.md](docs/USABILITY.md) | 可用性审计（动作视角）：用户会怎么做、那条路通不通 |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | **定位与方向定案（计算器，不是可视化工具）** · 技术栈 · 里程碑与批次索引 · 当前规划 |
+| [docs/HISTORY.md](docs/HISTORY.md) | **账本**：U0–U58 逐批叙述 · 批次总表 · 每次反馈的查证与修复（很长，按需检索）|
 | [docs/archive/](docs/archive/) | 已完成使命的历史文档 |
 
 ## 状态与边界
 
-**已落地**：U0–U54 的界面与交互迭代、M0–M3 里程碑（含 5 条定理模板逐步演示）。逐批的取舍与验收账在 [docs/ROADMAP.md](docs/ROADMAP.md) 与 [docs/USABILITY.md](docs/USABILITY.md)，本文件不复述。
+**已落地**：U0–U58 的界面与交互迭代、M0–M3 里程碑（含 5 条定理模板逐步演示）。逐批的取舍与验收账在 [docs/HISTORY.md](docs/HISTORY.md)，本文件不复述。
 
-**还没有的**：Cayley 定理的模板（缺「忠实作用 ⇒ 嵌入」在图上的落点）· 集合的**描述式**构造（分面表格 + 属性谓词 `{x in A_4 : x^2 = e}`；凭空造点集已经有了）· 宏 · 工具条与群目录 · 后端计算栈（GAP 推迟，目前全靠 `@groupviz/core` 的前端原语）。
+**还没有的**：Cayley 定理的模板（缺「忠实作用 ⇒ 嵌入」在图上的落点）· 集合的**描述式**构造（分面表格 + 属性谓词 `{x in A_4 : x^2 = e}`；凭空造点集与导入 1–31 阶小群表已经有了）· 宏 · 后端计算栈（GAP 推迟，目前全靠 `@groupviz/core` 的前端原语）。
 
 **已知边界**（有意为之，不是待修的 bug）：
 
@@ -156,5 +164,5 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器走查：几何、marker
 
 ## 依赖
 
-`@groupviz/core` + `@groupviz/react` **v2.3.0**（npm 包，锁定版本）· React 19 · Vite · KaTeX。
-引擎由 [rrCathy/GroupViz](https://github.com/rrCathy/GroupViz) 提供；本仓库是它的应用层。
+`@groupviz/core` **v2.3.0**（npm 包，锁定版本，纯算法层）· React 19 · Vite · KaTeX。
+引擎由 [rrCathy/GroupViz](https://github.com/rrCathy/GroupViz) 提供，本仓库**只复用它的算法层**（`@groupviz/core`）；它的可视化层（`@groupviz/react` 的 10 个 Scene）**不接** —— 见「定位」。

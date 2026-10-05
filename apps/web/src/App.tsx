@@ -36,6 +36,8 @@ import { ComposerOrb } from './ui/ComposerOrb'
 import { MapBuilder } from './ui/MapBuilder'
 // 作用编辑器（U52）：点住一个群就能填「它作用在 n 个点上」的像
 import { ActionBuilder } from './ui/ActionBuilder'
+// 结构编辑器（S2a）：给一个集合配一张乘法表，实时算它到哪一级
+import { StructureBuilder } from './ui/StructureBuilder'
 import type { CanvasNode } from './gal/types'
 import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
@@ -792,6 +794,55 @@ export default function App() {
     setInter({ kind: 'pending', opId: op.id, picked: [], presetOmega: setId })
   }, [])
 
+  /**
+   * 「给它一个运算」（S2b）：**从集合节点那头**起一个结构编辑器。
+   *
+   * 与 `startActionOnSet` 同一个位置、同一条理由：集合本身没有"单对象操作"的死角
+   * 由一个**界面起的头**补上。区别在终点 —— 那边进 `customAction` 的编辑器（填 Ω），
+   * 这边进 `structure` 的编辑器（填运算表），而且载体**已经指好了**（就是它）,
+   * 所以直接进 `editor` 态，不用先 pending 等用户再点一次。
+   */
+  const startStructureOn = useCallback((carrierId: string) => {
+    setOrbStage('closed')
+    setMultiOpen(false)
+    setConnectMenu(null)
+    setNotice(null)
+    setInter({ kind: 'editor', opId: 'structure', picked: [carrierId] })
+  }, [])
+
+  /**
+   * 「造结构」（S2b 目录面板那条路）：**先落载体那一行，再开编辑器**。
+   *
+   * 为什么不让结构"吞掉"载体（把 `structure(labeledSet(...), ...)` 写成一行的内联形式）：
+   * §11.3 —— 载体与结构是**两个节点**，`P` 可能同时被别的东西引用
+   * （`G ↷ P` 里它就是作用舞台）。而且来源线（`P -> M`）要有个真节点可指。
+   *
+   * `commitExpr` 那条路是"求值 → 去重 → 落行"，返回的是新名字；这里要拿到
+   * **那个名字**才能开编辑器，所以自己走一遍同样的三步（判据同源：`evalExpr` + `findExistingObject`）。
+   */
+  const startStructureFromCatalog = useCallback(
+    (carrierExpr: string) => {
+      const check = evalExpr(carrierExpr, byId)
+      if (!check.ok) {
+        setNotice({ text: check.error, hint: check.hint })
+        return
+      }
+      const dup = findExistingObject(objects, {
+        callKey: check.callKey,
+        def: carrierExpr,
+        label: check.label,
+      })
+      const id = dup ? dup.id : nextAutoName(usedNames)
+      if (!dup) setLines((p) => [...p, `${id} = ${carrierExpr}`])
+      setOrbStage('closed')
+      setMultiOpen(false)
+      setConnectMenu(null)
+      setNotice(null)
+      setInter({ kind: 'editor', opId: 'structure', picked: [id] })
+    },
+    [byId, objects, usedNames],
+  )
+
   /* ── 画布点击 ──────────────────────────────────────── */
 
   const onNodeClick = useCallback(
@@ -1117,6 +1168,8 @@ export default function App() {
           onRun={(op) => startOp(op, focusedObj.id)}
           // 点集 / 元素集才有的那颗（U57）：让某个群作用在它上面
           onActOn={() => startActionOnSet(focusedObj.id)}
+          // 点集 / 元素集才有的那颗（S2b）：给它配一个二元运算 → 结构编辑器
+          onBuild={() => startStructureOn(focusedObj.id)}
         />
       )}
 
@@ -1153,6 +1206,9 @@ export default function App() {
             onToggle={() => setOpenCatalog((v) => !v)}
             // 点出来的表达式走 `commitExpr` —— 与径向菜单 / 拖拽落行完全同一条路
             onAdd={commitExpr}
+            // 「造结构」：载体的那一行也走同一条落行路（`startStructureFromCatalog`），
+            // 只是落完还要把编辑器接上去
+            onBuildStructure={startStructureFromCatalog}
           />
         </div>
         <InfoDock
@@ -1225,6 +1281,18 @@ export default function App() {
             src={editorNodes[0]}
             objects={objects}
             presetOmega={presetOmegaOf}
+            onSubmit={submitEditorLine}
+            onCancel={reset}
+          />
+        ) : pendOp.id === 'structure' ? (
+          /*
+           * 结构编辑器（S2a）：载体是 `editorNodes[0]`（集合或元素集）。
+           * 它**产出的是定义行的表达式**，与手打的 `structure(P, ...)` 逐字同源。
+           */
+          <StructureBuilder
+            op={pendOp}
+            carrier={editorNodes[0]}
+            objects={objects}
             onSubmit={submitEditorLine}
             onCancel={reset}
           />

@@ -46,7 +46,8 @@ export interface GalObject {
 
 /** 画布节点 = 对象 + 布局信息。数值不上画布，映射只画边不占节点。 */
 export interface CanvasNode extends GalObject {
-  shape: 'group' | 'set' | 'action'
+  /** `structure` = 非群的代数结构（双线圆，见 `value.ts#CanvasShape`）*/
+  shape: 'group' | 'set' | 'structure' | 'action'
   /** 派生深度，决定分层 */
   level: number
 }

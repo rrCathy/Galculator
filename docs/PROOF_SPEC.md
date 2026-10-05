@@ -27,7 +27,9 @@ type ShowSpec =
   | { mode: 'table' }
 
 /**
- * SceneName 对齐 @groupviz/react v2.3.0 **实际入包的 10 个 Scene**。
+ * ⚠️ 历史遗留：SceneName 对齐 @groupviz/react v2.3.0 **实际入包的 10 个 Scene**。
+ * 本项目是群论**计算器**、不接引擎可视化层（见 ROADMAP.md 开头「定位」），
+ * 这一段是 v1 通用引擎 schema 的原样保留、**现行实现不用**（见 §2.5）。
  * 注意：sylow / tree / prestable 未 props 化、不入包，故不在此列。
  */
 type SceneName =
@@ -51,7 +53,7 @@ interface ProofSpec {
 }
 ```
 
-## 2.5 落地形态（2026-09-20，M1）
+## 2.5 落地形态
 
 §2 的第一版 schema 是按"通用引擎"设计的（`ComputeCall` + `ArgRef` 引用前步 `out`，
 `ShowSpec.diagram` 映射到 `@groupviz/react` 的 10 个 Scene）。**实际实现收窄成了下面这样**，
@@ -85,8 +87,8 @@ interface ProofTemplate {
      （与 U2 的"点出来的操作编回文本"同一条哲学）；
    - 走完一遍，画布上就是完整的证明图。
 2. **`ShowSpec` 换成 `line` + `highlight`。** 画布是自研的交换图（不是 10 个 Scene 之一），
-   所以"展示"就是两件事：这一步**投放**哪个对象、**高亮**谁。`SceneName` 那套留给
-   未来的"教育模式联动 GroupViz GVL"。
+   所以"展示"就是两件事：这一步**投放**哪个对象、**高亮**谁。
+   （`SceneName` 那套**不再保留后续打算** —— 本项目是计算器、不接引擎 Scene，见 ROADMAP.md「定位」。）
 3. **`ArgRef` 的 local/backend 分发没了。** 模板里全部是 local（走 core）；backend 仍未接入。
    代价是模板换群要作者改 `build()` —— 对演示性证明可接受（正确性本来就由作者负责）。
 
@@ -184,12 +186,7 @@ interface ProofTemplate {
 > **粒度 C 的关键**：s3–s5 只算 `|X|` 与模 p，**不枚举 X**（这本身是教学点：证明靠计数，不靠枚举）；
 > 存在性由 s5 的反证**独立**成立，s6 的 P 只是把"存在"具象化，不是前提——**不循环**。
 
-## 6. Sylow II / III（待写）
-
-- **Sylow II**（共轭性）：用 `sylowConjugationPerms(group, subgroups)` 得 G 作用在全体 Sylow p-子群上的置换，`computeOrbits` 证传递（单轨道），稳定子 = 正规化子 N_G(P)。
-- **Sylow III**（n_p ≡ 1 mod p 且 n_p | m）：`computeSylowAnalysis` 已给出 `np` / `congruentModP` / `dividesM`；模板负责把这两个结论"演"出来（轨道–稳定子 + 正规化子夹逼）。
-
-## 2.6 参数槽（M3，2026-09-24）
+## 2.6 参数槽
 
 U15 把"群与 p"变成入参时，三条 Sylow 模板的参数**恰好是同一个元组**，于是面板可以把
 "群输入框 + p 按钮组"写死。M3 的两条定理参数不一样，写死就不成立了：

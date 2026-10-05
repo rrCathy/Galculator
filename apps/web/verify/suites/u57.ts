@@ -22,7 +22,7 @@
  *   ⑤ 四条入口（群节点球 / ⊕ 球 / 拖拽连线 / 点集节点的「被作用」）落到**同一个 op**、
  *      同一份内核（`planCustomAction`）—— 不许长出四个不一致的入口。
  *
- * ⚠️ **期望值手算**：注册表 `OPS.length = 44`（u55 记过），`multiOps` 的条数
+ * ⚠️ **期望值手算**：注册表 `OPS.length = 45`（U60 起；u55 记过 44），`multiOps` 的条数
  * 由"有几条 op 的**画布可填位** ≥ 2"推出，不抄运行结果。
  */
 import { buildLines } from '../../src/gal/build'
@@ -34,6 +34,7 @@ import { eq, ok, suite } from '../harness'
 /** 全部参数档（漏一个就意味着那一档没人守）。 */
 const ALL_TYPES: ParamType[] = [
   'group',
+  'carrier',
   'subset',
   'setlike',
   'omega',
@@ -51,7 +52,7 @@ export function run(): void {
 
   suite('u57 \cdot takesCanvasObject（这一档能不能从画布上拿对象）')
   {
-    const objectish: ParamType[] = ['group', 'subset', 'setlike', 'omega', 'action', 'map']
+    const objectish: ParamType[] = ['group', 'carrier', 'subset', 'setlike', 'omega', 'action', 'map']
     ok(
       '对象档全为 true',
       objectish.every((t) => takesCanvasObject(t)),
@@ -142,10 +143,26 @@ export function run(): void {
       fwd.find((c) => c.op.id === 'customAction')?.swapped,
       false,
     )
+    /*
+     * ⚠️ **2026-10-04 翻（F1 修复）**：从前这里要的是"∩ ∪ ∖ 与 customAction 同批"。
+     * 那时 `paramAccepts#subset` **无条件**收 `set`，于是 `pointSet(5)` 被当成元素集，
+     * ∩ ∪ ∖（还有 quotient / cosetAction / C_G / N_G）一起列了出来 —— 而内核一条都不收，
+     * 点下去全是「\cap 需要两个集合」。拖 G→P 列 **10 条、9 条必报错**。
+     *
+     * 修法是**判据只写一份**（`ops.ts#setElementSetOf`：`set` 当元素集读，当且仅当
+     * ① 有母群 ② 成员都能在母群里解析回元素）。点集两条都不满足 ⇒ **本来就不该列**。
+     * 这条断言守的东西没变（"拖群到点集列出来的都得能跑"），变的是"点集算不算元素集"
+     * 这个数学事实 —— 它不算（它是 Ω）。
+     */
     ok(
-      '  集合运算照旧并列（∩ ∪ ∖ 与它同批）',
-      ['intersection', 'union', 'difference'].every((id) => fwd.some((c) => c.op.id === id)),
+      '  点集不是元素集：∩ ∪ ∖ 不再并列（修复前它们列出来必报错）',
+      !['intersection', 'union', 'difference'].some((id) => fwd.some((c) => c.op.id === id)),
       fwd.map((c) => c.op.id).join(','),
+    )
+    eq(
+      '  剩下来的每一条都真能跑 —— 拖 G→P 只留 customAction',
+      fwd.map((c) => c.op.id).join(','),
+      'customAction',
     )
 
     const rev = pairOps(p, g)
@@ -177,12 +194,32 @@ export function run(): void {
       !singles.some((o) => o.id === 'customAction'),
       singles.map((o) => o.id).join(','),
     )
-    // 但点集**不是**"什么都不能做"：它有自己的单对象操作 ⇒ 那条路得由界面起一个头
-    ok(
-      '  但点集确实有单对象操作（底集 / 生成子群）—— 它不是"空菜单"',
-      singles.some((o) => o.id === 'underlyingSet') && singles.some((o) => o.id === 'closure'),
+    /*
+     * ⚠️ **2026-10-04 翻（F1 修复）**：从前这里写着"点集确实有单对象操作（底集 / 生成子群）"。
+     * 那两条是 `paramAccepts` **单方面**收 `set` 收进来的 —— 内核的 `asSet.run` 说
+     * 「没有底集可取」、`closure` 的 `subgroupArgOf` 说「需要一个集合」。这正是本套
+     * 头号判据最忌讳的**菜单撒谎**（U57 自己就是被这条咬出来的）。
+     *
+     * ⚠️ **2026-10-04 再翻（U60 代数结构）**：F1 之后这里是"空"。U60 给点集补了一条
+     * **真能跑**的单对象 op ——「给它一个运算」（`structure`，参数位是 `carrier`，
+     * 内核 `planStructure` 真吃 `pointSet`）—— 于是判据从"为空"收紧成"恰好这一条"。
+     * 这不是撒谎回归：`paramAccepts('carrier', set)` 收的正是抽象点集，且 run 真造得出结构。
+     */
+    eq(
+      'singleOpsFor(点集) 恰好一条：structure（给它一个运算，U60 补的真入口）',
       singles.map((o) => o.id).join(','),
+      'structure',
     )
+    {
+      const o2 = buildLines(['P = pointSet(5)', 'G = D_4']).objects
+      const g2 = o2.find((o) => o.id === 'G')!.value
+      const p2 = o2.find((o) => o.id === 'P')!.value
+      ok(
+        '  它不是死路：拖一个群到它身上，菜单里必须有一条真能跑的（customAction）',
+        pairOps(g2, p2).some((c) => c.op.id === 'customAction'),
+        pairOps(g2, p2).map((c) => c.op.id).join(',') || '(空菜单)',
+      )
+    }
 
     /*
      * 两个计数的差就是这次改动的全部内容：

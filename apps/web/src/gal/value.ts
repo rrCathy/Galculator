@@ -1,9 +1,12 @@
 import type { Group, GroupElement, HomomorphismMap } from '@groupviz/core'
+// ⚠️ **运行时**导入（不是 type-only）：下面是 S2c 要的"够不够格当群"唯一判据。
+// 依赖是单向的 —— `algebra.ts` 只 `import type` 本模块，编译后不留 require，不会成环。
+import { isGroupStructure, type AxiomProfile } from './algebra'
 
 /**
- * 值类型（7 种）—— 架构 §3 / 交互模型 §2。
+ * 值类型（8 种）—— 架构 §3 / 交互模型 §2。
  *
- * 操作产出的**一切**都是这七类之一。
+ * 操作产出的**一切**都是这八类之一。
  * **「去哪」不在这里决定**——由下面的 `ValueSort`（存在层级）决定。
  */
 export type ValueType =
@@ -15,6 +18,7 @@ export type ValueType =
   | 'action'
   | 'relation'
   | 'number'
+  | 'structure'
 
 export const VALUE_TYPE_LABEL: Record<ValueType, string> = {
   group: '群',
@@ -25,6 +29,7 @@ export const VALUE_TYPE_LABEL: Record<ValueType, string> = {
   action: '作用',
   relation: '关系',
   number: '数值',
+  structure: '代数结构',
 }
 
 /* ── 存在层级：一个值「在数学图景里的位置」───────────────────── */
@@ -56,6 +61,7 @@ export function sortOf(v: GalValue): ValueSort {
     case 'group':
     case 'elements':
     case 'set':
+    case 'structure':
       return 'vertex'
     case 'map':
     case 'action':
@@ -278,6 +284,43 @@ export interface GalSet {
   from?: string
 }
 
+/* ── 代数结构（集合 + 二元运算 + 公理档案）───────────────────── */
+
+/**
+ * 代数结构 —— 载体是一批点，加一张二元运算表，加一份**算出来的**公理档案。
+ *
+ * ## 为什么它得是一等值
+ *
+ * 「三阶集 + 一个运算，是群吗？」是群论/近世代数教材的**第一章主线**，
+ * 而本项目从前只有"已经是群的东西"（core `Group` 公理写死）——用户拿着一张
+ * 乘法表却无处可去。结构把这半步补上：先是一张**待检的表**，够格成群时才
+ * **升格**为 core `Group`（`group` 是缓存指针，**不是第二个对象**）。
+ *
+ * ## 与 `GalSet` 的关系
+ *
+ * `carrier` 就是既有「集合」的一批成员（`SetMember`），不是新物种；
+ * 结构 = 载体 + 运算 + 档案。所以"凭空造点集 → 给它一个运算"这条路是通的
+ * （载体不要求有母群，`pointSet(3)` 合法）。
+ */
+export interface GalStructure {
+  /** 载体（就是既有「集合」的一批成员，不是新物种）*/
+  carrier: SetMember[]
+  /** 载体来自哪个集合对象（来源线）*/
+  carrierFrom?: string
+  /** 二元运算：1-based 表。`table[i][j] ∈ 1..n`（见 DEVPLAN §1：与 core 同构）*/
+  op: { table: number[][] }
+  /** 公理档案 —— **算出来的** */
+  axioms: AxiomProfile
+  /** 够格成群时的 core `Group`（升格缓存，**不是第二个对象**）*/
+  group?: Group
+  /**
+   * 单位群 U(M) —— 全体可逆元（`axioms.units`）构成的群。
+   * 已群时 = 自身（即 `group`）；`units` 不构成群时为 undefined。
+   * **缓存指针，不是第二个对象**。它把"非群"接回群论。
+   */
+  unitGroup?: Group
+}
+
 /* ── 值 ─────────────────────────────────────────────────── */
 
 export type GalValue =
@@ -289,6 +332,7 @@ export type GalValue =
   | { type: 'action'; action: GalAction }
   | { type: 'relation'; relation: GalRelation }
   | { type: 'number'; label: string; value: number }
+  | { type: 'structure'; structure: GalStructure }
 
 /** 取该值所属的上下文群（数值没有）。详情面板与后续计算都要它。 */
 export function contextGroup(v: GalValue): Group | null {
@@ -310,6 +354,10 @@ export function contextGroup(v: GalValue): Group | null {
       return v.relation.to
     case 'number':
       return null
+    case 'structure':
+      // 够格成群才有上下文群；非群结构（原群 / 半群 / 幺半群）没有
+      // —— 别拿 `C_1` 兜底，那会骗过"G 与 Ω 来自不同的群"那道关。
+      return v.structure.group ?? null
   }
 }
 
@@ -318,8 +366,13 @@ export function contextGroup(v: GalValue): Group | null {
  *
  * 这是本轮的关键修正：从前 `elements` 与 `subgroups` 都落到 `'set'`，
  * 画布上"集合对象"与"子群列表"长得一样。现在判据只有一条。
+ *
+ * **S2c 新增第四档 `'structure'`**（DEVPLAN §11.1，D3 已修正）：
+ * 非群的代数结构（原群 / 半群 / 幺半群）画成**双线圆** —— 它还是"一个集合，
+ * 只是里面装了个运算"，内环就是这个意思；够格成群时**与群同款**（方，描边透明）。
+ * 所以"升格"在屏幕上的可见形式是**内环消失 + 圆变方**。
  */
-export type CanvasShape = 'group' | 'set' | 'action' | 'edge' | 'none'
+export type CanvasShape = 'group' | 'set' | 'structure' | 'action' | 'edge' | 'none'
 
 export function canvasShape(v: GalValue): CanvasShape {
   switch (sortOf(v)) {
@@ -331,12 +384,22 @@ export function canvasShape(v: GalValue): CanvasShape {
       // 作用的目标节点是它的 Ω —— 由 derive 找（或造）出来（DIAGRAM_SPEC §6.4 第 1 条）。
       return 'edge'
     case 'vertex':
-      return v.type === 'group' ? 'group' : 'set'
+      if (v.type === 'group') return 'group'
+      /*
+       * 结构：够格成群 ⇒ 与群同款（方）；否则 ⇒ 双线圆（§11.1）。
+       *
+       * ⚠️ 判据走 `isGroupStructure`（**不是** `v.structure.group != null`）——
+       * §11.6 要求"画布形状 / `paramAccepts('group')` / 菜单里列不列 `Sub` /
+       * `structureToGroup` 非 null"是**同一个函数**。拿缓存指针 `group` 判，
+       * 就又多了一份判据（缓存没填上时形状与菜单会打架）。
+       */
+      if (v.type === 'structure') return isGroupStructure(v.structure) ? 'group' : 'structure'
+      return 'set'
   }
 }
 
-/** 画布上是否呈现为**节点**（群 / 集合；映射与作用都是边）。 */
+/** 画布上是否呈现为**节点**（群 / 集合 / 非群结构；映射与作用都是边）。 */
 export function isCanvasValue(v: GalValue): boolean {
   const s = canvasShape(v)
-  return s === 'group' || s === 'set'
+  return s === 'group' || s === 'set' || s === 'structure'
 }

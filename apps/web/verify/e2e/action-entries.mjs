@@ -15,7 +15,7 @@
  *   ③ 点集节点的环上有「被作用」⇒ 点它 → 提示 + pending
  *   ④ 点群 → 编辑器弹出来，**Ω 那一格已经是那个集合**（这是"从哪头进都不丢你指的东西"）
  *   ⑤ 填生成元的像 → 提交 → 画出 `G ↷ Omega`，零报错
- *   ⑥ Shift 拖 G 到集合上：连线菜单里也列得出 `customAction`
+ *   ⑥ Shift 拖 G 到集合上：只剩一条候选 ⇒ **直接执行** `customAction`（不弹菜单）
  *
  * 外加一条纪律：新写的文案全是纯文本面（判据与 `e2e/no-unicode-leak.mjs` 逐字相同）。
  *
@@ -320,8 +320,25 @@ await openRing('P')
   const mine = items.find((i) => i.label === '被作用')
   ok('  它的 title 说清了它会干什么', !!mine && mine.title.includes('作用'), String(mine?.title))
   ok('  「信息」照旧在（没被顶掉）', labels.includes('信息'), labels.join(' | '))
-  // 集合该有的操作照旧铺着（U57 只是**加**一颗，没动原来的）
-  ok('  集合自己的操作照旧铺着（asSet / closure）', labels.includes('asSet') && labels.includes('closure'), labels.join(' | '))
+  /*
+   * ⚠️ **2026-10-04 翻（F1 修复）**：U57 加「被作用」时这里写的是"集合该有的操作照旧铺着
+   * （asSet / closure）"。那两颗一直在撒谎 —— 点 `asSet` 报「P 没有底集可取」、
+   * 点 `closure` 报「closure 需要一个集合」，因为 `paramAccepts` 单方面收 `set`、内核不收。
+   *
+   * F1 把判据收成一份（`ops.ts#setElementSetOf`）之后，**抽象点集不满足**（它没有母群）
+   * ⇒ 这两颗不再铺出来。环上剩下 `信息 | 被作用`，对点集来说这是**正确的全部**：
+   * 它能被作用（「被作用」），不能取底集、不能生成子群。
+   */
+  ok(
+    '  集合球上**不再铺** asSet / closure（F1：列出来必报错，本来就不该列）',
+    !labels.includes('asSet') && !labels.includes('closure'),
+    labels.join(' | '),
+  )
+  ok(
+    '  环上剩下「信息 + 被作用」—— 对抽象点集来说这就是全部正确的入口',
+    labels.includes('信息') && labels.includes('被作用'),
+    labels.join(' | '),
+  )
   await page.screenshot({ path: '../../docs/assets/u57-set-ring.png' })
 }
 
@@ -391,23 +408,48 @@ await setCycles(['(1 2 3 4)', '(2 4)'])
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ⑥ Shift 拖 G 到 P 上：连线候选里也列得出 customAction ==')
+console.log('== ⑥ Shift 拖 G 到点集上：唯一候选直接执行（不弹菜单） ==')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(320)
 {
-  // 先删掉刚建的那条作用行，免得 ConnectMenu 里"已经有了"的判据干扰（不影响候选本身，
-  // 但保持场景干净更好读）
+  /*
+   * ⚠️ **2026-10-04 翻（F1 修复）**：改前拖 G→P 列 **10 条**候选（9 条必报错）
+   * ⇒ 弹候选菜单。F1 修完只剩 **1 条**（`customAction`）
+   * ⇒ 走 `App#onConnect` 的 `cands.length === 1` 分支：**直接执行、不弹菜单**。
+   * 这不是回归 —— 用户少点一次；要守的是"那唯一一条真的跑到编辑器里去"。
+   *
+   * ⚠️ 靶子换成**新点集 Q**：⑤ 已经造了一条 `G ↷ Ω=P` 的作用，再拖 G→P 会被
+   * "这条线已经有了"挡住（手画动作不会重复造同一条）。换 Q 才是"拖群到抽象点集"这条手势本身。
+   */
+  ok('另建一个干净点集 `Q = pointSet(3)` 当靶（P 上已经有作用了）', await addLine('Q', 'pointSet(3)'))
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(380)
+
   const nodes = await canvasNodes()
   const g = nodes.find((n) => n.id === 'G')
-  const p = nodes.find((n) => n.id === 'P')
-  await dragPointer(g, p)
+  const q = nodes.find((n) => n.id === 'Q')
+  await dragPointer(g, q)
 
   const menu = await page.evaluate(() =>
     [...document.querySelectorAll('.connect-menu .connect-label')].map((e) => e.textContent.trim()),
   )
-  ok('拖 G 到 P 上弹出了候选菜单', menu.length > 0, menu.join(' | ') || '(没弹)')
-  ok('  **菜单里有 `customAction`**（U57 前第二位是标量档 ⇒ 直接被跳过）', menu.includes('customAction'), menu.join(' | '))
-  ok('  集合运算（∩ ∪ ∖）照旧在', menu.includes('intersection'), menu.join(' | '))
+  ok(
+    '拖 G 到点集：只剩 1 条候选 ⇒ **不弹菜单、直接执行**（`onConnect` 的 length===1 分支）',
+    menu.length === 0,
+    menu.join(' | ') || '(没弹)',
+  )
+  const st = await page.evaluate(() => ({
+    editor: document.querySelectorAll('.action-builder').length,
+    notice: document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+  }))
+  ok('  唯一那条（customAction）真的进了编辑器', st.editor === 1, JSON.stringify(st))
+  ok(
+    '  不是 0 条候选那条路（"暂时没有可做的操作"）',
+    !st.notice || !st.notice.includes('暂时没有'),
+    JSON.stringify(st),
+  )
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(260)
   await scanPlain('连线菜单')
   await page.screenshot({ path: '../../docs/assets/u57-drag-menu.png' })
 }

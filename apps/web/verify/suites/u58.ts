@@ -52,6 +52,7 @@ const ALL_VALUE_TYPES = [
   'action',
   'relation',
   'number',
+  'structure',
 ] as const
 
 export function run(): void {

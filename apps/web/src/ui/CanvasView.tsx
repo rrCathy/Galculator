@@ -168,7 +168,8 @@ function labelWidth(s: string, font: number): number {
  * 固定尺寸会让 `pSub(D₄, 2)` 这种长标签撑破圆形、或被视口裁掉。
  */
 function measure(n: CanvasNode): Box {
-  if (n.shape === 'set') {
+  // 集合 / **非群结构**都画圆（§11.1：非群结构是"双线圆"，尺寸口径与集合同款）
+  if (n.shape === 'set' || n.shape === 'structure') {
     let font = 15
     let labelW = labelWidth(n.label, font)
     const maxInner = 2 * (SET_MAX_R - 12)
@@ -1612,6 +1613,8 @@ export function CanvasView({
               }`}
               data-label={n.label}
               data-id={n.id}
+              /* 形状的**机器可读**形态（走查读它 + 读 `.gnode-ring` 的有无，两条成对）*/
+              data-shape={n.shape}
               onClick={(e) => {
                 e.stopPropagation()
                 // 刚把这个节点拖过 → 这次 click 是拖动的尾巴，不算点选
@@ -1646,6 +1649,24 @@ export function CanvasView({
                   stroke={bodyStroke}
                   strokeWidth={selected || isPicked ? 2 : 1.4}
                   strokeDasharray={n.shape === 'action' ? '5 4' : undefined}
+                />
+              )}
+              {/*
+                非群结构的**内环**（§11.1 的"双线圆"）：它还是"一个集合，只是里面装了
+                一个运算"，内环就是这个意思。够格成群时 `canvasShape` 已经返回 `'group'`
+                （方、描边透明）⇒ 这一支不渲染 ⇒ **升格的可见形式 = 内环消失 + 圆变方**。
+                走查读 `.gnode-ring` 的有无（`data-shape` 之外的第二条判据，成对）。
+              */}
+              {n.shape === 'structure' && (
+                <circle
+                  className="gnode-ring"
+                  cx={p.x}
+                  cy={p.y}
+                  r={Math.max(6, b.hw - 5.5)}
+                  fill="none"
+                  stroke={bodyStroke}
+                  strokeWidth={1}
+                  pointerEvents="none"
                 />
               )}
               {/* 标签走 KaTeX（HTML），所以用 foreignObject 承载 */}

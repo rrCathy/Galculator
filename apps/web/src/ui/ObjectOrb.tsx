@@ -16,6 +16,8 @@ interface RingItem {
   opId?: string
   /** 有 act = "被作用"（U57：起一个 `customAction`，把这个集合当 Ω） */
   act?: boolean
+  /** 有 build = "给它一个运算"（S2b：起 `structure` 编辑器，把这个集合当载体） */
+  build?: boolean
   title: string
 }
 
@@ -42,7 +44,12 @@ function ringItems(value: GalValue, singleOps: OpDef[]): RingItem[] {
   const info: RingItem = {
     key: 'info',
     label: '信息',
-    tab: 'basic',
+    /*
+     * 结构是"载体 + 运算 + 档案"，它那一节的落点是**公理档案**（§11.2：级别去面板），
+     * 不是群那三节里的「基本」。所以「信息」要开的是 `axioms` —— 开了 `basic`
+     * 会落在空节上（结构的面板里根本没有 basic）。
+     */
+    tab: value.type === 'structure' ? 'axioms' : 'basic',
     title: '看这个对象的信息',
   }
   /*
@@ -64,12 +71,33 @@ function ringItems(value: GalValue, singleOps: OpDef[]): RingItem[] {
           title: '让某个群作用在这个集合上（选一个群 G，Ω 就是这个集合）',
         }
       : null
-  const head: RingItem[] = act ? [info, act] : [info]
-  if (singleOps.length === 0) return head
-  if (singleOps.length <= 3) {
+  /*
+   * **给它一个运算**（S2b）—— 头号场景（§10 场景 0）的入口。
+   *
+   * `structure` 那条 op 本来就在 `singleOpsFor(点集)` 里（S1 之后点集只有这一条单对象
+   * 操作），但它铺出来的按钮叫 `structure`（`menuLabel` 从 `notation` 派生）——
+   * 那是**实现的名字**，不是用户的问题。用户的问题句是「给它一个运算」。
+   * 所以这里给它起个能读懂的名字，并把 `structure` 从下面那排通用 op 里摘掉
+   * （免得同一个入口出现两次）。
+   */
+  const build: RingItem | null =
+    (value.type === 'set' || value.type === 'elements') &&
+    singleOps.some((o) => o.id === 'structure')
+      ? {
+          key: 'buildOn',
+          label: '给它一个运算',
+          build: true,
+          title: '给这个集合配一个二元运算（乘法表），算出它到哪一级',
+        }
+      : null
+  const head: RingItem[] = [info, ...[build, act].filter((x): x is RingItem => x !== null)]
+  // `structure` 已经被上面那颗「给它一个运算」代表了，别再铺一遍
+  const generic = singleOps.filter((o) => o.id !== 'structure')
+  if (generic.length === 0) return head
+  if (generic.length <= 3) {
     return [
       ...head,
-      ...singleOps.map((op) => ({
+      ...generic.map((op) => ({
         key: op.id,
         label: op.call?.[0] ?? menuLabel(op),
         opId: op.id,
@@ -110,6 +138,7 @@ export function ObjectOrb({
   onInspect,
   onRun,
   onActOn,
+  onBuild,
 }: {
   anchor: NodeAnchor
   stage: OrbStage
@@ -125,6 +154,8 @@ export function ObjectOrb({
   onRun: (op: OpDef) => void
   /** 「被作用」（U57）：把这个集合当 Ω 起一个作用 —— 只对 set / elements 出现 */
   onActOn?: () => void
+  /** 「给它一个运算」（S2b）：把这个集合当载体起 `structure` 编辑器 —— 只对 set / elements 出现 */
+  onBuild?: () => void
 }) {
   const clampX = (v: number) => Math.min(Math.max(v, 52), containerW - 52)
   const clampY = (v: number) => Math.min(Math.max(v, 20), containerH - 20)
@@ -169,6 +200,10 @@ export function ObjectOrb({
                 e.stopPropagation()
                 if (item.act) {
                   onActOn?.()
+                  return
+                }
+                if (item.build) {
+                  onBuild?.()
                   return
                 }
                 if (item.opId) {

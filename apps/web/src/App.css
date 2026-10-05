@@ -857,6 +857,13 @@ body {
   color: #77756d;
 }
 
+/* 代数结构（S2c）：它是**运算的产物**（与"运算结果偏紫"同一套来源色），
+   但比群淡一档 —— 非群的结构还没"升格"，底色不该抢。 */
+.chip-structure {
+  background: #eae7f6;
+  color: #534ab7;
+}
+
 /* 结构伴生箭头（缺口 ⑧）：与映射 / 关系同属"边"，但它是**派生出来的** ——
    底色取画布上那条蓝灰线（ALONGSIDE_EDGE）的浅版，一眼看出同一种东西。 */
 .chip-structural {
@@ -2029,6 +2036,179 @@ body {
   color: var(--text-faint);
   cursor: default;
   opacity: 0.65;
+}
+
+/* ── 结构编辑器（S2a）：复用 `.map-builder` / `.mb-*` 的壳，只加网格与读数 ── */
+
+/*
+ * 表格编辑器比映射编辑器宽：四阶就是 16 个格子，三阶也要 9 个。
+ * 但**不许吃满屏幕** —— 它是个弹层，画布还得看得见（用户填表时要瞄着色子）。
+ */
+.struct-builder {
+  width: 470px;
+}
+
+/* 网格滚动壳：行列多的时候靠它滚，**不是**把弹层撑大（`.map-builder` 的高度由内容定）*/
+.sb-scroll {
+  max-height: 46vh;
+  overflow: auto;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.sb-grid {
+  display: grid;
+  gap: 3px;
+  align-items: stretch;
+}
+
+.sb-corner,
+.sb-collabel,
+.sb-rowlabel,
+.sb-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  font-size: 12.5px;
+}
+
+.sb-collabel,
+.sb-rowlabel {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.sb-collabel {
+  padding: 0 4px;
+}
+
+.sb-rowlabel {
+  padding-right: 6px;
+  justify-content: flex-end;
+}
+
+.sb-cell {
+  min-width: 34px;
+  padding: 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12.5px;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* 还没填的格子：虚线 + 淡色 —— 一眼看出"这格空着"，而不是"填了个空值" */
+.sb-cell.empty {
+  border-style: dashed;
+  color: var(--text-faint);
+}
+
+.sb-cell:focus {
+  border-color: var(--blue);
+  outline: none;
+}
+
+/* 公理档案（编辑器与信息面板共用这两块）*/
+.sb-axioms {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.sb-ax {
+  display: grid;
+  grid-template-columns: 14px 62px 1fr;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sb-mark {
+  font-weight: 700;
+  text-align: center;
+}
+
+.sb-mark.ok {
+  color: var(--green-ink, #1a7f4b);
+}
+
+.sb-mark.bad {
+  color: var(--red-ink, #c0392b);
+}
+
+.sb-mark.note {
+  color: var(--text-faint);
+}
+
+.sb-ax-k {
+  color: var(--text-faint);
+}
+
+.sb-ax-v {
+  color: var(--text);
+  word-break: break-word;
+}
+
+.sb-ax.bad .sb-ax-v {
+  color: #b5352a;
+}
+
+/* 结论行：层级 + "就差一步"。**这一行是头号场景的答案**，字号给足 */
+.sb-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(83, 74, 183, 0.07);
+  font-size: 13px;
+}
+
+.sb-verdict strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sb-verdict-label {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.sb-verdict-gap {
+  margin-left: auto;
+  color: #b5352a;
+  font-size: 12px;
+}
+
+/* 够格成群：结论行转成"群的输入蓝"色系，与画布上的方框呼应 */
+.sb-verdict.verdict-group {
+  background: rgba(24, 95, 165, 0.09);
+}
+
+.sb-verdict.verdict-group .sb-verdict-gap {
+  color: var(--text-faint);
+}
+
+/* 非群结构的内环（画布上的"双线圆"，§11.1）*/
+.gnode-ring {
+  opacity: 0.85;
+}
+
+/* 「运算表」节（信息面板）：比元素表窄，格子小一档 */
+.struct-table th,
+.struct-table td {
+  min-width: 26px;
+  padding: 3px 5px;
+  text-align: center;
 }
 
 /* KaTeX 与周围文字对齐 */

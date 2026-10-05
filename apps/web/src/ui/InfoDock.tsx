@@ -9,13 +9,16 @@ import {
   subgroupStructureSymbol,
   type Group,
 } from '@groupviz/core'
-import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalAction, type GalMap, type NormalizedSubgroup } from '../gal/value'
+import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalAction, type GalMap, type GalStructure, type NormalizedSubgroup } from '../gal/value'
 // 作用的核（U52）：判据只有一份 —— 结论层那条 insight 用的是同一个函数
 import { actionKernel } from '../gal/customAction'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
 import { STRUCTURAL_LABEL } from '../gal/derive'
 import { elementNotation } from '../gal/ops'
 import { labelWritable } from '../gal/pointSet'
+import { STRUCTURE_LEVEL_LABEL } from '../gal/algebra'
+// 公理读数行（S2c）：与表格编辑器**同一份**排版 —— 两个面不许各写一份
+import { axiomRows, verdictText } from './axiomReadout'
 import { prettySymbol } from '../gal/pretty'
 import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/structure'
 // 「已知群」（U48）：结论表给的群只有符号 + 阶，没有元素表 —— 面板各节都得改口径
@@ -29,12 +32,25 @@ import type { GalEdge, GalObject, StructuralEdge } from '../gal/types'
 
 const ENUM_CAP = 144
 
-export type InfoTab = 'basic' | 'elements' | 'subgroups'
+export type InfoTab = 'basic' | 'elements' | 'subgroups' | 'axioms' | 'table'
 
 export const INFO_SECTIONS: { id: InfoTab; label: string }[] = [
   { id: 'basic', label: '基本' },
   { id: 'elements', label: '元素' },
   { id: 'subgroups', label: '子群' },
+]
+
+/**
+ * 代数结构自己的两节（S2c）。
+ *
+ * 为什么级别**不上画布**（§11.2）：画布是交换图，节点只有符号。级别是"这一章最想让
+ * 用户看见的那个结论"，但它的位置在**面板**——这里可以说清"是 magma / semigroup /
+ * monoid / group 里的哪一级"，还能把**为什么**（逐条公理 + 反例）一起摆出来。
+ * 画布上只承载最强的那一个视觉信号：**是不是群**（圆 / 方，§11.1）。
+ */
+export const STRUCT_SECTIONS: { id: InfoTab; label: string }[] = [
+  { id: 'axioms', label: '公理档案' },
+  { id: 'table', label: '运算表' },
 ]
 
 /**
@@ -114,6 +130,23 @@ export function InfoDock({
   onExtract?: (sub: NormalizedSubgroup) => void
 }) {
   const group = node && node.value.type === 'group' ? node.value.group : null
+  /**
+   * 代数结构（S2c）：`carrier` / `op.table` / `axioms`，够格成群时还有 `group`。
+   *
+   * ⚠️ 够格成群的**结构**在面板上走**两套节**：群那三节（基本 / 元素 / 子群，
+   * 载体就是升格出来的那个群）+ 结构自己的两节（公理档案 / 运算表）。
+   * 这是 §11.6「形状与能力同一个判据」在面板上的落法 —— 画布上它是方（=群），
+   * 球上列得出 `Sub`，那面板里也就该看得到元素表；否则"升格"只升了外观。
+   */
+  const struct = node && node.value.type === 'structure' ? node.value.structure : null
+  /** 面板里"群那几节"要看的群：真群，或结构升格出来的群 */
+  const showGroup = group ?? struct?.group ?? null
+  /** 本节点该有哪几节；`null` = 没有分节（走 `OtherTab` 的扁平排版） */
+  const sections: { id: InfoTab; label: string }[] | null = showGroup
+    ? [...INFO_SECTIONS, ...(struct ? STRUCT_SECTIONS : [])]
+    : struct
+      ? STRUCT_SECTIONS
+      : null
 
   /**
    * 「子群」标题行的数字（U45）。**不许卡住渲染** —— 见 `SUB_COUNT_CAP` 那段注释：
@@ -121,20 +154,30 @@ export function InfoDock({
    */
   const [subCount, setSubCount] = useState<number | null>(null)
   useEffect(() => {
-    if (!group || group.order > SUB_COUNT_CAP) {
+    if (!showGroup || showGroup.order > SUB_COUNT_CAP) {
       setSubCount(null)
       return
     }
     let alive = true
     const id = setTimeout(() => {
       if (!alive) return
-      setSubCount(subgroupClassCount(group))
+      setSubCount(subgroupClassCount(showGroup))
     }, 0)
     return () => {
       alive = false
       clearTimeout(id)
     }
-  }, [group])
+  }, [showGroup])
+
+  /** 折叠标题行右边的摘要（`axioms` / `table` 两节用结构的读数，不是群的）*/
+  const sumOf = (id: InfoTab): string => {
+    if (id === 'axioms') return struct ? STRUCTURE_LEVEL_LABEL[struct.axioms.level] : ''
+    if (id === 'table') {
+      const n = struct?.carrier.length ?? 0
+      return n > 0 ? `${n} x ${n}` : ''
+    }
+    return showGroup ? sectionSummary(id, showGroup, subCount) : ''
+  }
 
   // 结论层：这个对象"所以呢"——同构于什么 / 第一同构定理在这里具体是什么
   const insights = useMemo<Insight[]>(() => {
@@ -215,9 +258,9 @@ export function InfoDock({
             )}
           </div>
 
-          {group ? (
+          {sections ? (
             <div className="info-acc">
-              {INFO_SECTIONS.map((t) => {
+              {sections.map((t) => {
                 const openSec = tab === t.id
                 return (
                   <section key={t.id} className="info-sec" data-sec={t.id}>
@@ -230,7 +273,7 @@ export function InfoDock({
                       onClick={() => onTab(openSec ? null : t.id)}
                     >
                       <span className="info-sec-label">{t.label}</span>
-                      <span className="info-sec-sum">{sectionSummary(t.id, group, subCount)}</span>
+                      <span className="info-sec-sum">{sumOf(t.id)}</span>
                       {/* 展开三角用**内联 SVG** —— `▾` 键盘打不出来（no-unicode-leak 会抓） */}
                       <svg className="info-sec-caret" viewBox="0 0 8 6" aria-hidden="true">
                         <path d="M0.6 0.8 L7.4 0.8 L4 5.2 Z" fill="currentColor" />
@@ -238,9 +281,11 @@ export function InfoDock({
                     </button>
                     {openSec && (
                       <div className="info-sec-body">
-                        {t.id === 'basic' && <BasicTab group={group} node={node} />}
-                        {t.id === 'elements' && <ElementsTable group={group} />}
-                        {t.id === 'subgroups' && <SubgroupsTab group={group} />}
+                        {t.id === 'basic' && showGroup && <BasicTab group={showGroup} node={node} />}
+                        {t.id === 'elements' && showGroup && <ElementsTable group={showGroup} />}
+                        {t.id === 'subgroups' && showGroup && <SubgroupsTab group={showGroup} />}
+                        {t.id === 'axioms' && struct && <AxiomArchive structure={struct} />}
+                        {t.id === 'table' && struct && <StructureTable structure={struct} />}
                       </div>
                     )}
                   </section>
@@ -1000,6 +1045,117 @@ function ActionCorrespondence({ A }: { A: GalAction }) {
   )
 }
 
+/** 「运算表」一节最多显示这么多行列 —— 超过就**明说**，不静默截断（§11.4）。 */
+const STRUCT_TABLE_CAP = 12
+
+/**
+ * 「公理档案」节（S2c）—— 这个结构**到哪一级**，以及**为什么**。
+ *
+ * 与表格编辑器同一份排版（`axiomReadout.ts#axiomRows`）：两处读数不许各写一份，
+ * 否则"不结合时的反例怎么写"会变成两条判据（面板与编辑器说法打架）。
+ *
+ * ⚠️ 级别**不上画布**（§11.2）—— 画布只承载"是不是群"（圆 / 方）。
+ * 这里才是"magma / semigroup / monoid / group 里的哪一级"唯一能看的地方。
+ */
+function AxiomArchive({ structure }: { structure: GalStructure }) {
+  const labels = structure.carrier.map((m) => m.label)
+  const p = structure.axioms
+  const rows = axiomRows(labels, p)
+  const v = verdictText(p)
+  return (
+    <>
+      <div className={`sb-verdict verdict-${p.level}`} data-verdict={p.level}>
+        <span className="sb-verdict-label">层级</span>
+        <strong>{v.level}</strong>
+        {v.gap && <span className="sb-verdict-gap">就差一步：{v.gap}</span>}
+      </div>
+
+      <div className="sb-axioms" data-level={p.level}>
+        {rows.map((r) => (
+          <div key={r.key} className={`sb-ax${r.ok === null ? ' note' : r.ok ? ' ok' : ' bad'}`}>
+            <span className={`sb-mark${r.ok === null ? ' note' : r.ok ? ' ok' : ' bad'}`}>
+              {r.ok === null ? '-' : r.ok ? 'v' : 'x'}
+            </span>
+            <span className="sb-ax-k">{r.key}</span>
+            <span className="sb-ax-v">{r.text}</span>
+          </div>
+        ))}
+      </div>
+
+      <Row k="载体">
+        <span>{labels.length} 个点</span>
+      </Row>
+      {/*
+        「非群里藏着群」这一句是 Q3 的落点（§13.3）：`units` 就是可逆元集合，
+        `structure.unitGroup` 是它**算出来的群**（不封闭时是 undefined —— 那就别吹）。
+      */}
+      {p.units.length > 0 && (
+        <div className="insp-line dim">
+          可逆元那 {p.units.length} 个元素在乘法下构成一个群 U(M)
+          {p.units.length !== labels.length ? `（比整个载体小：|U(M)| = ${p.units.length}）` : ''}
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * 「运算表」节（S2c）—— 那张 n×n 的表本身（§11.4：表是**信息**，不上画布）。
+ *
+ * 落点参照 `ElementsTable`（同样的 `.etable-wrap` 横滚壳）。超过
+ * `STRUCT_TABLE_CAP` 行列时只显示左上角那一块，并**附注说明** —— 默默截断是
+ * "静默假装支持"，这个项目栽过。
+ */
+function StructureTable({ structure }: { structure: GalStructure }) {
+  const labels = structure.carrier.map((m) => m.label)
+  const t = structure.op.table
+  const n = labels.length
+  const show = Math.min(n, STRUCT_TABLE_CAP)
+  const cell = (v: number) => prettySymbol(labels[v - 1] ?? String(v))
+  return (
+    <>
+      <div className="etable-wrap">
+        <table className="etable struct-table" data-size={n}>
+          <thead>
+            <tr>
+              <th className="etable-corner">*</th>
+              {labels.slice(0, show).map((l, j) => (
+                <th key={j}>
+                  <TexOrText text={prettySymbol(l)} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {t.slice(0, show).map((row, i) => (
+              <tr key={i}>
+                <th className="etable-rowhead">
+                  <TexOrText text={prettySymbol(labels[i])} />
+                </th>
+                {row.slice(0, show).map((val, j) => (
+                  <td key={j} className="etable-cell struct-cell" data-cell={`${i}-${j}`}>
+                    <TexOrText text={cell(val)} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {n > show && (
+        <div className="insp-line dim">
+          只显示前 {show} 行 {show} 列 - 这张表共 {n} x {n}，没有省略整张表
+        </div>
+      )}
+      {structure.group && (
+        <div className="insp-line dim">
+          够格成群：已升格为群（元素顺序在内部做过一次置换，见「基本」节）
+        </div>
+      )}
+    </>
+  )
+}
+
 function OtherTab({
   node,
   onExtract,
@@ -1187,6 +1343,7 @@ function OtherTab({
           <span>{v.label}</span>
         </Row>
       )
+    /* `structure` 不在这里：它有自己的两节（公理档案 / 运算表），见 `AxiomArchive` */
     default:
       return null
   }
@@ -1201,7 +1358,11 @@ function OtherTab({
  *
  * 分隔一律用 ASCII `-`：`·` 键盘打不出来（`no-unicode-leak` 判据）。
  */
-function sectionSummary(id: InfoTab, group: Group, subCount: number | null): string {
+function sectionSummary(
+  id: 'basic' | 'elements' | 'subgroups',
+  group: Group,
+  subCount: number | null,
+): string {
   /*
    * 「已知群」（U48）：只有阶是真的，交换性是**未知**（`isAbelian` 在 stub 上是占位的
    * false）—— 摘要行不能把"未知"说成"非交换"，那是最容易骗过人的那种谎。

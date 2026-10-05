@@ -99,6 +99,9 @@ import {
   type SetMember,
   type ValueType,
 } from './value'
+// 代数结构（DEVPLAN-algebra-structures）：`isGroupStructure` 是"够不够格当群"的**唯一**判据，
+// `paramAccepts('group', 结构)` 与菜单必须与它同源 —— 判据分家就是菜单撒谎。
+import { asGroupOf, isGroupStructure, planStructure, STRUCTURE_LEVEL_LABEL } from './algebra'
 
 /* ── 机制（架构 §3）：回答"操作怎么造出来" ────────────────── */
 
@@ -142,7 +145,7 @@ export const MECHANISM_ORDER: Mechanism[] = [
  * | 类型 | 画布上能填 | 说明 |
  * |---|---|---|
  * | `group` | 群节点 | |
- * | `subset` | 圆节点（元素集）/ 群节点 | **单个**数集（`∩ ∪ ∖ ·`、`商`、`C_G`、`N_G`、`闭包` 都是它）：元素集 / 集合 / 群（当集合读，且须是前缀里某个群的子群）；`subgroups` 只在**恰好一个成员**时收（那等于一个子群，与 `subgroupArgOf` 一致）|
+ * | `subset` | 圆节点（元素集）/ 群节点 | **单个**数集（`∩ ∪ ∖ ·`、`商`、`C_G`、`N_G`、`闭包` 都是它）：元素集 / 元素集的提升（`asSet` 过的群或元素集）/ 群（当集合读，且须是前缀里某个群的子群）；`subgroups` 只在**恰好一个成员**时收（那等于一个子群，与 `subgroupArgOf` 一致）|
  * | `setlike` | 圆节点 / 群节点 | **把子群集列表整体当集合读**——**只有 `底集` 用它**（Sylow 链的 `asSet(Syl_p(G))` 靠这条；`∩ ∪ ∖ ·` 走的是 `subgroupArgOf`，只收单个数集）|
  * | `omega` | 集合 / 元素集节点 / 群节点 | 作用的作用对象 Ω —— 恰好是 `omegaArgOf` 收的那几种 |
  * | `omegaOrInt` | 集合 / 元素集节点 / 群节点 | **Ω 或它的点数**（U53）：填不出节点时由文本 / 编辑器补一个整数（`自定义作用` 用它）|
@@ -166,6 +169,7 @@ export const MECHANISM_ORDER: Mechanism[] = [
  */
 export type ParamType =
   | 'group'
+  | 'carrier'
   | 'subset'
   | 'setlike'
   | 'omega'
@@ -317,12 +321,43 @@ const fail = (error: string, hint?: string): OpOutcome => ({ ok: false, error, h
 
 function groupOf(a: OpArg | undefined): Group | null {
   if (!a || a.kind !== 'object') return null
-  return a.value.type === 'group' ? a.value.group : null
+  return asGroupOf(a.value)
 }
 
 /** `GalValue` 形态的同一个取群（`fits` 收到的是值不是实参）。 */
 function groupValueOf(v: GalValue | undefined): Group | null {
-  return v && v.type === 'group' ? v.group : null
+  return v ? asGroupOf(v) : null
+}
+
+/**
+ * `set` 值 → 元素集（**`subset` 位的唯一读法**，内核与菜单共用）。
+ *
+ * 集合本身是 Ω（一批点），**不是**群元素表。只有它确实是"某个群的元素的提升"时才能当元素集读：
+ *   ① `set.group` 非空 —— `pointSet(n)` / `labeledSet(...)` 是抽象点集，**没有母群** ⇒ 拒；
+ *   ② 每个成员的记号都能在母群里解析回元素 —— `asSet(子群集)` 的成员是**子群记号** ⇒ 拒。
+ *
+ * 两条都过才给出 `{group, elements}`。**判据只写这一份**：`elementsOf`（喂内核）与
+ * `paramAccepts`（定菜单）都调它 —— "菜单里列出来的"与"点下去跑得动的"于是永不分家。
+ *
+ * ⚠️ 从前 `paramAccepts` 的 `subset`/`setlike` **无条件**收 `set`，而内核
+ * （`subgroupArgOf` / `elementSetArgOf` / `asSet.run`）一条都不收 ⇒ 拖 `S_4 → pointSet(4)`
+ * 列出 10 条候选、**9 条点下去必报错**（实测 486 个拖拽候选里 324 个如此）。
+ * 病根就是**同一件事的判据写成两份**（见 `isScalarParam` 五处散写的同款教训）。
+ */
+function setElementSetOf(v: GalValue): { group: Group; elements: GroupElement[] } | null {
+  if (v.type !== 'set' || !v.set.group) return null
+  const G = v.set.group
+  const elements: GroupElement[] = []
+  for (const m of v.set.members) {
+    // 成员带 `subgroupElements` ⇒ 它是个**子群点**（`asSet(子群集)` 的产物）。
+    // 这条必须靠**结构**判，不能靠 label：子群的记号常常就是生成元的循环记号
+    // （`⟨(123)⟩` 里的 `(123)` 解析得回元素），只看 label 会把 4 个子群当成 4 个元素。
+    if (m.subgroupElements) return null
+    const e = resolveElementLoose(G, m.label)
+    if (!e) return null
+    elements.push(e)
+  }
+  return { group: G, elements }
 }
 
 function elementsOf(a: OpArg | undefined): { group: Group; elements: GroupElement[] } | null {
@@ -330,20 +365,22 @@ function elementsOf(a: OpArg | undefined): { group: Group; elements: GroupElemen
   const v = a.value
   if (v.type === 'elements') return { group: v.group, elements: v.elements }
   if (v.type === 'group') return { group: v.group, elements: v.group.elements }
+  if (v.type === 'set') return setElementSetOf(v)
   return null
 }
 
 /**
- * 集合读法（`ParamType` 的 `subset`）：元素集 / 恰好一个子群的子群集 / 群本身。
+ * 集合读法（`ParamType` 的 `subset`）：元素集 / 恰好一个子群的子群集 / 群本身 / 元素集的提升。
  *
  * 群对象也接受——因为 `Z(G)` 这类子群已升级为真群对象（`buildSubgroupGroup`），
  * 用户手上拿到的就是一个「群」。是不是合法子群由调用方用 core 校验。
  */
 function subgroupArgOf(a: OpArg | undefined): { group: Group; elements: GroupElement[] } | null {
+  // 元素集 / 群 / `set`（真的元素提升）走同一份读法；`set` 的取舍全在 `setElementSetOf` 那一处。
+  const direct = elementsOf(a)
+  if (direct) return direct
   if (!a || a.kind !== 'object') return null
   const v = a.value
-  if (v.type === 'elements') return { group: v.group, elements: v.elements }
-  if (v.type === 'group') return { group: v.group, elements: v.group.elements }
   if (v.type === 'subgroups' && v.subgroups.length === 1) {
     return { group: v.group, elements: v.subgroups[0].elements }
   }
@@ -2261,6 +2298,14 @@ export const OPS: OpDef[] = [
       } else if (v.type === 'group') {
         group = v.group
         members = v.group.elements.map((e) => ({ label: e.label }))
+      } else if (v.type === 'set') {
+        // 已经是集合了：底集的作用是**忘记结构**，而 set 早就没有结构可忘。
+        // （从前这里落到 else，报"没有底集可取"——把"没有结构可忘"说成了"里面没东西"，
+        //  措辞误导，见 U52「披露事实 ≠ 报错」。）
+        return fail(
+          `${name} 已经是集合了`,
+          '底集用于忘记结构：可传子群集（如 Syl(G, 2)）、元素集、群',
+        )
       } else {
         return fail(
           `${name} 没有底集可取`,
@@ -2350,6 +2395,68 @@ export const OPS: OpDef[] = [
         value: { type: 'set', set: plan.set },
         label: plan.set.label,
         sub: `|Omega| = ${plan.labels.length}, 点号 ${plan.labels.slice(0, 8).join(' ')}${plan.labels.length > 8 ? ' ...' : ''}`,
+      }
+    },
+  },
+  /*
+   * ── 代数结构（S1b）：**给一个集合配一个运算，看它到哪一级** ───────────────
+   *
+   * 群论教材的第一章主线（原群 → 半群 → 幺半群 → 群），而本项目从前只有"已经是群的
+   * 东西"。这条 op 把"待检的表"变成一等对象：够格成群时**升格**为 core `Group`，
+   * 于是 `Sub` / `Z` / 商 / Sylow 全都接得上（`paramAccepts('group', ·)` 放行）。
+   *
+   * 与 `pointSet` 同一档：不是 §3 的 10 个原语，而是「原子构造」机制下的实例。
+   */
+  {
+    id: 'structure',
+    notation: 'structure(P, table)',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '给一个集合配一个二元运算（乘法表），算出它到哪一级：原群 / 半群 / 幺半群 / 群',
+    recipe: '原子构造（集合 + 运算表 -> 结构）',
+    impl: 'gal/algebra 的 planStructure',
+    call: ['structure', 'algebra'],
+    /*
+     * **要编辑器**（S2a）：n² 个表项不是一行能敲出来的东西（`structure(P, 1,2,3, …)`
+     * 三阶就要 9 个数，四阶 16 个）。这与映射的 `editor: true` 同一条理由
+     * （`ARCHITECTURE §6.1` 的输入层三形态：几格表单比一串数字诚实得多）。
+     * 文本形态照旧可用 —— 编辑器**产出**的也正是那一行的表达式。
+     */
+    editor: true,
+    params: [{ name: 'carrier', type: 'carrier' }],
+    /* n² 个表项，行优先展平、1-based。variadic 不计入 arity（与 `labeledSet` 同款）。*/
+    variadic: { name: 'entry', type: 'int' },
+    arity: 1,
+    result: 'structure',
+    run: (a) => {
+      const carrierArg = a[0]
+      if (!carrierArg || carrierArg.kind !== 'object') return fail('structure 需要一个集合当载体')
+      const cv = carrierArg.value
+      const name = refText(carrierArg)
+      let labels: string[]
+      if (cv.type === 'set') labels = cv.set.members.map((m) => m.label)
+      else if (cv.type === 'elements') labels = cv.elements.map((e) => e.label)
+      else
+        return fail(
+          `${name} 不能当载体`,
+          '载体要一个集合（pointSet / labeledSet / asSet 的产物）或一个元素集',
+        )
+      const entries = a
+        .slice(1)
+        .map((x) => (x.kind === 'number' ? x.num : Number((x.text ?? '').trim())))
+      if (entries.some((e) => !Number.isFinite(e)))
+        return fail('运算表里有不认识的记号', `表项要 1..${labels.length} 的整数（1 是单位元位）`)
+      const plan = planStructure(labels, entries)
+      if (!plan.ok) return fail(plan.error, plan.hint)
+      const s = plan.structure
+      const lvl = STRUCTURE_LEVEL_LABEL[s.axioms.level]
+      const extra =
+        s.axioms.level === 'group' ? (s.axioms.commutative ? ' (交换)' : ' (非交换)') : ''
+      return {
+        ok: true,
+        value: { type: 'structure', structure: s },
+        label: `(${name}, *)`,
+        sub: `|P| = ${s.carrier.length}, ${lvl}${extra}`,
       }
     },
   },
@@ -3576,14 +3683,27 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
 
   switch (t) {
     case 'group':
-      return v.type === 'group'
+      // 群位：结构**够格成群**时放行（判据与 `structureToGroup` / `level` 同源）；
+      // 非群结构（原群 / 半群 / 幺半群）在这里被挡 ⇒ 菜单因此不撒谎。
+      if (v.type === 'group') return true
+      if (v.type === 'structure') return isGroupStructure(v.structure)
+      return false
+    case 'carrier':
+      // 载体位：**还没加运算的集合**。`set`（任意，含无母群的 `pointSet`）或 `elements`。
+      // 不复用 `subset`：F1 修完的 `subset` 要求 `set` 有母群，而载体恰是 `pointSet(3)`
+      // 这种抽象点集 —— 塞进 `subset` 会被拒，又是一轮菜单撒谎。
+      return v.type === 'set' || v.type === 'elements'
     case 'action':
       return v.type === 'action'
     case 'map':
       return v.type === 'map'
     case 'setlike': {
-      // **集合代数**（`∩ ∪ ∖ ·` 与 `底集`）：子群集列表**整体**当集合读
-      if (v.type === 'elements' || v.type === 'subgroups' || v.type === 'set') return true
+      // **集合代数**（`∩ ∪ ∖ ·` 与 `底集`）：子群集列表**整体**当集合读。
+      //
+      // ⚠️ **不收 `set`**：`底集` 要的是"还没忘记结构的东西"（子群集 / 元素集 / 群），
+      // 而 set 已经没有结构可忘了 —— 从前无条件收，于是集合节点的球上铺着 `asSet`、
+      // 点下去只报「没有底集可取」（菜单撒谎）。判据与 `underlyingSet.run` 的 else 分支同宽。
+      if (v.type === 'elements' || v.type === 'subgroups') return true
       if (v.type !== 'group') return false
       return groupAsSet(v.group)
     }
@@ -3593,7 +3713,15 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
       // 而 `omegaArgOf` 只从 `set` / `elements` / `group` 里读出 `points`。
       // U58 只把 `omegaOrInt`（`customAction` 的 Ω）放开了子群集，这里**故意不动**：
       // 要放开得连 `omegaArgOf` 的 `points` 一起改，等点名。
-      if (v.type === 'set' || v.type === 'elements') return true
+      //
+      // ⚠️ `omega` 位**唯一**的消费者是 `conjOn`（`conjugationOnSet`，F4）：它要的是
+      // "G 共轭作用在它的一族子群/元素上"，而 `pointSet(n)` / `labeledSet(...)` 这批
+      // **抽象点集没有共轭可言**（`v.set.group` 是 null ⇒ `omegaArgOf` 读出的 `ambient`
+      // 是 null ⇒ run 里必然报"要 Omega 是某个群的子群集/元素集"）。列出来点下去必报错
+      // 就是菜单撒谎，所以这里要求 `set` **有母群**才收 —— 判据与 `conjOn.run` 里
+      // `ambient` 那道关同宽。抽象点集要走「customAction」（它的位是 `omegaOrInt`）。
+      if (v.type === 'elements') return true
+      if (v.type === 'set') return v.set.group != null
       if (v.type !== 'group') return false
       return groupAsSet(v.group)
     }
@@ -3614,7 +3742,10 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
     case 'subset': {
       // **单个**数集。`subgroups` 只在恰好一个成员时收——那时它等于一个子群
       //（`closure(S)` / `quotient(G, N)` 这类就是这么用的）。
-      if (v.type === 'elements' || v.type === 'set') return true
+      if (v.type === 'elements') return true
+      // `set`：只有真的是"某个群的元素的提升"才收（`asSet(群/元素集)` 成立；
+      // `pointSet(n)` / `asSet(子群集)` 不成立）。判据与内核共用 `setElementSetOf`。
+      if (v.type === 'set') return setElementSetOf(v) !== null
       if (v.type === 'subgroups') return v.subgroups.length === 1
       if (v.type !== 'group') return false
       // 群对象当集合读，且前面有群参数时要求它是其中某个的子群

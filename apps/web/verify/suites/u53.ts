@@ -486,7 +486,7 @@ export function run(): void {
 
   {
     // U51 的 40 + U52 的「自定义作用」= 41；U53 再加「点集」「集合」= 43
-    eq('注册表 44 条', OPS.length, 44)
+    eq('注册表 45 条（U60 加代数结构）', OPS.length, 45)
 
     const ps = opById('pointSet')
     const ls = opById('labeledSet')

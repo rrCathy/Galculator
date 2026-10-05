@@ -148,6 +148,7 @@ export function menuLabel(op: OpDef): string {
  */
 export const PARAM_LABEL: Record<ParamType, string> = {
   group: '群',
+  carrier: '集合（载体）',
   subset: '元素集 / 子群',
   setlike: '集合 / 子群集',
   omega: '集合 Omega',

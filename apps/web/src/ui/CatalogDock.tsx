@@ -36,11 +36,21 @@ export function CatalogDock({
   open,
   onToggle,
   onAdd,
+  onBuildStructure,
 }: {
   open: boolean
   onToggle: () => void
   /** 把点出来的东西落成一行定义（`名字 = 表达式`）——命名归 App，与输入球同一条路 */
   onAdd: (expr: string) => void
+  /**
+   * 「造结构」（S2b）：**先造就载体，再开表格编辑器**。
+   *
+   * 参数是载体的表达式（`labeledSet(a, b, c)`）。App 那边会先把它落成一行
+   * （于是画布上真的有一个集合节点，§11.3：载体与结构是**两个**节点），
+   * 再把这个节点交给 `structure` 编辑器。所以这里给的不是"一个结构"，
+   * 而是"载体的写法" —— 编辑器还没开，表还是空的。
+   */
+  onBuildStructure: (carrierExpr: string) => void
 }) {
   /**
    * **收起**的那几阶。默认**全展开** —— 目录的第一功能是"浏览"，
@@ -51,6 +61,7 @@ export function CatalogDock({
   const [orders, setOrders] = useState<SmallGroupList[] | null>(null)
   const [points, setPoints] = useState('5')
   const [labels, setLabels] = useState('a, b, c')
+  const [structLabels, setStructLabels] = useState('1, 2, 3')
 
   useEffect(() => {
     if (!open || orders) return
@@ -130,6 +141,35 @@ export function CatalogDock({
           onClick={() => onAdd(`labeledSet(${labels.trim()})`)}
         >
           按标号造
+        </button>
+      </div>
+
+      {/*
+        「造结构」（S2b）—— 与上面两个框**并列**，因为它是同一件事的下一步：
+        先有载体才有运算。`labeledSet` 那一支故意用**同一串标号**：它会先后落两行
+        （`P = labeledSet(1, 2, 3)` 与编辑器产出的 `M = structure(P, ...)`），
+        画布上于是是"一个圆 + 一个双线圆"，中间一条来源线（§11.3）。
+      */}
+      <div className="cat-form">
+        <input
+          className="cat-input"
+          value={structLabels}
+          onChange={(e) => setStructLabels(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && structLabels.trim())
+              onBuildStructure(`labeledSet(${structLabels.trim()})`)
+          }}
+          placeholder="1, 2, 3"
+          title="造一个代数结构：先造就这批点，再打开运算表编辑器"
+          spellCheck={false}
+          autoComplete="off"
+        />
+        <button
+          className="cat-go"
+          disabled={!structLabels.trim()}
+          onClick={() => onBuildStructure(`labeledSet(${structLabels.trim()})`)}
+        >
+          造结构
         </button>
       </div>
 

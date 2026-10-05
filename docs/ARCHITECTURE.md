@@ -1,6 +1,8 @@
 # 架构（ARCHITECTURE）
 
 > 计算器内核的架构。与 [INTERACTION.md](INTERACTION.md)（交互模型）、[PROOF_SPEC.md](PROOF_SPEC.md)（证明层）、[ROADMAP.md](ROADMAP.md)（工程规划）并列。工程选型与依赖见 §11。
+> **本文件写"现在的架构是什么"**；架构怎么演化来的见 [HISTORY.md](HISTORY.md)。
+> ⚠️ 操作名（U54 起）统一为 **ASCII 英文**（§5 操作清单里的中文名是历史写法，现行名字看 `apps/web/src/gal/ops.ts`）。
 
 ## 0. 一句话
 
@@ -125,7 +127,7 @@
 
 | ValueSort | 成员 | 去处 |
 |---|---|---|
-| `vertex` | `group` · `elements` · `set` | 画布节点 |
+| `vertex` | `group` · `elements` · `set` · **`structure`** | 画布节点 |
 | `edge` | `map` · `action` | 画布边（作用线是其中之一）|
 | `list` | `subgroups` | 信息面板（**可「取出为对象」**）|
 | `scalar` | `number` | 数值区 |
@@ -145,6 +147,28 @@ Syl_p(G)（列表，不上画布）──底集──▶ Ω（集合，上画布
 ```
 
 这正是 Sylow III 的第一步。**列表不是死路，是待提升的池子。**
+
+### 3.7 代数结构：群以下的层级（S1/S2 落地）
+
+群论教材的第一章是「运算 → 半群 → 幺半群 → 群」，而本项目从前只有"已经是群的东西"
+（core `Group` 把 `identity` / `inverse` 写死）。`structure` 值把这半步补上：
+
+> **代数结构 = 载体（既有「集合」的一批点）+ 一张二元运算表 + 一份算出来的公理档案。**
+
+- **载体不是新物种**：就是 `GalSet` 的 `SetMember[]`，所以"凭空造点集 → 给它一个运算"这条路是通的
+  （`pointSet(3)` 合法：载体不要求有母群）。
+- **够格成群就升格**：`structureToGroup(s)` 把表交给 core 的 `createGroupFromImport`
+  （⚠️ 表 **1-based**、**第 0 元素必须是单位元** ⇒ 升格时做一次**置换**），
+  于是 `Sub` / `Z` / 商 / Sylow 全部接得上（`paramAccepts('group', 结构)` 放行）。
+- **判据只有一份**：`algebra.ts#isGroupStructure` 同时决定
+  ① 画布形状（方 / 双线圆）② `paramAccepts('group')` ③ 菜单里列不列 `Sub` ④ `structureToGroup` 非 null。
+  四条不一致 = "菜单撒谎"那个病根漏到了画布。
+- **公理档案**（`AxiomProfile`）不止"四档层级"：另有线 A 读数（消去律 / 幂等元 / 零元 /
+  拉丁方 + 坏行列 / 可逆元集 U(M)）与 `failsAt`（"就差一步：逆元"）。
+  反例要**给得出来**（不结合给三元组、无逆给元素），不许只打叉。
+- **单位群 U(M)** 是"把非群接回群论"的桥：全体可逆元在乘法下构成一个群。
+
+纪要在 [HISTORY.md](HISTORY.md)；设计全案在 [DEVPLAN-algebra-structures.md](DEVPLAN-algebra-structures.md)。
 
 ## 4. 类型 × 属性（= 筛的谓词库）
 
@@ -346,17 +370,22 @@ WordPred   { kind: 'word', lhs, rhs, vars }                          // x^2 = e
 
 ## 11. 引擎依赖（已是 npm 包）
 
-| 包 | 版本 | 内容 |
-|---|---|---|
-| `@groupviz/core` | 2.3.0 | 纯算法层：群构造 / 布局 / 序列化；零 React/DOM 依赖，仅依赖 zod |
-| `@groupviz/react` | 2.3.0 | 10 个受控 Scene + `useSceneState` + `SceneWindow` + i18n；peer: react 19 / three / r3f / katex |
+> **只复用算法层。** 本项目是群论**计算器**（见 [ROADMAP.md](ROADMAP.md) 开头「定位」），
+> 引擎的可视化层——`@groupviz/react` 的 10 个 Scene——**一个都不接**。
+> 下表列 `@groupviz/react` 的内容只是"包里有什么"的**事实记录**，不是依赖清单；
+> 实际只 import 它的 `theme.css`。
+
+| 包 | 版本 | 内容 | 本项目怎么用 |
+|---|---|---|---|
+| `@groupviz/core` | 2.3.0 | 纯算法层：群构造 / 布局 / 序列化；零 React/DOM 依赖，仅依赖 zod | **计算内核底座**，全面复用 |
+| `@groupviz/react` | 2.3.0 | 10 个受控 Scene + `useSceneState` + `SceneWindow` + i18n；peer: react 19 / three / r3f / katex | **只借 `theme.css`**；Scene 一个不接 |
 
 **已发包，直接装依赖，不再 alias 源码**（原"先用 GroupViz `src/core` 源码过渡、等包再切"的方案作废）。
 
 关键事实（v2.3.0 实测）：
 
 - `@groupviz/react` 收录 **10 个 Scene**：`SetView` / `CycleView` / `CayleyView` / `TableView` / `CosetStripScene` / **`ActionScene`** / **`HomomorphismScene`** / `SymmetryViewScene` / `Cayley3DScene` / **`SublatticeScene`**。
-- **`sylow` / `tree` / `prestable` 未 props 化、不入包** → Sylow 可视化需自绘（或用 Set / Coset 组合表达）。这是"渲染层自研"方针的直接依据。
+- **`sylow` / `tree` / `prestable` 未 props 化、不入包** —— 对本项目**无影响**：Sylow 靠**计算**跑通（U7 已完成），画布本就是自研的交换图，不依赖这些视图。
 - 官方 `API.md` 随包分发（`node_modules/@groupviz/core/API.md`），是消费端的权威 props 表。
 - 注意：`@groupviz/react` 的 `index.js` 是单一 bundle，**顶层就 import three / r3f / drei** —— 只要 import 它的 JS 就得装这三个（peer 要求 react `>=19 <19.3`）。
 
