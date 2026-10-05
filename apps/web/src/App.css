@@ -3009,3 +3009,222 @@ body {
   color: var(--blue);
   background: var(--blue-soft, var(--surface));
 }
+
+/* ── 工作台（P1，2026-10-05）─────────────────────────────────
+ *
+ * 用户定的形态（原话）：「工作台应该是从底部弹出的框，并且能在底部收起，
+ * 交换图画布充当背景。」
+ *
+ * 三条硬约束：
+ *   · **画布不重排** —— `position: absolute` 浮在画布上（INTERACTION §5
+ *     「画布不给抽屉让位」），升起时 `CanvasView` 的尺寸与格点布局**一行都不改**。
+ *     与"三栏并排"是根本不同的事：后者把宽度切掉。
+ *   · **收起贴着来时那条边** —— 收起后剩一条贴底胶囊，展开收起是同一根轴上两个位置。
+ *   · **底部有输入球**（`.composer-orb`）⇒ 工作台升起时它**让到右上**
+ *     （编辑器卡片 P0-1 已经用 `dockRight` 做过同一件事，见 `ComposerOrb` 的注释）。
+ *
+ * ⚠️ 内容区**复用** `.info-acc` / `.info-sec` / `.etable` 等类名 ——
+ * 那是 `InfoDock` 那边 50+ 条走查按着定位的，**同一批内容只能有一份排版**。
+ */
+
+/*
+ * 收起态：贴底一条胶囊（点它升起来）。
+ *
+ * ⚠️ **不占满宽度**（第一版 `left:0; right:0` 把它做成全宽，真机立刻暴露两处遮挡）：
+ *   · 左下「数值」抽屉在 `left:12px; bottom:12px` ⇒ 被工作台的标题条盖住、点不到；
+ *   · 底部输入球在 `bottom:12px` 居中 ⇒ 同样被盖。
+ * ⇒ 改成**居中一块**、并给左下那块留出 200px（数值面板 168px + 余量）。
+ * 右边界不设（让它按内容宽度走）⇒ 输入球在它右侧仍点得到。
+ */
+/*
+ * ⚠️ **`bottom` 不是 0，是 52px**（第二版真机又暴露一次）：
+ * 底部输入球 `.composer-orb` 在 `bottom: 12px`、高约 28px ⇒ 它占的是
+ * `12..40px` 那一行。工作台 `bottom: 0` 时收起态（30px 高）正好压住它 ⇒
+ * 点输入球点不动（真机报 `.bench-head intercepts pointer events`）。
+ * ⇒ 抬到 `bottom: 52px`：**收起时贴在输入球正上方**，展开时向上长。
+ *
+ * 收起态那个 `bottom: 52px` 的空当由 `.app` 的背景承担，视觉上不别扭 ——
+ * 它读成"输入球上面那一行"，本来就是 UI 的下沿。
+ */
+.bench {
+  position: absolute;
+  bottom: 52px;
+  left: 50%;
+  right: auto;
+  z-index: 14;
+  display: flex;
+  flex-direction: column;
+  width: min(720px, calc(100vw - 260px));
+  transform: translateX(-50%);
+  max-height: 45vh;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.06);
+}
+
+/* 收起时只要那条标题（body 不渲染，JSX 里已条件）*/
+.bench:not(.open) {
+  border-top-color: var(--border-strong);
+}
+
+.bench-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bench:not(.open) .bench-head {
+  border-bottom: none;
+}
+
+.bench-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.bench-toggle:hover {
+  background: #eceae3;
+}
+
+.bench-caret {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.bench-title {
+  font-weight: 500;
+}
+
+/* 焦点对象：贴在标题后面，一眼知道"工作台在看谁" */
+.bench-target {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--purple-text);
+  background: var(--purple-fill);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+
+.bench-secs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.bench-sec {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bench-sec:hover {
+  background: #eceae3;
+}
+
+.bench-sec.closed {
+  color: var(--text-faint);
+  border-style: dashed;
+}
+
+/*
+ * ⚠️ **升起时**（`.risen`）才允许吃高度。
+ * 不升起时（焦点是映射 / 作用 / 数值）它只是底部一条信息带 ——
+ * 那些值 `homeOf` 判 `canvas`（它们是**边**，那条线本身就是答案）。
+ */
+.bench-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  padding: 8px 12px 10px;
+  overflow: hidden;
+}
+
+.bench.risen .bench-body {
+  max-height: 45vh;
+}
+
+/* 内容区内部的滚动交给 `.info-acc`（它自带 `overflow-y: auto`）*/
+.bench-body .info-acc {
+  min-height: 0;
+}
+
+.bench-foot {
+  flex: 0 0 auto;
+  padding-top: 6px;
+  margin-top: 6px;
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 输入球让位：工作台贴着底，它不能被盖住 ──────────────────
+ *
+ * ⚠️ **这一条是必须的，不是"锦上添花"**（P1 第一版就漏了，真机立刻暴露）：
+ * `.bench` 是 `bottom: 0; left: 0; right: 0` 的**全宽**一条，收起时也占着那 30px，
+ * 而输入球 `.composer-orb` 也在 `bottom: 12px` 居中 ⇒ **工作台的标题条盖住它，
+ * 用户点输入球点不动**（真机报 `.bench-head intercepts pointer events`）。
+ *
+ * ⚠️ 这里**必须用 prop（`dockRight`）而不是纯 CSS** —— `.composer-orb` 的 `left`
+ * 是内联 style（`max(50%, …)`，U44 用来避开左下数值面板），内联压过任何样式表规则。
+ * 见 `ComposerOrb` 里 `dockRight` 那条注释（P0-1 同一坑踩过一次）。
+ */
+/* `.bench` 居中且不比输入球宽 ⇒ **输入球不用让位**（第一版让它 `dockRight` 是
+   因为那时工作台是全宽）。`.composer-orb` 的 `left` 是内联 style，那条 `dockRight`
+   prop 现在只服务编辑器卡片（P0-1）—— 别把两件事混在一处。 */
+
+/* 窄窗（≤1080px）：底部输入球在工作台升起时更容易撞上，
+   让它先贴着右边（工作台占满底宽）。 */
+@media (max-width: 1080px) {
+  .bench {
+    max-height: 52vh;
+  }
+  .bench.risen .bench-body {
+    max-height: 52vh;
+  }
+}
+
+/* 收起态那一句"点它升起"（P1：点它才升起的形态，标题条必须自解释） */
+.bench-peek {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.bench-peek.dim {
+  color: var(--text-faint);
+}
+
+/*
+ * ⚠️ **工作台的滚动链**（P1 真机截断过一次）：
+ * `.bench-body` 是 `flex-direction: column`，要让**内容区自己滚**就得给中间那层
+ * `flex: 1 1 auto; min-height: 0` —— 缺 `min-height: 0` 时 flex 子项不肯缩到
+ * 容器高度以下，于是内容被 `overflow: hidden` **直接切掉**（截图里最后一行
+ * `Out(G) = 1` 被吃掉了半行）。
+ * `.info-acc` 自带 `overflow-y: auto`，所以滚的是它。
+ */
+.bench-body > .info-acc {
+  flex: 1 1 auto;
+  min-height: 0;
+}

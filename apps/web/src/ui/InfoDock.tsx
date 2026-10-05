@@ -27,6 +27,7 @@ import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/st
 import { isKnownGroup, knownFacts, knownGroupInfo } from '../gal/known'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
+import { subgroupClassCount, SUB_COUNT_CAP } from './infoHelpers'
 import { DockPanel } from './DockPanel'
 import type { GalEdge, GalObject, StructuralEdge } from '../gal/types'
 
@@ -70,20 +71,11 @@ export const STRUCT_SECTIONS: { id: InfoTab; label: string }[] = [
  * 结果缓存进 `WeakMap`（按对象身份，与 `gal/identity.ts` 同纪律）：同一个群反复
  * 聚焦只算一次。
  */
-const SUB_COUNT_CAP = 60
-const subCountCache = new WeakMap<Group, number>()
-
-function subgroupClassCount(group: Group): number {
-  // 「已知群」没有元素表（U48）：枚举不了，标题行不给数字（`sectionSummary` 也不显示）
-  if (isKnownGroup(group)) return 0
-  const hit = subCountCache.get(group)
-  if (hit !== undefined) return hit
-  // 与 `SubgroupsTab` **同一个表达式**（`structKey`），标题与正文的数字不许打架
-  const subs = listCosetStripSubgroups(group)
-  const n = new Set(subs.map((s) => s.structure ?? `阶 ${s.order}`)).size
-  subCountCache.set(group, n)
-  return n
-}
+/*
+ * `subgroupClassCount` 与 `SUB_COUNT_CAP` 已移到 `./infoHelpers`（P1，2026-10-05）：
+ * 底部升起的 `Workbench` 也要同一个数与同一份缓存 —— 两处各留一份会让
+ * 「A_5 算两遍」，且改闸门时忘掉另一处 ⇒ 数字打架。
+ */
 
 /**
  * 信息区面板（UI v3）：三个「看」入口（基本 / 元素 / 子群）**共用这一个面板**。
@@ -364,6 +356,47 @@ function EdgeSection({ edge }: { edge: { edge: GalEdge; info: StructuralEdge } }
  * 识别结果现在统一由上面的结论层说（`groupInsights`，带 SmallGroup 编号与惯用名），
  * 这里不重复。
  */
+/**
+ * 「一节的内容」—— `InfoDock`（左上那个抽屉）与 `Workbench`（底部升起那个）**共用**。
+ *
+ * ## 为什么抽出来（2026-10-05，P1）
+ *
+ * 用户定的布局是"工作台从底部升起、画布当背景" ⇒ **两处要显示同一批内容**：
+ * 左边抽屉里一份、右边升起一份。若各写一份，那**两份内容迟早分家**（这个项目
+ * 反复栽的"判据散多份"的同一个病，只是这次在 UI 层）。
+ *
+ * ⇒ 判据与排版都只留一份，两处只传 `active`（哪几节展开）。
+ *
+ * ⚠️ **类名一字不改**（`.insp-*` / `.etable` / `.info-*`）—— 50+ 条走查按它们定位。
+ */
+export function SectionBody({
+  section,
+  group,
+  struct,
+  node,
+  active,
+  subCount,
+  onExtract,
+}: {
+  section: InfoTab
+  group: Group | null
+  struct: GalStructure | null
+  node: GalObject | null
+  /** 哪些节是展开的；`null` = 全收 */
+  active: Set<InfoTab> | null
+  subCount: number | null
+  onExtract?: (sub: NormalizedSubgroup) => void
+}) {
+  if (section === 'basic' && group && node) return <BasicTab group={group} node={node} />
+  if (section === 'elements' && group) return <ElementsTable group={group} />
+  if (section === 'subgroups' && group) return <SubgroupsTab group={group} />
+  if (section === 'axioms' && struct) return <AxiomArchive structure={struct} />
+  if (section === 'table' && struct) return <StructureTable structure={struct} />
+  void active
+  void subCount
+  return node ? <OtherTab node={node} onExtract={onExtract} /> : null
+}
+
 function BasicTab({ group, node }: { group: Group; node: GalObject }) {
   const known = knownGroupInfo(group)
   const info = useMemo(() => {
@@ -1382,7 +1415,10 @@ function OtherTab({
  *
  * 分隔一律用 ASCII `-`：`·` 键盘打不出来（`no-unicode-leak` 判据）。
  */
-function sectionSummary(
+/** 分区头右边那行摘要（`|G| = 24 · 未交换` / `24 个元素` / `7 类`）。
+ *  `Workbench` 复用同一函数 —— 两处显示同一个对象，摘要不许不一样。
+ */
+export function sectionSummary(
   id: 'basic' | 'elements' | 'subgroups',
   group: Group,
   subCount: number | null,

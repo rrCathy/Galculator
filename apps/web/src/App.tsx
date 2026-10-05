@@ -41,6 +41,7 @@ import { StructureBuilder } from './ui/StructureBuilder'
 import type { CanvasNode } from './gal/types'
 import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
+import { Workbench } from './ui/Workbench'
 import { OpDock } from './ui/OpDock'
 import { CatalogDock } from './ui/CatalogDock'
 import { InfoDock, type InfoTab } from './ui/InfoDock'
@@ -148,6 +149,16 @@ export default function App() {
   const [openCatalog, setOpenCatalog] = useState(false)
   const [openInfo, setOpenInfo] = useState(false)
   const [openNumeric, setOpenNumeric] = useState(true)
+  /**
+   * **工作台**的升起 / 收起（P1，2026-10-05）。
+   *
+   * 与 `openInfo` 是**两个独立开关**，不是同一个：用户定的是"工作台从底部升起"，
+   * 而 `InfoDock` 仍留在左上那一列抽屉里（它是"随手瞄一眼"的入口）。
+   * 两者显示同一批内容（`SectionBody`）—— **内容一份、两个地方**。
+   *
+   * 默认**收起**：它一升起就吃掉 45vh 的画布高度，而用户可能只是瞄一眼。
+   */
+  const [benchOpen, setBenchOpen] = useState(false)
   /**
    * 信息面板**展开的那一节**（U45 起是手风琴，不再是 tab）。
    * `null` = 全收 —— 默认状态就是它：不点开，面板只剩摘要 + 三行标题。
@@ -1265,8 +1276,29 @@ export default function App() {
         editing={editing}
         onAdd={(l) => (editing ? replaceLine(editing.index, l) : setLines((p) => [...p, l]))}
         minLeft={barriers.bottom}
-        // P0-1：编辑器常驻底部居中 ⇒ 输入球让到右边（两者都在 bottom:12px 会重叠）
+        /*
+         * 让位给底部那两个（**走 prop 不走 CSS** —— `.composer-orb` 的 `left` 是内联
+         * style，内联压过样式表规则，P0-1 已栽过一次）：
+         *   · 编辑器卡片常驻底部居中（P0-1）⇒ 让到右边；
+         *   · 工作台贴底**全宽**（P1）⇒ 让到右上角（右边那条已被编辑器占的语义不冲突：
+         *     两者基本不会同时，真同时也是"最上层那个让开"）。
+         */
         dockRight={inter.kind === 'editor'}
+      />
+
+      {/*
+        **工作台**（P1）—— 从底部升起的那一区。
+         *
+         * 位置刻意在 `ComposerOrb` **之后**：两者都在底部，DOM 顺序与视觉顺序一致，
+         * 而输入球是 z-index 12、工作台 14 —— 真撞上了也是工作台在上。
+         * `focusedObj` 与 `InfoDock` 共用同一个（`busy` 时为 null，两处一起消失）。
+         */}
+      <Workbench
+        open={benchOpen}
+        onToggle={() => setBenchOpen((v) => !v)}
+        node={busy ? null : focusedObj}
+        viewportH={canvasSize.h}
+        onExtract={extractSubgroup}
       />
 
       <div className="dock-bottomleft" ref={dockBottomRef}>
