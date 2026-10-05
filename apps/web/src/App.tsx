@@ -1296,7 +1296,24 @@ export default function App() {
       <Workbench
         open={benchOpen}
         onToggle={() => setBenchOpen((v) => !v)}
+        /*
+         * 任务栏点一条 ⇒ 走**与球菜单 / 拖拽 / 目录同一条路**（`startOp`）。
+         *
+         * 关键：**焦点对象有就带上它当第一参数，没有就 `picked: []` 进 pending** ——
+         * 于是"没选中任何东西也能开始"是**天然**成立的，不是一句承诺。
+         * （第一版工作台没有这个入口，用户问"创建一个集合工作台怎么只能看"
+         *  根子就在这儿：功能全塞在球菜单里，工作台只是个查看器。）
+         *
+         * `params[0]` 收不收当前焦点由 `canPick` 判 —— 收不下就当没选，
+         * 免得把一个"类型就不对"的对象硬塞进第一位。
+         */
+        onRunOp={(op) => {
+          const focusNow = busy ? null : focusedObj
+          const use = focusNow && canPick(op, 0, [], focusNow.value) ? focusNow.id : null
+          dispatchOp(op, use ? [use] : [])
+        }}
         node={busy ? null : focusedObj}
+        editorBusy={inter.kind === 'editor'}
         viewportH={canvasSize.h}
         onExtract={extractSubgroup}
       />

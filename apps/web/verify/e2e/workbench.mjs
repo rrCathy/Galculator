@@ -92,7 +92,8 @@ const bench = () =>
       right: Math.round(r.right),
       vw: window.innerWidth,
       vh: window.innerHeight,
-      sections: [...el.querySelectorAll('.bench-sec')].map((x) => x.textContent.trim()),
+      /* 每节自己的头（`.info-sec-label`），标题栏不再有一排节名按钮 */
+      sections: [...el.querySelectorAll('.bench-detail .info-sec-label')].map((x) => x.textContent.trim()),
       heads: [...el.querySelectorAll('.info-sec-label')].map((x) => x.textContent.trim()),
       sums: [...el.querySelectorAll('.info-sec-sum')].map((x) => x.textContent.trim()),
       tables: el.querySelectorAll('.etable').length,
@@ -138,8 +139,19 @@ console.log('\n== 场景 1：贴底常驻，默认收起 ==')
   ok('收起时贴底那一带（位置偏下）',
     b !== null && b.vh - b.top - b.h < 70, b === null ? '' : `距视口底 ${Math.round(b.vh - b.top - b.h)}px`)
   ok('收起时只有标题条那一行高（< 60px）', b !== null && b.h < 60, `h=${b?.h}`)
-  ok('收起时那句「先选一个对象」的提示在（自解释）',
-    b !== null && /先在画布或左栏选一个对象/.test(b.text), b?.text.slice(0, 60))
+  /*
+   * ⚠️ **P1-2 改掉了这条契约**（第一版的工作台不做功能入口，只看细节）：
+   * 从前收起条上写「先在画布或左栏选一个对象」—— 那正是用户骂的那句
+   * 「什么叫得选对象才能用工作台」。现在收起条上写的是**它能干什么**：
+   * 「7 类 36 个操作：加结构 / 同态 / 作用 / 半直积 / 自同构 / 共轭类」。
+   * ⇒ 判据从"提示用户去选对象"改成"**报能力清单**"，并加一条**不许出现旧那句**。
+   */
+  ok('收起条报出能力清单（7 类 36 个操作 + 点名的六件事）',
+    b !== null && /7 类 36 个操作/.test(b.text) && /加结构/.test(b.text) &&
+      /同态/.test(b.text) && /半直积/.test(b.text) && /自同构/.test(b.text) && /共轭类/.test(b.text),
+    b?.text.slice(0, 90))
+  ok('收起条**不再**说「先选一个对象」（那是第一版那个错）',
+    b !== null && !/先在画布或左栏选一个对象/.test(b.text), b?.text.slice(0, 60))
   ok('收起时没有内容区（`.info-acc` 不在）', (await page.locator('.bench .info-acc').count()) === 0)
 
   // 点对象 ⇒ 标题条报出对象名，但仍不升起
@@ -147,7 +159,8 @@ console.log('\n== 场景 1：贴底常驻，默认收起 ==')
   b = await bench()
   ok('选中后标题条报出对象名（`G`）', b !== null && b.node === 'G', `node=${b?.node}`)
   ok('选中后**仍不自动升起**（用户定的：点它才升起）', b !== null && !/ open/.test(b.cls), b?.cls)
-  ok('收起时提示改成「点它升起」', b !== null && /点它升起/.test(b.text), b?.text.slice(0, 60))
+  ok('收起时仍报能力清单（选不选对象都一样可用）',
+    b !== null && /7 类 36 个操作/.test(b.text), b?.text.slice(0, 60))
 }
 
 /* ══ 场景 2：点它升起 + 画布不重排 ════════════════════════════ */
@@ -227,20 +240,31 @@ console.log('\n== 场景 3：内容 ==')
   ok('分区摘要写了 7 类（S_4 子群按共轭类 7 种）', /7\s*类/.test(sums), sums)
 
   // 分区能单独收
-  await page.evaluate(() => {
-    const b2 = [...document.querySelectorAll('.bench-sec')].find((x) => x.textContent.trim() === '元素')
-    b2?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
+  /*
+   * ⚠️ **按它所属那一节的标题找，不按按钮自己的文字**（P1-2 改了形态）：
+   * 分节按钮从"标题栏里的一排 `基本|元素|子群`"挪进了**每一节自己的头**里，
+   * 现在按钮上写的是动作词「收起 / 展开」，节名在旁边的 `.info-sec-label`。
+   * 第一版按 `textContent === '元素'` 找 —— 现在找不到了，红了 3 条。
+   */
+  const clickSec = (label) =>
+    page.evaluate((L) => {
+      const head = [...document.querySelectorAll('.bench-detail .info-sec-head')].find((h) =>
+        h.querySelector('.info-sec-label')?.textContent.trim() === L,
+      )
+      const b = head?.querySelector('.bench-sec')
+      if (!b) return false
+      b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      return true
+    }, label)
+
+  ok('「元素」那一节有收起按钮（工作台默认是摊开的，但要能收）', await clickSec('元素'))
   await page.waitForTimeout(420)
   const b2 = await bench()
   ok('点「元素」能收掉那一节（工作台默认是摊开的，但要能收）',
     b2 !== null && (b2.tables ?? 0) === 0, `tables=${b2?.tables}`)
   ok('收掉之后那一节的头还在（能再点回来）',
     (b2?.heads ?? []).includes('元素'), JSON.stringify(b2?.heads))
-  await page.evaluate(() => {
-    const b3 = [...document.querySelectorAll('.bench-sec')].find((x) => x.textContent.trim() === '元素')
-    b3?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
+  await clickSec('元素')
   await page.waitForTimeout(420)
   ok('再点又展开', ((await bench())?.tables ?? 0) >= 1, '')
 }
@@ -282,6 +306,123 @@ console.log('\n== 场景 5：不挡左下数值抽屉与底部输入球 ==')
   ok('底部输入球 ✎ **点得到**', orb.ok, orb.why)
   const tools = await clickable('.canvas-tools .tool, .tools .tool, [class*="tool"]')
   ok('底部工具条**点得到**', tools.ok, tools.why)
+  ok('全程零 console 错误', logs.length === 0, logs.slice(0, 2).join(' | '))
+}
+
+/* ══ 场景 6：任务栏 —— **不选对象也能用**（P1-2 的核心承诺）════════
+ *
+ * ⚠️ 这组是专门钉 2026-10-05 用户当场骂的那句
+ *   「什么叫得选对象才能用工作台？那叫什么工作台？我创建了一个集合，
+ *     这个工作台怎么只能看？工作台难道不就是用来放什么添加群结构之类的功能吗？」
+ *
+ * 三条承诺，各有判据：
+ *   ① **能力常驻**：抬起眼就看见 7 族 + 36 个按钮，含用户点名的六件事；
+ *   ② **不需要选中对象**：空画布上点一条，它进 pending 并说清下一个要什么；
+ *   ③ **有焦点就带上它**：点一条结构，编辑器直接开、**已带上那个集合**。
+ */
+
+console.log('\n== 场景 6：任务栏（不选对象也能用）==')
+{
+  // 回到空画布（前面几组造过东西）
+  await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
+  await page.waitForTimeout(1500)
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(600)
+
+  // ① 能力常驻
+  ok('**空画布**上工作台也升起得起来', (await page.locator('.bench.open').count()) === 1)
+  const fams = await page.evaluate(() =>
+    [...document.querySelectorAll('.bench-fam-head')].map((x) => ({
+      label: x.querySelector('.bench-fam-label')?.textContent?.trim(),
+      n: Number(x.querySelector('.bench-fam-n')?.textContent?.trim() ?? '0'),
+    })),
+  )
+  ok('7 族全在场', fams.length === 7, JSON.stringify(fams.map((f) => f.label)))
+  const totalOps = fams.reduce((s2, f) => s2 + f.n, 0)
+  ok('按钮总数 36（族头那个数字是真数，不是装饰）', totalOps === 36, `sum=${totalOps}`)
+  const labels = fams.map((f) => f.label).join(' / ')
+  ok('用户点名的都在里面（加结构 · 群与分解 · 作用与轨道 · 映射的核与像）',
+    /结构 \/ 映射 \/ 作用/.test(labels) && /群与分解/.test(labels) &&
+      /作用与轨道/.test(labels) && /映射的核与像/.test(labels),
+    labels)
+
+  // ② 不需要选中对象：点一条，进 pending 并说清下一个要什么
+  const clickFam = (L) =>
+    page.evaluate((x) => {
+      const b = [...document.querySelectorAll('.bench-fam-head')].find(
+        (e) => e.querySelector('.bench-fam-label')?.textContent?.trim() === x,
+      )
+      if (!b) return false
+      b.click()
+      return true
+    }, L)
+  const clickOp = (N) =>
+    page.evaluate((x) => {
+      const b = [...document.querySelectorAll('.bench-op')].find(
+        (e) => e.querySelector('.bench-op-name')?.textContent?.trim() === x,
+      )
+      if (!b) return false
+      b.click()
+      return true
+    }, N)
+
+  ok('展开「群与分解」', await clickFam('群与分解'))
+  await page.waitForTimeout(400)
+  ok('展开后这一族有 9 个按钮', (await page.locator('.bench-op').count()) === 9,
+    `${await page.locator('.bench-op').count()}`)
+
+  // ⚠️ 此刻**画布是空的、一个对象都没选**
+  ok('此刻确实没选中任何对象', (await page.locator('.gnode.sel, .gnode[data-selected="true"]').count()) === 0)
+  ok('点「Z(G)」有反应（不是死的按钮）', await clickOp('Z(G)'))
+  await page.waitForTimeout(600)
+  const pend = await page.evaluate(() => ({
+    bar: !!document.querySelector('.pending-bar'),
+    what: document.querySelector('.pending-what')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    hint: document.querySelector('.pending-hint')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+  }))
+  ok('它进 pending（去画布点参数，而不是报错）', pend.bar, JSON.stringify(pend))
+  ok('pending 说清下一位要什么（群，第 1 / 1 个对象）',
+    /选择/.test(pend.hint) && /1 \/ 1/.test(pend.hint) && /群/.test(pend.hint), pend.hint)
+
+  // ③ 按提示去点一个群 ⇒ 真算出来（手算：Z(S_4) = C_1，阶 1）
+  await addLine('G', 'S_4')
+  await page.waitForTimeout(350)
+  await clickNode('G')
+  await page.waitForTimeout(800)
+  ok('按提示点一个群就真算出来（画布上多了一个对象）',
+    (await page.locator('svg.canvas g.gnode').count()) >= 2,
+    await page.evaluate(() => [...document.querySelectorAll('svg.canvas g.gnode')].map((g) => g.dataset.id).join(' ')))
+  ok('pending 自动收了', (await page.locator('.pending-bar').count()) === 0)
+
+  // ③' 有焦点时点「给这个集合加结构」⇒ 编辑器直接开、**带上那个集合**
+  await page.evaluate(() => document.querySelector('.pending-x, .pending-bar .icon-x')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await addLine('P', 'labeledSet(a, b, c)')
+  await page.waitForTimeout(350)
+  await clickNode('P')
+  await page.waitForTimeout(500)
+  ok('展开「结构 / 映射 / 作用」', await clickFam('结构 / 映射 / 作用'))
+  await page.waitForTimeout(400)
+  ok('点「structure(P, table)」', await clickOp('structure(P, table)'))
+  await page.waitForTimeout(800)
+  const ed = await page.evaluate(() => ({
+    open: !!document.querySelector('.struct-builder'),
+    cells: document.querySelectorAll('.sb-cell').length,
+    head: document.querySelector('.struct-builder .mb-head')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    /* 编辑器开着时工作台的细节区让位（否则两者贴底重叠，按钮点不到）*/
+    detailBusy: !!document.querySelector('.bench-detail.busy'),
+    famsStillThere: document.querySelectorAll('.bench-fam-head').length,
+  }))
+  ok('编辑器**直接开**了（不用再去别处找入口）', ed.open, ed.head.slice(0, 60))
+  ok('**带上了那个集合**（编辑器头写着 labeledSet，不是空的）',
+    /labeledSet/.test(ed.head), ed.head.slice(0, 60))
+  ok('表已铺好（3 x 3 = 9 格，手算：载体 3 个元素）', ed.cells === 9, `cells=${ed.cells}`)
+  ok('编辑器开着时细节区让位（否则两者贴底重叠）', ed.detailBusy)
+  ok('任务栏仍在（改主意不必先关编辑器）', ed.famsStillThere === 7, `fams=${ed.famsStillThere}`)
+
+  // 收工：关掉编辑器
+  await page.evaluate(() => document.querySelector('.map-builder .mb-x')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  await page.waitForTimeout(500)
+  ok('x 关得掉', (await page.locator('.map-builder').count()) === 0)
   ok('全程零 console 错误', logs.length === 0, logs.slice(0, 2).join(' | '))
 }
 
