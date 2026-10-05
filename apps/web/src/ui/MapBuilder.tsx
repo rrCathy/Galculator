@@ -10,6 +10,7 @@ import {
   type Group,
 } from '@groupviz/core'
 import { composeMapLine } from '../gal/compose'
+import { CardEditor } from './CardEditor'
 // 「已知群」（U48）：只有符号 + 阶、没有元素表 —— 做不了「填生成元的像」
 import { isKnownGroup } from '../gal/known'
 import { checkName, nextAutoName, normalizeName } from '../gal/naming'
@@ -164,20 +165,55 @@ function MapBuilderEditor({ op, src, tgt, objects, onSubmit, onCancel }: MapBuil
   if (!G || !H) return null
 
   return (
-    <div className="map-builder" onClick={(e) => e.stopPropagation()}>
-      <div className="mb-head">
-        <span className="chip chip-map">映射</span>
-        <strong>f :</strong>
-        <TexOrText text={src.label} />
-        <span className="mb-arrow">到</span>
-        <TexOrText text={tgt.label} />
-        <button className="mb-x" onClick={onCancel} title="取消（Esc）">
-          x
-        </button>
-      </div>
-
-      <div className="mb-hint">同态由生成元的像唯一决定----填每个生成元映到哪</div>
-
+    <CardEditor
+      head={{
+        chip: 'map',
+        chipLabel: '映射',
+        children: (
+          <>
+            <strong>f :</strong>
+            <TexOrText text={src.label} />
+            <span className="mb-arrow">到</span>
+            <TexOrText text={tgt.label} />
+          </>
+        ),
+      }}
+      hint="同态由生成元的像唯一决定----填每个生成元映到哪"
+      name={nameDraft}
+      onNameChange={setNameDraft}
+      namePlaceholder={autoName}
+      onSubmit={submit}
+      canSubmit={canSubmit}
+      onCancel={onCancel}
+      check={
+        <div className={`mb-check ${check.state}`}>
+          {check.state === 'empty' && (
+            <span>
+              {prettySymbol(G.symbol)} 到{prettySymbol(H.symbol)}：{gens.length} 个生成元待填
+              {autoNote ? ` -${autoNote}` : ''}
+            </span>
+          )}
+          {check.state === 'bad' && (
+            <>
+              <span className="mb-bad-mark">x</span>
+              <span>
+                {check.error}
+                {check.hint ? ` -${check.hint}` : ''}
+              </span>
+            </>
+          )}
+          {check.state === 'ok' && (
+            <>
+              <span className="mb-ok-mark">v</span>
+              <span>
+                {check.kind} -|ker| = {check.kernel} -|im| = {check.image}
+                {autoNote ? `（${autoNote}）` : ''}
+              </span>
+            </>
+          )}
+        </div>
+      }
+    >
       <div className="mb-rows">
         {gens.map((g) => (
           <label key={g.gen.name} className="mb-row">
@@ -201,54 +237,6 @@ function MapBuilderEditor({ op, src, tgt, objects, onSubmit, onCancel }: MapBuil
           自动填充
         </button>
       </div>
-
-      <div className={`mb-check ${check.state}`}>
-        {check.state === 'empty' && (
-          <span>
-            {prettySymbol(G.symbol)} 到{prettySymbol(H.symbol)}：{gens.length} 个生成元待填
-            {autoNote ? ` -${autoNote}` : ''}
-          </span>
-        )}
-        {check.state === 'bad' && (
-          <>
-            <span className="mb-bad-mark">x</span>
-            <span>
-              {check.error}
-              {check.hint ? ` -${check.hint}` : ''}
-            </span>
-          </>
-        )}
-        {check.state === 'ok' && (
-          <>
-            <span className="mb-ok-mark">v</span>
-            <span>
-              {check.kind} -|ker| = {check.kernel} -|im| = {check.image}
-              {autoNote ? `（${autoNote}）` : ''}
-            </span>
-          </>
-        )}
-      </div>
-
-      <div className="mb-foot">
-        <input
-          className="mb-name"
-          value={nameDraft}
-          onChange={(e) => setNameDraft(e.target.value)}
-          placeholder={autoName}
-          title={`留空则命名为「${autoName}」`}
-          spellCheck={false}
-          autoComplete="off"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submit()
-          }}
-        />
-        <button className="mb-btn" onClick={onCancel}>
-          取消
-        </button>
-        <button className="mb-btn primary" onClick={submit} disabled={!canSubmit}>
-          确认
-        </button>
-      </div>
-    </div>
+    </CardEditor>
   )
 }

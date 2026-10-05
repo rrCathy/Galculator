@@ -28,6 +28,7 @@ import { labelsHint, POINT_SET_MAX } from '../gal/pointSet'
 import { asciiSymbol, prettySymbol } from '../gal/pretty'
 import type { OpDef } from '../gal/ops'
 import type { CanvasNode, GalObject } from '../gal/types'
+import { CardEditor } from './CardEditor'
 import { TexOrText } from './Tex'
 
 /** 校验结果（编辑器底部那条状态行）。 */
@@ -340,27 +341,61 @@ function ActionBuilderEditor({
               .join(' , ')}${omega.labels.length > 6 ? ' ...' : ''}`
 
   return (
-    <div className="map-builder action-builder" onClick={(e) => e.stopPropagation()}>
-      <div className="mb-head">
-        <span className="chip chip-action">作用</span>
-        <TexOrText text={src.label} />
-        <span className="mb-arrow">作用在</span>
-        <span>{n >= 1 ? `${n} 个点` : '点集'}</span>
-        <button className="mb-x" onClick={onCancel} title="取消（Esc）">
-          x
-        </button>
-      </div>
-
-      {/*
-        这块是**纯文本面**（按钮、title、状态行都在这儿）：不许出现
-        希腊字母这类键盘打不出的字符（回归 `e2e/no-unicode-leak.mjs`）。
-        所以这里一律用「点」说话：数学上就是 Ω，字面上不写它。
-      */}
-      <div className="mb-hint">
-        一个作用就是一个同态 G 到置换群：先定作用点集，再填每个生成元把点映到哪。
-        点集填一个点数，或一个点集表达式（点集 / 集合 / 子群集 / 底集）。
-      </div>
-
+    <CardEditor
+      variant="action"
+      head={{
+        chip: 'action',
+        chipLabel: '作用',
+        children: (
+          <>
+            <TexOrText text={src.label} />
+            <span className="mb-arrow">作用在</span>
+            <span>{n >= 1 ? `${n} 个点` : '点集'}</span>
+          </>
+        ),
+      }}
+      /*
+       * hint 是**纯文本面**（按钮、title、状态行都在这儿）：不许出现
+       * 希腊字母这类键盘打不出的字符（回归 `e2e/no-unicode-leak.mjs`）。
+       * 所以这里一律用「点」说话：数学上就是 Ω，字面上不写它。
+       */
+      hint="一个作用就是一个同态 G 到置换群：先定作用点集，再填每个生成元把点映到哪。点集填一个点数，或一个点集表达式（点集 / 集合 / 子群集 / 底集）。"
+      name={nameDraft}
+      onNameChange={setNameDraft}
+      namePlaceholder={autoName}
+      onSubmit={submit}
+      canSubmit={canSubmit}
+      onCancel={onCancel}
+      check={
+        <div className={`mb-check ${check.state}`}>
+          {check.state === 'empty' && (
+            <span>
+              {prettySymbol(G.symbol)} 作用在 {n >= 1 ? `${n} 个点上` : '点集上'}：{check.message}
+              {autoNote ? ` -${autoNote}` : ''}
+            </span>
+          )}
+          {check.state === 'bad' && (
+            <>
+              <span className="mb-bad-mark">x</span>
+              <span>
+                {check.error}
+                {check.hint ? ` -${check.hint}` : ''}
+              </span>
+            </>
+          )}
+          {check.state === 'ok' && (
+            <>
+              <span className="mb-ok-mark">v</span>
+              <span>
+                是同态 - {check.orbitSizes.length === 1 && check.orbitSizes[0] === n ? '传递' : `${check.orbitSizes.length} 个轨道`} -
+                {check.faithful ? ' 忠实' : ` 不忠实（核阶 ${check.kernelSize}）`}
+                {autoNote ? `（${autoNote}）` : ''}
+              </span>
+            </>
+          )}
+        </div>
+      }
+    >
       <label className="ab-n">
         <span className="mb-gen">作用点集</span>
         <input
@@ -449,55 +484,6 @@ function ActionBuilderEditor({
           </button>
         </div>
       </div>
-
-      <div className={`mb-check ${check.state}`}>
-        {check.state === 'empty' && (
-          <span>
-            {prettySymbol(G.symbol)} 作用在 {n >= 1 ? `${n} 个点上` : '点集上'}：{check.message}
-            {autoNote ? ` -${autoNote}` : ''}
-          </span>
-        )}
-        {check.state === 'bad' && (
-          <>
-            <span className="mb-bad-mark">x</span>
-            <span>
-              {check.error}
-              {check.hint ? ` -${check.hint}` : ''}
-            </span>
-          </>
-        )}
-        {check.state === 'ok' && (
-          <>
-            <span className="mb-ok-mark">v</span>
-            <span>
-              是同态 - {check.orbitSizes.length === 1 && check.orbitSizes[0] === n ? '传递' : `${check.orbitSizes.length} 个轨道`} -
-              {check.faithful ? ' 忠实' : ` 不忠实（核阶 ${check.kernelSize}）`}
-              {autoNote ? `（${autoNote}）` : ''}
-            </span>
-          </>
-        )}
-      </div>
-
-      <div className="mb-foot">
-        <input
-          className="mb-name"
-          value={nameDraft}
-          onChange={(e) => setNameDraft(e.target.value)}
-          placeholder={autoName}
-          title={`留空则命名为「${autoName}」`}
-          spellCheck={false}
-          autoComplete="off"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submit()
-          }}
-        />
-        <button className="mb-btn" onClick={onCancel}>
-          取消
-        </button>
-        <button className="mb-btn primary" onClick={submit} disabled={!canSubmit}>
-          确认
-        </button>
-      </div>
-    </div>
+    </CardEditor>
   )
 }

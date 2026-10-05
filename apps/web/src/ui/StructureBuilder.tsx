@@ -6,6 +6,7 @@ import type { OpDef } from '../gal/ops'
 import type { CanvasNode, GalObject } from '../gal/types'
 import type { GalValue } from '../gal/value'
 import { axiomRows, verdictText } from './axiomReadout'
+import { CardEditor } from './CardEditor'
 import { TexOrText } from './Tex'
 
 /**
@@ -135,21 +136,47 @@ function StructureEditor({
     })
 
   return (
-    <div className="map-builder struct-builder" onClick={(e) => e.stopPropagation()}>
-      <div className="mb-head">
-        <span className="chip chip-structure">代数结构</span>
-        <strong>运算表 :</strong>
-        <TexOrText text={carrier.label} />
-        <span className="mb-arrow">上的二元运算</span>
-        <button className="mb-x" onClick={onCancel} title="取消（Esc）">
-          x
-        </button>
-      </div>
-
-      <div className="mb-hint">
-        每格填「第几行乘第几列得到谁」- 表项按行优先 1..{n} 编号，行列头就是这些编号。
-      </div>
-
+    <CardEditor
+      variant="structure"
+      head={{
+        chip: 'structure',
+        chipLabel: '代数结构',
+        children: (
+          <>
+            <strong>运算表 :</strong>
+            <TexOrText text={carrier.label} />
+            <span className="mb-arrow">上的二元运算</span>
+          </>
+        ),
+      }}
+      hint={
+        <>
+          每格填「第几行乘第几列得到谁」- 表项按行优先 1..{n} 编号，行列头就是这些编号。
+        </>
+      }
+      name={nameDraft}
+      onNameChange={setNameDraft}
+      namePlaceholder={autoName}
+      onSubmit={submit}
+      canSubmit={canSubmit}
+      onCancel={onCancel}
+      check={
+        <div className={`mb-check ${profile ? 'ok' : 'empty'}`}>
+          {!profile ? (
+            <span>
+              还有 {n * n - filled} 格没填（共 {n * n} 格）
+            </span>
+          ) : (
+            <>
+              <span className="mb-ok-mark">v</span>
+              <span>表填满了 - 下面是逐条读数</span>
+            </>
+          )}
+        </div>
+      }
+      /* 公理档案在状态行**之后**、表单脚之前（P0-2 给 CardEditor 留的 afterCheck 位）*/
+      afterCheck={profile ? <AxiomReadout labels={labels} profile={profile} /> : undefined}
+    >
       {/* 可滚的网格：64 阶也能看（超上限那一支在包装层就拦了）；12 阶以内不用滚 */}
       <div className="sb-scroll">
         <div
@@ -189,43 +216,7 @@ function StructureEditor({
           ))}
         </div>
       </div>
-
-      <div className={`mb-check ${profile ? 'ok' : 'empty'}`}>
-        {!profile ? (
-          <span>
-            还有 {n * n - filled} 格没填（共 {n * n} 格）
-          </span>
-        ) : (
-          <>
-            <span className="mb-ok-mark">v</span>
-            <span>表填满了 - 下面是逐条读数</span>
-          </>
-        )}
-      </div>
-
-      {profile && <AxiomReadout labels={labels} profile={profile} />}
-
-      <div className="mb-foot">
-        <input
-          className="mb-name"
-          value={nameDraft}
-          onChange={(e) => setNameDraft(e.target.value)}
-          placeholder={autoName}
-          title={`留空则命名为「${autoName}」`}
-          spellCheck={false}
-          autoComplete="off"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') submit()
-          }}
-        />
-        <button className="mb-btn" onClick={onCancel}>
-          取消
-        </button>
-        <button className="mb-btn primary" onClick={submit} disabled={!canSubmit}>
-          确认
-        </button>
-      </div>
-    </div>
+    </CardEditor>
   )
 }
 
