@@ -90,6 +90,10 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
   说明那批收尾**没整套跑**。判据：**批次收尾必须整套 `verify:e2e` 跑一遍**
   （逐个 `node verify/e2e/*.mjs`），然后 `git status --short docs/assets/` 复核差异
   **确实是本次改动引起的**再提交，别把过期截图和新截图混在一个提交里说不清。
+  ⚠ **禁止 `git add -A` 提交**：整套跑会重刷十几二十张**老**截图（多数只是重渲染噪音，
+  字节数只差 ±几字节），`git add -A` 会把它们一并扫进去。2026-10-05 真踩：`2dbf8a7`
+  夹带 22 张 `u*.png`，只能再补一次回退提交（`adbe862`）。正解：提交前先
+  `git checkout HEAD -- docs/assets/` 清掉噪音，再 `git add <本次真要更新的具体文件>`。
 
 ## 写断言时的坑（都是真踩过的）
 
