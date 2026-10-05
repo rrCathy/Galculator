@@ -79,7 +79,12 @@ import {
   lookupAutomorphisms,
 } from './automorphisms'
 // 半直积的三态分诊（U51）：core 有 `createSemidirectProduct`，缺的是"φ 从哪来"
-import { humanFingerprint, planInnerSemidirect, planSemidirect, semidirectBudget } from './semidirect'
+import {
+  humanFingerprint,
+  planInnerSemidirect,
+  planSemidirect,
+  semidirectBlockedReason,
+} from './semidirect'
 // 已知结论层（U48）：课本有闭式的族**先查表再谈计算** —— `Aut(S_6) = 1440` 是背下来的结论，
 // 不是现场搜索出来的（用户：「说 S6 搜不动我不是很认可」）
 import { isKnownGroup, knownFacts, realizeKnownGroup, type KnownGroupSpec } from './known'
@@ -312,8 +317,100 @@ export interface OpDef {
    * 改成**类型匹配就调**，把"要不要再判一次"交给实现自己。
    */
   fits?: (values: GalValue[]) => boolean
+  /**
+   * 本 op 的 `subset` 位**对"另一个 id 空间的群"的态度**（F2，2026-10-05）。
+   *
+   * ## 为什么要有这个字段（而不是把 `groupAsSet` 一刀切）
+   *
+   * `subset` 位的**四类消费者对跨 id 空间的容忍度完全不同** —— 这是实测出来的，
+   * 不是设计出来的：
+   *
+   * | op | 跨 id 空间时 | 依据 |
+   * |---|---|---|
+   * | `商` / `陪集作用` | **能跑**（唯一同构子群 ⇒ 自动翻译）| `autoTranslatedSubgroup` |
+   * | `中心化子` / `正规化子` | **跑不动**（元素必须真在 G 里）| `foreignElementSetFail` |
+   * | `交` / `并` / `差` / `积集` | **跑不动**（靠母群对齐）| `setOp` 的 `sameGroup` 那道关 |
+   * | `闭包` | 无 group 前缀 ⇒ 用不到 | — |
+   *
+   * 于是判据必须**按 op** 给，不能按 `subset` 这个类型统一给。
+   * 统一收窄会误杀 `商` / `陪集作用` 那两条真能跑的路（用户实测的 `S_4 / 独立 V_4`）；
+   * 统一放宽就是 F2 那个病 —— 68 个"列出来点下去必报错"的候选。
+   *
+   * ## 三档的判据（`paramAccepts` 消费，`undefined` = `elements`）
+   *
+   *  · `align`（**默认，最严**）：两边元素 id 必须能直接对着读
+   *    （`idsComparable`：同世界 or 两边都自证式 id）。
+   *  · `translate`：再放行"**G 里与它同构的子群恰好一个**"那条路
+   *    （`autoTranslatedSubgroup`；陪集层不跨）。`商` 要求那个子群还**正规**。
+   *  · `align|translate`（**最宽**）：两条都放行。给"真的两条路都能走"的 op。
+   *
+   * ⚠️ **判据与 run 里的守卫共用同一批函数**（`idsComparable` /
+   * `autoTranslatedSubgroup`）—— 预检放过的，点下去一定能跑；
+   * 预检拦下的，一定是那道关会拦的（`AUDIT-2026-10-04-canvas.md` F2）。
+   */
+  crossSpace?: CrossSpacePolicy
+  /**
+   * 本 op 的 **`group` 位**对"另一个 id 空间的群"的态度（F2，2026-10-05）。
+   *
+   * 与 `crossSpace` 同构，只是作用在 `group` 位上 —— 绝大多数 op 的 group 位
+   * **不关心**（`商` / `C_G` 的第一参数就是个上下文，与 id 空间无关），
+   * 只有"这个群必须真是前一个群的子群"那类需要声明。
+   *
+   * 目前只有 `像`（`image(f, H)`，H 必须 `≤ 定义域`）用得上。
+   */
+  groupSlotSubgroupOf?: number
+  /**
+   * 本 op 的**两个参数之间**必须同世界（F2，2026-10-05）。
+   *
+   * `paramAccepts` 是**逐参**判的（每个参数只看 `earlier`），所以"这两个数集来自
+   * 同一个群吗"这条判据它看不到 —— 而集合运算（`∩ ∪ ∖ ·`）恰恰要求这个：
+   * 两个没有共同母群的数集（`orbits(conjAction(S_4), (12))` 的轨道集 与 `C_6`）
+   * 元素 id 空间不相通，算出来只有一句"没有共同的母群"。
+   *
+   * `true` ＝ 本 op 的**每一个**参数都必须与 `earlier` 里的数集同世界
+   * （判据 `idsComparable`，与 `setOp` 里 `sameGroup(rootOf·, rootOf·)` 那道关同源）。
+   * 默认 `false`（逐参判足够）。
+   */
+  pairSameWorld?: boolean
+  /**
+   * 产**数值**的 op 默认不进手势菜单（"计算先不弄"，U47 那条老决策）——
+   * 但**逐条豁免**：有些数值是"作用/群的性质"而不是"算术练习"，
+   * 缺了入口就断了"作用才是主角"那条链（F5）。
+   *
+   * 唯一在册的豁免：`orbitCount`（`burnside(A)` = 轨道条数）。
+   * 它与 `orbits` / `stabilizer` / `fix` 是**同一个动作的四个读法**，
+   * README 把它们并列在同一行；只把前三个铺在作用线的球上会让用户看着
+   * 已有的作用对象想数轨道时**只能手打**。
+   *
+   * 仍**不豁免**的：`ord` / `elementOrder` / `factorize` / `binomial` / `gcd` / `lcm` /
+   * `eulerPhi` —— 它们是"先造对象再算"，有文本入口与数值区就够了。
+   */
+  numericGesture?: boolean
+  /**
+   * 本 op 的**两个对象位能否对调**（F2 配套，2026-10-05）。
+   *
+   * ## 为什么类型相同还不够
+   *
+   * `map(G, H)` 与 `N_G(G, H)` 的两位**都是对象位**，但：
+   *   · `map` 换序是**另一个问题**（`map(H, G)` 是反方向的映射）—— 换了就是错的；
+   *   · `N_G` 换序是**同一个问题**（用户想算 `N_{S_4}(A_4)`，先点了 `A_4`）。
+   *
+   * 而 `N_G` 的两位**类型还不同**（`group` + `subset`）—— 所以"同型才兜"也不对。
+   *
+   * ⇒ 只能由 op 自己声明。**在册**：`normalizer` / `centralizer` / `quotient` /
+   * `cosetAction` —— 「母群 ⊇ 子群」这一族，顺序由**用户的心智**（"我要算谁"）
+   * 决定而不是由参数表决定。`App.tsx` 的 `orderForUi` 早就为它们做了兜底，
+   * 缺的只是 `canPick` 这道门别把它先一步挡掉。
+   */
+  swappableParams?: boolean
   run: (args: OpArg[], ctx?: OpContext) => OpOutcome
 }
+
+/**
+ * `subset` 位对"另一个 id 空间的群"的容忍档（见 `OpDef.crossSpace`）。
+ * `undefined` ＝ `align`（最严，默认）。
+ */
+export type CrossSpacePolicy = 'align' | 'translate' | 'align|translate'
 
 /* ── 参数辅助 ──────────────────────────────────────────── */
 
@@ -811,6 +908,13 @@ function autoTranslatedSubgroup(
   requireNormal: boolean,
 ): Subgroup | null {
   if (hasCosetElements(G) || hasCosetElements(S.group)) return null
+  // **装得下才谈得上翻译**（F2，2026-10-05 补）：`|S| > |G|` 时 G 里不可能有与 S
+  // 同构的子群。没有这道门时 `S_4` 里那个唯一的 `C_1`（`{e}`，阶 1、正规）
+  // 会让 `quotient(C_1, S_4)` 通过"唯一同构正规子群"这道门 ⇒ 菜单列出一条
+  // 点下去必报「S_4 的元素不在 C_1 里」的候选（实测 1 条）。
+  // 同一道守卫在 `relations.ts#embeddingContainment` 里本来就有（`H.order >= G.order` 挡第二关），
+  // 是这条翻译路径漏了 —— 现在两处同宽。
+  if (S.elements.length > G.order) return null
   const subs = isomorphicSubgroupsIn(G, S)
   if (!subs) return null
   const cands = requireNormal ? subs.filter((h) => h.isNormal) : subs
@@ -1005,7 +1109,7 @@ function omegaArgOf(a: OpArg | undefined): OmegaArg | null {
     return {
       group: v.group,
       label: `asSet(${refText(a)})`,
-      members: v.elements.map((e) => ({ label: e.label })),
+      members: v.elements.map((e) => ({ label: e.label, id: e.id })),
       points: null,
     }
   }
@@ -1013,7 +1117,7 @@ function omegaArgOf(a: OpArg | undefined): OmegaArg | null {
     return {
       group: v.group,
       label: `asSet(${refText(a)})`,
-      members: v.group.elements.map((e) => ({ label: e.label })),
+      members: v.group.elements.map((e) => ({ label: e.label, id: e.id })),
       points: null,
     }
   }
@@ -1073,14 +1177,30 @@ function conjugationPermsOnElements(
   acting: readonly GroupElement[],
 ): { perms: Map<string, number[]>; omega?: undefined } | { error: string; hint?: string } {
   const full = computeConjugationPerms(G)
-  const posInG = (label: string) => G.elements.findIndex((e) => e.label === label)
-  const src = O.members.map((m) => posInG(m.label))
+  // F2：Ω 是**另一个群对象**时（`conjOn(S_4, A_4)`），Ω 的成员记号来自那个群，
+  // 按 label 在 G 里查会一个都找不到（`A_4` 的 `a` 与 `S_4` 的元素标签毫无关系）。
+  // 置换群的元素 id **就是置换本身**、跨群有意义，所以先按 id 查、退回 label。
+  const posById = new Map<string, number>()
+  G.elements.forEach((e, i) => posById.set(e.id, i))
+  const posInG = (label: string, id?: string): number => {
+    if (id !== undefined) {
+      const hit = posById.get(id)
+      if (hit !== undefined) return hit
+    }
+    return G.elements.findIndex((e) => e.label === label)
+  }
+  const src = O.members.map((m) => posInG(m.label, m.id))
   if (src.some((i) => i < 0)) {
     return { error: 'Omega 里有 G 中找不到的元素', hint: 'Omega 的成员必须是 G 的元素' }
   }
-  const posInO = new Map<string, number>()
-  O.members.forEach((m, i) => {
-    if (!posInO.has(m.label)) posInO.set(m.label, i)
+  /*
+   * 回写坐标：`posInO` 必须**按 G 里的下标**索引（不是 Ω 的成员序号）——
+   * 所以这里的键是"G 里的位置"，值是"Ω 里的位置"。F2：键优先用元素 id
+   * （Ω 是另一个群对象时 label 对不上）。
+   */
+  const posInO = new Map<number, number>()
+  src.forEach((gi, oi) => {
+    if (!posInO.has(gi)) posInO.set(gi, oi)
   })
   const perms = new Map<string, number[]>()
   for (const g of acting) {
@@ -1088,7 +1208,7 @@ function conjugationPermsOnElements(
     if (!p) return { error: 'core 没有给出该共轭置换' }
     const perm: number[] = []
     for (const i of src) {
-      const j = posInO.get(G.elements[p[i]].label)
+      const j = posInO.get(p[i])
       if (j === undefined) {
         return {
           error: `${elementLabel(G, g.id)} 把 Omega 里的元素映到了 Omega 之外`,
@@ -1508,16 +1628,22 @@ export const OPS: OpDef[] = [
     arity: 2,
     result: 'group',
     /*
-     * **候选预检**：预算拦得下来的，菜单里就别列（列了点下去必被拦住 = 撒谎）。
-     * 判据与 `planSemidirect` 的第一道门共用同一个 `semidirectBudget`。
+     * **候选预检**（F3，2026-10-05 从"只挡预算"扩到"挡四道门"）：
+     * 判据是 `semidirectBlockedReason` —— 与 `planSemidirect` **同一个函数**。
      *
-     * 注意分寸：这里只挡**预算**，不挡"多解"—— 「多解」是**数学答复**
-     *（这个记号本来就定不下一个群），不是"点了必然报错"的实现问题。
+     * 从前这里只调 `semidirectBudget`（四道门里的第一道），于是
+     * 拖 `G(S_4)` → `Z(= Z(S_4) = C_1)` 照样列「半直积」，点下去报
+     * 「G 与 Z 的半直积本地算不了」——"共用同一个判据"本身变成了两份（F3 原话）。
+     *
+     * 注意分寸：这里只挡**预算 / 平凡性**（"点了必然报错"那一类），
+     * **不挡"多解"**——「多解」是**数学答复**（这个记号本来就定不下一个群），
+     * 不是实现问题。也不挡枚举阶段的 blocked（那要真算一遍 `Aut(N)` 的像，太贵）。
      */
     fits: (vs) => {
       const A = groupValueOf(vs[0])
       const B = groupValueOf(vs[1])
-      return !A || !B || semidirectBudget(A, B).ok
+      if (!A || !B) return true // 前缀未齐 ⇒ 判不了，按契约返回 true
+      return semidirectBlockedReason(A, B) === null
     },
     run: (a) => {
       const N = groupOf(a[0])
@@ -1601,6 +1727,9 @@ export const OPS: OpDef[] = [
     doc: '商群：把正规子群 N 的每个陪集压成一点',
     recipe: '原子构造（不归约）',
     impl: 'computeQuotientGroup',
+    // F2：`商` 是**唯一**会跨 id 空间自动翻译的位（唯一同构的**正规**子群），
+    // 所以菜单必须放行那条路 —— 用户实测的 `S_4 / 独立 V_4` 靠它。
+    crossSpace: 'translate',
     infix: ['/'],
     call: ['quotient'],
     params: [
@@ -1609,6 +1738,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'group',
+    // 「母群 ⊇ 子群」这一族：用户的心智是"我要算谁的正规化子/商/陪集"，不是"它是谁的第一参"。
+    swappableParams: true,
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('商需要第一个参数是群')
@@ -1691,6 +1822,15 @@ export const OPS: OpDef[] = [
     arity: 2,
     editor: true,
     result: 'map',
+    /*
+     * **候选预检**（F3）：同态由**生成元的像**唯一决定，所以**源群没有生成元时
+     * 这条 op 根本跑不了**（`Z(S_4) = C_1` 就是这样：报"没有生成元，无法由生成元的像定义映射"）。
+     * 判据 `getGeneratorElements(G).length > 0` 与 run 里那道门**同一个调用**。
+     */
+    fits: (vs) => {
+      const G = groupValueOf(vs[0])
+      return !G || getGeneratorElements(G).length > 0
+    },
     run: (a) => {
       const G = groupOf(a[0])
       const H = groupOf(a[1])
@@ -1867,6 +2007,29 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'action',
+    /*
+     * **候选预检**（F3）：共轭 `g·x·g^-1` 必须在**某个群里面**做，而那个群要么是
+     * Ω 自己的母群、要么就是作用群 G 自身。Ω 是个"跟 G 毫无关系的群"的元素集时
+     * （`conjOn(C_6, asSet(Syl(S_4, 3)))`），run 里那句「G 与 Omega 来自不同的群」
+     * 必响 —— 菜单不该列。
+     *
+     * 判据与 run 里 `sameAs || asSub` 那道关**同一个组合**：
+     * 同群 / id 可直接对着读且真是子群 / Ω 就是 G 自己。
+     */
+    fits: (vs) => {
+      const G = groupValueOf(vs[0])
+      const O = vs[1]
+      if (!G || !O) return true // 前缀未齐 ⇒ 判不了
+      if (O.type === 'group') return true // Ω 就是某个群 —— 共轭在 G 里做，总能算
+      const ambient = O.type === 'elements' ? O.group : O.type === 'set' ? O.set.group : null
+      if (!ambient) return true // 抽象点集：run 会说清"没有共轭可言"，那是另一类提示
+      if (sameGroup(G, ambient)) return true
+      if (G.order > ambient.order) return false
+      if (!idsComparable(G, ambient)) return false
+      const ambIds = new Set(ambient.elements.map((e) => e.id))
+      if (!G.elements.every((e) => ambIds.has(e.id))) return false
+      return subgroupFromElementIds(ambient, G.elements.map((e) => e.id))?.order === G.order
+    },
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('conjOn 的第一个参数必须是群')
@@ -1889,7 +2052,22 @@ export const OPS: OpDef[] = [
        * 于是从前这条一律被"来自不同的群"挡掉。共轭本来就在母群里做，
        * 子群对象又沿用母群的元素 id，所以这里只要判"P 是不是 G 的子群"。
        */
-      const ambient = O.group
+      /**
+       * **共轭在哪一群里做** —— 这是 F2 挖出来的**真 bug**（不只是菜单撒谎）。
+       *
+       * Ω 是一个**群对象** H（`conjOn(G, H)` 这种写法）时，`omegaArgOf` 给出的
+       * `O.group` 是 **H 自己**。而共轭 `g·x·g^-1` 必须在**作用群 G 里面**做 ——
+       * 于是 `ambient` 应当取 `G`（Ω 的点集仍然是 H 的元素）。
+       *
+       * 修前：`ambient = H` ⇒ `sameGroup(G, H)` 只在 G = H 时成立、
+       * `asSub` 判的是 "G ≤ H" ⇒ **`conjOn(S_4, A_4)` 这类数学上完全合法的写法
+       * 一律报「G 与 Omega 来自不同的群」**（A₄ 在 S₄ 里正规，共轭封闭，该算得出来）。
+       *
+       * 判据不变的那一半：Ω 是**元素集 / 集合**时 `ambient` 仍取 `O.group` ——
+       * 那时"Ω 的母群"确实是共轭发生的场所（Sylow III 的 `P ↷ Syl_p(G)` 靠这一条）。
+       */
+      const omegaIsGroupObject = a[1]?.kind === 'object' && a[1].value.type === 'group'
+      const ambient = omegaIsGroupObject ? G : O.group
       // Ω 是**没有母群的合成点集**（U53 的 `pointSet(5)` / `labeledSet(a,b,c)`）——
       // 共轭作用要的是"G 共轭作用在它的一族子群/元素上"，抽象点集没有共轭可言。
       // 这不是"算不动"，是**这个问题在这里不成立**，要说清并指向自定义作用。
@@ -1900,20 +2078,25 @@ export const OPS: OpDef[] = [
         )
       }
       const sameAs = sameGroup(G, ambient)
+      // F2：判据与菜单那侧（`paramAccepts` 的 `omega` 档）同源 ——
+      // `isSubgroupElementSet` 是 core 的**静默**判据（认不得的引用它一丢了之），
+      // 于是独立构造的 `A_4` 会被说成是 `S_4` 的子群。这里要的是
+      // "G 的元素真在 ambient 里、且两边 id 能直接对着读"。
       const asSub =
         !sameAs &&
         G.order <= ambient.order &&
-        isSubgroupElementSet(
-          ambient,
-          G.elements.map((e) => e.id),
-        )
+        idsComparable(G, ambient) &&
+        subgroupFromElementIds(ambient, G.elements.map((e) => e.id))?.order === G.order
       if (!sameAs && !asSub) {
         return fail(
           'G 与 Omega 来自不同的群',
           `${prettySymbol(G.symbol)} 与 ${prettySymbol(ambient.symbol)}`,
         )
       }
-      const acting = asSub ? G.elements : ambient.elements
+      // `acting` = 真正在动的那些元素，**永远是作用群 G 的元素**。
+      // （`asSub` 那一档是"作用群 G 是 Ω 母群的子群"，动的仍是 G 全体；
+      //   Ω 就是 G 自身时也是 G 全体。）
+      const acting = G.elements
 
       const r = O.points
         ? conjugationPermsOnSubgroups(ambient, O.points, acting)
@@ -1950,6 +2133,8 @@ export const OPS: OpDef[] = [
     primitive: true,
     doc: 'G 左乘作用在 H 的左陪集上（共 [G:H] 个点）---- Sylow I 的舞台',
     impl: 'computeCosetActionPerms',
+    // F2：与 `商` 同一条翻译路，但**不要求正规**（`autoTranslatedSubgroup(G, S, false)`）。
+    crossSpace: 'translate',
     call: ['cosetAction', 'coset'],
     params: [
       { name: 'G', type: 'group' },
@@ -1957,6 +2142,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'action',
+    // 「母群 ⊇ 子群」这一族：用户的心智是"我要算谁的正规化子/商/陪集"，不是"它是谁的第一参"。
+    swappableParams: true,
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('cosetAction 的第一个参数必须是群', '如 cosetAction(G, P)')
@@ -2211,6 +2398,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
+    // F2：两个数集必须同世界（元素 id 空间相通）——`setOp` 靠母群对齐，判据见 `pairSameWorld`。
+    pairSameWorld: true,
     run: (a, ctx) => setOp(a, '\\cap', ctx),
   },
   {
@@ -2228,6 +2417,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
+    // F2：两个数集必须同世界（元素 id 空间相通）——`setOp` 靠母群对齐，判据见 `pairSameWorld`。
+    pairSameWorld: true,
     run: (a, ctx) => setOp(a, '\\cup', ctx),
   },
   {
@@ -2247,6 +2438,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
+    // F2：两个数集必须同世界（元素 id 空间相通）——`setOp` 靠母群对齐，判据见 `pairSameWorld`。
+    pairSameWorld: true,
     run: (a, ctx) => setOp(a, '\\', ctx),
   },
   {
@@ -2264,6 +2457,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'elements',
+    // F2：两个数集必须同世界（元素 id 空间相通）——`setOp` 靠母群对齐，判据见 `pairSameWorld`。
+    pairSameWorld: true,
     run: (a, ctx) => setOp(a, '\\cdot', ctx),
   },
 
@@ -2604,6 +2799,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'group',
+    // 「母群 ⊇ 子群」这一族：用户的心智是"我要算谁的正规化子/商/陪集"，不是"它是谁的第一参"。
+    swappableParams: true,
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('C_G 的第一个参数必须是群')
@@ -2647,6 +2844,8 @@ export const OPS: OpDef[] = [
     ],
     arity: 2,
     result: 'group',
+    // 「母群 ⊇ 子群」这一族：用户的心智是"我要算谁的正规化子/商/陪集"，不是"它是谁的第一参"。
+    swappableParams: true,
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('N_G 的第一个参数必须是群')
@@ -2812,6 +3011,9 @@ export const OPS: OpDef[] = [
     params: [{ name: 'A', type: 'action' }],
     arity: 1,
     result: 'number',
+    // F5：轨道条数是"这个作用的基本读数"（与 orbits / stabilizer / fix 同一个动作），
+    // 不是"算术练习" ⇒ 豁免"产数值不进手势菜单"那条老决策，铺在作用线的球上。
+    numericGesture: true,
     run: (a) => {
       const A = actionOf(a[0])
       if (!A) return fail('burnside 需要一个作用', '先用 conjAction(G) / leftAction(G) 造一个')
@@ -2879,6 +3081,8 @@ export const OPS: OpDef[] = [
     arity: 1,
     optional: 1,
     result: 'group',
+    // F2：第二参 H 必须 `≤ 定义域` —— 声明在 `group` 位上，判据与下面那三关同源。
+    groupSlotSubgroupOf: 0,
     run: (a) => {
       const M = mapArgOf(a[0])
       if (!M) return fail('像需要一个映射对象', '映射由对象编辑器产出（U3）')
@@ -3671,23 +3875,118 @@ export function opByCall(name: string): OpDef | undefined {
  *
  * 除 `opsFor` 外，U2 的 pending 也用它——点第二个参数时要知道"这个节点能不能当这一位"。
  */
-export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): boolean {
-  /** 群对象当集合读的共用判据（见 `subset` 的分支注释）。 */
-  const groupAsSet = (g: Group): boolean => {
+/**
+ * `subset` 位上「另一个 id 空间的群能不能当子群读」—— **F2 的唯一判据**。
+ *
+ * 三档（`OpDef.crossSpace` 的取值）在这里落地，**判据与 run 里的守卫同源**：
+ *  · `align`：`idsComparable`（同世界 or 两边都自证式 id）—— 与 `foreignElementSetFail`
+ *    里那道 `idsComparable(S.group, G) && 元素全在 G 里` 同一个函数。
+ *  · `translate`：`autoTranslatedSubgroup(G, S, requireNormal)` 非 null
+ *    —— 与 `商` / `陪集作用` 的 run 里那道门**同一个函数**（`requireNormal` 也一样）。
+ *
+ * ⚠️ **不许用 `containment()` 代替**：它的第二关（嵌入）只问"G 里有没有同构的子群"，
+ * **不问是否唯一** —— 于是 `D_3 ⊆ S_4` 判 YES，但 `quotient(S_4, D_3)` 真跑不动
+ * （S₄ 里有 4 个 S₃，"恰好一个"才是能自动翻译的那条）。实测读数见
+ * `docs/AUDIT-2026-10-04-canvas.md` F2 与 HISTORY 2026-10-05。
+ *
+ * 判不出（`hasCosetElements` 守住的那一半、超枚举守卫）时一律 **false** ——
+ * 宁可少列一条候选，也不列一条点了必报错。
+ */
+function crossSpaceAccepts(
+  policy: CrossSpacePolicy,
+  G: Group,
+  S: { group: Group; elements: GroupElement[] },
+  requireNormal: boolean,
+): boolean {
+  /*
+   * **装得下**（拉格朗日，F2 2026-10-05 补）——三条路都先过这一关。
+   *
+   * 病根：core 给平凡子群沿用**母群的单位元置换**做 id，所以 `Z(S_4) = C_1` 的
+   * 元素 id 是 `'1,2,3,4'`，**在 S_4 的元素表里找得到** ⇒ 光看 id 会放行
+   * `quotient(C_1, S_4)`，而那要求 `S_4 ≤ C_1`（|S_4| = 24 > |C_1| = 1）——
+   * 方向反了，点下去必报「S_4 的元素不在 C_1 里」。
+   *
+   * 判据就是拉格朗日：**|S| > |G| ⇒ 不可能是子群**。`relations.ts` 的
+   * `literalContainment` / `embeddingContainment` 各有一道同样的门（F2 补的），
+   * 现在这三处同宽。
+   */
+  if (S.elements.length > G.order) return false
+
+  if (policy === 'align|translate') {
+    // 两条路都成立的 op：任一条为真即收（目前没有 op 用这一档，作为**可表达性**存在）。
+    if (idsComparable(S.group, G)) {
+      const gIds = new Set(G.elements.map((e) => e.id))
+      if (S.elements.every((e) => gIds.has(e.id))) return true
+    }
+    return autoTranslatedSubgroup(G, S, requireNormal) !== null
+  }
+  if (policy === 'translate') return autoTranslatedSubgroup(G, S, requireNormal) !== null
+  if (!idsComparable(S.group, G)) return false
+  const gIds = new Set(G.elements.map((e) => e.id))
+  return S.elements.every((e) => gIds.has(e.id))
+}
+
+export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[], op?: OpDef): boolean {
+  /**
+   * 「这个值能不能当**前缀某个群的子集**读」—— **F2 的唯一判据入口**。
+   *
+   * 三个 `subset` 档的值都从这里过：`group`（群对象当集合读）· `elements`（元素集）·
+   * `set`（`asSet` 过的提升）。**从前只有 `group` 那一支查，另两支无条件放行** ——
+   * 于是拖一个别的群的 `elements`（典型：`orbits(conjAction(S_4), (12))` 给出的轨道集）
+   * 到任何群上，`商` / `C_G` / `N_G` / `交` 全部列得出来、点下去全报错
+   * （实测：`O x C6` 那 8 条全是这一类）。
+   *
+   * 判据与各 op 的 run 里那道关**同源**（`crossSpaceAccepts`）——
+   * 菜单里列出来的，就是真跑得动的。
+   *
+   * 陪集层（`O = orbits(...)` 那种商群的轨道）**在同母群里照旧放行**：
+   * `align` 档里的 `idsComparable` 走 `elementSemanticKey`（U39 的语义对齐），
+   * 跨商群的假包含已经挡掉了。
+   */
+  const subsetOfPrefixGroup = (s: { group: Group; elements: GroupElement[] }): boolean => {
     const groups = earlier.filter((e) => e.type === 'group')
+    // F2：`pairSameWorld` 的 op（集合运算）两个参数都是数集、没有 group 前缀 ——
+    // 那条"必须同世界"的判据只能对**earlier 里的数集**做。
+    if (op?.pairSameWorld) {
+      const sets = earlier.filter(
+        (e): e is Extract<GalValue, { type: 'elements' }> => e.type === 'elements',
+      )
+      if (sets.length > 0 && !sets.some((e) => idsComparable(e.group, s.group))) return false
+    }
     if (groups.length === 0) return true
-    return groups.some(
-      (e) => e.type === 'group' && isSubgroupElementSet(e.group, g.elements.map((x) => x.id)),
-    )
+    const policy = op?.crossSpace ?? 'align'
+    return groups.some((e) => {
+      if (e.type !== 'group') return false
+      return crossSpaceAccepts(policy, e.group, s, op?.id === 'quotient')
+    })
   }
 
+  /** 群对象当集合读（`subset` / `setlike` / `omega` 三档都收群）。 */
+  const groupAsSet = (g: Group): boolean => subsetOfPrefixGroup({ group: g, elements: g.elements })
+
   switch (t) {
-    case 'group':
+    case 'group': {
       // 群位：结构**够格成群**时放行（判据与 `structureToGroup` / `level` 同源）；
       // 非群结构（原群 / 半群 / 幺半群）在这里被挡 ⇒ 菜单因此不撒谎。
+      //
+      // ⚠️ **F2**：`像`（`image(f, H)`）的 H 位声明了 `groupSlotSubgroupOf: 0`
+      // ——"这个群必须真是第 0 位那个映射的定义域的子群"。从前 group 位一律放行，
+      // 于是拖 `A_4`（|A₄|=12 > |C₆|=6）到 `C_6 → C_6` 的映射上照样列「像 f(H)」，
+      // 点下去报「比定义域还大」（实测 4 条）。
+      if (op?.groupSlotSubgroupOf !== undefined && v.type === 'group') {
+        const host = earlier[op.groupSlotSubgroupOf]
+        if (host?.type === 'map') {
+          const M = host.map
+          if (v.group.order > M.domain.order) return false
+          if (!idsComparable(v.group, M.domain)) return false
+          const domIds = new Set(M.domain.elements.map((e) => e.id))
+          if (!v.group.elements.every((e) => domIds.has(e.id))) return false
+        }
+      }
       if (v.type === 'group') return true
       if (v.type === 'structure') return isGroupStructure(v.structure)
       return false
+    }
     case 'carrier':
       // 载体位：**还没加运算的集合**。`set`（任意，含无母群的 `pointSet`）或 `elements`。
       // 不复用 `subset`：F1 修完的 `subset` 要求 `set` 有母群，而载体恰是 `pointSet(3)`
@@ -3720,7 +4019,12 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
       // 是 null ⇒ run 里必然报"要 Omega 是某个群的子群集/元素集"）。列出来点下去必报错
       // 就是菜单撒谎，所以这里要求 `set` **有母群**才收 —— 判据与 `conjOn.run` 里
       // `ambient` 那道关同宽。抽象点集要走「customAction」（它的位是 `omegaOrInt`）。
-      if (v.type === 'elements') return true
+      // `elements` 与 `set` 都要求它与 G 有**结构关系**（同群 / 是 G 的子群）——
+      // 判据与 `conjOn.run` 里 `sameAs || asSub` 那道关同宽。
+      // ⚠️ F2：从前 `elements` 无条件放行，于是拖 `orbits(conjAction(S_4), (12))`
+      // 那种"别的群的轨道集"到任何群上，`conjOn` 都列得出来、点下去报
+      // 「G 与 Omega 来自不同的群」（实测 9 条）。
+      if (v.type === 'elements') return subsetOfPrefixGroup({ group: v.group, elements: v.elements })
       if (v.type === 'set') return v.set.group != null
       if (v.type !== 'group') return false
       return groupAsSet(v.group)
@@ -3742,10 +4046,19 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[]): bo
     case 'subset': {
       // **单个**数集。`subgroups` 只在恰好一个成员时收——那时它等于一个子群
       //（`closure(S)` / `quotient(G, N)` 这类就是这么用的）。
-      if (v.type === 'elements') return true
+      //
+      // ⚠️ **F2（2026-10-05）**：`elements` 与 `set` 从前**无条件放行**，
+      // 于是拖别的群的元素集（典型：`orbits(conjAction(S_4), (12))` 的轨道集）
+      // 到任何群上，`商` / `C_G` / `交` 全列得出来、点下去全报错
+      // （实测残留的 59 条里 32 条是这一类）。现在两者都走 `subsetOfPrefixGroup`，
+      // 判据与各 op 的 run 里那道关同源。
+      if (v.type === 'elements') return subsetOfPrefixGroup({ group: v.group, elements: v.elements })
       // `set`：只有真的是"某个群的元素的提升"才收（`asSet(群/元素集)` 成立；
       // `pointSet(n)` / `asSet(子群集)` 不成立）。判据与内核共用 `setElementSetOf`。
-      if (v.type === 'set') return setElementSetOf(v) !== null
+      if (v.type === 'set') {
+        const asEls = setElementSetOf(v)
+        return asEls ? subsetOfPrefixGroup(asEls) : false
+      }
       if (v.type === 'subgroups') return v.subgroups.length === 1
       if (v.type !== 'group') return false
       // 群对象当集合读，且前面有群参数时要求它是其中某个的子群
@@ -3794,7 +4107,7 @@ export function opsFor(selection: GalValue[]): OpDef[] {
        * 但 `omegaOrInt` 同时是"能空着"与"能吃画布上的集合"——那句替身会把
        * "选中 G 与一个集合"整条路误杀。删掉它，逐项交给 `paramAccepts` 真判。
        */
-      if (!paramAccepts(p.type, selection[i], selection.slice(0, i))) return false
+      if (!paramAccepts(p.type, selection[i], selection.slice(0, i), op)) return false
     }
     for (let i = selection.length; i < op.params.length; i++) {
       const p = op.params[i]

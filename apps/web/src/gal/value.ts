@@ -97,6 +97,31 @@ export interface NormalizedSubgroup {
   isNormal: boolean
   /** null = 该来源不提供此信息（如 findAllSubgroups 的普通子群） */
   isSylow: boolean | null
+  /**
+   * **这一项就是母群自己**（F7，2026-10-05）。
+   *
+   * ## 为什么需要这个字段
+   *
+   * 同族三条 op 的口径天生不同，而**数学上它们都是对的**：
+   *   · `Sub(G)` / `maximalSubgroups(G)` —— core 的 `findAllSubgroups`
+   *     **不含 G 自身**（"极大子群"按定义是 G 的真子群）。
+   *   · `normalSubgroups(G)` —— core 的 `findAllNormalSubgroups` **含 G 自身**，
+   *     因为 `G ⊴ G` 恒成立（正规子群的定义允许 G 本身）。
+   *
+   * 用户看到的是**同一个族的三条并列入口**，正规子群那份"多算一个"，
+   * 于是问「为什么正规子群多一个」—— 界面上没有任何地方回答这个问题。
+   *
+   * ## 为什么不"统一口径"
+   *
+   * 改任一边都要**说数学上的假话**：
+   *   · 从 `normalSubgroups` 里剔掉 G ⇒ 漏掉 `G ⊴ G`（用户拿它当"正规性"的判据，
+   *     `H ⊴ G` 判的就是"在列表里"）；
+   *   · 往 `Sub(G)` 里塞 G ⇒ "子群"在多数教材里默认指**真**子群，
+   *     而且 `findAllSubgroups` 是 core 的语义，不该由应用层加料。
+   *
+   * ⇒ **披露**而不是改口径：这一项在列表里标出来（UI 用它），顶部再写一句口径说明。
+   */
+  isSelf: boolean
   /** 生成元记号，如 ⟨r2, s⟩；平凡群为 {e} */
   label: string
 }
@@ -122,6 +147,8 @@ export function normalizeSubgroup(s: RawSubgroupLike, group: Group): NormalizedS
     generators: gens,
     isNormal: !!s.isNormal,
     isSylow: s.isSylow ?? null,
+    // F7：判据走**阶 + 元素数**（不是 `label`）—— G 自身的元素数与阶都等于母群。
+    isSelf: order === group.order && s.elements.length === group.elements.length,
     label:
       order <= 1
         ? '{e}'
@@ -263,6 +290,18 @@ export interface GalRelation {
 export interface SetMember {
   /** 展示记号（`⟨r2, s⟩` / `H₁` / `r2` …）*/
   label: string
+  /**
+   * 成员**背后的群元素 id**（F2，2026-10-05）。
+   *
+   * 为什么需要：Ω 是**另一个群对象**时（`conjOn(S_4, A_4)` 这类），
+   * 成员的 label 来自那个群，按 label 在作用群里查**一个都找不到**
+   * （`A_4` 的 `a` 与 `S_4` 的元素标签毫无关系）。
+   * 置换群的元素 id **就是置换本身**、跨群有意义（`idsAreSelfDescribing`），
+   * 所以先按 id 定位、退回 label。
+   *
+   * **可选**：合成点集（`pointSet(5)` / `labeledSet(a,b,c)`）与子群点没有 id。
+   */
+  id?: string
   /** 成员背后的子群元素集（若它是子群）*/
   subgroupElements?: GroupElement[]
 }

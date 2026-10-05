@@ -815,11 +815,14 @@ function SubgroupTagList({
   subs,
   onExtract,
   cap = 24,
+  /** 口径说明（谁产出的这个列表决定了它含不含 G 自身）—— 见 F7 */
+  scopeNote,
 }: {
   group: Group
   subs: NormalizedSubgroup[]
   onExtract?: (sub: NormalizedSubgroup) => void
   cap?: number
+  scopeNote?: string
 }) {
   const groups = useMemo(() => {
     const m = new Map<string, NormalizedSubgroup[]>()
@@ -840,6 +843,7 @@ function SubgroupTagList({
 
   return (
     <div className="insp-subgroups">
+      {scopeNote && <div className="insp-line dim">{scopeNote}</div>}
       {groups.map(([key, list]) => {
         const open = openKeys.has(key)
         return (
@@ -888,7 +892,11 @@ function SubgroupTag({
     <button
       type="button"
       className="sub-tag sub-tag-btn"
-      title={`阶 ${sub.order} -指数 ${sub.index ?? '--'} -点击取出为对象`}
+      title={
+        sub.isSelf
+          ? `阶 ${sub.order} -这一项就是 G 自己（G 正规于自身）`
+          : `阶 ${sub.order} -指数 ${sub.index ?? '--'} -点击取出为对象`
+      }
       onClick={() => onExtract?.(sub)}
     >
       <TexOrText text={sub.label} />
@@ -899,6 +907,9 @@ function SubgroupTag({
         </b>
       )}
       {sub.isSylow && <b className="syl">Syl</b>}
+      {/* F7：`normalSubgroups` 含 G 自身（`G ⊴ G` 恒成立），`Sub` / `maximalSubgroups` 不含。
+          不改口径（改哪边都是数学上的假话），改为标出来 —— 见 `NormalizedSubgroup.isSelf`。*/}
+      {sub.isSelf && <b className="self-mark">= G</b>}
     </button>
   )
 }
@@ -1176,7 +1187,20 @@ function OtherTab({
         </>
       )
     case 'subgroups':
-      return <SubgroupTagList group={v.group} subs={v.subgroups} onExtract={onExtract} />
+      return (
+        <SubgroupTagList
+          group={v.group}
+          subs={v.subgroups}
+          onExtract={onExtract}
+          scopeNote={
+            // F7：口径说明跟着**产出它的那条 op** 走 —— 同一个族三种口径，
+            // 而它们各自都是数学上对的（见 `NormalizedSubgroup.isSelf`）。
+            v.subgroups.some((s) => s.isSelf)
+              ? '这一份含 G 自身（G 正规于自身，标成 "= G" 的那一项）'
+              : '这一份只含真子群'
+          }
+        />
+      )
     case 'set':
       // 集合（Ω）：成员可能是子群、子集或元素——统一按记号列出来
       return (

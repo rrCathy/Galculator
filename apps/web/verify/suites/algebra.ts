@@ -27,7 +27,8 @@ export function run(): void {
     if (g?.value.type === 'group') {
       const ins = groupInsights(g.value.group)
       ok('直接建的 S_4 不报"同构于 S_4"', !ins.some((i) => i.label === '同构'))
-      ok('给出阶的素因子分解', ins.some((i) => i.text.includes('2^4') || i.text.includes('24 = 2')))
+      // ⚠️ 读 `tex` 而不是 `text`：`Insight.text` 已于 2026-10-05 删（零消费者且内容就是 LaTeX）
+      ok('给出阶的素因子分解', ins.some((i) => i.tex.includes('2^4') || i.tex.includes('24 = 2')))
     }
   }
 
@@ -39,7 +40,7 @@ export function run(): void {
       const ins = mapInsights(m.value.map)
       ok('说出第一同构定理', ins.some((i) => i.label === '第一同构定理'))
       const concrete = ins.find((i) => i.label === '具体结论')
-      ok('满射时给出 G/ker f \\cong H', !!concrete && concrete.text.includes('\\cong C_3'), concrete?.text)
+      ok('满射时给出 G/ker f \\cong H', !!concrete && concrete.tex.includes('C_{3}'), concrete?.tex)
       const main = ins.find((i) => i.label === '第一同构定理')
       ok('数字核对：|G|/|ker| = |im|', !!main && main.detail?.includes('相等 v'), main?.detail)
     } else {

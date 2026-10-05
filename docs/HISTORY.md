@@ -3990,6 +3990,118 @@ F2（`groupAsSet` 走 core 静默判据）· F3（`fits` 只 2/45）· **F5（Bu
 
 ---
 
+## 丙编补 · 2026-10-05 · 审查 7 条全部结清（清账批次）
+
+> 触发：用户 2026-10-05 问「继续开发新数学功能还是趁早重构 UI/UX」，
+> 我给的答案是「**都不** —— 先把两份不碰 UI 的账清掉」。
+> 盘账结论：数学侧已榨干（`TASKS.md` 9 条剩 Hall 一条，而 Cayley 的卡点**是 UI 不是数学**），
+> 而布局重构会一次性打掉 34 套 1222 条走查 ⇒ **先清判据、再写规范、最后才动布局**。
+> 全案见 `docs/PROPOSAL-zones.md`（三区提案，本次一并写完）。
+
+### 读数（改前 → 改后，同一份探针 `.tmp-audit/probe4.ts`）
+
+| 量 | 改前 | 改后 |
+|---|---|---|
+| 拖拽候选总数 | 230 | **178** |
+| **其中"列出来点下去必报错"** | **68（30%）** | **1**（那条是「多解」，按 U51 定案是**数学答复**）|
+| 单对象候选 | 68 | **69**（F5 给 `burnside` 补了入口）|
+| 语义层 | 2421 | **2468 / 0**（新增 `verify/suites/f2f3.ts`）|
+| 走查 | 34 套 1181 | 34 套 **1222 / 0**（`batch9` 24→27）|
+
+### F2（中）：`paramAccepts` 收不到 op 上下文 —— 病根是**逐参判 + 判据两份**
+
+- **症状**：68 个拖拽候选"列出来点下去必报错"。三条同源：
+  ① `group` 位（`Z(G)` 拖到 `A_4` 上列 `商`）② `elements` / `set` 位
+  （`orbits(conjAction(S_4),(12))` 的轨道集拖到任何群上，`商` / `交` / `C_G` 全列）
+  ③ `omega` 位（`conjOn` 那 9 条）。
+- **原审查给的修法不够**：`AUDIT` §5 建议"`groupAsSet` 改走 `containment()`"——
+  实测**会引入新的撒谎**：`containment` 第二关只问"G 里有没有同构子群"、**不问是否唯一**，
+  于是 `D_3 ⊆ S_4` 判 YES，而 `quotient(S_4, D_3)` 真跑不动（S₄ 里有 **4** 个 S₃）。
+  真判据是 `autoTranslatedSubgroup`（**恰好一个**才是数学逼出来的选择）。
+- **真病根**：`subset` 位的**四类消费者对跨 id 空间的容忍度完全不同**，而 `paramAccepts`
+  只按 `ParamType` 判、拿不到 op：
+
+  | op | 跨 id 空间时 | 依据 |
+  |---|---|---|
+  | `商` / `陪集作用` | **能跑**（唯一同构子群 ⇒ 自动翻译）| `autoTranslatedSubgroup` |
+  | `中心化子` / `正规化子` | **跑不动**（元素必须真在 G 里）| `foreignElementSetFail` |
+  | `交` / `并` / `差` / `积集` | **跑不动**（靠母群对齐）| `setOp` 的 `sameGroup` 关 |
+  | `像 f(H)` | H 必须 `≤ 定义域` | 三关 |
+
+- **修法**：给 `OpDef` 加三个**声明式策略字段**，判据一律调 run 用的**那些函数**
+  （`idsComparable` / `autoTranslatedSubgroup` / `semidirectBlockedReason`）：
+  `crossSpace`（`subset` 位的跨空间档位）· `groupSlotSubgroupOf`（`group` 位要求"是某映射的子群"）
+  · `pairSameWorld`（两个 `subset` 参数之间必须同世界）。
+  `paramAccepts` 加第四参 `op?: OpDef`，三个调用点（`opsFor` / `canPick` / `pairOps`）都传。
+- **拉格朗日那道门补了四处**（"装得下才谈得上翻译"）：`core` 给平凡子群沿用
+  **母群的单位元置换**做元素 id，所以 `Z(S_4) = C_1` 的 id 是 `'1,2,3,4'`、**在 S₄ 的表里找得到**
+  ⇒ 光看 id 会放行 `quotient(C_1, S_4)`，而那要求 `S_4 ≤ C_1`。方向反了。
+
+### F2 顺带挖出的三个真 bug（都不是菜单撒谎）
+
+1. **`conjOn(S_4, A_4)` 报「G 与 Omega 来自不同的群」** —— 数学上完全合法
+   （A₄ 在 S₄ 里正规、共轭封闭）。根因：`omegaArgOf` 对群对象返回 `group: H 自己`，
+   而**共轭必须在作用群 G 里面做** ⇒ `ambient` 取错了群。修后核验（手算）：
+   轨道 = 双换手共轭类 **3** 个元素；稳定子 = `C_{S_4}((12)(34))` = **8**（D₄，
+   cycle type 2² 的中心化子是 `2²·2! = 8` —— 我第一版手算写成 4，被对账逮住）；`3 × 8 = 24 = |S₄|` ✓
+2. **`autoTranslatedSubgroup` 缺"装得下"门** —— S₄ 里恰好有**一个** C₁（`{e}`，阶 1、正规），
+   "唯一同构正规子群"为真 ⇒ 放行 `quotient(C_1, S_4)`。同一道守卫
+   `relations.ts#embeddingContainment` 本来就有（`H.order >= G.order` 挡第二关），是翻译路径漏了。
+3. **`canPick` 把 `orderForUi` 的顺序兜底先一步挡掉** —— 用户 2026-09-30 报的
+   「想算 `N_{S_4}(A_4)`，先点了 A₄」那条路。`App.tsx` 的 `orderForUi` 早就为它做了兜底，
+   可 `canPick` 判 `paramAccepts('subset', S_4, [A_4])` 为 false ⇒ 用户点第二下时画布没反应。
+   从前 `subset` 位里的 `group` 放行得宽、这条侥幸能过；F2 收窄判据后它露了出来。
+   ⇒ **门与兜底打架**：一边说"这个顺序不成立"，一边准备把顺序换过来。
+   修法：`OpDef.swappableParams`（**只有 op 自己能声明**两位可对调）——
+   ⚠️ 不能按"两位同型"判：`map(G,H)` 两位都是 `group`，但换序是**另一个问题**；
+   而 `N_G` 的 `group`+`subset` 类型**不同**却能换。**在册的只有"母群 ⊇ 子群"这一族**
+   （`normalizer` / `centralizer` / `quotient` / `cosetAction`）。
+
+### F3（中）：`fits` 从 2/45 扩到三处四道门
+
+- `semidirectProduct` 的 `fits` 此前**只调 `semidirectBudget`**（四道门里的第一道），
+  而 `planSemidirect` 还有三道 `blocked` 门 ⇒ 拖 `G(S_4)` → `Z(= C_1)` 照样列「半直积」，
+  点下去报「本地算不了」。**"共用同一个判据"这句话本身又变成了两份**（审查原话）。
+  修法：把那四道门抽成 `semidirectBlockedReason`，`planSemidirect` 与 `fits` 共用。
+  分寸不变：只挡"点了必然报错"的，**不挡「多解」**（那是数学答复），也不挡枚举阶段。
+- `map`：`getGeneratorElements(G).length > 0`（`Z(S_4) = C_1` 没有生成元 ⇒ 同态给不出）。
+- `conjOn`：判据与 run 里 `sameAs || asSub` 那道关**同一个组合**。
+
+### F5（中）：`burnside`（轨道条数）不再零入口
+
+- 根因：`singleOpsFor` 一刀切排除 `result === 'number'`（"计算先不弄"，U47 老决策），
+  而 `burnside` 产数值 ⇒ 作用线的球上只有 `orbits` / `stabilizer` / `fix`。
+  **用户点完作用、想数轨道时界面上点不出来，必须手打** —— 而 README 把它和那三个并列在同一行。
+- 修法：`OpDef.numericGesture` **逐条豁免**（默认仍排除）。在册的只有 `orbitCount`。
+  仍不豁免 `ord` / `elementOrder` / `factorize` / `gcd` / `lcm` / `eulerPhi`——
+  它们是"先造对象再算"，有文本入口与数值区就够。
+- 正向读数（手算）：`burnside(conjAction(S_4)) = 5`（共轭类数 ✓，Burnside 平均值 `120/24 = 5` 对账 ✓）；
+  `burnside(leftAction(S_4)) = 1`（正则作用传递 ✓）。
+
+### F6/F7（低）：两份"看得见的困惑"，都**不改数学只改披露**
+
+- **F6**：`C_2 x C_2` 虽长得像记号，内核归约成 `directProduct`（实测 `origin=derived` / `opId=directProduct`，
+  **手打也如此**）⇒ 落在「操作」抽屉而不是「对象」抽屉。README 那行会让人困惑。
+  修法：把它从「记号建群」挪到「原子构造」，并加一句为什么。
+- **F7**：`normalSubgroups(S_4)` 回 4 个**含 G 自身**（阶 1/4/12/24），
+  而 `Sub` / `maximalSubgroups` 都不含。同族两条口径并列，用户会问"为什么多一个"。
+  **不统一口径**——改任一边都是数学上的假话（剔掉 G ⇒ 漏掉 `G ⊴ G`；
+  塞进 `Sub` ⇒ core 的 `findAllSubgroups` 语义被应用层加料）。
+  修法：`NormalizedSubgroup.isSelf` + 列表里标 `= G` + 顶部写一句口径说明。
+
+### 顺手清掉的一处死代码：`Insight.text`
+
+- 那个字段定位是「纯文本主体（无障碍 / 降级用）」，**零消费者**（面板渲染的是 `tex`），
+  而且**内容就是 LaTeX**（`\cong` / `\Omega` / `\implies`）⇒ 兑现不了。
+  真要做降级面得另写一份 `asciiSymbol`（三兄弟之一），不能靠把 LaTeX 塞进一个叫 `text` 的字段。
+  删掉（15 处定义 + 4 处断言改读 `tex`）。
+- ⚠️ MEMORY §3.3 记的「约 40 处报错语 / `notation` 残留 LaTeX」**已过期**：
+  本轮实测 `OpDef` 的 `notation` / `doc` 与全部 `fail(msg, hint)` **各 0 条**。
+  那 70 条命中里绝大多数是 `proof.ts` 的证明步骤正文（走 KaTeX，不是纯文本面）。
+
+
+---
+
 # 丁 · 其它历史
 
 > 零散的、带日期的历史记录：图表诊断与修复、定理复现体检、Proof Spec 落地形态等。

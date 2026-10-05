@@ -456,18 +456,69 @@ export function semidirectBudget(N: Group, H: Group): { ok: true } | { ok: false
  * 「平凡作用」单独算一态：`:` / `⋊` 记号的语义是**非平凡**半直积，只有平凡作用时
  * 这个记号其实指的是直积（该说清楚，而不是混进候选里凑数）。
  */
-export function planSemidirect(N: Group, H: Group): SemidirectPlan {
+/**
+ * `planSemidirect` 的**前四道门**抽出来 —— 菜单预检（`OpDef.fits`）与正式求值共用。
+ *
+ * ## 为什么抽（F3，2026-10-05）
+ *
+ * `fits` 此前只调 `semidirectBudget`（第 1 道），而 `planSemidirect` 还有三道
+ * `blocked` 门。于是拖 `G(S_4)` → `Z(= Z(S_4) = C_1)` 照样列出「半直积」，
+ * 点下去报「G 与 Z 的半直积本地算不了」——
+ * "共用同一个判据"这句话本身又变成了**两份**（`AUDIT-2026-10-04-canvas.md` F3 原话）。
+ *
+ * ⚠️ **只抽"预算 / 平凡性"这四道**，不抽后面的枚举：
+ *  · `trivial` / `multi` 是**数学答复**（这个记号本来就定不下一个群），不是"点了必报错"；
+ *  · 枚举的 `blocked` 要算 `Aut(N)` 的全部像，预检时算一遍、run 里再算一遍太贵。
+ * 那两类由 `planSemidirect` 自己判（预检放过的，run 可以再拦 —— 那时用户已经点了，
+ * 会看到理由）。
+ */
+export function semidirectBlockedReason(N: Group, H: Group): string | null {
   const budget = semidirectBudget(N, H)
-  if (!budget.ok) return { kind: 'blocked', why: budget.why }
+  if (!budget.ok) return budget.why
+  const autLookup = lookupAutImages(N)
+  if (autLookup.kind === 'blocked') return autLookup.why
+  const auts = autLookup.images
+  const nOrder = N.order
+
+  const gens = minimalGenerators(H, H.elements)
+  if (gens.length === 0) return `${nm(H)} 是平凡群，没有能作用的生成元`
+  const genOrders = gens.map((g) => {
+    let o = 1
+    let cur = g
+    while (cur.id !== H.identity.id && o < 512) {
+      cur = H.multiply(cur, g)
+      o++
+    }
+    return o
+  })
+  const autOrders = auts.map((a) => imageOrder(a, nOrder))
+  const cands = genOrders.map((go) =>
+    auts.map((_, i) => i).filter((i) => autOrders[i] > 0 && go % autOrders[i] === 0),
+  )
+  const combos = cands.reduce((acc, c) => acc * c.length, 1)
+  const sampled = combos > SEMI_FULL_COMBO_CAP
+  const perGen = Math.min(
+    SEMI_PER_GEN_CAP,
+    Math.max(1, Math.ceil(Math.pow(SEMI_SAMPLE_CAP, 1 / cands.length))),
+  )
+  const used = sampled ? cands.map((list) => sampleCandidates(list, auts, perGen)) : cands
+  const usedCombos = used.reduce((acc, c) => acc * c.length, 1)
+  if (usedCombos > SEMI_SAMPLE_CAP * 4) {
+    return `生成元像的组合有 ${combos} 种（H 的生成元 ${gens.length} 个、Aut(${nm(N)}) 有 ${auts.length} 个元素），分层抽样后仍有 ${usedCombos} 种，本地跑不完`
+  }
+  return null
+}
+
+export function planSemidirect(N: Group, H: Group): SemidirectPlan {
+  // 四道门的判据只有一份（`semidirectBlockedReason`）—— 菜单预检与这里共用。
+  const blocked = semidirectBlockedReason(N, H)
+  if (blocked !== null) return { kind: 'blocked', why: blocked }
   const autLookup = lookupAutImages(N)
   if (autLookup.kind === 'blocked') return autLookup
   const auts = autLookup.images
   const nOrder = N.order
 
   const gens = minimalGenerators(H, H.elements)
-  if (gens.length === 0) {
-    return { kind: 'blocked', why: `${nm(H)} 是平凡群，没有能作用的生成元` }
-  }
   const genOrders = gens.map((g) => {
     let o = 1
     let cur = g
@@ -485,12 +536,6 @@ export function planSemidirect(N: Group, H: Group): SemidirectPlan {
   const perGen = Math.min(SEMI_PER_GEN_CAP, Math.max(1, Math.ceil(Math.pow(SEMI_SAMPLE_CAP, 1 / cands.length))))
   const used = sampled ? cands.map((list) => sampleCandidates(list, auts, perGen)) : cands
   const usedCombos = used.reduce((acc, c) => acc * c.length, 1)
-  if (usedCombos > SEMI_SAMPLE_CAP * 4) {
-    return {
-      kind: 'blocked',
-      why: `生成元像的组合有 ${combos} 种（H 的生成元 ${gens.length} 个、Aut(${nm(N)}) 有 ${auts.length} 个元素），分层抽样后仍有 ${usedCombos} 种，本地跑不完`,
-    }
-  }
 
   const idImg = identityImage(nOrder)
   const idxOf = new Map(N.elements.map((el, i) => [el.id, i]))

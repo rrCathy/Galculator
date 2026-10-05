@@ -899,6 +899,14 @@ body {
   color: #0f6e56;
 }
 
+/* F7：「这一项就是 G 自己」（normalSubgroups 含 G 自身，Sub / maximalSubgroups 不含）。
+   口径不统一是数学上对的，所以标出来而不是改数据。 */
+.sub-tag b.self-mark {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-style: italic;
+}
+
 /* 可点击的标签 —— 「取出为对象」：列表是入口，不是终点（DIAGRAM_SPEC §3）*/
 .sub-tag-btn {
   cursor: pointer;

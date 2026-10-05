@@ -7,7 +7,7 @@ import {
   type OpDef,
   type ParamType,
 } from './ops'
-import { maxObjectArity, objectArity } from './compose'
+import { maxObjectArity, objectArity, scalarSlots } from './compose'
 // 包含判据与信息面板的「关系」层（U19）**共用同一份**。
 // `embeddingSearchBlocked` = 「嵌入那条路被守卫挡下了」（U38），`pairMissHint` 用它区分
 // "证明了没有"与"没算"
@@ -91,9 +91,15 @@ export function activeOpId(inter: Interaction): string | null {
  * 两处过滤：
  *   - `objectArity ≤ 1`——只需一个对象（末尾的标量参数交给补参条）；
  *   - **排除产数值的**（`ord` 这类）——用户定了"计算先不弄"，所以它不进菜单。
+ *     ⚠️ **逐条豁免**（F5）：`OpDef.numericGesture` 为真的那几条照列。
+ *     在册的只有 `orbitCount`（`burnside(A)` = 轨道条数）——它与 `orbits` /
+ *     `stabilizer` / `fix` 是同一个动作的四个读法，缺了入口就断了
+ *     「作用才是主角」（U57）那条链：用户点完作用、想数轨道时界面上点不出来。
  */
 export function singleOpsFor(value: GalValue): OpDef[] {
-  return opsFor([value]).filter((op) => objectArity(op) <= 1 && op.result !== 'number')
+  return opsFor([value]).filter(
+    (op) => objectArity(op) <= 1 && (op.result !== 'number' || op.numericGesture === true),
+  )
 }
 
 /**
@@ -193,6 +199,23 @@ export function pendingHint(op: OpDef, pickedCount: number): string {
  * `omegaOrInt` 是半对象档，它的"能吃画布上的集合"那一半必须能在 pending 里点得到。
  * 从前写成 `isScalarParam(p.type) return false` ⇒ `customAction(G, ·, …)` 停在
  * 第 2 位时，**画布上的集合点不动**（用户 2026-10-03：「只能选择一个对象？」）。
+ *
+ * ## 「两位同型 + 顺序可兜」时也要放行（F2 顺手挖出来的）
+ *
+ * `N_G(G, H)` / `C_G(G, S)` 这类 op 的两个位**同型**（`group` + `subset`），
+ * 而用户的点击顺序是**"我要算谁"**，不是"它是谁的第一参"——
+ * 用户 2026-09-30 报的正是这个：想算 `N_{S_4}(A_4)`，先点了 `A_4`。
+ *
+ * `App.tsx` 的 `orderForUi` 已经为这件事做了兜底（正序走得通就用正序，
+ * 走不通试反序）。但**这道门先一步把它挡了**：`picked = [A_4]` 判第 2 位时，
+ * `paramAccepts('subset', S_4, [A_4])` 为 false（`S_4` 装不下 `A_4`）⇒ 用户点不动。
+ *
+ * 从前 `subset` 位里的 `group` 放行得宽，这条侥幸能过；F2 收窄判据（把
+ * "跨 id 空间 / 装不下"真的拒掉）之后它就露出来了 ——
+ * **门与兜底打架**：一边说"这个顺序不成立"，一边准备把顺序换过来。
+ *
+ * 修法：两位**同型**且 op **没有标量位**（标量位不能换槽，`orderForUi` 也不兜）
+ * 时，按"**另一种顺序能不能成**"来放行 —— 判据与 `orderForUi` 用的那条兜底同源。
  */
 export function canPick(
   op: OpDef,
@@ -203,7 +226,30 @@ export function canPick(
   const p = op.params[index]
   if (!p) return false
   if (!takesCanvasObject(p.type)) return false
-  return paramAccepts(p.type, candidate, pickedValues)
+  if (paramAccepts(p.type, candidate, pickedValues, op)) return true
+
+  // ── 顺序可兜的那一半 ──
+  if (!op.swappableParams) return false // 只有 op 自己声明"两位可对调"才兜（见 `OpDef.swappableParams`）
+  if (scalarSlots(op).length > 0) return false // 有标量位 ⇒ `orderForUi` 不兜，这里也不放
+  if (maxObjectArity(op) !== 2) return false // 只对"两位"的 op 有意义
+  /*
+   * `pickedValues` 装的是**前 `index` 位**（`index` 位此刻还空着，等 candidate）。
+   * `orderForUi` 的兜底是"正序跑不通就整体对调" —— 所以要问的是
+   * **`[candidate, ...pickedValues]`（candidate 去第 0 位）** 还成立吗？
+   *
+   * 举例（`N_G(G, H)`、`picked = [A_4]`、`index = 1`、candidate = `S_4`）：
+   *   对调后是 `[S_4, A_4]` ⇒ `paramAccepts('group', S_4, [])` ✓ 且
+   *   `paramAccepts('subset', A_4, [S_4])` ✓ ⇒ 放行。
+   *   原序 `[A_4, S_4]` 里 `S_4` 装不下 `A_4`，正是要拒的那一条。
+   *
+   * 逐位重判：任何一位不成立就整体否决 —— 半条路能跑不算"点得动"。
+   */
+  const swapped: GalValue[] = [candidate, ...pickedValues]
+  for (let i = 0; i < swapped.length && i < op.params.length; i++) {
+    if (!takesCanvasObject(op.params[i].type)) continue
+    if (!paramAccepts(op.params[i].type, swapped[i], swapped.slice(0, i), op)) return false
+  }
+  return true
 }
 
 /* ── 两个对象凑一起（第四批：拖拽连线）────────────────────── */
@@ -312,8 +358,10 @@ export function pairOps(a: GalValue, b: GalValue): PairCandidate[] {
       continue
     }
 
-    const forward = paramAccepts(p0.type, a, []) && paramAccepts(p1.type, b, [a])
-    const backward = paramAccepts(p0.type, b, []) && paramAccepts(p1.type, a, [b])
+    const forward =
+      paramAccepts(p0.type, a, [], op) && paramAccepts(p1.type, b, [a], op)
+    const backward =
+      paramAccepts(p0.type, b, [], op) && paramAccepts(p1.type, a, [b], op)
     if (!forward && !backward) continue
     /**
      * **候选预检**（U51）：类型上"填得上"不等于**跑得动**。

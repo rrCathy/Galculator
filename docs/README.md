@@ -34,6 +34,13 @@
 | [TASKS.md](TASKS.md) | **输入视角**：群论常见计算与证明，每行给可粘贴的输入 + 实测结果，照着逐条核 |
 | [USABILITY.md](USABILITY.md) | **动作视角**：用户想做某件事时最可能的动作是什么、那条路通不通、哪里会卡住 |
 
+## 提案（还没动工，但已经定了方向）
+
+| 文档 | 回答什么问题 |
+|---|---|
+| [PROPOSAL-algebra-structures.md](PROPOSAL-algebra-structures.md) | 集 → 半群 → 幺半群 → 群这一层怎么做的（**已落地**，规范在 ARCHITECTURE §3.7 / `gal/algebra.ts`）|
+| [PROPOSAL-zones.md](PROPOSAL-zones.md) | 工作台 / 画布 / 草稿区三区（**待拍板**，含迁移路径与 P0–P3 批次）|
+
 ## 账本（长，按需检索）
 
 | 文档 | 内容 |

@@ -180,10 +180,15 @@ export function isomorphismOf(a: Group, b: Group): 'yes' | 'no' | 'unknown' {
 export interface Insight {
   /** 短标签：「同构」「第一同构定理」「阶」… */
   label: string
-  /** TeX 主体（面板里用 KaTeX 渲染） */
+  /**
+   * 主体 —— **TeX 源**，面板里走 KaTeX 渲染。
+   *
+   * ⚠️ 2026-10-05：**这里曾有一个 `text` 字段**（定位"纯文本主体 / 无障碍降级"），
+   * 零消费者，且**内容就是 LaTeX**（`\cong` / `\Omega` / `\implies` …）⇒
+   * 兑现不了。真要做降级面得另写一份 `asciiSymbol`（`MEMORY` §3.3 的三兄弟之一），
+   * 不能靠把 LaTeX 塞进一个叫 `text` 的字段。已删。
+   */
   tex: string
-  /** 纯文本主体（无障碍 / 降级用） */
-  text: string
   /** 补充说明（纯文本，一行） */
   detail?: string
   /** `key` = 主要结论（醒目）；`note` = 附注（弱化） */
@@ -231,7 +236,6 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
       label: '已知结论',
       tone: 'key',
       tex: known.tex,
-      text: known.plain,
       detail: known.build
         ? `结论指出它同构于 ${prettySymbol(known.build)}；这里给的就是那个群，可以直接接着算`
         : '本地没有这个群的元素表：知道它是什么、阶是多少，但不算出来（元素级运算用不了）',
@@ -268,9 +272,6 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
         label: same ? '识别' : '同构',
         tone: 'key',
         tex: same ? group.symbol : `${group.symbol} \\;\\cong\\; ${iso}`,
-        text: same
-          ? prettySymbol(group.symbol)
-          : `${prettySymbol(group.symbol)} \\cong ${prettySymbol(iso)}`,
         detail,
       })
     }
@@ -291,7 +292,6 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
       label: '阶',
       tone: 'note',
       tex: `\\lvert G\\rvert = ${group.order} = ${tex}`,
-      text: `|G| = ${group.order} = ${text}`,
       /*
        * ⚠️ **判据不是 `fs.length`**（U55 走查抓到的真账）：
        * `factorizeOrder` 回的是**互异素因子**的表（`{prime, exponent}[]`），
@@ -323,7 +323,6 @@ export function mapInsights(map: GalMap): Insight[] {
     label: '第一同构定理',
     tone: 'key',
     tex: `${G.symbol}/\\ker f \\;\\cong\\; \\operatorname{im} f`,
-    text: `${prettySymbol(G.symbol)}/ker f \\cong im f`,
     detail:
       `|G| / |ker| = ${G.order} / ${k} = ${G.order / k}` +
       `，|im| = ${im} ---- 两边 ${G.order / k === im ? '相等 v' : '不等 x'}`,
@@ -338,7 +337,6 @@ export function mapInsights(map: GalMap): Insight[] {
       label: '具体结论',
       tone: 'key',
       tex: `${G.symbol}/\\ker f \\;\\cong\\; ${H.symbol}`,
-      text: `${prettySymbol(G.symbol)}/ker f \\cong ${prettySymbol(H.symbol)}`,
       detail: `满射 -> 商群与靶群同构${qIso ? `（识别为 ${asciiSymbol(qIso)}）` : ''}`,
     })
   } else if (qIso) {
@@ -346,7 +344,6 @@ export function mapInsights(map: GalMap): Insight[] {
       label: '具体结论',
       tone: 'key',
       tex: `${G.symbol}/\\ker f \\;\\cong\\; ${qIso}`,
-      text: `${prettySymbol(G.symbol)}/ker f \\cong ${prettySymbol(qIso)}`,
       detail: '商群被识别出来了（非满射，靶群更大）',
     })
   } else if (im > 0 && map.image) {
@@ -354,7 +351,6 @@ export function mapInsights(map: GalMap): Insight[] {
       label: '具体结论',
       tone: 'note',
       tex: `\\operatorname{im} f \\le ${H.symbol},\\quad \\lvert \\operatorname{im} f \\rvert = ${im}`,
-      text: `im f \\subseteq ${prettySymbol(H.symbol)}，|im f| = ${im}`,
       detail: '像落在靶群里；商群的同构类未识别出（超出本地识别范围）',
     })
   }
@@ -392,7 +388,6 @@ export function actionInsights(A: GalAction): Insight[] {
       label: isConj ? '共轭类（类方程）' : '轨道分解',
       tone: transitive ? 'key' : 'note',
       tex: `\\lvert \\Omega \\rvert = ${A.n} = ${sizes.join(' + ')}`,
-      text: `|\\Omega| = ${A.n} = ${sizes.join(' + ')}`,
       detail: transitive
         ? '只有一个轨道 \\to 作用**传递**'
         : `${sizes.length} 个轨道${isConj ? '（这正是类方程）' : ''}`,
@@ -422,7 +417,6 @@ export function actionInsights(A: GalAction): Insight[] {
       label: '同态的核',
       tone: faithful ? 'note' : 'key',
       tex: `\\lvert \\ker \\varphi \\rvert = ${kernelIds.length}`,
-      text: `|ker| = ${kernelIds.length}`,
       detail: faithful
         ? `作用忠实，核只有单位元${named ? `（${named}）` : ''}`
         : `不忠实：核有 ${kernelIds.length} 个元素，只有 G 商掉它才嵌入置换群${
@@ -446,7 +440,6 @@ export function actionInsights(A: GalAction): Insight[] {
       label: 'Sylow III',
       tone: 'key',
       tex: `n_{${p}} = ${np} \\equiv 1 \\pmod{${p}}, \\qquad n_{${p}} \\mid ${m}`,
-      text: `n_${p} = ${np} \\equiv 1 (mod ${p})，且 n_${p} | ${m}`,
       detail:
         `核对：${np} mod ${p} = ${np % p}${np % p === 1 ? ' v' : ' x'}` +
         `，${m} / ${np} = ${m / np}${m % np === 0 ? ' v' : ' x'}`,
@@ -460,7 +453,6 @@ export function actionInsights(A: GalAction): Insight[] {
         label: '轨道-稳定子',
         tone: 'key',
         tex: `n_{${p}} = [G : N_G(H)] = ${G.order} / ${stab.length} = ${G.order / stab.length}`,
-        text: `n_${p} = [G : N_G(H)] = |G| / |N_G(H)| = ${G.order} / ${stab.length} = ${G.order / stab.length}`,
         detail: `|Orb| * |Stab| = ${np} * ${stab.length} = ${np * stab.length} = |G| ${ok ? 'v' : 'x'}`,
       })
     }
@@ -471,14 +463,12 @@ export function actionInsights(A: GalAction): Insight[] {
             label: '正规 iff 唯一',
             tone: 'key',
             tex: `n_{${p}} = 1 \;\\Longrightarrow\; H \\trianglelefteq G`,
-            text: `n_${p} = 1 \\implies 唯一的 Sylow ${p}-子群 H 是正规子群`,
             detail: '唯一的 Sylow p-子群必正规（反之，正规的 Sylow p-子群必唯一）',
           }
         : {
             label: '非正规',
             tone: 'note',
             tex: `n_{${p}} = ${np} > 1 \;\\Longrightarrow\; H \\ntrianglelefteq G`,
-            text: `n_${p} = ${np} > 1 \\implies 这些 Sylow ${p}-子群都不正规`,
             detail: `Sylow ${p}-子群共 ${np} 个，彼此共轭（Sylow II）；阶 p^${k}，指数 ${m}`,
           },
     )
@@ -491,7 +481,6 @@ export function actionInsights(A: GalAction): Insight[] {
       label: '中心',
       tone: 'note',
       tex: `Z(G) = \\operatorname{Fix}(G \\curvearrowright G)`,
-      text: 'Z(G) = 共轭作用的不动点全体',
       detail: `长度 1 的轨道有 ${fix} 个 ---- 它们对应 G 的中心元`,
     })
   }

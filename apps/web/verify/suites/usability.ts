@@ -82,8 +82,8 @@ export function run(): void {
     ok('`K = ker(f)` 有「识别」条（不再沉默）', ker.labels.includes('识别'), ker.labels.join(','))
     ok(
       '识别条把符号（ker f = C_2）当答案',
-      ker.insights.some((i) => i.text.includes('C_2')),
-      ker.insights.map((i) => `${i.text} :: ${i.detail}`).join(' | '),
+      ker.insights.some((i) => i.tex.includes('C_{2}')),
+      ker.insights.map((i) => `${i.tex} :: ${i.detail}`).join(' | '),
     )
 
     // 归一：`C_{2}^{2}`（幂写法）与 `C_{2}\times C_{2}`（乘法写法）是同一个群，
@@ -97,8 +97,8 @@ export function run(): void {
     ok('`quotient(G,N)`（符号 S_4/N）说「同构」', q.labels.includes('同构'), q.labels.join(','))
     ok(
       '那条写着 \\cong S_3',
-      q.insights.some((i) => i.text.includes('S_3')),
-      q.insights.map((i) => i.text).join(' | '),
+      q.insights.some((i) => i.tex.includes('S_{3}')),
+      q.insights.map((i) => i.tex).join(' | '),
     )
 
     // 闭包 / 自同构群也一样（它们都是"构造出来的"）

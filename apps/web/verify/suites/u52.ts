@@ -144,10 +144,11 @@ export function run(): void {
       const ins = actionInsights(A)
       const orbit = ins[0]
       ok('结论层第①条还是轨道分解（没被挤走）', orbit.label === '轨道分解', orbit.label)
-      eq('轨道分解报的是「4 = 4」', orbit.text, '|\\Omega| = 4 = 4')
+      // ⚠️ 读 `tex`（`Insight.text` 已删，见 insights.ts）：`\lvert`/`\rvert` 是 KaTeX 的绝对值竖线
+      eq('轨道分解报的是「4 = 4」', orbit.tex, '\\lvert \\Omega \\rvert = 4 = 4')
       const kern = ins.find((x) => x.label === '同态的核')
       ok('结论层有「同态的核」一条', !!kern)
-      eq('忠实时报 |ker| = 1', kern?.text, '|ker| = 1')
+      eq('忠实时报 |ker| = 1', kern?.tex, '\\lvert \\ker \\varphi \\rvert = 1')
       eq('忠实那条是弱化语气（不是头条）', kern?.tone, 'note')
     }
 
@@ -186,7 +187,7 @@ export function run(): void {
 
     const ins = A ? actionInsights(A) : []
     const kern = ins.find((x) => x.label === '同态的核')
-    eq('结论层报 |ker| = 2', kern?.text, '|ker| = 2')
+    eq('结论层报 |ker| = 2', kern?.tex, '\\lvert \\ker \\varphi \\rvert = 2')
     eq('不忠实那条是醒目语气（key）', kern?.tone, 'key')
 
     /* 非忠实作用上的轨道 / 稳定子照样要能算 */
@@ -205,7 +206,7 @@ export function run(): void {
     eq('e 认作恒等', b.err('A'), null)
     const A = actionOf(b, 'A')
     eq('核 = G（全映成恒等）', A ? kernelOrder(A) : -1, 4)
-    eq('3 个轨道（每个点一个）', A ? actionInsights(A)[0].text : '', '|\\Omega| = 3 = 1 + 1 + 1')
+    eq('3 个轨道（每个点一个）', A ? actionInsights(A)[0].tex : '', '\\lvert \\Omega \\rvert = 3 = 1 + 1 + 1')
 
     // core 的 parseCycleNotation 对纯不动点一律回 null —— 报错语要把 e 这条出路说出来
     const f = failOf(['G = C_4', 'B = customAction(G, 4, a -> (1))'])
@@ -233,13 +234,13 @@ export function run(): void {
     const A4 = actionOf(s4, 'A')
     eq('|im| = 24（忠实）', A4 ? kernelOrder(A4) : -1, 1)
     eq('perms 覆盖 24 个元素', A4?.perms.size, 24)
-    eq('传递（1 个轨道）', A4 ? actionInsights(A4)[0].text : '', '|\\Omega| = 4 = 4')
+    eq('传递（1 个轨道）', A4 ? actionInsights(A4)[0].tex : '', '\\lvert \\Omega \\rvert = 4 = 4')
 
     // V_4：三个非平凡元素 ↦ 三个不同对换之积 —— Klein 四元群
     const v4 = build(['G = V_4', 'A = customAction(G, 4, a -> (12)(34), b -> (13)(24))'])
     eq('V_4 能建', v4.err('A'), null)
     eq('V_4 忠实', actionOf(v4, 'A') ? kernelOrder(actionOf(v4, 'A')!) : -1, 1)
-    eq('V_4 上的作用传递', actionOf(v4, 'A') ? actionInsights(actionOf(v4, 'A')!)[0].text : '', '|\\Omega| = 4 = 4')
+    eq('V_4 上的作用传递', actionOf(v4, 'A') ? actionInsights(actionOf(v4, 'A')!)[0].tex : '', '\\lvert \\Omega \\rvert = 4 = 4')
 
     // D_4：正方形 4 个顶点上的自然作用
     const d4 = build(['G = D_4', 'A = customAction(G, 4, r -> (1234), s -> (12)(34))'])
@@ -250,7 +251,7 @@ export function run(): void {
     const q8 = build(['G = Q_8', 'A = customAction(G, 2, i -> (12), j -> (12))'])
     eq('Q_8 的单像作用能建', q8.err('A'), null)
     eq('核 = ⟨k⟩（4 阶）', actionOf(q8, 'A') ? kernelOrder(actionOf(q8, 'A')!) : -1, 4)
-    eq('2 个点上传递', actionOf(q8, 'A') ? actionInsights(actionOf(q8, 'A')!)[0].text : '', '|\\Omega| = 2 = 2')
+    eq('2 个点上传递', actionOf(q8, 'A') ? actionInsights(actionOf(q8, 'A')!)[0].tex : '', '\\lvert \\Omega \\rvert = 2 = 2')
 
     // S_3：两个对换 ↦ 同一个对换 = 符号同态
     const s3 = build(['G = S_3', 'A = customAction(G, 2, s12 -> (12), s23 -> (12))'])
