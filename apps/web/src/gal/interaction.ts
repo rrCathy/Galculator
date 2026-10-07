@@ -8,6 +8,8 @@ import {
   type ParamType,
 } from './ops'
 import { maxObjectArity, objectArity, scalarSlots } from './compose'
+// 界面上的操作名一律中文（2026-10-06 W1）—— 见该文件头「为什么要有这张表」
+import { opName } from './opLabels'
 // 包含判据与信息面板的「关系」层（U19）**共用同一份**。
 // `embeddingSearchBlocked` = 「嵌入那条路被守卫挡下了」（U38），`pairMissHint` 用它区分
 // "证明了没有"与"没算"
@@ -127,22 +129,26 @@ export function multiOps(): OpDef[] {
 }
 
 /**
- * 悬浮球面板里的短标签。
+ * 悬浮球 / 菜单 / 工作台里的短标签 —— **中文显示名**。
  *
- * ⚠️ **这张表在 U54 被删掉了** —— 它从前是一张"每个 op 手写一条中文短标签"的表，
- * 漏写一条就退到 `op.notation`。那时的 `notation` 是 LaTeX 源（`N \rtimes H`），
- * 退过去就是把反斜杠当纯文本贴按钮上（U51 踩过）。于是表只增不减，
- * 每加一个 op 都得记得同步 —— 而"记得同步"从来不是一条能靠得住的纪律。
+ * ## 两次改动，方向相反，别搞混
  *
- * 现在 `notation` 本身就是**纯 ASCII 函数式**（`directProduct(A, B)`，见 ops.ts），
- * 兜底切出 `(` 之前那段正好就是用户要敲的英文名。所以**兜底即正解**：
- * 一张需要手工同步的表，不如一个不会漂移的派生。
+ * · **U54**：删掉手工中文表，改成从 `notation` 派生（切 `(` 之前那段）。
+ *   当时的病是"表要手工同步、会漂移"，于是选了"派生不会漂移"。
+ * · **2026-10-06（本次）**：改回**一张显式表**（`gal/opLabels.ts#OP_LABEL`）——
+ *   因为派生出来的东西是**英文**。用户实测原话：
  *
- * ⚠️ 唯一的约束：`notation` 里不许再出现 LaTeX 命令或非 ASCII（回归里有一条断言守着）。
+ *   > 「具体功能为什么不用中文？为什么中英文混杂？你想给谁用？」
+ *
+ *   病根是 U54 把**输入语法**（`notation`，能敲）当成了**显示名**（界面上唯一的名字）。
+ *   这次把它俩分开：**界面一律中文**（本文返回的），`notation` 只进 `title`（悬停才见）。
+ *
+ * ⚠️ U54 担心的"手工表会漂移"**没有被丢掉**，是换了个守法：
+ * `opLabels.ts#assertEveryOpNamed()` 在**模块加载时**断言 45 条一条不少 ——
+ * 漏写不是"悄悄退回英文"，而是**加载就抛**。这才是不靠自觉的做法。
  */
 export function menuLabel(op: OpDef): string {
-  const paren = op.notation.indexOf('(')
-  return paren > 0 ? op.notation.slice(0, paren) : op.notation
+  return opName(op)
 }
 
 /**

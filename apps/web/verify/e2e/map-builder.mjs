@@ -100,16 +100,17 @@ const clickNode = async (id) => {
   return done
 }
 
-/** 从「⊕ 多对象球」里点一个 op（按 `.orb-op-label` 匹配，label 是纯 ASCII 操作名）。 */
-const pickMultiOp = async (label) =>
-  page.evaluate((lb) => {
+/** 从「⊕ 多对象球」里点一个 op（按 `data-op` 找，不按显示文本）。 */
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const pickMultiOp = async (opId) =>
+  page.evaluate((want) => {
     const hit = [...document.querySelectorAll('.orb-center-panel .orb-op')].find(
-      (b) => b.querySelector('.orb-op-label')?.textContent?.trim() === lb,
+      (b) => b.dataset.op === want,
     )
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
 
 /** 编辑器的当前状态（一次读完，避免多次往返）。 */
 const mb = () =>

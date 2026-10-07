@@ -3054,16 +3054,47 @@ body {
   z-index: 14;
   display: flex;
   flex-direction: column;
-  /* 两栏：任务栏（左，窄）+ 细节区（右，宽）。原来 720px 是单栏细节区的宽度，
-     塞进两栏之后每一栏都太挤 ⇒ 抬到 880px。仍是 `calc(100vw - 260px)`：
-     左边 260px 让给左下「数值」抽屉（它占 168px + 余量，见下面那条注）。 */
-  width: min(880px, calc(100vw - 260px));
+  /*
+   * **宽度**（工作台 v2 / W3）：用户 2026-10-06 定「工作台没必要那么小，
+   * 占大半个屏幕没什么问题」。左侧 300px 让给左下「数值」抽屉（168px + 余量）。
+   */
+  width: min(1240px, calc(100vw - 300px));
   transform: translateX(-50%);
-  max-height: 52vh;
-  background: var(--panel, #fff);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 -2px 14px rgba(0, 0, 0, 0.06);
+  /*
+   * **半透明玻璃**（用户原话：「把工作台背景改成半透明的就行（想想什么液体玻璃质感）」）——
+   * 画布在背后仍看得见，所以工作台敢做大。
+   *
+   * ⚠️ 高度**由 JS 给内联 style**（默认 68vh、可拖到 88vh）⇒ 这里**不许再写**
+   * `height` / `max-height`：内联压过样式表，写了也不生效（本项目栽过一次，
+   * 白重启了一轮 dev server）。
+   */
+  background: rgba(252, 252, 255, 0.62);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 20px;
+  box-shadow:
+    0 -8px 40px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+}
+
+/* 顶边抓手：拖动改高度 */
+.bench-grip {
+  flex: 0 0 auto;
+  height: 8px;
+  cursor: ns-resize;
+  background: transparent;
+}
+
+.bench-grip::after {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 3px;
+  margin: 2px auto 0;
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.14);
 }
 
 /* 收起时只要那条标题（body 不渲染，JSX 里已条件）*/
@@ -3163,22 +3194,19 @@ body {
 /*
  * 两栏：任务栏（左，固定宽）+ 细节区（右，吃剩余）。
  *
- * ⚠️ `flex-direction: row` 是 P1-2 的关键改动（第一版是 column，只有一栏）。
- * 两栏各自独立滚动 ⇒ 任务栏列 36 个操作时细节区仍然可读。
+ * ⚠️ **P1-2 是 row（两栏），W3（2026-10-06）翻回 column** —— 用户否掉了"左栏按钮 + 右栏折叠列表"
+ * 那套（"还是不行"）。现在的纵向三段是**计算器**的顺序：
+ * 显示条（显示屏）→ 符号键盘（按键）→ 明细区（摊开读）。三段各占一行、各自不抢宽度。
  */
 .bench-body {
   display: flex;
   flex: 1 1 auto;
-  flex-direction: row;
+  flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 8px;
   min-height: 0;
-  padding: 8px 12px 10px;
+  padding: 4px 14px 12px;
   overflow: hidden;
-}
-
-.bench.risen .bench-body {
-  max-height: 52vh;
 }
 
 /* ── 左栏：任务栏 ────────────────────────────────────────── */
@@ -3645,4 +3673,500 @@ body {
 .conj-note {
   color: var(--text-faint);
   font-size: 11px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   工作台 v2 = 玻璃计算器（W2–W4，2026-10-06）
+   ──────────────────────────────────────────────────────────────────
+   三段：① 显示条（显示屏）② 符号键盘（按键，随焦点变）③ 明细区（摊开读）。
+   写在文件**末尾**是刻意的：同一特异性下"写在后面"胜 —— 要覆写上面那批
+   `.bench-*` 基规则，只能排在它们之后（写在前面 = 没写）。
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── ① 显示条 ─────────────────────────────────────────────── */
+
+.bench-display {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.bench-screen {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(230, 241, 251, 0.72);
+  border: 1px solid rgba(133, 183, 235, 0.5);
+}
+
+.bench-screen-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #0c447c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bench-screen-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #185fa5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* `＋ 导入对象` —— 用户点名要的那枚按钮 */
+.bench-plus {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 78px;
+  padding: 4px 12px;
+  border: 1px solid rgba(133, 183, 235, 0.6);
+  border-radius: 12px;
+  background: rgba(230, 241, 251, 0.72);
+  color: #0c447c;
+  cursor: pointer;
+}
+
+.bench-plus:hover {
+  background: rgba(213, 232, 250, 0.9);
+}
+
+.bench-plus.on {
+  background: rgba(190, 221, 250, 0.95);
+  border-color: #85b7eb;
+}
+
+.bench-plus-glyph {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.bench-plus-word {
+  font-size: 11px;
+}
+
+/*
+ * ⚠️ **这是一个浮层（popover），不是排版流里的一条**（2026-10-06 第二次返工）。
+ *
+ * 第一版把它塞进 `.bench-body` 的纵向流里 ⇒ 一条往下压的长带，把键盘与明细区
+ * 全顶下去，用户原话：「**改了约等于没改。。。**」。
+ * ⇒ 改成锚在 `＋` 按钮下面的浮层：**不挤动任何东西**，选完就关。
+ */
+.bench-plus-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 4;
+  width: min(560px, 84vw);
+  max-height: 54vh;
+  overflow-y: auto;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--border-strong, var(--border));
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.18);
+}
+
+.plus-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.plus-close {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plus-close:hover {
+  color: var(--text);
+}
+
+/* ── ② 符号键盘（随焦点变）────────────────────────────────── */
+
+.bench-pad {
+  flex: 0 0 auto;
+  max-height: 30vh;
+  overflow-y: auto;
+  padding: 2px 2px 4px;
+}
+
+.bench-pad-hint {
+  margin: 6px 2px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+.bench-pad-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+.bench-pad-label {
+  flex: 0 0 96px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.bench-pad-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* 一枚符号键。**键面是 KaTeX 排版出来的字形**，不是文本流 ——
+   `×` `⋊` `≤` 键盘打不出来，用户 2026-09-27 定了"不许显示这类字符"，
+   而 KaTeX 子树是那条规矩的豁免面（"显示是排版，文本流是 ASCII"）。 */
+.bench-key {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 46px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.bench-key:hover {
+  background: #fff;
+  border-color: #85b7eb;
+}
+
+.bench-key-glyph {
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* "这枚键要几个对象"—— 与 `objectArity` 同源，>1 才显示 */
+.bench-key-n {
+  position: absolute;
+  top: 1px;
+  right: 3px;
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+
+/* ── ③ 明细区（平铺 tab，**不是手风琴**）──────────────────── */
+
+.bench-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.bench-tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--text-dim, var(--text));
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.bench-tab:hover {
+  background: #fff;
+}
+
+.bench-tab.on {
+  background: rgba(230, 241, 251, 0.95);
+  border-color: rgba(133, 183, 235, 0.7);
+  color: #0c447c;
+  font-weight: 500;
+}
+
+.bench-tab-sum {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.bench-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── 工作台升起时，输入球让位（W3）───────────────────────────
+ *
+ * 工作台现在占大半屏（默认 68vh、可拖到 88vh、最宽 1240px）⇒ **会盖住输入球**。
+ * 真机实测（playwright 点「添加」）：
+ *   `<div class="bench-page"> … subtree intercepts pointer events`
+ * ⇒ 把输入球抬到**工作台顶边之上**：`bottom = 工作台高 + 10px`。
+ * 高度由 Workbench 报给 App（`onHeight`），App 写在 `--bench-h` 上。
+ *
+ * `.composer-card` 是 `.composer-orb` 的子元素（`bottom: 44px`，相对它定位）
+ * ⇒ 球往上走，卡片跟着走，不用单独管。
+ *
+ * ⚠️ **只改 `bottom`**：`.composer-orb` 的 `left` 是**内联 style**（`max(50%, …)`），
+ * 样式表碰不动它 —— P0-1 栽过一次，那条教训见上面 `.composer-orb` 的注释。
+ * ⚠️ 这条必须排在 `.composer-orb` 基规则（本文件 927 行）**之后**：同一特异性下
+ * "写在后面"胜，写在前面 = 没写。
+ */
+/* ⚠️ 补偿量 `62px` 不是拍脑袋：`.bench` 自己还有 `bottom: 52px` 的底座偏移
+ * ⇒ 工作台顶边在"视口底往上 `benchH + 52`"处。要让输入球落在它**之上**，
+ * `bottom` 至少得是 `benchH + 52`，再留 10px 缝 ⇒ **62px**。
+ * （第一版写 `+ 10px`，探针量出来输入球正好压在工作台里，还是点不动。） */
+.app.bench-open .composer-orb {
+  bottom: calc(var(--bench-h, 0px) + 62px);
+}
+
+/* 输入球靠左时（`dockLeft`），卡片也从**球的左边往右展开**，不再居中 ——
+ * 否则球在左边缘、卡片却以它为轴居中，会有一半跑到屏幕外。 */
+.app.bench-open .composer-card {
+  left: 0;
+  right: auto;
+  transform: none;
+}
+
+/* ── `＋` 面板（W2 续，2026-10-06）──────────────────────────────
+
+   用户实测第 1 条：「导入对象怎么导入成这样？**首先这个长条UI太丑了**，
+   然后是为什么不能导入常见群？」
+
+   ⇒ 两处改动：
+     · **常见群一键**（`.plus-quick` / `.plus-chip`）—— 点 `A_4` 就上台面，
+       不用知道 GAP 编号（`smallGroup(12, 3)` 是库的坐标，不是人认的名字）；
+     · 表单**收成紧凑的一行行**（原来是三条通栏长条）。
+   只加在 `＋` 面板里：左栏「目录」的 `.cat-form` 保持原样（那套走查按它写）。 */
+
+.plus-quick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.plus-quick-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.plus-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.plus-chip:hover {
+  background: #fff;
+  border-color: #85b7eb;
+}
+
+/* `＋` 浮层参考系：面板锚在按钮下面（`top: 100%` 相对这一格）*/
+.bench-display {
+  position: relative;
+}
+
+/* 浮层里的三个表单：**输入框铺满**，别留右边一片空
+   （用户实测：「那你右边不就空了？右边空了也没东西展示啊？」）*/
+.bench-plus-panel .cat-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.bench-plus-panel .cat-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bench-plus-panel .cat-go {
+  flex: 0 0 auto;
+}
+
+/* ── 台面上的对象（W2-②，2026-10-06）──────────────────────────
+ *
+ * 用户实测第 2 条：「工作台不能储存对象啊？我点两下画布，对象就取消选中了，
+ * 谁会用丢东西的工作台？」⇒ 台面自己记一份"摆上来的对象"，点一下切回去、`x` 拿下去。
+ * 存的是 id，对象与画布**是同一份**。 */
+
+.bench-stage {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0 2px;
+}
+
+.bench-stage-label {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.bench-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  overflow: hidden;
+}
+
+.bench-chip.on {
+  border-color: #85b7eb;
+  background: rgba(230, 241, 251, 0.95);
+}
+
+.bench-chip-main {
+  padding: 3px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.bench-chip-x {
+  padding: 3px 8px 3px 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.bench-chip-x:hover {
+  color: var(--text);
+}
+
+/* 结论层在工作台里也要占满宽（`.bench-brief` 只是给它一点上边距）*/
+.bench-brief {
+  flex: 0 0 auto;
+}
+
+/* ── `＋` 面板里的群库（按阶浏览，**显示可读名**）──────────────
+ *
+ * 用户实测：「什么叫群库导入是输入阶和序数？谁记得住 A4 是 12,3？」
+ * ⇒ 不再让用户填坐标；把 93 个群**按阶铺开**，名字用可读结构名（`A4` / `C6` / `D8`）。 */
+
+.plus-lib {
+  margin: 8px 0;
+}
+
+.plus-lib-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+
+.plus-lib-hint {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.plus-lib-body {
+  max-height: 26vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.plus-lib-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.plus-lib-order {
+  flex: 0 0 46px;
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-top: 5px;
+  text-align: right;
+}
+
+.plus-lib-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* ── 编辑器卡片**收进台面**（W2-②，2026-10-06）────────────────────
+ *
+ * 用户实测原话：「这又弄得啥？**窗口乱摆**？」
+ *
+ * 病根：`.map-builder` 是 P0-1 定的「贴底居中」浮层（`bottom: 12px`），
+ * 而工作台的底边在 `bottom: 52px` ⇒ 卡片**吊在台面下面**，一半压着台面、
+ * 一半露在台外，还跟台内的按钮错位 —— 看着就像"飘在那儿"。
+ *
+ * ⇒ 工作台展开时把它**抬到台面里**：`bottom = 52 + 14`，并补一道投影
+ * （贴底常驻时不要投影是 P0-1 定的；可**浮在台面上**就该有投影，
+ * 否则读不出"它在台面之上"这一层）。
+ * 高度也跟着台面走，别顶出台面。
+ */
+.app.bench-open .map-builder {
+  bottom: calc(52px + 14px);
+  max-height: calc(var(--bench-h, 100vh) - 130px);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.16);
+}
+
+/* 映射的事实表（定义域/陪域/单·满/核/像）—— 信息面板与工作台共用一份。
+   用表而不是纯文本：**键与值要对齐**，不然"核 ker: e, (12)..." 读起来是一锅粥。 */
+.map-facts {
+  margin-top: 8px;
+}
+
+.map-facts table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.map-facts th {
+  width: 84px;
+  padding: 3px 10px 3px 0;
+  text-align: left;
+  font-weight: 400;
+  color: var(--text-faint);
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.map-facts td {
+  padding: 3px 0;
+  color: var(--text);
+  vertical-align: top;
+  word-break: break-word;
 }

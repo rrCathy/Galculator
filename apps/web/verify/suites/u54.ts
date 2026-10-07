@@ -29,7 +29,8 @@
  * ── 本套守的判据 ───────────────────────────────────────────────
  *   ① **一个 op 的三个名字都必须是 ASCII**：`call` 别名 / `notation` / `doc`；
  *   ② **`notation` 的前缀必须是某个 `call` 别名** —— 否则用户照抄 `notation` 敲不出来；
- *   ③ **`menuLabel` 从 `notation` 派生**（不再有手工表），所以它自动满足 ①；
+ *   ③ **`menuLabel` 是中文显示名**（2026-10-06 起，见 `gal/opLabels.ts`）——
+ *      它**与 `notation` 分家**：`notation` 是输入语法（① 管它），`menuLabel` 是界面文案；
  *   ④ **纯文本面零 LaTeX**：跑一批真实表达式与失败分支，把 `error` / `hint` /
  *      `sub` / `note` 全收上来扫一遍；`recipe` / `PARAM_LABEL` 静态扫；
  *   ⑤ **老中文名要给指路**：`直积(C_3, C_2)` 得说"改叫 directProduct 了"，
@@ -46,8 +47,8 @@
  *   `asciiSymbol('\\operatorname{Aut}(C_{6})')`：`\operatorname{Aut}` 取花括号里那段
  *     ⇒ `Aut`；`_{6}` ⇒ `_6` ⇒ `Aut(C_6)`。
  *
- *   `menuLabel`：`notation` 切第一个 `(` 之前 ⇒ `directProduct(A, B)` 给
- *     `directProduct`（从前是一张手工表，漏补一条就把 LaTeX 贴按钮上）。
+ *   `menuLabel`：2026-10-06 起**返回中文显示名**（`OP_LABEL`），不再从 `notation` 切前缀。
+ *     口径为什么翻，见下面那节 suite 的头注。
  */
 import { build, eq, ok, suite } from '../harness'
 import { RENAMED_OPS } from '../../src/gal/evalDef'
@@ -259,19 +260,47 @@ export function run(): void {
     )
   }
 
-  /* ══ 2 · menuLabel 从 notation 派生（手工表已删）═══════════ */
+  /* ══ 2 · menuLabel = 中文显示名（2026-10-06 翻口径）═══════════ */
 
-  suite('u54 - menuLabel：派生，不再手工同步')
+  suite('u54 / W1 - menuLabel：中文显示名，与 notation 分家')
 
+  /*
+   * ⚠️ **翻账声明**（2026-10-06，工作台 v2 / W1）。
+   *
+   * U54 时这里断言的是「标签 = `notation` 切 `(` 之前」（即英文名），
+   * 理由是"派生不会漂移、不用手工同步"。那条理由**没错**，但它漏了一件事：
+   * 派生出来的东西是**英文** —— 用户实测原话：
+   *
+   *   > 「具体功能为什么不用中文？为什么中英文混杂？你想给谁用？」
+   *
+   * ⇒ 口径改成**显示名与输入语法分家**：`notation` 是输入语法（能敲，①管它），
+   *   `menuLabel` 是**界面文案**（中文，由 `gal/opLabels.ts#OP_LABEL` 给）。
+   * 下面这些期望值**逐条从英文翻成中文** —— 翻的是判据，不是让实现迁就断言。
+   *
+   * U54 担心的"手工表会漂移"改由 `opLabels.ts#assertEveryOpNamed()` 在**加载期**守：
+   * 漏写不是"悄悄退回英文"，而是加载就抛。
+   */
   {
-    eq('directProduct', menuLabel(opById('directProduct')!), 'directProduct')
-    eq('conjOn', menuLabel(opById('conjugationOnSet')!), 'conjOn')
-    eq('semidirectProduct', menuLabel(opById('semidirectProduct')!), 'semidirectProduct')
-    eq('pointSet', menuLabel(opById('pointSet')!), 'pointSet')
-    eq('labeledSet', menuLabel(opById('labeledSet')!), 'labeledSet')
+    eq('直积', menuLabel(opById('directProduct')!), '直积')
+    eq('集合上的共轭', menuLabel(opById('conjugationOnSet')!), '集合上的共轭')
+    eq('半直积', menuLabel(opById('semidirectProduct')!), '半直积')
+    eq('造点集', menuLabel(opById('pointSet')!), '造点集')
+    eq('按标号造集合', menuLabel(opById('labeledSet')!), '按标号造集合')
+
+    // 新口径的第一条守卫：**标签不许再是英文 id**（不然这次改动等于没做）。
+    const englishy = OPS.filter((op) => /^[A-Za-z][A-Za-z0-9_]*$/.test(menuLabel(op)))
+    eq('没有一个标签是纯英文 id', englishy.map((o) => o.id).join(' '), '')
 
     const leaky = OPS.filter((op) => strayLatex(menuLabel(op)).length > 0)
     eq('没有哪个菜单标签带 LaTeX', leaky.map((o) => o.id).join(' '), '')
+
+    // 显示侧同样受"键盘打不出来的字符不许出现"约束（用户 2026-09-27 立）。
+    const untypable = OPS.filter((op) => leakChars(menuLabel(op)).length > 0)
+    eq(
+      '没有哪个标签带键盘打不出来的字符',
+      untypable.map((o) => `${o.id}:${menuLabel(op)}`).join(' '),
+      '',
+    )
 
     const blank = OPS.filter((op) => menuLabel(op).trim().length === 0)
     eq('没有哪个标签是空的（球上不许有看不见的按钮）', blank.length, 0)

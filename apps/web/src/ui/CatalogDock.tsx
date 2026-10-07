@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { smallGroupCatalog, type SmallGroupList } from '../gal/smallGroups'
 import { DockPanel } from './DockPanel'
+import { NewObjectForms } from './NewObjectForms'
 
 /**
  * 「目录」浮层面板（U56）—— 从库里**挑**群、**凭空造**集合，点了就落成一行定义。
@@ -59,9 +60,6 @@ export function CatalogDock({
   const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set())
   /** `null` = 还没算过（首次展开时补上） */
   const [orders, setOrders] = useState<SmallGroupList[] | null>(null)
-  const [points, setPoints] = useState('5')
-  const [labels, setLabels] = useState('a, b, c')
-  const [structLabels, setStructLabels] = useState('1, 2, 3')
 
   useEffect(() => {
     if (!open || orders) return
@@ -95,83 +93,14 @@ export function CatalogDock({
        * 而群目录是个 93 条的长列表，塞在它后面等于把造集合的入口埋起来
        * （用户原话问的正是"怎么创建任意集合"）。分区顺序就是个优先级声明。
        *
-       * 分两个框而不是一个，是因为 `labeledSet(5)` 到底指"5 个点"还是
-       * "一个叫 5 的点"两种读法都通（`pointSet.ts` 模块头）—— 让用户分别
-       * 从两个框进，比自己猜要诚实。
+       * ⚠️ 2026-10-06（W2）：这三块表单**抽去了 `ui/NewObjectForms.tsx`**，
+       * 因为工作台的 `＋` 也要开同一套。**DOM 类名逐字未变** ⇒ 本套走查一条不改。
        */}
-      <div className="dock-subtitle">集合（凭空造）</div>
-      <div className="cat-form">
-        <input
-          className="cat-input"
-          value={points}
-          onChange={(e) => setPoints(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && points.trim()) onAdd(`pointSet(${points.trim()})`)
-          }}
-          inputMode="numeric"
-          placeholder="点数"
-          title="造 n 个抽象点：pointSet(5)"
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <button
-          className="cat-go"
-          disabled={!points.trim()}
-          onClick={() => onAdd(`pointSet(${points.trim()})`)}
-        >
-          造点集
-        </button>
-      </div>
-      <div className="cat-form">
-        <input
-          className="cat-input"
-          value={labels}
-          onChange={(e) => setLabels(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && labels.trim()) onAdd(`labeledSet(${labels.trim()})`)
-          }}
-          placeholder="a, b, c"
-          title="按你的标号造点集：labeledSet(a, b, c)"
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <button
-          className="cat-go"
-          disabled={!labels.trim()}
-          onClick={() => onAdd(`labeledSet(${labels.trim()})`)}
-        >
-          按标号造
-        </button>
-      </div>
-
-      {/*
-        「造结构」（S2b）—— 与上面两个框**并列**，因为它是同一件事的下一步：
-        先有载体才有运算。`labeledSet` 那一支故意用**同一串标号**：它会先后落两行
-        （`P = labeledSet(1, 2, 3)` 与编辑器产出的 `M = structure(P, ...)`），
-        画布上于是是"一个圆 + 一个双线圆"，中间一条来源线（§11.3）。
-      */}
-      <div className="cat-form">
-        <input
-          className="cat-input"
-          value={structLabels}
-          onChange={(e) => setStructLabels(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && structLabels.trim())
-              onBuildStructure(`labeledSet(${structLabels.trim()})`)
-          }}
-          placeholder="1, 2, 3"
-          title="造一个代数结构：先造就这批点，再打开运算表编辑器"
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <button
-          className="cat-go"
-          disabled={!structLabels.trim()}
-          onClick={() => onBuildStructure(`labeledSet(${structLabels.trim()})`)}
-        >
-          造结构
-        </button>
-      </div>
+      <NewObjectForms
+        onAdd={onAdd}
+        onBuildStructure={onBuildStructure}
+        heading="集合（凭空造）"
+      />
 
       <div className="dock-subtitle">群（{total} 个，按阶分组）</div>
       {list.map((g) => (

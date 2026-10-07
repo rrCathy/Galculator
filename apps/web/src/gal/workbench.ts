@@ -30,13 +30,19 @@ import { takesCanvasObject } from './ops'
  *    **互不重叠**。加了新 op 却没归类 ⇒ 加载即抛，而不是"悄悄出现在没人看得见的地方"。
  * ② **不许重**：一条 op 只出现在一族里（用户点得到的位置唯一）。
  *
- * ## 排除名单：11 条刻意**不进**工作台
+ * ## 三档归宿：键盘族 / `＋` 面板 / 排除名单
  *
- * | 排除 | 为什么 |
- * |---|---|
- * | `pointSet` / `labeledSet` / `smallGroup` | 实参**全是标量**、一个对象都不吃 ⇒ 它们是「**凭空造**」。分工上属「目录」（U56 就是为它们建的），工作台是"处理已有对象之间的细致结构"，两者不是一件事 |
- * | `contains` / `isomorphism` | **用户 2026-10-05 拍板**：这两个是「**两个对象之间的关系**」（产出 `relation`，画布上落成一条可点的边），按三区定义属**画布**（"画布是用来处理多个对象之间关系的地方"）。入口在 ⊕ 球菜单（`multiOps` 16 条里含这两个）与拖拽连线 |
- * | `factorize` / `binomial` / `binomialMod` / `gcd` / `lcm` / `eulerPhi` | 纯整数算术，与群论无关；U47 定过"计算先不弄"，有输入球与数值区就够 |
+ * | 档 | 谁 | 为什么 |
+ * |---|---|---|
+ * | **键盘族**（`BENCH_FAMILIES`）| 31 条 | 都要**一个已有对象**当第一参数 ⇒ 是键盘键（"对这个对象做点什么"）|
+ * | **`＋` 面板**（`BENCH_PLUS`）| `pointSet` / `labeledSet` / `smallGroup` | 实参**全是标量**、一个对象都不吃 ⇒ 键盘上按不出来，只能从 `＋` 进 |
+ * | **排除**（`BENCH_EXCLUDED`）| `contains` / `isomorphism` | 两个对象之间的**关系**（产出 `relation`，画布上落成一条可点的边）⇒ 用户 2026-10-05 拍板归**画布** |
+ * | | `factorize` / `binomial` / `binomialMod` / `gcd` / `lcm` / `eulerPhi` | 纯整数算术，与群论无关（U47「计算先不弄」）|
+ *
+ * ⚠️ **2026-10-06（W2）翻过一次账**：`pointSet`/`labeledSet`/`smallGroup` 从前在**排除名单**里，
+ * 理由写的是"属目录"。用户实测第一条就是「**为什么不能在工作台内就创建出任意集合？**」——
+ * 那句理由**是分类不是入口**（和 P1-1 被否是同一类错：把"这东西属于哪个分类"
+ * 当成了"用户从哪儿进得来"）。现在它们在工作台里，入口是显示条上的 `＋`。
  *
  * ⚠️ 这条排除**是判断不是事实**。若哪天用户要"在工作台里随手算个数"，
  * 改这张表即可 —— 但别零散地在别处开口子（那会回到"判据散多份"）。
@@ -117,11 +123,23 @@ export const BENCH_FAMILIES: BenchFamily[] = [
   },
 ]
 
-/** 刻意**不进**工作台的 op —— 见模块头的排除表。 */
+/**
+ * **`＋` 面板里的 op**（工作台 v2 / W2，2026-10-06）—— 它们的入口是显示条上那个 `＋`，
+ * **不是任务栏/键盘上的按钮**。
+ *
+ * 为什么单列一档，而不是塞回 `BENCH_EXCLUDED`：
+ * 用户 2026-10-06 实测第一条就是「**为什么不能在工作台内就创建出任意集合？**」
+ * 把它们写进"排除名单"（=不在工作台里）就是**继续撒谎** —— 它们在工作台里，
+ * 只是入口是 `＋` 而不是键盘键（键盘键是"对一个已有对象做事"，凭空造没有对象可按）。
+ *
+ * ⚠️ 与 `structure`（造结构）的分工：`structure` 的实参是**一个集合**，
+ * 所以它是键盘键（焦点是集合时就出现）；这里三条的实参**全是标量**，
+ * 键盘上按不出来，只能从 `＋` 进。**同一个入口只出现一次**。
+ */
+export const BENCH_PLUS: string[] = ['pointSet', 'labeledSet', 'smallGroup']
+
+/** 刻意**不进**工作台任何地方的 op —— 见模块头的排除表。 */
 export const BENCH_EXCLUDED: Record<string, string> = {
-  pointSet: '凭空造点集：实参全是标量，一个对象都不吃，属「目录」（U56）',
-  labeledSet: '凭空造点集：同 pointSet',
-  smallGroup: '从库里挑群：属「目录」（U56）',
   contains: '两个对象之间的关系（产出 relation）⇒ 属画布；入口在 ⊕ 球菜单与拖拽',
   isomorphism: '两个对象之间的关系（产出 relation）⇒ 属画布；入口在 ⊕ 球菜单与拖拽',
   factorize: '纯整数算术（U47「计算先不弄」）',
@@ -132,7 +150,13 @@ export const BENCH_EXCLUDED: Record<string, string> = {
   eulerPhi: '纯整数算术',
 }
 
-/** 启动时跑一次：分组与排除名单合起来必须恰好盖住全部 op，且互不重叠。 */
+/**
+ * 启动时跑一次：**键盘分组 ∪ `＋` 面板 ∪ 排除名单 = 全部 op**，且互不重叠。
+ *
+ * ⚠️ 2026-10-06（W2）从"两档"扩成"三档"：加 `BENCH_PLUS` 是因为用户点名的
+ * 「工作台里造不出集合」—— 凭空造的三条**一直在工作台里**，只是不该出现在键盘上。
+ * 纪律不变：**新的 op 没有归宿就加载即抛**，不许"悄悄出现在没人看得见的地方"。
+ */
 function assertPartition(): void {
   const byId = new Map(OPS.map((o) => [o.id, o]))
   const inFamily = new Map<string, string>()
@@ -144,11 +168,17 @@ function assertPartition(): void {
       inFamily.set(id, f.label)
     }
   }
+  for (const id of BENCH_PLUS) {
+    const prev = inFamily.get(id)
+    if (prev) throw new Error(`工作台分组表：${id} 同时在「${prev}」与「＋ 面板」里`)
+    if (!byId.has(id)) throw new Error(`工作台分组表：＋ 面板里的 ${id} 不在 OPS 里`)
+    inFamily.set(id, '＋ 面板')
+  }
   const missing = OPS.filter((o) => !inFamily.has(o.id) && !(o.id in BENCH_EXCLUDED)).map((o) => o.id)
   if (missing.length > 0) {
     throw new Error(
       `工作台分组表漏了 ${missing.length} 条 op：${missing.join(', ')}\n` +
-        `要么归入某一族，要么写进 BENCH_EXCLUDED 并说明为什么。这是纪律，不是可选。`,
+        `要么归入某一族，要么进 BENCH_PLUS（＋ 面板），要么写进 BENCH_EXCLUDED 并说明为什么。这是纪律，不是可选。`,
     )
   }
 }

@@ -90,44 +90,47 @@ const clickEl = async (sel) => {
   return true
 }
 
-const clickElByText = (sel, text) =>
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickElByOp = (sel, opId) =>
   page.evaluate(
-    ({ s, t }) => {
-      const b = [...document.querySelectorAll(s)].find((x) => x.textContent.trim() === t)
+    ({ s, want }) => {
+      const b = [...document.querySelectorAll(s)].find((x) => x.dataset.op === want)
       if (!b) return false
       b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       return true
     },
-    { s: sel, t: text },
+    { s: sel, want: opId },
   )
 
-const clickCenterOp = (label) =>
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickCenterOp = (opId) =>
   page.evaluate((want) => {
     const b = [...document.querySelectorAll('.orb-center-panel .orb-op')].find(
-      (x) => x.querySelector('.orb-op-label')?.textContent?.trim() === want,
+      (x) => x.dataset.op === want,
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
 
 /** 单对象那条路：群节点的环上先点「操作」卫星，再从抽屉里挑一条。 */
-const clickOpsPanelOp = (label) =>
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickOpsPanelOp = (opId) =>
   page.evaluate((want) => {
     const b = [...document.querySelectorAll('.orb-ops-panel .orb-op')].find(
-      (x) => x.querySelector('.orb-op-label')?.textContent?.trim() === want,
+      (x) => x.dataset.op === want,
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
 
 /** 从**群节点球**进 `customAction`：环上直接有就点它，否则先开「操作」抽屉。 */
 const openFromGroupOrb = async (id) => {
   await clickSvg(`svg.canvas g.gnode[data-id="${id}"] .gnode-hit`)
   await clickEl('.orb:not(.orb-center)')
-  if (await clickElByText('.orb-sat', 'customAction')) return true
-  await clickElByText('.orb-sat', '操作')
+  if (await clickElByOp('.orb-sat', 'customAction')) return true
+  await clickEl('.orb-sat:text-is("操作")')
   await page.waitForTimeout(420)
   return clickOpsPanelOp('customAction')
 }
@@ -356,7 +359,7 @@ console.log('== ⑤b 换个**非平凡**作用（左正则）：表里给出真�
   await page.keyboard.press('Escape')
   await page.waitForTimeout(320)
   ok('再进一次 `customAction`', await openFromGroupOrb('G'))
-  ok('点得中「左正则作用」', await clickElByText('.action-builder .mb-auto', '左正则作用'))
+  ok('点得中「左正则作用」', await clickEl('.action-builder .mb-auto:text-is("左正则作用")'))
   await page.waitForTimeout(520)
   const e = await editorState()
   ok('  它把 Ω 设成 |G| = 24 个点', e.omega === '24', JSON.stringify(e.omega))

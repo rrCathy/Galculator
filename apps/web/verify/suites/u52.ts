@@ -423,7 +423,8 @@ export function run(): void {
       'U57 翻案：**进** multiOps（Ω 是半对象档 —— 用户手上 G + 点集时这条路必须列得出来）',
       multiOps().some((o) => o.id === 'customAction'),
     )
-    eq('菜单标签 = notation 前缀（U54 起不再靠手工表）', op ? menuLabel(op) : '', 'customAction')
+    // 翻账（工作台 v2 / W1，2026-10-06）：标签从英文名翻成中文显示名。
+    eq('菜单标签 = 中文显示名', op ? menuLabel(op) : '', '自定义作用')
     eq('模板给的是能照抄的一行', op ? opTemplate(op) : '', 'customAction(G, 4, a -> (1 2 3 4))')
 
     // 一行文字往返：编辑器编出来的行必须能被同一条求值路径吃回去。

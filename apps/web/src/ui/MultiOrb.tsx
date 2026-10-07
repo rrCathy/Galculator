@@ -40,7 +40,10 @@ export function MultiOrb({
             <button
               key={op.id}
               className="orb-op"
-              title={`${op.notation} ---- ${op.doc}`}
+              /* 回归按 `data-op` 找按钮（**不按显示文本**）——
+                 显示名从 2026-10-06 起是中文，按文本匹配会随文案漂移。 */
+              data-op={op.id}
+              title={`${menuLabel(op)}（${op.notation}）---- ${op.doc}`}
               onClick={() => onPick(op)}
             >
               <span className="orb-op-label">{menuLabel(op)}</span>

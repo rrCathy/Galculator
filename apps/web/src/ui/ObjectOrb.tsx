@@ -75,10 +75,9 @@ function ringItems(value: GalValue, singleOps: OpDef[]): RingItem[] {
    * **给它一个运算**（S2b）—— 头号场景（§10 场景 0）的入口。
    *
    * `structure` 那条 op 本来就在 `singleOpsFor(点集)` 里（S1 之后点集只有这一条单对象
-   * 操作），但它铺出来的按钮叫 `structure`（`menuLabel` 从 `notation` 派生）——
-   * 那是**实现的名字**，不是用户的问题。用户的问题句是「给它一个运算」。
-   * 所以这里给它起个能读懂的名字，并把 `structure` 从下面那排通用 op 里摘掉
-   * （免得同一个入口出现两次）。
+   * 操作），但它铺出来的按钮名不如用户的问题句贴切。
+   * 用户的问题句是「给它一个运算」—— 这里就用那句当标签，
+   * 并把 `structure` 从下面那排通用 op 里摘掉（免得同一个入口出现两次）。
    */
   const build: RingItem | null =
     (value.type === 'set' || value.type === 'elements') &&
@@ -99,9 +98,11 @@ function ringItems(value: GalValue, singleOps: OpDef[]): RingItem[] {
       ...head,
       ...generic.map((op) => ({
         key: op.id,
-        label: op.call?.[0] ?? menuLabel(op),
+        // 中文显示名（2026-10-06 起 `menuLabel` 就是中文）——
+        // 从前这里是 `op.call?.[0] ?? menuLabel(op)`，会把 `conjOn` 这种英文名贴到按钮上。
+        label: menuLabel(op),
         opId: op.id,
-        title: `${op.notation} ---- ${op.doc}`,
+        title: `${menuLabel(op)}（${op.notation}）---- ${op.doc}`,
       })),
     ]
   }
@@ -194,6 +195,7 @@ export function ObjectOrb({
             <button
               key={item.key}
               className={`orb-sat${item.tab ? ' orb-info' : ' orb-ops'}`}
+              data-op={item.opId}
               style={{ left: x, top: y }}
               title={item.title}
               onClick={(e) => {
@@ -238,7 +240,8 @@ export function ObjectOrb({
             <button
               key={op.id}
               className="orb-op"
-              title={`${op.notation} ---- ${op.doc}`}
+              data-op={op.id}
+              title={`${menuLabel(op)}（${op.notation}）---- ${op.doc}`}
               onClick={() => onRun(op)}
             >
               <span className="orb-op-label">{menuLabel(op)}</span>

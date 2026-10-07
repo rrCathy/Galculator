@@ -260,19 +260,19 @@ await page.waitForTimeout(420)
 {
   /* U44 起映射的操作走**悬浮球**（信息面板那一行「可做」已砍）。
      映射的单对象操作 ≤3 条，球面直接把它们铺出来（`ringItems` 的规矩）——
-     标签取 `op.call[0]`，`像` 这条的别名首项是 `im`。
+     显示名 2026-10-06 起是中文（`像`），按 `data-op="image"` 定位。
      ⚠️ 选择器要 `:not(.orb-center)` —— `ComposerOrb` / `MultiOrb` 也渲染 `.orb`
      按钮（带 `.orb-center`），光用 `.orb` 会命中好几个。对象球的 `.orb` 没有那个类。 */
   ok('点箭头后球出来了', (await page.locator('.orb:not(.orb-center)').count()) === 1)
   await page.evaluate(() => document.querySelector('.orb:not(.orb-center)')?.click())
   await page.waitForTimeout(300)
   const found = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('.orb-sat')].find((x) => x.textContent?.trim() === 'im')
+    const b = document.querySelector('.orb-sat[data-op="image"]')
     if (!b) return false
     b.click()
     return true
   })
-  ok('球上有「im」这颗（映射的单对象操作铺开）', found)
+  ok('球上有「像」这颗（映射的单对象操作铺开）', found)
   await page.waitForTimeout(340)
   const bar = await barText()
   ok(
@@ -307,8 +307,8 @@ await page.waitForTimeout(300)
 await page.click('.multi-orb .orb-center')
 await page.waitForTimeout(300)
 {
-  const item = page.locator('.orb-center-panel .orb-op', { hasText: 'image' }).first()
-  ok('⊕ 多对象菜单里有「image」（U54 前叫「像 f(H)」）', (await item.count()) > 0)
+  const item = page.locator('.orb-center-panel .orb-op[data-op="image"]').first()
+  ok('⊕ 多对象菜单里有「像」', (await item.count()) > 0)
   await item.click()
   await page.waitForTimeout(320)
   const bar1 = await barText()

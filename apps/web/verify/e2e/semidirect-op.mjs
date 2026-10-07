@@ -20,9 +20,10 @@
  *   ⑥ **纯文本面零泄漏**：状态行 / 连线菜单 / ⊕ 面板的文本全是「键盘打得出」的字符
  *      （判据与 `e2e/no-unicode-leak.mjs` 的 `ALLOWED` 逐字相同）。
  *
- * ⚠️ 菜单标签的期望值（U54 起）：标签是**从 `OpDef.notation` 派生**的英文名
- * （`semidirectProduct` / `directProduct` / `contains` / `Z` / `Syl` …），
- * 不再是一张手写的中文表。改这一套时别照抄源码注释里的旧中文名。
+ * ⚠️ 菜单标签的期望值（2026-10-06 起，工作台 v2 / W1）：**显示名是中文**
+ * （`menuLabel` → `opLabels.ts#OP_LABEL`，如「半直积」/「直积」/「包含」）。
+ * 所以走查里**不比显示文本**，改成按 `data-op` 的 **op id** 找/比对
+ * （`semidirectProduct` / `directProduct` / `contains` …）—— id 不会随文案漂移。
  *
  * 跑法（先起 dev server 5273）：`node verify/e2e/semidirect-op.mjs`
  */
@@ -134,6 +135,10 @@ const dragPointer = async (a, b, shift = true) => {
 /** 连线菜单里的候选短标签（`menuLabel(op)`）。 */
 const menuLabels = () =>
   page.evaluate(() => [...document.querySelectorAll('.connect-item .connect-label')].map((e) => e.textContent.trim()))
+
+/** 连线菜单里的候选 op id（`data-op`）—— 找条目/比集合一律按 id，不按显示文本。 */
+const menuOpIds = () =>
+  page.evaluate(() => [...document.querySelectorAll('.connect-item')].map((e) => e.dataset.op))
 
 /** 点左栏的一行（按 `.row-name` 里的 **id** 匹配）—— 只对**手输声明**的对象有效。 */
 const clickRow = async (id) => {
@@ -288,17 +293,17 @@ const before = await canvasState()
 
     await dragPointer(a, b, true)
     const labels = await menuLabels()
-    ok('弹出了候选菜单（多候选，没有静默执行）', labels.length > 0, JSON.stringify(labels))
-    ok('菜单里有「semidirectProduct」（op 从注册表派生，画布上自动就有；U54 前叫「半直积」）', labels.includes('semidirectProduct'), labels.join(' | '))
+    const ids = await menuOpIds()
+    ok('弹出了候选菜单（多候选，没有静默执行）', ids.length > 0, JSON.stringify(ids))
+    // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+    ok('菜单里有「半直积」（op 从注册表派生，画布上自动就有）', ids.includes('semidirectProduct'), ids.join(' | '))
     ok('标签不是原样贴出的 LaTeX（不许出现反斜杠）', labels.every((l) => !l.includes('\\')), labels.join(' | '))
     ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
     await page.screenshot({ path: '../../docs/assets/u51-semidirect-connect-menu.png' })
 
     // 点 semidirectProduct —— 菜单不撒谎：列出来就得真跑得动
     await page.evaluate(() => {
-      const b2 = [...document.querySelectorAll('.connect-item')].find((x) =>
-        x.querySelector('.connect-label')?.textContent?.trim() === 'semidirectProduct',
-      )
+      const b2 = [...document.querySelectorAll('.connect-item')].find((x) => x.dataset.op === 'semidirectProduct')
       b2?.click()
     })
     await page.waitForTimeout(700)
@@ -355,11 +360,13 @@ await page.waitForTimeout(480)
 
     await dragPointer(a, g, true)
     const labels = await menuLabels()
-    ok('弹出候选菜单', labels.length > 0, JSON.stringify(labels))
+    const ids = await menuOpIds()
+    ok('弹出候选菜单', ids.length > 0, JSON.stringify(ids))
     // 手算：|A_4| x |S_4| = 12 x 24 = 288 > 256（本地规模线）—— 列出来点下去必被预算拦住
-    ok('菜单里**没有**「semidirectProduct」（列出来就是撒谎）', !labels.includes('semidirectProduct'), labels.join(' | '))
-    ok('同一对下「directProduct」照列（别把预检做成"一律不列"）', labels.includes('directProduct'), labels.join(' | '))
-    ok('「contains」也在（A_4 正规于 S_4，这是真判据）', labels.includes('contains'), labels.join(' | '))
+    // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+    ok('菜单里**没有**「半直积」（列出来就是撒谎）', !ids.includes('semidirectProduct'), ids.join(' | '))
+    ok('同一对下「直积」照列（别把预检做成"一律不列"）', ids.includes('directProduct'), ids.join(' | '))
+    ok('「包含」也在（A_4 正规于 S_4，这是真判据）', ids.includes('contains'), ids.join(' | '))
     ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
 
     // 真拖两次同一个东西也不该把 14 秒的活悄悄塞给用户：菜单里没有它，就没法误点

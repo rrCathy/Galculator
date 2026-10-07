@@ -13,6 +13,7 @@ import { ACTION_KIND_LABEL, VALUE_TYPE_LABEL, type GalAction, type GalMap, type 
 // 作用的核（U52）：判据只有一份 —— 结论层那条 insight 用的是同一个函数
 import { actionKernel } from '../gal/customAction'
 import { actionInsights, groupInsights, mapInsights, type Insight } from '../gal/insights'
+import { groupName } from '../gal/mathLabel'
 import { STRUCTURAL_LABEL } from '../gal/derive'
 import { elementNotation } from '../gal/ops'
 import { labelWritable } from '../gal/pointSet'
@@ -101,6 +102,107 @@ export const STRUCT_SECTIONS: { id: InfoTab; label: string }[] = [
  *
  * 悬浮球那三个入口照旧可用：点「元素」= 打开面板 + 展开「元素」这一节。
  */
+/**
+ * **结论层**：这个对象"所以呢" —— 同构于什么 / 第一同构定理在这里具体是什么。
+ *
+ * ⚠️ **判据只有这一份**：`groupInsights` / `mapInsights` / `actionInsights`
+ * 由这里统一分派。信息面板与工作台**共用它**（内容一份两处显示）。
+ */
+export function insightsOf(node: GalObject | null): Insight[] {
+  const v = node?.value
+  if (!v) return []
+  // 传 node：结论层要看**这个对象是怎么来的**（手写记号 / 由操作构造）
+  if (v.type === 'group') return groupInsights(v.group, node ?? undefined)
+  if (v.type === 'map') return mapInsights(v.map)
+  // 作用：轨道分解 + （Sylow III）n_p 的三条等式 —— MVP 的落点
+  if (v.type === 'action') return actionInsights(v.action)
+  return []
+}
+
+/**
+ * 把结论层画出来。
+ *
+ * ⚠️ **2026-10-06 从 `InfoDock` 里抽出来**，因为工作台也要它。用户实测原话：
+ *
+ * > 「映射的详细信息呢？**把信息栏收起了不知道把信息挪过去？？？**」
+ *
+ * —— 收起信息面板却不把内容搬进工作台，那**不是取舍，是丢东西**。
+ * 抽成组件之后两处渲染的是同一份 `Insight[]`，不会再出现"收了一处、另一处没有"。
+ */
+export function Insights({ items }: { items: Insight[] }) {
+  if (items.length === 0) return null
+  return (
+    <div className="insights">
+      {items.map((ins, i) => (
+        /* 第一条 = **头条**（U46）：识别 / 第一同构定理 / 轨道分解 本来就是
+           结论层的第一个答案，字号要比其余结论再大一档 —— 见 `.insight-lead` */
+        <div key={i} className={`insight insight-${ins.tone}${i === 0 ? ' insight-lead' : ''}`}>
+          <span className="insight-label">{ins.label}</span>
+          <div className="insight-body">
+            <Tex tex={ins.tex} />
+            {ins.detail && <div className="insight-detail">{ins.detail}</div>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * **映射的详细信息**（2026-10-06）。
+ *
+ * 用户实测原话：
+ *
+ * > 「映射的详细信息呢？**把信息栏收起了不知道把信息挪过去？？？**」
+ * > 「工作台还看不了映射的信息，还得去信息栏看，那样工作台用同态功能的意义是什么？」
+ *
+ * ⇒ 与 `Insights` 同一个道理：**一份两处显示**（信息面板 + 工作台），
+ * 收起任何一处都不会把内容弄丢。
+ *
+ * 分工：这里只摆**事实**（定义域 / 陪域 / 生成元的像 / 单·满 / 核 / 像）；
+ * "所以呢"（第一同构定理那类结论）归 `mapInsights` —— 两者**不重叠**。
+ */
+export function MapFacts({ map }: { map: GalMap }) {
+  const yn = (v: boolean | null) => (v === null ? '未判定' : v ? '是' : '否')
+  /** 元素列表（超长就截断 —— 别把一面墙塞进面板） */
+  const elems = (xs: { label: string }[] | undefined, cap = 12) => {
+    if (!xs || xs.length === 0) return '（空）'
+    const head = xs.slice(0, cap).map((e) => e.label)
+    return xs.length > cap ? `${head.join(', ')} … 共 ${xs.length} 个` : head.join(', ')
+  }
+  const rows: { k: string; v: string }[] = [
+    { k: '定义域', v: groupName(map.domain) },
+    { k: '陪域', v: groupName(map.codomain) },
+    { k: '同态', v: map.isHomomorphism ? '是' : '否' },
+    { k: '单射', v: yn(map.isInjective) },
+    { k: '满射', v: yn(map.isSurjective) },
+    { k: '核 ker', v: elems(map.kernel) },
+    { k: '像 im', v: elems(map.image) },
+    {
+      k: '生成元的像',
+      v: map.genImages.length
+        ? map.genImages.map((g) => `${g.generator} -> ${g.image.label}`).join(', ')
+        : '（无）',
+    },
+  ]
+  return (
+    <div className="map-facts">
+      <table>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.k}>
+              <th>{r.k}</th>
+              <td>
+                <TexOrText text={r.v} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 export function InfoDock({
   open,
   onToggle,
@@ -183,17 +285,8 @@ export function InfoDock({
     return showGroup ? sectionSummary(id, showGroup, subCount) : ''
   }
 
-  // 结论层：这个对象"所以呢"——同构于什么 / 第一同构定理在这里具体是什么
-  const insights = useMemo<Insight[]>(() => {
-    const v = node?.value
-    if (!v) return []
-    // 传 node：结论层要看**这个对象是怎么来的**（手写记号 / 由操作构造）
-    if (v.type === 'group') return groupInsights(v.group, node ?? undefined)
-    if (v.type === 'map') return mapInsights(v.map)
-    // 作用：轨道分解 + （Sylow III）n_p 的三条等式 —— MVP 的落点
-    if (v.type === 'action') return actionInsights(v.action)
-    return []
-  }, [node])
+  /** 结论层：**判据在 `insightsOf`**（工作台共用同一份，别再在这儿分派一遍） */
+  const insights = useMemo<Insight[]>(() => insightsOf(node), [node])
 
   return (
     <DockPanel
@@ -245,21 +338,9 @@ export function InfoDock({
               </span>
             </div>
 
-            {insights.length > 0 && (
-              <div className="insights">
-                {insights.map((ins, i) => (
-                  /* 第一条 = **头条**（U46）：识别 / 第一同构定理 / 轨道分解 本来就是
-                     结论层的第一个答案，字号要比其余结论再大一档 —— 见 `.insight-lead` */
-                  <div key={i} className={`insight insight-${ins.tone}${i === 0 ? ' insight-lead' : ''}`}>
-                    <span className="insight-label">{ins.label}</span>
-                    <div className="insight-body">
-                      <Tex tex={ins.tex} />
-                      {ins.detail && <div className="insight-detail">{ins.detail}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <Insights items={insights} />
+            {/* 映射的**事实**（定义域/陪域/单·满/核/像）—— 与工作台同一份 */}
+            {node.value.type === 'map' && <MapFacts map={node.value.map} />}
           </div>
 
           {sections ? (

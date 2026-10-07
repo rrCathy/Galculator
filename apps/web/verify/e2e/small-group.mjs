@@ -223,7 +223,7 @@ const insightsOk = () => page.evaluate(() => document.querySelectorAll('.dock-to
 const PLAIN_SELECTORS = [
   '.composer-status',
   '.row-err',
-  '.orb-ops-panel .orb-op-label',
+  '.orb-ops-panel .orb-op',
   '.orb-ops-panel .orb-op code',
   '.orb-ops-panel .orb-op-doc',
   '.dock-topleft .insp-k',

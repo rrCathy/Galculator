@@ -136,6 +136,12 @@ const ringLabels = () =>
     [...document.querySelectorAll('.orb-sat')].map((e) => e.textContent.trim()),
   )
 
+/** 环上"直接是 op"的那些（带 `data-op` 的）—— 按 op id 比，不按显示文本。 */
+const ringOpIds = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.orb-sat[data-op]')].map((e) => e.dataset.op),
+  )
+
 const clickRingItem = async (label) => {
   const hit = await page.evaluate((want) => {
     const it = [...document.querySelectorAll('.orb-sat')].find(
@@ -150,15 +156,16 @@ const clickRingItem = async (label) => {
 }
 
 /** 点左栏「操作」抽屉里那条（悬浮球展开后的面板：`.orb-ops-panel .orb-op`）。 */
-const clickOrbOp = async (label) => {
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickOrbOp = async (opId) => {
   const hit = await page.evaluate((want) => {
     const b = [...document.querySelectorAll('.orb-ops-panel .orb-op')].find(
-      (x) => x.querySelector('.orb-op-label')?.textContent?.trim() === want,
+      (x) => x.dataset.op === want,
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
   await page.waitForTimeout(900)
   return hit
 }
@@ -248,7 +255,8 @@ console.log('\n== 场景 2：集合球上的「给它一个运算」 ==')
   await openOrb(carrierId)
   const ring = await ringLabels()
   ok('点集的球上有「给它一个运算」', ring.includes('给它一个运算'), ring.join(', '))
-  ok('球上没有裸露的 `structure` 按钮（实现名不该当入口名）', !ring.includes('structure'), ring.join(', '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('球上没有裸露的 `structure` 按钮（实现名不该当入口名）', !(await ringOpIds()).includes('structure'), ring.join(', '))
   const hit = await clickRingItem('给它一个运算')
   ok('点得中，编辑器打开', hit && (await gridState()) !== null)
   await escapeAll()
@@ -332,13 +340,15 @@ console.log('\n== 场景 5：群结构的球上有 Sub，点下去真算得出 =
   console.log('  [诊断] 结构节点的环 = ' + ring.join(', '))
   ok('群结构的球上有「操作」（操作不止三条，收进面板）', ring.includes('操作'), ring.join(', '))
   const opened = ring.includes('操作') ? await clickRingItem('操作') : false
-  ok('点得开「操作」面板', opened || ring.includes('Sub'))
-  const labels = await page.evaluate(() =>
-    [...document.querySelectorAll('.orb-ops-panel .orb-op-label')].map((e) => e.textContent.trim()),
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('点得开「操作」面板', opened || (await ringOpIds()).includes('subgroups'))
+  const opIds = await page.evaluate(() =>
+    [...document.querySelectorAll('.orb-ops-panel .orb-op')].map((e) => e.dataset.op),
   )
-  console.log('  [诊断] 面板里的操作 = ' + labels.join(', '))
-  ok('面板里有 Sub（形状说方，菜单里就得有 Sub）', labels.includes('Sub'), labels.join(', '))
-  ok('面板里有 Z', labels.includes('Z'), labels.join(', '))
+  console.log('  [诊断] 面板里的操作 = ' + opIds.join(', '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('面板里有「所有子群」（形状说方，菜单里就得有）', opIds.includes('subgroups'), opIds.join(', '))
+  ok('面板里有「中心」', opIds.includes('center'), opIds.join(', '))
 
   // §12.2 的反证：**点一下**，不能只看标签（"形状对、菜单也对，但点下去报错"）
   //
@@ -346,27 +356,29 @@ console.log('\n== 场景 5：群结构的球上有 Sub，点下去真算得出 =
   // 它**不上画布**（DIAGRAM_SPEC §3）—— 所以拿"画布 id 差集"当判据会永远为空
   // （写了条看着很硬、其实恒假的断言）。它的落点是左栏「操作」抽屉的那一行。
   const rowsBefore = await rows()
-  const clicked = await clickOrbOp('Sub')
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  const clicked = await clickOrbOp('subgroups')
   const nt = await notice()
   const rowsAfter = await rows()
   const subRow = rowsAfter.find((r) => /^Sub\(/.test(r.def))
-  ok('点得中 Sub', clicked)
+  ok('点得中「所有子群」', clicked)
   ok(
-    'Sub 真算得出（左栏多出 Sub(...) 那一行，且没报错）',
+    '「所有子群」真算得出（左栏多出 Sub(...) 那一行，且没报错）',
     !!subRow && !subRow.err && !isError(nt),
     `notice=${JSON.stringify(nt)} 新行=${JSON.stringify(rowsAfter.filter((r) => !rowsBefore.some((b) => b.name === r.name)))}`,
   )
 
-  // 另一半：产**群**的操作（`Z`）该在画布上真的多一个节点
+  // 另一半：产**群**的操作（`center`）该在画布上真的多一个节点
   await openOrb(structId)
   const opened2 = (await ringLabels()).includes('操作') ? await clickRingItem('操作') : false
   const before2 = await nodeIds()
-  const zHit = opened2 ? await clickOrbOp('Z') : false
+  const zHit = opened2 ? await clickOrbOp('center') : false
   const nt2 = await notice()
   const after2 = await nodeIds()
-  ok('点得中 Z', zHit)
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('点得中「中心」', zHit)
   ok(
-    'Z 真算得出（画布多了节点 —— 它产群，是顶点）',
+    '「中心」真算得出（画布多了节点 —— 它产群，是顶点）',
     zHit && !isError(nt2) && after2.some((id) => !before2.includes(id)),
     `notice=${JSON.stringify(nt2)} before=[${before2}] after=[${after2}]`,
   )
@@ -396,9 +408,11 @@ console.log('\n== 场景 6/7：半群结构 = 双线圆，球上没有群操作 
 
   await openOrb('S2')
   const ring = await ringLabels()
+  const ringIds = await ringOpIds()
   console.log('  [诊断] 半群结构的环 = ' + ring.join(', '))
-  ok('半群结构的球上没有 Sub', !ring.includes('Sub'), ring.join(', '))
-  ok('半群结构的球上没有 Z', !ring.includes('Z'), ring.join(', '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('半群结构的球上没有「所有子群」', !ringIds.includes('subgroups'), ring.join(', '))
+  ok('半群结构的球上没有「中心」', !ringIds.includes('center'), ring.join(', '))
   ok('半群结构的球上也没有「操作」面板（一条群操作都列不出）', !ring.includes('操作'), ring.join(', '))
   ok('  但它不是死路：还有「信息」', ring.includes('信息'), ring.join(', '))
 

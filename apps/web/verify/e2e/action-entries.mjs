@@ -125,6 +125,7 @@ const openRing = async (id) => {
 const ringItems = () =>
   page.evaluate(() =>
     [...document.querySelectorAll('.orb-sat')].map((b) => ({
+      opId: b.dataset.op ?? '',
       label: b.textContent.trim(),
       title: b.getAttribute('title') ?? '',
     })),
@@ -144,15 +145,22 @@ const centerLabels = () =>
     [...document.querySelectorAll('.orb-center-panel .orb-op-label')].map((e) => e.textContent.trim()),
   )
 
-const clickCenterOp = (label) =>
+/** ⊕ 球的候选 op id（`data-op`）—— 找按钮/比集合一律按 id，不按显示文本。 */
+const centerOpIds = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.orb-center-panel .orb-op')].map((e) => e.dataset.op),
+  )
+
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickCenterOp = (opId) =>
   page.evaluate((want) => {
     const b = [...document.querySelectorAll('.orb-center-panel .orb-op')].find(
-      (x) => x.querySelector('.orb-op-label')?.textContent?.trim() === want,
+      (x) => x.dataset.op === want,
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
 
 /** 编辑器的读数：Ω 那一格 + 高亮的那颗 chip + 生成元行数。 */
 const editorState = () =>
@@ -196,15 +204,15 @@ const dragPointer = async (a, b) => {
 const PLAIN_SELECTORS = [
   '.notice',
   '.orb-sat',
-  '.orb-center-panel .orb-op-label',
+  '.orb-center-panel .orb-op',
   '.orb-center-panel .orb-op code',
   '.orb-center-panel .orb-op-doc',
   '.orb-center-panel [title]',
-  '.orb-ops-panel:not(.orb-center-panel) .orb-op-label',
+  '.orb-ops-panel:not(.orb-center-panel) .orb-op',
   '.orb-ops-panel:not(.orb-center-panel) .orb-op code',
   '.orb-ops-panel:not(.orb-center-panel) .orb-op-doc',
   '.orb-ops-panel:not(.orb-center-panel) [title]',
-  '.connect-menu .connect-label',
+  '.connect-menu .connect-item',
   '.connect-menu .connect-item code',
   '.composer-status',
   '.action-builder .mb-hint',
@@ -257,14 +265,17 @@ console.log('== ① ⊕ 球（"把两样凑一起"）：U57 前它 15 条里偏�
 await clickEl('.multi-orb .orb-center')
 {
   const labels = await centerLabels()
-  ok('⊕ 球列得出 16 条（U57 前是 15）', labels.length === 16, `${labels.length}: ${labels.join(' | ')}`)
-  ok('**含 `customAction`**（这就是用户找不到的那条）', labels.includes('customAction'), labels.join(' | '))
+  const ids = await centerOpIds()
+  ok('⊕ 球列得出 16 条（U57 前是 15）', ids.length === 16, `${ids.length}: ${ids.join(' | ')}`)
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('**含「自定义作用」**（这就是用户找不到的那条）', ids.includes('customAction'), ids.join(' | '))
   ok(
-    '  排在 `conjOn` / `cosetAction` 之后（注册表序，没被特殊插队）',
-    labels.indexOf('customAction') > labels.indexOf('cosetAction'),
-    labels.join(' | '),
+    '  排在「集合上的共轭」/「陪集作用」之后（注册表序，没被特殊插队）',
+    ids.indexOf('customAction') > ids.indexOf('cosetAction'),
+    ids.join(' | '),
   )
-  ok('  同族的两个内置作用照旧都在', labels.includes('conjOn') && labels.includes('cosetAction'), labels.join(' | '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('  同族的两个内置作用照旧都在', ids.includes('conjugationOnSet') && ids.includes('cosetAction'), ids.join(' | '))
   ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
   await page.screenshot({ path: '../../docs/assets/u57-multiorb.png' })
 }
@@ -276,14 +287,17 @@ await clickEl('.multi-orb .orb-center')
 console.log('')
 console.log('== ② 从 ⊕ 球点 `customAction` -> 空着手 pending，等你去点一个群 ==')
 {
-  ok('点得中「customAction」', await clickCenterOp('customAction'))
+  ok('点得中「自定义作用」', await clickCenterOp('customAction'))
   await page.waitForTimeout(320)
 
   const pend = await page.evaluate(() => ({
     what: document.querySelector('.pending-what')?.textContent?.trim() ?? '',
+    // `.pending-what` 的文本 2026-10-06 起是中文名，ASCII 记法进了 title。
+    whatTitle: document.querySelector('.pending-what')?.getAttribute('title')?.trim() ?? '',
     hint: document.querySelector('.pending-hint')?.textContent?.trim() ?? '',
   }))
-  ok('提示条要的就是第一参 G', pend.what.includes('customAction'), JSON.stringify(pend))
+  // 翻账（W1，2026-10-06）：文本改中文，按 title 里的 ASCII 记法判。
+  ok('提示条要的就是第一参 G', pend.whatTitle.includes('customAction'), JSON.stringify(pend))
   /*
    * U58 翻案：这条从前写的是「且没说"两个对象"（它只要一个群）」。
    * U58 起它**真的要两个** —— 第二位 Ω 也能在画布上点（提示条写「第 1 / 2 个对象」，
@@ -329,9 +343,10 @@ await openRing('P')
    * ⇒ 这两颗不再铺出来。环上剩下 `信息 | 被作用`，对点集来说这是**正确的全部**：
    * 它能被作用（「被作用」），不能取底集、不能生成子群。
    */
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
   ok(
-    '  集合球上**不再铺** asSet / closure（F1：列出来必报错，本来就不该列）',
-    !labels.includes('asSet') && !labels.includes('closure'),
+    '  集合球上**不再铺**「底层集合」/「闭包」（F1：列出来必报错，本来就不该列）',
+    !items.some((i) => i.opId === 'underlyingSet' || i.opId === 'closure'),
     labels.join(' | '),
   )
   ok(
@@ -354,8 +369,13 @@ console.log('== ④ 点「被作用」-> 选个群 -> 编辑器里 Ω 已经是�
 
   const notice = await page.evaluate(() => document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? '')
   ok('提示条说明白要选一个群当作用群', notice.includes('作用群') && notice.includes('G'), notice)
-  const what = await page.evaluate(() => document.querySelector('.pending-what')?.textContent?.trim() ?? '')
-  ok('  进的是同一条 op（customAction）', what.includes('customAction'), what)
+  const what = await page.evaluate(() => ({
+    text: document.querySelector('.pending-what')?.textContent?.trim() ?? '',
+    // `.pending-what` 的文本 2026-10-06 起是中文名，ASCII 记法进了 title。
+    title: document.querySelector('.pending-what')?.getAttribute('title')?.trim() ?? '',
+  }))
+  // 翻账（W1，2026-10-06）：文本改中文，按 title 里的 ASCII 记法判。
+  ok('  进的是同一条 op（customAction）', what.title.includes('customAction'), JSON.stringify(what))
 
   ok('点得中群节点 G', await clickSvg('svg.canvas g.gnode[data-id="G"] .gnode-hit'))
   const e = await editorState()
@@ -431,7 +451,7 @@ await page.waitForTimeout(320)
   await dragPointer(g, q)
 
   const menu = await page.evaluate(() =>
-    [...document.querySelectorAll('.connect-menu .connect-label')].map((e) => e.textContent.trim()),
+    [...document.querySelectorAll('.connect-menu .connect-item')].map((e) => e.dataset.op),
   )
   ok(
     '拖 G 到点集：只剩 1 条候选 ⇒ **不弹菜单、直接执行**（`onConnect` 的 length===1 分支）',

@@ -112,25 +112,26 @@ const dragPointer = async (a, b) => {
   await page.waitForTimeout(460)
 }
 
-/** 拖之后的候选菜单（`.connect-menu`）。 */
+/** 拖之后的候选菜单（`.connect-menu`）—— 收集 op id。 */
 const connectMenu = () =>
   page.evaluate(() => {
     const m = document.querySelector('.connect-menu')
     if (!m) return null
     return {
       head: m.querySelector('.connect-head')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-      items: [...m.querySelectorAll('.connect-item .connect-label')].map((e) => e.textContent.trim()),
+      items: [...m.querySelectorAll('.connect-item')].map((e) => e.dataset.op),
     }
   })
 
-const clickMenuItem = async (label) => {
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickMenuItem = async (opId) => {
   const hit = await page.evaluate((want) => {
     const items = [...document.querySelectorAll('.connect-item')]
-    const h = items.find((it) => it.querySelector('.connect-label')?.textContent?.trim() === want)
+    const h = items.find((it) => it.dataset.op === want)
     if (!h) return false
     h.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
   await page.waitForTimeout(700)
   return hit
 }
@@ -162,11 +163,11 @@ const openOrb = async (id) => {
   await page.waitForTimeout(460)
 }
 
-/** 球环上铺开的东西（卫星 `.orb-sat` + 「操作」面板里的 label）。 */
-const ringLabels = () =>
+/** 球环上铺开的操作（卫星 `.orb-sat` + 「操作」面板里的 `.orb-op`）—— 收集 op id。 */
+const ringOpIds = () =>
   page.evaluate(() =>
-    [...document.querySelectorAll('.orb-sat, .orb-ops-panel .orb-op-label')].map((e) =>
-      e.textContent.trim(),
+    [...document.querySelectorAll('.orb-sat[data-op], .orb-ops-panel .orb-op')].map(
+      (e) => e.dataset.op,
     ),
   )
 
@@ -213,9 +214,10 @@ console.log('\n== 场景 B：点集节点的球 ==')
 await escapeAll()
 {
   await openOrb('P')
-  const ring = await ringLabels()
-  ok('球的环**不含** asSet（底集对"已经是集合"的东西没意义）', !ring.includes('asSet'), ring.join(', '))
-  ok('球的环**不含** closure（抽象点集没有生成子群）', !ring.includes('closure'), ring.join(', '))
+  const ring = await ringOpIds()
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('球的环**不含**「底层集合」（底集对"已经是集合"的东西没意义）', !ring.includes('underlyingSet'), ring.join(', '))
+  ok('球的环**不含**「闭包」（抽象点集没有生成子群）', !ring.includes('closure'), ring.join(', '))
 }
 
 /* ══ 场景 C：手打时诚实报错 ══════════════════════════════════ */
@@ -303,8 +305,9 @@ await escapeAll()
     const menu = await connectMenu()
     ok('拖得开候选菜单', !!menu, menu ? menu.items.join(', ') : '(没弹)')
     if (menu) {
+      // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
       ok(
-        '菜单里有 quotient（有母群的元素集提升 = 真子群，F1 的"补"这一半）',
+        '菜单里有「商群」（有母群的元素集提升 = 真子群，F1 的"补"这一半）',
         menu.items.includes('quotient'),
         menu.items.join(', '),
       )
@@ -313,7 +316,7 @@ await escapeAll()
       await page.waitForTimeout(900)
       const nt = await notice()
       const after = await nodeIds()
-      ok('点得中 quotient', clicked)
+      ok('点得中「商群」', clicked)
       ok(
         '商算得出（无报错提示；且画布多出节点 —— 比 id 差集，不看"节点数 +1"）',
         clicked && (!nt || !/需要|不是|不能|没有|算不了|失败/.test(nt)) && after.some((id) => !before.includes(id)),

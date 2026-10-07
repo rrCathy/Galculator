@@ -503,8 +503,9 @@ export function run(): void {
     eq('params 长度 == arity + optional（集合）', ls?.params.length, (ls?.arity ?? 0) + (ls?.optional ?? 0))
     eq('集合靠 variadic 收点', ls?.variadic?.name, 'point')
     eq('集合的 arity = 0（点全在 variadic 里）', ls?.arity, 0)
-    eq('菜单标签 = notation 前缀（点集）', ps ? menuLabel(ps) : '', 'pointSet')
-    eq('菜单标签 = notation 前缀（集合）', ls ? menuLabel(ls) : '', 'labeledSet')
+    // 翻账（工作台 v2 / W1，2026-10-06）：标签改成中文显示名。
+    eq('菜单标签 = 中文显示名（点集）', ps ? menuLabel(ps) : '', '造点集')
+    eq('菜单标签 = 中文显示名（集合）', ls ? menuLabel(ls) : '', '按标号造集合')
     eq('模板照抄就能跑（点集）', ps ? opTemplate(ps) : '', 'pointSet(5)')
     eq('模板照抄就能跑（集合）', ls ? opTemplate(ls) : '', 'labeledSet(a, b, c)')
     ok(

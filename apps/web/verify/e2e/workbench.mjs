@@ -175,13 +175,17 @@ console.log('\n== 场景 1：贴底常驻，默认收起 ==')
   /*
    * ⚠️ **P1-2 改掉了这条契约**（第一版的工作台不做功能入口，只看细节）：
    * 从前收起条上写「先在画布或左栏选一个对象」—— 那正是用户骂的那句
-   * 「什么叫得选对象才能用工作台」。现在收起条上写的是**它能干什么**：
-   * 「7 类 36 个操作：加结构 / 同态 / 作用 / 半直积 / 自同构 / 共轭类」。
-   * ⇒ 判据从"提示用户去选对象"改成"**报能力清单**"，并加一条**不许出现旧那句**。
+   * 「什么叫得选对象才能用工作台」。现在收起条上写的是**它能干什么**。
+   *
+   * ⚠️ **W1（2026-10-06）又把措辞翻了一次**：从写死的
+   * 「7 类 36 个操作：加结构 / 同态 / 作用 / 半直积 / 自同构 / 共轭类」
+   * 改成**从表里数出来的**「N 类 M 个操作，点一条就能开始」。两条理由：
+   *   ① 写死那串在 T2（`contains`/`isomorphism` 归画布）之后就撒着谎 —— 早就是 6 类 34 条；
+   *   ② 用户明确说了不要"一堆功能文字"。
+   * ⇒ 判据跟着翻：不再点名那六件事，只要求①有"N 类 M 个操作" ②**旧那句不许再出现**。
    */
-  ok('收起条报出能力清单（7 类 36 个操作 + 点名的六件事）',
-    b !== null && /7 类 36 个操作/.test(b.text) && /加结构/.test(b.text) &&
-      /同态/.test(b.text) && /半直积/.test(b.text) && /自同构/.test(b.text) && /共轭类/.test(b.text),
+  ok('收起条报出能力（现在是算出来的「N 类 M 个操作」）',
+    b !== null && /\d+ 类 \d+ 个操作/.test(b.text) && /点一条就能开始/.test(b.text),
     b?.text.slice(0, 90))
   ok('收起条**不再**说「先选一个对象」（那是第一版那个错）',
     b !== null && !/先在画布或左栏选一个对象/.test(b.text), b?.text.slice(0, 60))
@@ -193,7 +197,7 @@ console.log('\n== 场景 1：贴底常驻，默认收起 ==')
   ok('选中后标题条报出对象名（`G`）', b !== null && b.node === 'G', `node=${b?.node}`)
   ok('选中后**仍不自动升起**（用户定的：点它才升起）', b !== null && !/ open/.test(b.cls), b?.cls)
   ok('收起时仍报能力清单（选不选对象都一样可用）',
-    b !== null && /7 类 36 个操作/.test(b.text), b?.text.slice(0, 60))
+    b !== null && /\d+ 类 \d+ 个操作/.test(b.text), b?.text.slice(0, 60))
 }
 
 /* ══ 场景 2：点它升起 + 画布不重排 ════════════════════════════ */
@@ -395,15 +399,14 @@ console.log('\n== 场景 6：任务栏（不选对象也能用）==')
       b.click()
       return true
     }, L)
-  const clickOp = (N) =>
+  // 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+  const clickOp = (opId) =>
     page.evaluate((x) => {
-      const b = [...document.querySelectorAll('.bench-op')].find(
-        (e) => e.querySelector('.bench-op-name')?.textContent?.trim() === x,
-      )
+      const b = [...document.querySelectorAll('.bench-op')].find((e) => e.dataset.op === x)
       if (!b) return false
       b.click()
       return true
-    }, N)
+    }, opId)
 
   ok('展开「群与分解」', await clickFam('群与分解'))
   await page.waitForTimeout(400)
@@ -412,11 +415,14 @@ console.log('\n== 场景 6：任务栏（不选对象也能用）==')
 
   // ⚠️ 此刻**画布是空的、一个对象都没选**
   ok('此刻确实没选中任何对象', (await page.locator('.gnode.sel, .gnode[data-selected="true"]').count()) === 0)
-  ok('点「Z(G)」有反应（不是死的按钮）', await clickOp('Z(G)'))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('点「中心 Z(G)」有反应（不是死的按钮）', await clickOp('center'))
   await page.waitForTimeout(600)
   const pend = await page.evaluate(() => ({
     bar: !!document.querySelector('.pending-bar'),
     what: document.querySelector('.pending-what')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    // 翻账（W1，2026-10-06）：`.pending-what` 文本改中文，ASCII 记法进了 title。
+    whatTitle: document.querySelector('.pending-what')?.getAttribute('title')?.trim() ?? '',
     hint: document.querySelector('.pending-hint')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
   }))
   ok('它进 pending（去画布点参数，而不是报错）', pend.bar, JSON.stringify(pend))
@@ -449,7 +455,8 @@ console.log('\n== 场景 6：任务栏（不选对象也能用）==')
   await page.waitForTimeout(400)
   ok('展开「结构 / 映射 / 作用」', await clickFam('结构 / 映射 / 作用'))
   await page.waitForTimeout(400)
-  ok('点「structure(P, table)」', await clickOp('structure(P, table)'))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('点「造结构」', await clickOp('structure'))
   await page.waitForTimeout(700)
   /* 它要一个载体 ⇒ 走槽位选那个集合（同样不碰画布）*/
   ok('结构 op 也要槽位（载体）', (await page.locator('.bench-slots').count()) === 1)
@@ -559,11 +566,12 @@ console.log('\n== 场景 7：共轭类 + 关系 op 归画布 ==')
     }, f)
     await page.waitForTimeout(200)
   }
-  const opNames = await page.evaluate(() =>
-    [...document.querySelectorAll('.bench-op-name')].map((x) => x.textContent.trim()),
+  const opIds = await page.evaluate(() =>
+    [...document.querySelectorAll('.bench-op')].map((x) => x.dataset.op),
   )
-  ok('工作台里**没有** contains（它归画布）', !opNames.some((n) => /contains/.test(n)), JSON.stringify(opNames.length))
-  ok('工作台里**没有** isomorphism（它归画布）', !opNames.some((n) => /isomorphism/.test(n)))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('工作台里**没有**「包含」（它归画布）', !opIds.includes('contains'), JSON.stringify(opIds.length))
+  ok('工作台里**没有**「同构」（它归画布）', !opIds.includes('isomorphism'))
   ok('也没有「关系」这一族了', (await page.locator('.bench-fam').count()) === 6)
   ok('全程零 console 错误', logs.length === 0, logs.slice(0, 2).join(' | '))
 }

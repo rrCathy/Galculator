@@ -434,16 +434,20 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
     顺带同一条纪律的一个变体：**hint 里"如 X"的 X 必须照抄就能跑** ——
     写 `asSet(Syl_p(G))` 是错的（`Syl_p` 只是 op 名，`Syl_p(G)` 少一个参数），得写 `asSet(Syl(G, 3))`。
 
-70. **菜单标签的期望值 = `OpDef.notation` 切出 `(` 之前那段**（2026-10-03，U54）。
-    从前有一张手写的中文短标签表（`interaction.ts#MENU_LABEL`），U54 整张删了 ——
-    现在 `menuLabel` 是**派生**的，于是"菜单上看到的"就是"敲得出来的"。
-    走查里凡是**比对菜单/操作标签**的期望值（`.orb-op-label` / `.connect-label` /
-    `.row-op`），一律用 ASCII 名：`Z` · `C_G` · `N_G` · `Sub` · `pSub` · `Syl` ·
+70. **走查里比对 op 名字，一律按 `data-op` 的 op id —— 不按显示文本**（2026-10-06，工作台 v2 / W1）。
+    显示名从这天起是**中文**（`menuLabel` → `gal/opLabels.ts#OP_LABEL`，如「直积」「所有子群」
+    「建同态」）—— 它**会随文案漂移**，照它写期望值必然过一阵就红。
+    所以凡是**找 op 按钮 / 比对 op 名字**的地方（`.orb-op` · `.orb-sat` · `.row-op` ·
+    `.connect-item` · `.bench-op`），一律取元素上的 `data-op` 属性，期望值写 **op id**：
+    `center` · `centralizer` · `normalizer` · `subgroups` · `pSubgroups` · `sylow` ·
     `contains` · `quotient` · `semidirectProduct` · `directProduct` · `customAction` ·
-    `leftAction` · `commutator` · `ord` · `asSet` · `image` …
-    别照抄源码注释里的旧中文名（那些是**历史记录**）。
-    另注：**数值区的标签是 `n = <用户敲的那串>`**（`gal/numeric.ts#computedNumbers`），
-    所以断言要写 `includes('burnside')` 而不是 `includes('轨道数')`。
+    `leftTranslationAction` · `commutatorGroup` · `elementOrder` · `underlyingSet` ·
+    `image` …
+    （`data-op` 只加在**带 op 的**元素上；纯"看/入口"按钮 ——「操作」「信息」「给它一个运算」——
+    没有这个属性，仍按文本点。`.pending-what` 的文本也是中文了，要 ASCII 记法读它的 `title`。）
+    ⚠️ 旧口径（2026-10-03，U54）：标签是从 `OpDef.notation` 派生的英文名，走查写 ASCII 名；**已过期**。
+    另注：**数值区的标签是 `n = <用户敲的那串>`**（`gal/numeric.ts#computedNumbers`）——
+    那走的是**输入语法**、不是显示名，所以断言仍写 `includes('burnside')` 而不是 `includes('轨道数')`。
 
 71. **"内嵌小群表的第 i 个" ≠ `SmallGroup(n, i)`**（2026-10-03，U55）。
     core 的 `SmallGroups/registry.ts#FACTORIES` 对 **1–15 阶是手写工厂序**（8 阶是

@@ -107,7 +107,8 @@ export function ObjectRow({
               key={op.id}
               type="button"
               className="row-op"
-              title={`${op.notation} ---- ${op.doc}`}
+              data-op={op.id}
+              title={`${menuLabel(op)}（${op.notation}）---- ${op.doc}`}
               onClick={(e) => {
                 e.stopPropagation()
                 onRunOp?.(op)

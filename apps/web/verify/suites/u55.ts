@@ -282,7 +282,8 @@ export function run(): void {
     const op = opById('smallGroup')
     ok('注册表里有 smallGroup', !!op, '')
     eq('notation 是 ASCII 函数式', op?.notation, 'smallGroup(n, i)')
-    eq('菜单标签从 notation 派生', op ? menuLabel(op) : '<无>', 'smallGroup')
+    // 翻账（工作台 v2 / W1，2026-10-06）：标签改成中文显示名。
+    eq('菜单标签 = 中文显示名', op ? menuLabel(op) : '<无>', '从群库导入')
     eq('arity 是 2', op?.arity, 2)
     eq('params 长度 2', op?.params.length, 2)
     eq('第一参是整数', op?.params[0].type, 'int')

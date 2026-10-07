@@ -70,8 +70,14 @@ const ui = () =>
       ops: [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op-label')].map((e) =>
         e.textContent.trim(),
       ),
+      // op id（`data-op`）—— 找按钮/比集合一律按 **id**，不按显示文本：
+      // 显示名从 2026-10-06（工作台 v2 / W1）起是中文，按文本匹配会随文案漂移。
+      opIds: [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')].map(
+        (e) => e.dataset.op,
+      ),
       centerPanel: document.querySelectorAll('.orb-center-panel').length,
       centerOps: [...document.querySelectorAll('.orb-center-panel .orb-op-label')].map((e) => e.textContent.trim()),
+      centerOpIds: [...document.querySelectorAll('.orb-center-panel .orb-op')].map((e) => e.dataset.op),
       pending: document.querySelectorAll('.pending-bar').length,
       hint: document.querySelector('.pending-hint')?.textContent?.trim() ?? null,
       fillFields: document.querySelectorAll('.fill-field input').length,
@@ -177,9 +183,10 @@ console.log('== ④ 「操作」铺出单对象操作 ==')
   st = await ui()
   ok('操作面板出现了', st.opsPanel === 1)
   ok('列出的条数够多（群上的单对象操作有一串）', st.ops.length >= 8, `${st.ops.length} 条：${st.ops.join(' / ')}`)
-  ok('里面有「Z」', st.ops.includes('Z'), st.ops.join(','))
-  ok('里面有「commutator」（U54 前叫「换位子群 [G,G]」）', st.ops.includes('commutator'), st.ops.join(','))
-  ok('下面那一列是「ord」不该在（产数值的不进菜单；U54 前叫「元素阶 ord」）', !st.ops.includes('ord'), st.ops.join(','))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('里面有「中心」', st.opIds.includes('center'), st.opIds.join(','))
+  ok('里面有「换位子群」', st.opIds.includes('commutatorGroup'), st.opIds.join(','))
+  ok('下面那一列是「元素阶」不该在（产数值的不进菜单）', !st.opIds.includes('elementOrder'), st.opIds.join(','))
 
   await page.screenshot({ path: '../../docs/assets/u2-radial-menu.png' })
 }
@@ -192,12 +199,12 @@ console.log('== ⑤ 点一下直接创建 ==')
   const before = (await ui()).nodes.length
   const clicked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')]
-    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'Z')
+    const hit = btns.find((b) => b.dataset.op === 'center')
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('点得中「Z」', clicked)
+  ok('点得中「中心 Z(G)」', clicked)
   await page.waitForTimeout(520)
 
   st = await ui()
@@ -218,18 +225,18 @@ console.log('== ⑥ 多对象球：进 pending ==')
   st = await ui()
   ok('多对象面板出现了', st.centerPanel === 1)
   ok('列的是"多对象操作"', st.centerOps.length >= 10, `${st.centerOps.length} 条：${st.centerOps.join(' / ')}`)
-  ok('里面有「quotient」', st.centerOps.includes('quotient'), st.centerOps.join(','))
-  ok('单对象操作没混进来（Z 不该在这儿）', !st.centerOps.includes('Z'), st.centerOps.join(','))
+  ok('里面有「商群」', st.centerOpIds.includes('quotient'), st.centerOps.join(','))
+  ok('单对象操作没混进来（中心不该在这儿）', !st.centerOpIds.includes('center'), st.centerOps.join(','))
 
-  // 点「quotient」\\to 参数要 (G, N)，还没选任何对象 \\to pending
+  // 点「商群」\\to 参数要 (G, N)，还没选任何对象 \\to pending
   const picked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-center-panel .orb-op')]
-    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'quotient')
+    const hit = btns.find((b) => b.dataset.op === 'quotient')
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('点得中「quotient」', picked)
+  ok('点得中「商群」', picked)
   await page.waitForTimeout(420)
 
   st = await ui()
@@ -271,12 +278,12 @@ console.log('== ⑧ 缺标量的操作进补参条 ==')
   await clickEl('.orb-sat:text-is("操作")')
   const clicked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')]
-    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'Syl')
+    const hit = btns.find((b) => b.dataset.op === 'sylow')
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('点得中「Syl」', clicked)
+  ok('点得中「Sylow 子群」', clicked)
   await page.waitForTimeout(420)
 
   const st2 = await ui()
@@ -326,13 +333,13 @@ console.log('== ⑨ 映射（只画箭头）的球 ==')
   await clickEl('.orb:not(.orb-center)')
   st = await ui()
   ok(
-    '映射的环绕是「信息 + ker + im」（\\le 3 条就铺开，不收进下拉）',
-    st.sats.join('|') === '信息|ker|im',
+    '映射的环绕是「信息 + 核 + 像」（\\le 3 条就铺开，不收进下拉）',
+    st.sats.join('|') === '信息|核|像',
     st.sats.join('|'),
   )
 
   const beforeList = (await ui()).nodes
-  ok('点得中「ker」', await clickEl('.orb-sat:text-is("ker")'))
+  ok('点得中「核」', await clickEl('.orb-sat[data-op="kernel"]'))
   await page.waitForTimeout(560)
   const st3 = await ui()
   const changed = st3.nodes.join(',') !== beforeList.join(',')

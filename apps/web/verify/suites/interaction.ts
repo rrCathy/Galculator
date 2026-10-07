@@ -217,20 +217,21 @@ export function run(): void {
     eq('生成元 -> 像（编辑器专用）', PARAM_LABEL.genImage, '生成元 -> 像')
   }
 
-  /* ══ ⑥ menuLabel：一圈放不下全记法，得给短标签 ═══════════ */
+  /* ══ ⑥ menuLabel：悬浮球上的短标签（2026-10-06 起是中文）═══════ */
 
   suite('interaction - menuLabel（悬浮球上的短标签）')
   {
-    // 菜单标签是**纯文本**面上的字（按钮里直接显示）→ 一律 ASCII，不写 LaTeX。
-    // U54 起这张手工表**删掉了**：标签一律从 `notation` 切「(」之前派生，
-    // 于是"漏补一条就退到 LaTeX"那个坑从根上没有了（派生不会漂移）。
-    eq('map：标签 = notation 前缀', menuLabel(opOf('map')), 'map')
-    eq('contains：同上', menuLabel(opOf('contains')), 'contains')
-    eq('image：同上', menuLabel(opOf('image')), 'image')
+    // ⚠️ 翻账（工作台 v2 / W1）：这一节**从前断言的是英文名**（"标签 = notation 前缀"）。
+    // 用户实测「为什么不用中文？为什么中英文混杂？」之后翻了口径：
+    // `notation` 是输入语法，`menuLabel` 是**界面文案**（中文，见 `gal/opLabels.ts`）。
+    // 期望值逐条翻成中文 —— 判据变了，不是实现迁就断言。
+    eq('建同态', menuLabel(opOf('map')), '建同态')
+    eq('包含', menuLabel(opOf('contains')), '包含')
+    eq('像', menuLabel(opOf('image')), '像')
 
-    eq('conjOn(G, Omega) -> conjOn', menuLabel(opOf('conjugationOnSet')), 'conjOn')
-    eq('cosetAction(G, H) -> cosetAction', menuLabel(opOf('cosetAction')), 'cosetAction')
-    eq('asSet(S) -> asSet', menuLabel(opOf('underlyingSet')), 'asSet')
+    eq('集合上的共轭', menuLabel(opOf('conjugationOnSet')), '集合上的共轭')
+    eq('陪集作用', menuLabel(opOf('cosetAction')), '陪集作用')
+    eq('底层集合', menuLabel(opOf('underlyingSet')), '底层集合')
 
     // 一定要每个 op 都拿得到标签（空标签 = 球上一个看不见的按钮）
     const blank = OPS.filter((op) => menuLabel(op).trim().length === 0)

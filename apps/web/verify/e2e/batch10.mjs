@@ -113,12 +113,10 @@ const dragPointer = async (a, b) => {
   await page.waitForTimeout(420)
 }
 
-/** 连线菜单里的候选条目文字（第一项在最前）。 */
+/** 连线菜单里的候选 op id（第一项在最前）—— 按 `data-op` 收集，不按显示文本。 */
 const menuItems = () =>
   page.evaluate(() =>
-    [...document.querySelectorAll('.connect-menu .connect-item')].map((b) =>
-      (b.querySelector('.connect-label')?.textContent ?? b.textContent).trim(),
-    ),
+    [...document.querySelectorAll('.connect-menu .connect-item')].map((b) => b.dataset.op),
   )
 
 /** 菜单里那句"为什么没有包含"。 */
@@ -196,7 +194,8 @@ console.log('== ① 拖 V₄ → S₄（用户报的那条）==')
   )
   const items = await menuItems()
   ok('弹出了候选菜单', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  ok('菜单第一条是「contains」（按数学意图排序；U54 前叫「包含」）', (items[0] ?? '').includes('contains'), items.join(' | '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('菜单第一条是「包含」（按数学意图排序）', (items[0] ?? '') === 'contains', items.join(' | '))
   ok('菜单里**没有**那句"为什么没有包含"（因为已经列出来了）', (await menuMiss()) === null)
 
   // 点第一条（contains）
@@ -228,8 +227,9 @@ console.log('== ①b 对照：A₄ → S₄（判得出正规）==')
   )
   const items = await menuItems()
   ok('弹出候选菜单', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  const idx = items.findIndex((t) => t.includes('contains'))
-  ok('菜单里有「contains」', idx >= 0, items.join(' | '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  const idx = items.indexOf('contains')
+  ok('菜单里有「包含」', idx >= 0, items.join(' | '))
   await page.locator('.connect-menu .connect-item').nth(idx).click()
   await page.waitForTimeout(700)
   const after = await canvasState()
@@ -256,8 +256,9 @@ console.log('== ② 拖 C₃ → S₄ ==')
   )
   const items = await menuItems()
   ok('弹出候选菜单', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  ok('菜单里有「contains」', items.some((t) => t.includes('contains')), items.join(' | '))
-  const idx = items.findIndex((t) => t.includes('contains'))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('菜单里有「包含」', items.includes('contains'), items.join(' | '))
+  const idx = items.indexOf('contains')
   await page.locator('.connect-menu .connect-item').nth(idx).click()
   await page.waitForTimeout(700)
   const after = await canvasState()
@@ -278,7 +279,8 @@ console.log('== ③ 拖 C₃ → V₄（3 ∤ 4，本来就不该有）==')
   )
   const items = await menuItems()
   ok('菜单弹出来了（直积 / 映射）', (await page.locator('.connect-menu').count()) === 1, items.join(' | '))
-  ok('菜单里**没有**「contains」（菜单不撒谎）', !items.some((t) => t.includes('contains')), items.join(' | '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('菜单里**没有**「包含」（菜单不撒谎）', !items.includes('contains'), items.join(' | '))
   const miss = await menuMiss()
   ok('但菜单里给了一句解释', !!miss, String(miss))
   ok('解释里点明"不整除 + 拉格朗日"', !!miss && miss.includes('不整除') && miss.includes('拉格朗日'), String(miss))
@@ -377,11 +379,12 @@ console.log('== ⑦ 商群（陪集层）：拖 C₃ → S₄/V₄ ==')
     const items = await page.evaluate(() => {
       const m = document.querySelector('.connect-menu')
       if (!m) return null
-      return [...m.querySelectorAll('button')].map((b) => b.textContent.trim())
+      return [...m.querySelectorAll('.connect-item')].map((b) => b.dataset.op)
     })
+    // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
     ok(
-      '拖 C₃ → S₄/V₄：菜单里列出「contains」（用户报的这条，U38 修好）',
-      !!items && items.some((t) => t.includes('contains')),
+      '拖 C₃ → S₄/V₄：菜单里列出「包含」（用户报的这条，U38 修好）',
+      !!items && items.includes('contains'),
       JSON.stringify(items),
     )
     await page.keyboard.press('Escape')

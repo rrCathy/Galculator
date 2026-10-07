@@ -209,9 +209,10 @@ if (menu === 0) {
   console.log(`    [diag] linking=${await page.locator('.canvas.linking').count()}`)
 }
 const items = await page.evaluate(() =>
-  [...document.querySelectorAll('.connect-item .connect-label')].map((e) => e.textContent.trim()),
+  [...document.querySelectorAll('.connect-item')].map((e) => e.dataset.op),
 )
-ok('菜单第一条是「contains」（按数学意图排序；U54 前叫「包含 \subseteq」）', (items[0] ?? '').includes('contains'), items.join(' | '))
+// 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+ok('菜单第一条是「包含」（按数学意图排序）', (items[0] ?? '') === 'contains', items.join(' | '))
 
 if (menu === 1) {
   await page.screenshot({ path: '../../docs/assets/u21-connect-menu.png' })
@@ -234,15 +235,16 @@ ok('子群集那一行带「操作」按钮（它不上画布，没有悬浮球�
 await opsBtn.click()
 await page.waitForTimeout(260)
 const ops = await page.evaluate(() =>
-  [...document.querySelectorAll('.row-ops .row-op')].map((e) => e.textContent.trim()),
+  [...document.querySelectorAll('.row-ops .row-op')].map((e) => e.dataset.op),
 )
 ok('展开后列出它能做的操作', ops.length > 0, ops.join(' | '))
-ok('里面就有「asSet」(underlyingSet；U54 前叫「底集」)', ops.some((x) => x.includes('asSet')), ops.join(' | '))
+// 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+ok('里面就有「底层集合」（op id = underlyingSet）', ops.includes('underlyingSet'), ops.join(' | '))
 
 await page.screenshot({ path: '../../docs/assets/u44-row-ops.png' })
 
 const nodesBefore = (await canvasState()).nodes.length
-await page.locator('.row-ops .row-op', { hasText: 'asSet' }).first().click()
+await page.locator('.row-ops .row-op[data-op="underlyingSet"]').first().click()
 await page.waitForTimeout(460)
 const afterSet = await canvasState()
 ok(

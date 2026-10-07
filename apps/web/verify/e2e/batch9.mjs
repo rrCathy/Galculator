@@ -209,16 +209,17 @@ console.log('== ③ N_G / C_G 的反序兜底（用户报的那条）==')
   await addLine('A', 'S_4')
   await addLine('B', 'A_4')
 
-  // ⊕ 球 → 「N_G」（U54 前叫「正规化子 N_G」）→ pending → **先点 A₄、再点 S₄**（用户的心智顺序）
+  // ⊕ 球 → 「正规化子」（op id = normalizer）→ pending → **先点 A₄、再点 S₄**（用户的心智顺序）
   await clickEl('.multi-orb .orb-center')
   const picked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-center-panel .orb-op')]
-    const hit = btns.find((b) => b.querySelector('.orb-op-label')?.textContent?.trim() === 'N_G')
+    const hit = btns.find((b) => b.dataset.op === 'normalizer')
     if (!hit) return false
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('⊕ 球里有「N_G」', picked)
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('⊕ 球里有「正规化子」', picked)
   await page.waitForTimeout(420)
   ok('进了 pending', (await ui()).pending === 1)
 

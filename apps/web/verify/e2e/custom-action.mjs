@@ -142,10 +142,17 @@ const orbOpLabels = () =>
     [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op-label')].map((e) => e.textContent.trim()),
   )
 
+/** 悬浮球面板里的候选 op id（`data-op`）—— 找按钮/比集合一律按 id，不按显示文本。 */
+const orbOpIds = () =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')].map((e) => e.dataset.op),
+  )
+
 /** 悬浮球面板里每一条的「标签 + 模板」（模板是"照抄就能跑"的那一行）。 */
 const orbOps = () =>
   page.evaluate(() =>
     [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')].map((b) => ({
+      opId: b.dataset.op,
       label: b.querySelector('.orb-op-label')?.textContent?.trim() ?? '',
       tmpl: b.querySelector('code')?.textContent?.trim() ?? '',
       doc: b.querySelector('.orb-op-doc')?.textContent?.trim() ?? '',
@@ -153,15 +160,16 @@ const orbOps = () =>
     })),
   )
 
-const clickOrbOp = async (label) => {
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickOrbOp = async (opId) => {
   const hit = await page.evaluate((want) => {
     const b = [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')].find(
-      (x) => x.querySelector('.orb-op-label')?.textContent?.trim() === want,
+      (x) => x.dataset.op === want,
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
   await page.waitForTimeout(420)
   return hit
 }
@@ -277,15 +285,17 @@ await openOpsPanel('G')
 {
   const ops = await orbOps()
   const labels = ops.map((o) => o.label)
-  ok('单对象操作面板里有「customAction」（U54 前叫「自定义作用」）', labels.includes('customAction'), labels.join(' | '))
+  const ids = ops.map((o) => o.opId)
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('单对象操作面板里有「自定义作用」', ids.includes('customAction'), ids.join(' | '))
   ok('标签不是原样贴出的 LaTeX（不许出现反斜杠）', labels.every((l) => !l.includes('\\')), labels.join(' | '))
-  const mine = ops.find((o) => o.label === 'customAction')
+  const mine = ops.find((o) => o.opId === 'customAction')
   // 模板是"照抄就能跑"的一行：`C_4` 的生成元是 `a`，4 个点上的 4-循环
   ok('模板给的是能照抄的一行', mine?.tmpl === 'customAction(G, 4, a -> (1 2 3 4))', String(mine?.tmpl))
   ok('说明里说清了"恒等写 e"', !!mine?.doc && mine.doc.includes('恒等写 e'), String(mine?.doc))
   await page.screenshot({ path: '../../docs/assets/u52-action-menu.png' })
 
-  ok('点得中「customAction」', await clickOrbOp('customAction'))
+  ok('点得中「自定义作用」', await clickOrbOp('customAction'))
   await page.waitForTimeout(320)
   const opened = await page.locator('.action-builder').count()
   ok('编辑器弹出来了（不是 pending / 补参条）', opened === 1, `count=${opened}`)
@@ -462,11 +472,13 @@ await page.waitForTimeout(400)
 await openOpsPanel('G')
 {
   const labels = await orbOpLabels()
-  ok('菜单弹得出来（不是空的）', labels.length > 0, labels.join(' | '))
+  const ids = await orbOpIds()
+  ok('菜单弹得出来（不是空的）', ids.length > 0, ids.join(' | '))
   // core 给 C_2^2 的生成元起名全是 `a`、记号全是 `1` ⇒ "分别指定像"表达不出来。
   // 列出来点下去只能得到一句"做不了" —— 那就是撒谎（U38/U51 立的规矩）。
-  ok('**不列**「customAction」', !labels.includes('customAction'), labels.join(' | '))
-  ok('同一张菜单里「leftAction」照列（不是"一律不列"）', labels.includes('leftAction'), labels.join(' | '))
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('**不列**「自定义作用」', !ids.includes('customAction'), ids.join(' | '))
+  ok('同一张菜单里「左平移作用」照列（不是"一律不列"）', ids.includes('leftTranslationAction'), ids.join(' | '))
   ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
 
   // 文本路照旧能进去 —— 那时要**说清为什么**，并给出路
@@ -488,8 +500,9 @@ await openOpsPanel('G')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(400)
   await openOpsPanel('H')
-  const labels = await orbOpLabels()
-  ok('V_4（同一个群、另一种构造）上照列「customAction」', labels.includes('customAction'), labels.join(' | '))
+  const ids = await orbOpIds()
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('V_4（同一个群、另一种构造）上照列「自定义作用」', ids.includes('customAction'), ids.join(' | '))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 }

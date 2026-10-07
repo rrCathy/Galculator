@@ -136,21 +136,23 @@ const openOpsPanel = async (id) => {
   await clickEl('.orb-sat:text-is("操作")')
 }
 
-const orbOpLabels = () =>
+/** 单对象操作面板里的候选 op id（`data-op`）—— 找按钮/比集合一律按 id，不按显示文本。 */
+const orbOpIds = () =>
   page.evaluate(() =>
-    [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op-label')].map((e) => e.textContent.trim()),
+    [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')].map((e) => e.dataset.op),
   )
 
-/** 点单对象操作面板里的某一条（按短标签）。 */
-const clickOrbOp = async (label) => {
+/** 点单对象操作面板里的某一条（按 op id）。 */
+// 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
+const clickOrbOp = async (opId) => {
   const hit = await page.evaluate((want) => {
     const b = [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')].find(
-      (x) => x.querySelector('.orb-op-label')?.textContent?.trim() === want,
+      (x) => x.dataset.op === want,
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
-  }, label)
+  }, opId)
   await page.waitForTimeout(420)
   return hit
 }
@@ -232,7 +234,7 @@ const PLAIN_SELECTORS = [
   '.action-builder .ab-sets-label',
   '.action-builder .ab-set-chip',
   '.action-builder [title]',
-  '.orb-ops-panel:not(.orb-center-panel) .orb-op-label',
+  '.orb-ops-panel:not(.orb-center-panel) .orb-op',
   '.orb-ops-panel:not(.orb-center-panel) .orb-op code',
   '.orb-ops-panel:not(.orb-center-panel) .orb-op-doc',
   '.orb-ops-panel:not(.orb-center-panel) .orb-ops-hint',
@@ -342,9 +344,10 @@ await page.waitForTimeout(420)
 
 await openOpsPanel('G')
 {
-  const labels = await orbOpLabels()
-  ok('单对象操作面板里有「customAction」（U54 前叫「自定义作用」）', labels.includes('customAction'), labels.join(' | '))
-  ok('点得中「customAction」', await clickOrbOp('customAction'))
+  const ids = await orbOpIds()
+  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
+  ok('单对象操作面板里有「自定义作用」', ids.includes('customAction'), ids.join(' | '))
+  ok('点得中「自定义作用」', await clickOrbOp('customAction'))
   await page.waitForTimeout(500)
 
   let s = await editorState()

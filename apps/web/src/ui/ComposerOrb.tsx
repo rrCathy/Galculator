@@ -33,6 +33,7 @@ export function ComposerOrb({
   onAdd,
     minLeft = 0,
     dockRight = false,
+    dockLeft = false,
   }: {
   open: boolean
   onToggle: () => void
@@ -55,6 +56,19 @@ export function ComposerOrb({
    * （= 居中），白查一轮。**与内联样式共处只有一条路：改它自己。**
    */
   dockRight?: boolean
+  /**
+   * **工作台升起时靠左停**（2026-10-06，用户实测第 3 条）。
+   *
+   * 用户原话：工作台展开后那个悬在上方的输入口「太神秘了，不会挪个位置？比如放左边？」
+   *
+   * 病根是我上一版只治了**遮挡**（把球整体上移），没治**语义** ——
+   * 一个孤零零的球浮在台面上方，看不出它是谁。靠左停就不一样：
+   * 它贴着屏幕左边、在左栏那一列的下方，读起来是"输入在这儿"。
+   *
+   * ⚠️ 与 `dockRight` 同一个理由，**必须走 prop**（`left` 是内联 style）。
+   * 两者同时为真时以 `dockLeft` 为准（工作台是更大的面，编辑器会收进它里面）。
+   */
+  dockLeft?: boolean
 }) {
   const [nameDraft, setNameDraft] = useState('')
   const [exprDraft, setExprDraft] = useState('')
@@ -118,7 +132,17 @@ export function ComposerOrb({
   return (
     <div
       className="composer-orb"
-      style={dockRight ? { right: 12, left: 'auto' } : { left: `max(50%, ${minLeft + 70}px)` }}
+      /* ⚠️ `left` 走内联 style 是历史包袱（`max(50%, minLeft)` 要避开左下数值抽屉）——
+         所以"靠哪边停"只能在这里改，样式表碰不动（P0-1 栽过）。
+         ⚠️ 靠边时**必须同时把 `transform: translateX(-50%)` 抹掉**：那是"以 left 为轴居中"
+         用的，靠边时它会再把球往左拽半个身位（真机量出来 `left: -4`，半个球在屏幕外）。 */
+      style={
+        dockLeft
+          ? { left: 12, right: 'auto', transform: 'none' }
+          : dockRight
+            ? { right: 12, left: 'auto', transform: 'none' }
+            : { left: `max(50%, ${minLeft + 70}px)` }
+      }
     >
       <button
         className={`orb orb-center${open ? ' on' : ''}`}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { buildLines } from './gal/build'
 import { deriveCanvas, STRUCT_PREFIX } from './gal/derive'
 import { evalExpr } from './gal/evalDef'
@@ -160,6 +160,39 @@ export default function App() {
    */
   const [benchOpen, setBenchOpen] = useState(false)
   /**
+   * 工作台当前的升起高度（px，收起时 0）。工作台自己报上来（`Workbench#onHeight`）。
+   *
+   * ⚠️ 它是**给输入球让位用的**：工作台占大半屏会盖住 `.composer-orb`
+   * （真机实测：点「添加」报 `intercepts pointer events`）。见 App.css 里
+   * `.app.bench-open .composer-orb` 那条规则。
+   */
+  const [benchH, setBenchH] = useState(0)
+
+  /**
+   * **工作台台面上的对象**（2026-10-06，用户实测第 2 条）。
+   *
+   * > 「工作台不能储存对象啊？我点两下画布，对象就取消选中了，**谁会用丢东西的工作台**？」
+   *
+   * ⇒ 台面自己记一份"摆上来的对象"，**与画布焦点解耦**：焦点被清掉不影响它。
+   *
+   * ⚠️ 存的是 **id**，不是对象的副本 —— 台面上的对象与画布上的对象**是同一个**
+   * （用户 2026-10-06 拍板：「肯定都是同一个对象啊，工作台的对象和画布的对象肯定是同一个」）。
+   * 所以这只是一份**选择**，不新造数据（避开三区那个"同一性"陷阱）。
+   */
+  const [benchStage, setBenchStage] = useState<string[]>([])
+
+  /**
+   * **工作台升起 ⇒ 自动收起信息面板**（2026-10-06，用户实测第 4 条）。
+   *
+   * > 「又是工作台，又是信息栏，不知道取舍？不会收起信息栏？」
+   *
+   * 工作台的明细区本来就是 `InfoDock#SectionBody` 的**同一份内容**（一份两处显示），
+   * 同时摆出来就是两遍。收掉的那份用户还能自己再点开（这条只在他"升起工作台"那一下触发）。
+   */
+  useEffect(() => {
+    if (benchOpen) setOpenInfo(false)
+  }, [benchOpen])
+  /**
    * 信息面板**展开的那一节**（U45 起是手风琴，不再是 tab）。
    * `null` = 全收 —— 默认状态就是它：不点开，面板只剩摘要 + 三行标题。
    */
@@ -270,6 +303,25 @@ export default function App() {
     // 但同样该能点、能看信息（CanvasNode 就是带 shape/level 的 GalObject）。
     return graph.nodes.find((n) => n.id === focus) ?? null
   }, [objects, graph.nodes, focus])
+
+  /**
+   * 工作台开着时，**碰过谁就把谁摆上台面**（去重、只增不减）。
+   *
+   * 这就是"工作台会存东西"：不需要用户额外按"收藏"，他点过/造过的对象自动留在台上。
+   * ⚠️ 只在 `benchOpen` 时记 —— 工作台没开时不该在背后攒一堆。
+   */
+  useEffect(() => {
+    if (!benchOpen) return
+    const id = focusedObj?.id
+    if (!id) return
+    setBenchStage((prev) => (prev.includes(id) ? prev : [...prev, id]))
+  }, [benchOpen, focusedObj?.id])
+
+  /** 台面上还活着的对象（对象被删了就不该再挂着）—— 查的是**同一份对象表**。 */
+  const benchStageLive = useMemo(
+    () => benchStage.filter((id) => byId.has(id) || graph.nodes.some((n) => n.id === id)),
+    [benchStage, byId, graph.nodes],
+  )
   const anchor = focus ? (anchors.find((a) => a.id === focus) ?? null) : null
 
   /**
@@ -998,7 +1050,9 @@ export default function App() {
       return (
         <div className="pending-bar">
           <span className="pending-hint">{pendingHint(pendOp, inter.picked.length)}</span>
-          <code className="pending-what">{pendOp.notation}</code>
+          <code className="pending-what" title={pendOp.notation}>
+            {menuLabel(pendOp)}
+          </code>
           {inter.picked.length > 0 && (
             <span className="pending-picked">
               已选 {inter.picked.map((id) => byId.get(id)?.label ?? id).join(' , ')}
@@ -1026,7 +1080,9 @@ export default function App() {
       return (
         <div className="pending-bar">
           <span className="pending-hint">补参数</span>
-          <code className="pending-what">{pendOp.notation}</code>
+          <code className="pending-what" title={pendOp.notation}>
+            {menuLabel(pendOp)}
+          </code>
           {slots.map((s) => (
             <label key={s} className="fill-field">
               <span>{pendOp.params[s].name}</span>
@@ -1098,7 +1154,10 @@ export default function App() {
   })()
 
   return (
-    <div className="app">
+    <div
+      className={`app${benchOpen && benchH > 0 ? ' bench-open' : ''}`}
+      style={{ '--bench-h': `${benchH}px` } as CSSProperties}
+    >
       <CanvasView
         ref={canvasRef}
         graph={graph}
@@ -1114,7 +1173,21 @@ export default function App() {
            * 点画布看别的对象（那是"边填边看"的一部分，不是"要关掉编辑器"）。
            * 它与"常驻"不矛盾：常驻说的是**位置与形态**，不是"点哪都不关"。
            */
-          if (inter.kind !== 'editor') reset()
+          if (inter.kind === 'editor') return
+          /*
+           * **工作台展开时，点画布空白 = 收起工作台**（2026-10-06，用户实测第 5 条）：
+           *
+           * > 「点画布为什么是取消对象？再怎么弄也得是收起工作台吧？」
+           *
+           * 用户此刻想"退出"的是**工作台**（它盖住了大半屏），不是那个焦点对象 ——
+           * 焦点是他在台面上干活的对象，点一下空白就丢掉太粗暴了。
+           * ⇒ 先收台；再点一次才轮到清焦点（那时台已经收了，`benchOpen` 为假）。
+           */
+          if (benchOpen) {
+            setBenchOpen(false)
+            return
+          }
+          reset()
         }}
         onAnchors={onAnchors}
         pickedIds={markedIds}
@@ -1150,7 +1223,8 @@ export default function App() {
             <button
               key={`${c.op.id}:${c.swapped ? 1 : 0}`}
               className="connect-item"
-              title={`${c.op.notation} ---- ${c.op.doc}`}
+              data-op={c.op.id}
+              title={`${menuLabel(c.op)}（${c.op.notation}）---- ${c.op.doc}`}
               onClick={() => {
                 setConnectMenu(null)
                 dispatchPairOp(c.op, connectMenu.from, connectMenu.to, c.swapped)
@@ -1284,6 +1358,14 @@ export default function App() {
          *     两者基本不会同时，真同时也是"最上层那个让开"）。
          */
         dockRight={inter.kind === 'editor'}
+        /*
+         * **工作台升起 ⇒ 输入球靠左停**（2026-10-06，用户实测第 3 条）。
+         *
+         * 用户原话：「工作台展开后上面一个输入口也太神秘了，不会挪个位置？比如放左边？」
+         * 上一版只治了遮挡（把球整体上移），没治语义 ⇒ 一个孤零零的球浮在台面上方。
+         * `dockLeft` 优先于 `dockRight`（工作台是更大的面，编辑器会收进它里面）。
+         */
+        dockLeft={benchOpen}
       />
 
       {/*
@@ -1328,6 +1410,19 @@ export default function App() {
         editorBusy={inter.kind === 'editor'}
         viewportH={canvasSize.h}
         onExtract={extractSubgroup}
+        /* 工作台把升起高度报上来 ⇒ App 拾起输入球让位（见 `benchH` 的注释）*/
+        onHeight={setBenchH}
+        /* **台面上的对象**（第 2 条）：存 id、与画布同一份数据；点槽位走同一个 `onNodeClick` */
+        stage={benchStageLive}
+        onDrop={(id) => setBenchStage((prev) => prev.filter((x) => x !== id))}
+        /*
+         * **`＋` 导入对象**（W2）—— 与左栏「目录」面板**同一对回调**：
+         * `commitExpr` 是"把手势编好的表达式落成一行定义"的同一条路，
+         * `startStructureFromCatalog` 是"先落载体、再把编辑器接上去"。
+         * 用户原话：「为什么不能在工作台内就创建出任意集合？还得我先点击目录栏导入对象？」
+         */
+        onAdd={commitExpr}
+        onBuildStructure={startStructureFromCatalog}
       />
 
       <div className="dock-bottomleft" ref={dockBottomRef}>
