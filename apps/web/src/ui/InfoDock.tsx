@@ -168,7 +168,7 @@ export function MapFacts({ map }: { map: GalMap }) {
   const elems = (xs: { label: string }[] | undefined, cap = 12) => {
     if (!xs || xs.length === 0) return '（空）'
     const head = xs.slice(0, cap).map((e) => e.label)
-    return xs.length > cap ? `${head.join(', ')} … 共 ${xs.length} 个` : head.join(', ')
+    return xs.length > cap ? `${head.join(', ')} ... 共 ${xs.length} 个` : head.join(', ')
   }
   const rows: { k: string; v: string }[] = [
     { k: '定义域', v: groupName(map.domain) },

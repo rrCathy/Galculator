@@ -1394,7 +1394,20 @@ export default function App() {
           const use = focusNow && canPick(op, 0, [], focusNow.value) ? focusNow.id : null
           dispatchOp(op, use ? [use] : [])
         }}
-        node={busy ? null : focusedObj}
+        /*
+         * ⚠️ busy（pending / fill / editor）时**也要把焦点传下去**（2026-10-07 收尾修）：
+         * 从前这里写 `busy ? null : focusedObj` —— 是 U3.1/P1 时代的写法。
+         * v2 的显示条里那段「正在选参数：x / y」副行、以及编辑器卡片那句
+         * 「键盘随时可以改主意」，都以"busy 时仍有焦点"为前提 —— 掐成 null 后
+         * 前者是死代码、后者与真机行为相反（键盘只剩一句"先有一个对象"的空提示，
+         * 探针实测 `.bench-key` 归零）。不再掐：键盘是常驻控制面，busy 中再点一枚键
+         * 就是换主意（`dispatchOp` 直接替换 `inter`，语义安全）。
+         * （`onRunOp` 里那把 `busy ? null` 是**另一件事**：busy 中发起的新 op
+         *   不携带焦点当第一参 —— 那是守卫，不是丢焦点。）
+         * （上方 `InfoDock` 那把 `busy ? null` 不在此列 —— 信息面板 busy 时让位
+         *   是它自己的语义，工作台恰恰是 busy 时的接盘者。）
+         */
+        node={focusedObj}
         /*
          * **槽位**（T1）—— pending 时工作台自己把参数对象凑齐。
          *

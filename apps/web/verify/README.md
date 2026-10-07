@@ -55,6 +55,9 @@ node verify/e2e/small-group.mjs       # 小群表：GAP 编号取群 + 与手写
 node verify/e2e/catalog.mjs           # 目录面板：凭空造集合 / 挑群，点了落成一行定义（U56）
 node verify/e2e/action-entries.mjs    # 群作用的四条入口：⊕ 球 / 点集「被作用」/ 拖拽（U57）
 node verify/e2e/action-omega.mjs      # 群作用这件事本身：Ω 能选 / 子群集当 Ω / 元素送到哪（U58）
+node verify/e2e/set-menu.mjs          # 集合那一侧的菜单不撒谎：asSet/closure 收窄（U59）
+node verify/e2e/map-builder.mjs       # 映射构建器的卡片形态（三编辑器包壳）
+node verify/e2e/workbench.mjs         # 工作台 v2 玻璃计算器：显示条 / 键盘随焦点变 / 槽位 / ＋导入 / 台面
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
@@ -520,3 +523,15 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
     命令分隔符，留着就成了 `< 234>`），读数随之带点号 `1 <234> , 2 <123>`（用户照着写像要用）。
     诊断手法：`.tmp-diag/probe2.mjs` 先复现（改之前），修完重跑同一份探针（改之后）——
     **同一份脚本前后各跑一次**，比"看代码觉得对了"硬。
+
+75. **改了 DOM 的批次，收尾必须重跑"该面"的走查 —— 不然"落地"只是代码落地**（2026-10-07）。
+    工作台 v2（2026-10-06）把 DOM 从 v1 的手风琴任务栏（`.bench-fam` / `.bench-op` /
+    `.info-sec-*`）整个换成了玻璃计算器（`.bench-screen` / `.bench-key` / `.bench-tab` /
+    `.bench-chip`），而 `e2e/workbench.mjs` **还按 v1 选择器断言** —— 那套跑下去只会
+    `querySelectorAll` 拿到空集然后大面积红，于是"功能本体已并入、该面整整一个迭代
+    **零 e2e 覆盖**"（连 `no-unicode-leak` 都没扫工作台，键盘 27 枚键的 title 全在盲区里，
+    实测漏了 `·` / `…` / 字面 `**` / `——` 共 12 处渲染面文本泄漏）。**判据：改 DOM 的批次，
+    收尾动作是"该面的每一套走查重写/重跑到绿"，不是"新功能自己那几条绿"。**
+    配套：重写前先用探针把 v2 真实 DOM 读一遍再写断言（`.tmp-diag/probe-wb2.mjs`）——
+    "先实测再写"对走查同样成立；探针顺带抓到 App 里 `node={busy ? null : focusedObj}`
+    把 v2 的「正在选参数」副行与"键盘随时可以改主意"掐成死代码（busy 不掐焦点，修）。

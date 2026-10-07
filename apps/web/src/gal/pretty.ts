@@ -316,16 +316,17 @@ export function prettySymbol(raw: string): string {
 /**
  * 群记号 → **纯文本面**的写法（`C_{2}\times C_{2}` → `C_2 x C_2`）。
  *
- * 三兄弟的分工，别串（U54 立的）：
+ * 两兄弟的分工，别串（U54 立的）：
  *
  * | 函数 | 落到哪 | 产出 |
  * |---|---|---|
  * | `prettySymbol` | KaTeX 渲染面（`<Tex>` / `TexOrText`） | 简化 LaTeX |
- * | `plainSymbol`（`ui/marks.ts`） | SVG `<text>` / `title` | Unicode（`×` `⋊`） |
- * | `asciiSymbol`（本函数） | **报错语 / `sub` / `note` / `detail`** | **只有 ASCII** |
+ * | `asciiSymbol`（本函数） | **报错语 / `sub` / `note` / `detail` / `title`** | **只有 ASCII** |
  *
- * 为什么不能拿 `plainSymbol` 顶：它吐 `×` / `⋊`，而 `no-unicode-leak` 明令
- * "键盘打不出的字符一律不许显示" —— 那两个字符都不在放行集里。
+ * ⚠️ 别写第三种"降级成 Unicode（`×` `⋊` `·`）"的函数顶上来 —— `no-unicode-leak`
+ * 明令"键盘打不出的字符一律不许显示"，那几个字符都不在放行集里。
+ * （从前 `ui/marks.ts` 有一把 `plainSymbol` 就是这条路，2026-10-07 删除——它没有
+ * 消费者，留着只会让下一个"急用"的人踩进泄漏。）
  */
 export function asciiSymbol(raw: string): string {
   return (

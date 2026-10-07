@@ -43,13 +43,13 @@
 | [TASKS.md](TASKS.md) | **输入视角**：群论常见计算与证明，每行给可粘贴的输入 + 实测结果，照着逐条核 |
 | [USABILITY.md](USABILITY.md) | **动作视角**：用户想做某件事时最可能的动作是什么、那条路通不通、哪里会卡住 |
 
-## 提案（还没动工，但已经定了方向）
+## 提案（已定方向；部分已落地）
 
 | 文档 | 回答什么问题 |
 |---|---|
 | [PROPOSAL-algebra-structures.md](PROPOSAL-algebra-structures.md) | 集 → 半群 → 幺半群 → 群这一层怎么做的（**已落地**，规范在 ARCHITECTURE §3.7 / `gal/algebra.ts`）|
-| [PROPOSAL-zones.md](PROPOSAL-zones.md) | 工作台 / 画布 / 草稿区三区（**待拍板**，含迁移路径与 P0–P3 批次）|
-| [PROPOSAL-workbench-v2.md](PROPOSAL-workbench-v2.md) | 工作台重做：**玻璃「计算器」**（符号键盘 + `＋`导入 + 明细区，键盘随焦点变）（**待拍板**，第 3 稿，含场景 + W1–W5）|
+| [PROPOSAL-zones.md](PROPOSAL-zones.md) | 工作台 / 画布 / 草稿区三区（**部分落地**：P0/P1 工作台已落地，P2 草稿区待拍板，P3 画布减法未做）|
+| [PROPOSAL-workbench-v2.md](PROPOSAL-workbench-v2.md) | 工作台重做：**玻璃「计算器」**（符号键盘 + `＋`导入 + 明细区，键盘随焦点变）（**已落地**，现行规范在 INTERACTION §4.9）|
 
 ## 账本（长，按需检索）
 

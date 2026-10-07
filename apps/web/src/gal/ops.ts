@@ -1811,7 +1811,7 @@ export const OPS: OpDef[] = [
     notation: 'map(G, H, r -> e, ...)',
     mechanism: 'atomic',
     primitive: true,
-    doc: '同态 f : G -> H，由**生成元的像**给出（如 r2 -> e, s -> s）',
+    doc: '同态 f : G -> H，由生成元的像给出（如 r2 -> e, s -> s）',
     impl: 'extendFromGenerators + verifyHomomorphism',
     call: ['map', 'hom'],
     params: [

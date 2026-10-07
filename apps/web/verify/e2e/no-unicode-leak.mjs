@@ -235,6 +235,68 @@ const clickRow = async (id) => {
   }, id)
 }
 
+/**
+ * 工作台节点点击（真实鼠标）—— 工作台收着时节点点得到；
+ * 升起后节点被盖（T1），所以这套的顺序一律是"先点节点、再升台"。
+ */
+const clickNodeAt = async (id) => {
+  const pt = await page.evaluate((nid) => {
+    const el = document.querySelector(`svg.canvas g.gnode[data-id="${nid}"] .gnode-hit`)
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  }, id)
+  if (!pt) return false
+  await page.mouse.click(pt.x, pt.y)
+  await page.waitForTimeout(450)
+  return true
+}
+
+/* ── 工作台（v2 玻璃计算器）：这是 2026-10-07 收尾补巡的面 ──
+ * 键盘 27 枚键的 title（中文全名 + doc）、`＋` 面板（群库 93 chip 的 title）、
+ * 槽位候选（对象 def）、显示条副行 —— 全是文本流，都要扫。 */
+{
+  await page.goto('about:blank')
+  await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
+  await page.waitForTimeout(1300)
+  await addLine('G', 'S_4')
+  await addLine('P', 'labeledSet(a, b, c)')
+  await page.waitForTimeout(300)
+
+  await clickNodeAt('G')
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(700)
+  await checkVisible('工作台：升起 + 焦点群（键盘键 title 全扫）')
+  await checkSource('工作台：升起 + 焦点群')
+
+  // ＋ 面板：常见群 chip + 群库 93 枚 chip（title 是 smallGroup(n, i)，ASCII）
+  await page.click('.bench-plus')
+  await page.waitForTimeout(900)
+  await checkVisible('工作台：＋ 导入面板（群库 93 chip）')
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+
+  // pending：槽位头 + 候选的 def + 显示条「正在选参数」副行
+  await page.evaluate(() => {
+    const k = [...document.querySelectorAll('.bench-key')].find((b) => b.dataset.op === 'directProduct')
+    k?.click()
+  })
+  await page.waitForTimeout(600)
+  await checkVisible('工作台：pending 槽位（候选 def）')
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+
+  // 焦点换成集合：先收台再点节点（升起时节点被盖，T1），扫完把台收回（还旧几何给后面的段落）
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(500)
+  await clickNodeAt('P')
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(700)
+  await checkVisible('工作台：焦点集合（单键键盘）')
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(500)
+}
+
 for (const id of ['G', 'K', '\\varphi']) {
   await clickRow(id)
   await page.waitForTimeout(360)

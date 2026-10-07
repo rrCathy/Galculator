@@ -317,7 +317,7 @@ export function Workbench({
           <span className="bench-caret">{open ? 'v' : '^'}</span>
           <span className="bench-title">工作台</span>
           {/* 收起态也要说清"它能干什么"，否则一条光秃秃的胶囊没人敢点 */}
-          {!open && <span className="bench-peek">点开：造对象 · 对它做事 · 翻它的结构</span>}
+          {!open && <span className="bench-peek">点开：造对象 - 对它做事 - 翻它的结构</span>}
         </button>
         {node && <span className="bench-target">{node.id}</span>}
       </header>
@@ -346,7 +346,7 @@ export function Workbench({
                         : null,
                     ]
                       .filter(Boolean)
-                      .join('  ·  ')}
+                      .join('  -  ')}
                   </div>
                 </>
               ) : (
@@ -413,7 +413,7 @@ export function Workbench({
                   </div>
                   <div className="plus-lib-body">
                     {orders === null ? (
-                      <span className="plus-lib-hint">正在载入…</span>
+                      <span className="plus-lib-hint">正在载入...</span>
                     ) : (
                       orders.map((g) => (
                         <div key={g.order} className="plus-lib-row">
@@ -488,7 +488,7 @@ export function Workbench({
           <nav className="bench-pad" aria-label="工作台键盘">
             {!node ? (
               <p className="bench-pad-hint">
-                键盘要**先有一个对象**：按 <b>＋</b> 造一个，或点画布上的节点。
+                键盘要先有一个对象：按 <b>＋</b> 造一个，或点画布上的节点。
               </p>
             ) : padCount === 0 ? (
               <p className="bench-pad-hint">这个对象暂时没有可用的操作。</p>
@@ -505,7 +505,7 @@ export function Workbench({
                           className="bench-key"
                           data-op={op.id}
                           onClick={() => onRunOp(op)}
-                          title={`${menuLabel(op)}（${op.notation}）· ${howOf.get(op.id) ?? ''}\n${op.doc}`}
+                          title={`${menuLabel(op)}（${op.notation}）- ${howOf.get(op.id) ?? ''}\n${op.doc}`}
                         >
                           {/* 键面走 KaTeX：`×` `⋊` `≤` 这些字符键盘打不出来，
                               用户 2026-09-27 定的规矩是"不许出现在文本流里"——
@@ -527,7 +527,7 @@ export function Workbench({
               <p className="bench-blank">
                 正在填一张表（下面那张卡片就是）。
                 <br />
-                填完提交，或者点它右上角的 x 取消 —— 键盘随时可以改主意。
+                填完提交，或者点它右上角的 x 取消，键盘随时可以改主意。
               </p>
             ) : pending ? (
               /* **对象槽位**（T1）—— 工作台自己把参数对象凑齐，**不依赖画布** */
@@ -563,7 +563,7 @@ export function Workbench({
                 </div>
                 {cands.length === 0 ? (
                   <p className="bench-blank">
-                    画布上还没有能填这一位的对象 —— 按上面的 <b>＋</b> 造一个。
+                    画布上还没有能填这一位的对象，按上面的 <b>＋</b> 造一个。
                   </p>
                 ) : (
                   <>
@@ -602,10 +602,10 @@ export function Workbench({
                   {/* `map` 这一支**走不到这里**（上面那个条件已经把它接走了）——
                       所以下面不再列它，否则是死代码。 */}
                   {node.value.type === 'action'
-                    ? '一个作用 —— 画布上那条作用线就是它'
+                    ? '一个作用，画布上那条作用线就是它'
                     : node.value.type === 'relation'
-                      ? '一条关系边 —— 画布上那条线就是它'
-                      : '一条边 —— 画布上那条线就是它'}
+                      ? '一条关系边，画布上那条线就是它'
+                      : '一条边，画布上那条线就是它'}
                   ，答案在画布上。
                 </p>
               )
