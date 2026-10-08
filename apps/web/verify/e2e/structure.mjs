@@ -240,9 +240,10 @@ let carrierId = null
     ok('状态行说清还差几格', /还有 9 格没填/.test(st.check), st.check)
   }
   // 载体那一行真的落了（先有载体才有运算，§11.3：两个节点）
+  // ⚠️ def 含花括号 ⇒ KaTeX 渲染吃空格 ⇒ 对空格宽容
   const rs = await rows()
-  const carrier = rs.find((r) => /labeledSet\(1, 2, 3\)/.test(r.def))
-  ok('载体真的落成一行定义（labeledSet(1, 2, 3)）', !!carrier && !carrier.err, JSON.stringify(carrier))
+  const carrier = rs.find((r) => /\{1,\s*2,\s*3\}/.test(r.def))
+  ok('载体真的落成一行定义（{1, 2, 3}）', !!carrier && !carrier.err, JSON.stringify(carrier))
   carrierId = carrier?.name ?? null
   ok('载体在画布上有节点', !!carrierId && (await nodeIds()).includes(carrierId), String(carrierId))
   await escapeAll()

@@ -37,15 +37,18 @@ import { NewObjectForms } from './NewObjectForms'
  * | v1'（P1-2）| 左：7 族手风琴任务栏 / 右：信息面板复用 | 「不是探索精细结构的台，是**到处点点点的数控机床**」 |
  * | v2 一稿 | 左列按钮 + 右列折叠列表 | 「还是不行」（本质没变，只换了皮） |
  * | v2 二稿 | 大玻璃台 + 三带一主区 | 「还是不行」——操作面仍是**一堆功能文字** |
- * | **v2 三稿 = 本文件** | **计算器**：显示条 + **符号键盘** + 明细区 | 用户：「**对味了。这样不错。**」 |
+ * | **v2 三稿** | **计算器**：显示条 + **符号键盘** + 明细区 | 用户：「**对味了。这样不错。**」 |
+ * | **v2.1（2026-10-07 本版）** | **左键盘 / 右明细的横排计算器**：左列＝显示屏 + 键盘（三块）+ `＋`；右列＝明细大阅读区（操作时不动）；台面进标题栏；`＋` 面板＝左列内联紧凑手风琴 | 用户：「**先照方案二开发吧**」（方案一被否：「工作台比较宽，一行一行放会压缩用户想看的信息」）|
  *
- * ## 三段，各管一件事
+ * ## 现在各段管什么（v2.1）
  *
  * | 段 | 是什么 | 判据 |
  * |---|---|---|
- * | ① **显示条** | 当前焦点对象的身份 + `＋` 导入 | 像计算器的显示屏 |
- * | ② **符号键盘** | 每条 op 一枚**符号键**（`×` `⋊` `/` `Z` `≤` …），悬停出中文全名 | **随焦点变** |
- * | ③ **明细区** | 焦点对象的精细结构，**一页铺开**（不折叠）| 内容复用 `InfoDock#SectionBody` |
+ * | **左列 · 显示屏** | 当前焦点对象的身份 + `＋` 前的状态行；pending 时在屏上写**算式**（`D₄ × ▢ = ...`）| 像计算器的显示屏 |
+ * | **左列 · 符号键盘** | 每条 op 一枚**符号键**，按动作分**三块**（造新东西 / 读它的结构 / 作用与集合）；`＋` 面板开着时让位给它 | **随焦点变** |
+ * | **左列 · 待选（pending）** | 槽位 + 候选在键盘上方；**键盘仍在下头**（换主意）| 判据同一份 `canPick` |
+ * | **右列 · 明细区** | 焦点对象的精细结构，**一页铺开**（不折叠）；按键盘/翻台面时**纹丝不动** | 内容复用 `InfoDock#SectionBody` |
+ * | **标题栏 · 台面** | 碰过的对象 chips（数学名；点它切焦点，`x` 拿下不删）| 存 id，与画布同一份数据 |
  *
  * ## 两条不能丢的判据
  *
@@ -149,6 +152,11 @@ export function Workbench({
   /** `＋` 面板开着吗 */
   const [plusOpen, setPlusOpen] = useState(false)
   /**
+   * 群库在 `＋` 面板里**默认折起**（2026-10-07 方案二：手风琴要紧凑——
+   * 用户原话「导入按钮拉出来的手风琴太大了，明显可以紧凑一点」）。
+   */
+  const [libOpen, setLibOpen] = useState(false)
+  /**
    * 群库（**懒加载**：首次 ~311ms 给 93 个群跑预计算，与「目录」用的是**同一个**
    * `smallGroupCatalog`）。推到下一个宏任务，让面板先画出来，人不会觉得"点不动"。
    */
@@ -158,6 +166,33 @@ export function Workbench({
     const id = setTimeout(() => setOrders(smallGroupCatalog()), 0)
     return () => clearTimeout(id)
   }, [plusOpen, orders])
+  /**
+   * `＋` 面板的两种关法（旧账，2026-10-07 修）：**Esc** 与**点外面**。
+   *
+   * ⚠️ Esc 必须走**捕获阶段 + stopPropagation**：App 的全局 Esc 在 window 冒泡段
+   * （清 pending / 清焦点），不拦的话"想关面板"会先把焦点清了（真机复现过：
+   * 面板还在、显示条却回了「还没有对象」）。层叠语义：面板开着时 Esc 先关面板，
+   * 再按一次才轮到 App 的取消。
+   */
+  useEffect(() => {
+    if (!plusOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      setPlusOpen(false)
+    }
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t || t.closest('.bench-plus-panel') || t.closest('.bench-plus')) return
+      setPlusOpen(false)
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('pointerdown', onDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('pointerdown', onDown, true)
+    }
+  }, [plusOpen])
   /** 拖出来的高度比例（`null` = 用默认）*/
   const [hRatio, setHRatio] = useState<number | null>(null)
   const drag = useRef<{ y: number; h0: number } | null>(null)
@@ -247,6 +282,16 @@ export function Workbench({
         : [],
     [pending, objects, slotIdx, pickedVals],
   )
+  /** 显示屏算式里的已选对象（按槽位顺序，丢引用就跳过）*/
+  const pickedObjs = useMemo(
+    () =>
+      pending
+        ? pending.picked
+            .map((id) => objects.find((o) => o.id === id))
+            .filter((o): o is GalObject => !!o)
+        : [],
+    [pending, objects],
+  )
 
   /** 每枚键的角标文案（**判据与 `objectArity` 同源**，见 `gal/workbench.ts#benchArity`）*/
   const howOf = useMemo(() => {
@@ -311,7 +356,8 @@ export function Workbench({
       {/* 顶边抓手：拖高（收起态不显示）*/}
       {open && <div className="bench-grip" onPointerDown={onGripDown} title="拖动改变工作台高度" />}
 
-      {/* 标题条 = 收起后那条胶囊。**贴着底**，所以点它落回去时位置不变。 */}
+      {/* 标题条 = 收起后那条胶囊。**贴着底**，所以点它落回去时位置不变。
+          台面 chips 挂在它右侧（2026-10-07 方案二：台面不另占一行）。 */}
       <header className="bench-head">
         <button className="bench-toggle" onClick={onToggle} title={open ? '收起工作台' : '展开工作台'}>
           <span className="bench-caret">{open ? 'v' : '^'}</span>
@@ -320,221 +366,96 @@ export function Workbench({
           {!open && <span className="bench-peek">点开：造对象 - 对它做事 - 翻它的结构</span>}
         </button>
         {node && <span className="bench-target">{node.id}</span>}
+        {open && stage.length > 0 && (
+          <div className="bench-stage">
+            <span className="bench-stage-label">台面</span>
+            {stage.map((id) => {
+              /*
+               * chip 上写**数学名**（`A₄` / `C₆`），不是对象名（`A` / `B`）——
+               * 用户在台面上认的是"这是哪个群"，不是"我给它起的第几个字母"。
+               * 对象名进 `title`，随时能查到。
+               */
+              const obj = objects.find((o) => o.id === id)
+              return (
+                <span key={id} className={`bench-chip${id === node?.id ? ' on' : ''}`}>
+                  {/* 点一下 = 切到它 —— 走的是 `onPick`，与"点画布节点"**同一个函数** */}
+                  <button className="bench-chip-main" onClick={() => onPick(id)} title={`切到 ${id}`}>
+                    {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
+                  </button>
+                  {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}
+                  <button
+                    className="bench-chip-x"
+                    onClick={() => onDrop(id)}
+                    title={`把 ${id} 拿下台面（不删对象）`}
+                  >
+                    x
+                  </button>
+                </span>
+              )
+            })}
+          </div>
+        )}
       </header>
 
       {open && (
         <div className="bench-body">
-          {/* ── ① 显示条（计算器的"显示屏"）──────────────────── */}
-          <div className="bench-display">
-            <div className="bench-screen">
-              {node ? (
-                <>
-                  {/*
-                   * ⚠️ 标题写**数学身份**，不是 `def`（用户实测两条：
-                   * 「smallgroup(12,3)？不是 A4？」「map(B,D,a→0,b→1)？为什么不用 φ:A₄→C₃？」）。
-                   * `def` 是"它怎么被造出来的"，降为副行。判据在 `gal/mathLabel.ts`。
-                   */}
-                  <div className="bench-screen-title">
-                    <TexOrText text={ml?.main ?? node.def} />
-                  </div>
-                  <div className="bench-screen-sub">
-                    {[
-                      ml?.sub,
-                      showGroup ? `阶 ${showGroup.order}` : null,
-                      pending
-                        ? `正在选参数：${pending.picked.length} / ${maxObjectArity(pending.op)}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join('  -  ')}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="bench-screen-title">还没有对象</div>
-                  <div className="bench-screen-sub">
-                    按右边 <b>＋</b> 造一个（集合 / 群），或点画布上的节点
-                  </div>
-                </>
-              )}
-            </div>
-            {/*
-              **＋ 导入对象**（用户点名的那个按钮）：
-              「比如用『＋』按钮让用户来导入对象不就挺好的吗？」
-            */}
-            <button
-              className={`bench-plus${plusOpen ? ' on' : ''}`}
-              onClick={() => setPlusOpen((v) => !v)}
-              title="造一个对象放上台面（集合 / 群 / 结构）"
-            >
-              <span className="bench-plus-glyph">＋</span>
-              <span className="bench-plus-word">导入对象</span>
-            </button>
-
-            {/*
-              ⚠️ **`＋` 面板挂在按钮上浮出来**（2026-10-06 第二次返工）。
-              第一版把它**塞进 body 的排版流**里 ⇒ 一条往下压的长带，把键盘/明细区全顶下去，
-              用户原话：「改了约等于没改。。。」
-              ⇒ 改成**浮层（popover）**：锚在 `＋` 下面、右对齐、**不挤动任何东西**。
-            */}
-            {plusOpen && (
-              <div className="bench-plus-panel" onClick={(e) => e.stopPropagation()}>
-                <div className="plus-head">
-                  <span>导入对象</span>
-                  <button className="plus-close" onClick={() => setPlusOpen(false)} title="关闭">
-                    x
-                  </button>
-                </div>
-                {/* 常见群：直接走**记号**（输入层本来就认它们）*/}
-                <div className="plus-quick">
-                  <span className="plus-quick-label">常见群</span>
-                  {COMMON_GROUPS.map((g) => (
-                    <button
-                      key={g}
-                      className="plus-chip"
-                      title={`导入 ${g}`}
-                      onClick={() => {
-                        onAdd(g)
-                        setPlusOpen(false)
-                      }}
-                    >
-                      {g}
-                    </button>
-                  ))}
-                </div>
-                {/*
-                 * 群库：按阶分组、**显示可读的结构名**（`A4` / `C6` / `D8`…），点名字就导入。
-                 * **不再让用户填「阶, 编号」** —— 用户原话：
-                 * 「什么叫群库导入是输入阶和序数？**谁记得住 A4 是 12,3**？你想给谁用？」
-                 */}
-                <div className="plus-lib">
-                  <div className="plus-lib-head">
-                    群库<span className="plus-lib-hint">按阶分组，点名字导入</span>
-                  </div>
-                  <div className="plus-lib-body">
-                    {orders === null ? (
-                      <span className="plus-lib-hint">正在载入...</span>
-                    ) : (
-                      orders.map((g) => (
-                        <div key={g.order} className="plus-lib-row">
-                          <span className="plus-lib-order">阶 {g.order}</span>
-                          <div className="plus-lib-items">
-                            {g.entries.map((e) => (
-                              <button
-                                key={e.i}
-                                className="plus-chip"
-                                title={`smallGroup(${g.order}, ${e.i})`}
-                                onClick={() => {
-                                  onAdd(`smallGroup(${g.order}, ${e.i})`)
-                                  setPlusOpen(false)
-                                }}
-                              >
-                                {e.structure}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))
+          {/* ══ 左列：显示屏 + 待选 + 键盘（或 ＋ 面板）+ ＋ 按钮 ══ */}
+          <div className="bench-left">
+            {/* ── ① 显示屏（计算器的"显示屏"）──────────────────── */}
+            <div className="bench-display">
+              <div className="bench-screen">
+                {node ? (
+                  <>
+                    {/*
+                     * ⚠️ 标题写**数学身份**，不是 `def`（用户实测两条：
+                     * 「smallgroup(12,3)？不是 A4？」「map(B,D,a→0,b→1)？为什么不用 φ:A₄→C₃？」）。
+                     * `def` 是"它怎么被造出来的"，降为副行。判据在 `gal/mathLabel.ts`。
+                     */}
+                    <div className="bench-screen-title">
+                      <TexOrText text={ml?.main ?? node.def} />
+                    </div>
+                    <div className="bench-screen-sub">
+                      {[
+                        ml?.sub,
+                        showGroup ? `阶 ${showGroup.order}` : null,
+                        pending
+                          ? `正在选参数：${pending.picked.length} / ${maxObjectArity(pending.op)}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join('  -  ')}
+                    </div>
+                    {/*
+                     * pending 时显示屏写**算式**（2026-10-07 方案二）：
+                     * 已选对象 + 这枚 op 的符号键 + 一个空格子 + `= ...`。
+                     * 空格子是**无文本的样式盒**——`▢` 那种字符键盘打不出来（文本流纪律）。
+                     */}
+                    {pending && (
+                      <div className="bench-eq">
+                        {pickedObjs.map((o) => (
+                          <TexOrText key={o.id} text={mathLabel(o).main} />
+                        ))}
+                        <Tex className="bench-eq-op" tex={opKey(pending.op).tex} />
+                        <span className="bench-eq-blank" />
+                        <span className="bench-eq-tail">= ...</span>
+                      </div>
                     )}
-                  </div>
-                </div>
-                {/* 造集合 / 造结构：与「目录」共用同一套表单（`ui/NewObjectForms.tsx`）*/}
-                <NewObjectForms
-                  onAdd={(e) => {
-                    onAdd(e)
-                    setPlusOpen(false)
-                  }}
-                  onBuildStructure={(e) => {
-                    onBuildStructure(e)
-                    setPlusOpen(false)
-                  }}
-                />
+                  </>
+                ) : (
+                  /* 只报状态，不教操作（2026-10-07 用户：「你见过计算器还要标注『按数字按钮来计算』吗」）*/
+                  <div className="bench-screen-title">还没有对象</div>
+                )}
               </div>
-            )}
-          </div>
-
-          {/* ── ② 台面：摆上来的对象（**不会因为点一下画布就消失**）──── */}
-          {stage.length > 0 && (
-            <div className="bench-stage">
-              <span className="bench-stage-label">台面上</span>
-              {stage.map((id) => {
-                /*
-                 * chip 上写**数学名**（`A₄` / `C₆`），不是对象名（`A` / `B`）——
-                 * 用户在台面上认的是"这是哪个群"，不是"我给它起的第几个字母"。
-                 * 对象名进 `title`，随时能查到。
-                 */
-                const obj = objects.find((o) => o.id === id)
-                return (
-                  <span key={id} className={`bench-chip${id === node?.id ? ' on' : ''}`}>
-                    {/* 点一下 = 切到它 —— 走的是 `onPick`，与"点画布节点"**同一个函数** */}
-                    <button className="bench-chip-main" onClick={() => onPick(id)} title={`切到 ${id}`}>
-                      {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
-                    </button>
-                    {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}
-                    <button
-                      className="bench-chip-x"
-                      onClick={() => onDrop(id)}
-                      title={`把 ${id} 拿下台面（不删对象）`}
-                    >
-                      x
-                    </button>
-                  </span>
-                )
-              })}
             </div>
-          )}
 
-          {/* ── ③ 符号键盘（随焦点变）──────────────────────── */}
-          <nav className="bench-pad" aria-label="工作台键盘">
-            {!node ? (
-              <p className="bench-pad-hint">
-                键盘要先有一个对象：按 <b>＋</b> 造一个，或点画布上的节点。
-              </p>
-            ) : padCount === 0 ? (
-              <p className="bench-pad-hint">这个对象暂时没有可用的操作。</p>
-            ) : (
-              padFamilies.map((f) => (
-                <div key={f.key} className="bench-pad-row">
-                  <span className="bench-pad-label">{f.label}</span>
-                  <div className="bench-pad-keys">
-                    {f.ops.map((op) => {
-                      const n = benchArity(op)
-                      return (
-                        <button
-                          key={op.id}
-                          className="bench-key"
-                          data-op={op.id}
-                          onClick={() => onRunOp(op)}
-                          title={`${menuLabel(op)}（${op.notation}）- ${howOf.get(op.id) ?? ''}\n${op.doc}`}
-                        >
-                          {/* 键面走 KaTeX：`×` `⋊` `≤` 这些字符键盘打不出来，
-                              用户 2026-09-27 定的规矩是"不许出现在文本流里"——
-                              显示只能靠排版（`opKey` 给 KaTeX 源，`keyAscii` 给纯文本替身）。 */}
-                          <Tex className="bench-key-glyph" tex={opKey(op).tex} />
-                          {n > 1 && <span className="bench-key-n">{n}</span>}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))
-            )}
-          </nav>
-
-          {/* ── ③ 明细区（一页铺开，不折叠）────────────────── */}
-          <div className={`bench-detail${editorBusy ? ' busy' : ''}`}>
-            {editorBusy ? (
-              <p className="bench-blank">
-                正在填一张表（下面那张卡片就是）。
-                <br />
-                填完提交，或者点它右上角的 x 取消，键盘随时可以改主意。
-              </p>
-            ) : pending ? (
-              /* **对象槽位**（T1）—— 工作台自己把参数对象凑齐，**不依赖画布** */
+            {/*
+             * ── ② 待选（pending）：槽位 + 候选，在键盘**上方** ──────
+             * 键盘留在下面（busy 不掐焦点：按另一枚键 = 换主意），列内超长时自己滚。
+             */}
+            {pending && (
               <div className="bench-slots">
                 <div className="bench-slot-head">
                   正在选对象：<code title={pending.op.notation}>{menuLabel(pending.op)}</code>
-                  <span className="bench-slot-hint">（在下面点，不用去画布）</span>
                 </div>
                 <div className="bench-slot-list">
                   {Array.from({ length: Math.max(maxObjectArity(pending.op), slotIdx) }).map((_, i) => {
@@ -562,12 +483,10 @@ export function Workbench({
                   })}
                 </div>
                 {cands.length === 0 ? (
-                  <p className="bench-blank">
-                    画布上还没有能填这一位的对象，按上面的 <b>＋</b> 造一个。
-                  </p>
+                  <p className="bench-blank">没有能填这一位的对象。</p>
                 ) : (
                   <>
-                    <div className="bench-cands-title">点一下填进第 {slotIdx + 1} 位：</div>
+                    <div className="bench-cands-title">填第 {slotIdx + 1} 位：</div>
                     <div className="bench-cands-list">
                       {cands.map((o) => (
                         <button key={o.id} className="bench-cand" onClick={() => onPick(o.id)}>
@@ -579,71 +498,218 @@ export function Workbench({
                   </>
                 )}
               </div>
-            ) : !node ? (
-              <p className="bench-blank">
-                按 <b>＋</b> 造一个对象，这里就会摊开它的结构。
-              </p>
-            ) : !showDetail ? (
+            )}
+
+            {/* ── ③ 符号键盘（随焦点变）；`＋` 面板开着时让位给它 ── */}
+            {plusOpen ? (
               /*
-               * **映射 / 作用 / 关系**这类"答案在画布上的"的值 —— 从前这里只有一句
-               * 「答案在画布上」，用户实测第 9 条问的就是"那详细信息呢？"。
-               * 现在把**结论层原样铺出来**（`insightsOf`，与信息面板同一份判据）。
+               * `＋` 面板（2026-10-07 方案二）：**左列内联的紧凑手风琴**。
+               * 用户原话：「导入按钮拉出来的手风琴太大了，明显可以紧凑一点」
+               * ⇒ 常见群一排小 chip / 群库默认折起 / 自定义三行紧凑表单。
                */
-              ins.length > 0 || node.value.type === 'map' ? (
-                <div className="bench-page">
-                  {/* 结论层（"所以呢"）+ **事实表**（定义域/陪域/单·满/核/像）——
-                      两者一份两处显示，与信息面板同源 */}
-                  <Insights items={ins} />
-                  {node.value.type === 'map' && <MapFacts map={node.value.map} />}
+              <div className="bench-plus-panel">
+                <div className="plus-head">
+                  <span>导入对象</span>
+                  <button className="plus-close" onClick={() => setPlusOpen(false)} title="关闭">
+                    x
+                  </button>
                 </div>
-              ) : (
-                <p className="bench-blank">
-                  <code>{node.id}</code> 是
-                  {/* `map` 这一支**走不到这里**（上面那个条件已经把它接走了）——
-                      所以下面不再列它，否则是死代码。 */}
-                  {node.value.type === 'action'
-                    ? '一个作用，画布上那条作用线就是它'
-                    : node.value.type === 'relation'
-                      ? '一条关系边，画布上那条线就是它'
-                      : '一条边，画布上那条线就是它'}
-                  ，答案在画布上。
-                </p>
-              )
-            ) : sections ? (
-              <>
-                {/* 结论层（识别 / 第一同构定理 / 轨道分解）—— 与信息面板同一份 */}
-                {ins.length > 0 && (
-                  <div className="bench-brief">
-                    <Insights items={ins} />
-                  </div>
-                )}
-                {/* 平铺 tab 条（**不是手风琴**：进工作台是"摊开读"，不是"一层层点开"）*/}
-                <div className="bench-tabs">
-                  {sections.map((t) => (
+                {/* 常见群：直接走**记号**（输入层本来就认它们）*/}
+                <div className="plus-quick">
+                  <span className="plus-quick-label">常见群</span>
+                  {COMMON_GROUPS.map((g) => (
                     <button
-                      key={t.id}
-                      className={`bench-tab${t.id === tab ? ' on' : ''}`}
-                      data-tab={t.id}
-                      onClick={() => setTab(t.id)}
+                      key={g}
+                      className="plus-chip"
+                      title={`导入 ${g}`}
+                      onClick={() => {
+                        onAdd(g)
+                        setPlusOpen(false)
+                      }}
                     >
-                      <span className="bench-tab-label">{t.label}</span>
-                      {t.id === 'axioms' && struct ? (
-                        <span className="bench-tab-sum">{STRUCTURE_LEVEL_LABEL[struct.axioms.level]}</span>
-                      ) : t.id === 'table' && struct ? (
-                        <span className="bench-tab-sum">
-                          {struct.carrier.length > 0 ? `${struct.carrier.length} x ${struct.carrier.length}` : ''}
-                        </span>
-                      ) : showGroup &&
-                        (t.id === 'basic' || t.id === 'elements' || t.id === 'conj' || t.id === 'subgroups') ? (
-                        <span className="bench-tab-sum">{sectionSummary(t.id, showGroup, subCount)}</span>
-                      ) : null}
+                      {g}
                     </button>
                   ))}
                 </div>
+                {/*
+                 * 群库：**默认折起**（手风琴要紧凑）；展开才铺 93 个群、按阶分组的
+                 * **可读结构名**（`A4` / `C6` / `D8`…），点名字导入。
+                 * **不再让用户填「阶, 编号」** —— 用户原话：
+                 * 「什么叫群库导入是输入阶和序数？**谁记得住 A4 是 12,3**？你想给谁用？」
+                 */}
+                <div className="plus-lib">
+                  <button className="plus-lib-head" onClick={() => setLibOpen((v) => !v)}>
+                    <span className="plus-lib-caret">{libOpen ? 'v' : '>'}</span>
+                    <span>群库</span>
+                    <span className="plus-lib-hint">93 个 - 按阶分组，点名字导入</span>
+                  </button>
+                  {libOpen && (
+                    <div className="plus-lib-body">
+                      {orders === null ? (
+                        <span className="plus-lib-hint">正在载入...</span>
+                      ) : (
+                        orders.map((g) => (
+                          <div key={g.order} className="plus-lib-row">
+                            <span className="plus-lib-order">阶 {g.order}</span>
+                            <div className="plus-lib-items">
+                              {g.entries.map((e) => (
+                                <button
+                                  key={e.i}
+                                  className="plus-chip"
+                                  title={`smallGroup(${g.order}, ${e.i})`}
+                                  onClick={() => {
+                                    onAdd(`smallGroup(${g.order}, ${e.i})`)
+                                    setPlusOpen(false)
+                                  }}
+                                >
+                                  {e.structure}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+                {/* 造集合 / 造结构：与「目录」共用同一套表单（`ui/NewObjectForms.tsx`）*/}
+                <NewObjectForms
+                  onAdd={(e) => {
+                    onAdd(e)
+                    setPlusOpen(false)
+                  }}
+                  onBuildStructure={(e) => {
+                    onBuildStructure(e)
+                    setPlusOpen(false)
+                  }}
+                />
+              </div>
+            ) : (
+              <nav className="bench-pad" aria-label="工作台键盘">
+                {node ? (
+                  padCount === 0 ? (
+                    <p className="bench-pad-hint">没有可用的操作。</p>
+                  ) : (
+                    padFamilies.map((f) => (
+                    <div key={f.key} className="bench-pad-row" data-fam={f.key}>
+                      <span className="bench-pad-label">{f.label}</span>
+                      <div className="bench-pad-keys">
+                        {f.ops.map((op) => {
+                          const n = benchArity(op)
+                          return (
+                            <button
+                              key={op.id}
+                              className="bench-key"
+                              data-op={op.id}
+                              onClick={() => onRunOp(op)}
+                              title={`${menuLabel(op)}（${op.notation}）- ${howOf.get(op.id) ?? ''}\n${op.doc}`}
+                            >
+                              {/* 键面走 KaTeX：`×` `⋊` `≤` 这些字符键盘打不出来，
+                                  用户 2026-09-27 定的规矩是"不许出现在文本流里"——
+                                  显示只能靠排版（`opKey` 给 KaTeX 源，`keyAscii` 给纯文本替身）。 */}
+                              <Tex className="bench-key-glyph" tex={opKey(op).tex} />
+                              {n > 1 && <span className="bench-key-n">{n}</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    ))
+                  )
+                ) : null}
+              </nav>
+            )}
+
+            {/* `＋ 导入对象` —— 左列底部的主按钮（用户点名的那枚：「用『＋』按钮让用户来导入对象」）*/}
+            <button
+              className={`bench-plus${plusOpen ? ' on' : ''}`}
+              onClick={() => setPlusOpen((v) => !v)}
+              title="造一个对象放上台面（集合 / 群 / 结构）"
+            >
+              <span className="bench-plus-glyph">＋</span>
+              <span className="bench-plus-word">导入对象</span>
+            </button>
+          </div>
+
+          {/* ══ 右列：明细大阅读区（按键盘 / 翻台面时纹丝不动）══ */}
+          <div className="bench-right">
+            <div className={`bench-detail${editorBusy ? ' busy' : ''}`}>
+              {editorBusy ? (
+                <p className="bench-blank">正在填一张表（下面那张卡片）。</p>
+              ) : !node ? null : !showDetail ? (
+                /*
+                 * **映射 / 作用 / 关系**这类"答案在画布上的"的值 —— 从前这里只有一句
+                 * 「答案在画布上」，用户实测第 9 条问的就是"那详细信息呢？"。
+                 * 现在把**结论层原样铺出来**（`insightsOf`，与信息面板同一份判据）。
+                 */
+                ins.length > 0 || node.value.type === 'map' ? (
+                  <div className="bench-page">
+                    {/* 结论层（"所以呢"）+ **事实表**（定义域/陪域/单·满/核/像）——
+                        两者一份两处显示，与信息面板同源 */}
+                    <Insights items={ins} />
+                    {node.value.type === 'map' && <MapFacts map={node.value.map} />}
+                  </div>
+                ) : (
+                  <p className="bench-blank">
+                    <code>{node.id}</code> 是
+                    {/* `map` 这一支**走不到这里**（上面那个条件已经把它接走了）——
+                        所以下面不再列它，否则是死代码。 */}
+                    {node.value.type === 'action'
+                      ? '一个作用，画布上那条作用线就是它'
+                      : node.value.type === 'relation'
+                        ? '一条关系边，画布上那条线就是它'
+                        : '一条边，画布上那条线就是它'}
+                    ，答案在画布上。
+                  </p>
+                )
+              ) : sections ? (
+                <>
+                  {/* 结论层（识别 / 第一同构定理 / 轨道分解）—— 与信息面板同一份 */}
+                  {ins.length > 0 && (
+                    <div className="bench-brief">
+                      <Insights items={ins} />
+                    </div>
+                  )}
+                  {/* 平铺 tab 条（**不是手风琴**：进工作台是"摊开读"，不是"一层层点开"）*/}
+                  <div className="bench-tabs">
+                    {sections.map((t) => (
+                      <button
+                        key={t.id}
+                        className={`bench-tab${t.id === tab ? ' on' : ''}`}
+                        data-tab={t.id}
+                        onClick={() => setTab(t.id)}
+                      >
+                        <span className="bench-tab-label">{t.label}</span>
+                        {t.id === 'axioms' && struct ? (
+                          <span className="bench-tab-sum">{STRUCTURE_LEVEL_LABEL[struct.axioms.level]}</span>
+                        ) : t.id === 'table' && struct ? (
+                          <span className="bench-tab-sum">
+                            {struct.carrier.length > 0 ? `${struct.carrier.length} x ${struct.carrier.length}` : ''}
+                          </span>
+                        ) : showGroup &&
+                          (t.id === 'basic' || t.id === 'elements' || t.id === 'conj' || t.id === 'subgroups') ? (
+                          <span className="bench-tab-sum">{sectionSummary(t.id, showGroup, subCount)}</span>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="bench-page">
+                    <SectionBody
+                      section={tab}
+                      group={showGroup}
+                      struct={struct}
+                      node={node}
+                      active={null}
+                      subCount={subCount}
+                      onExtract={onExtract}
+                    />
+                  </div>
+                </>
+              ) : (
                 <div className="bench-page">
                   <SectionBody
-                    section={tab}
-                    group={showGroup}
+                    section="basic"
+                    group={group}
                     struct={struct}
                     node={node}
                     active={null}
@@ -651,25 +717,13 @@ export function Workbench({
                     onExtract={onExtract}
                   />
                 </div>
-              </>
-            ) : (
-              <div className="bench-page">
-                <SectionBody
-                  section="basic"
-                  group={group}
-                  struct={struct}
-                  node={node}
-                  active={null}
-                  subCount={subCount}
-                  onExtract={onExtract}
-                />
-              </div>
-            )}
-            {node && (
-              <div className="bench-foot">
-                <TexOrText text={node.def} />
-              </div>
-            )}
+              )}
+              {node && (
+                <div className="bench-foot">
+                  <TexOrText text={node.def} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

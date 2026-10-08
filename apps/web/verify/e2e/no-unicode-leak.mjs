@@ -270,8 +270,11 @@ const clickNodeAt = async (id) => {
   await checkSource('工作台：升起 + 焦点群')
 
   // ＋ 面板：常见群 chip + 群库 93 枚 chip（title 是 smallGroup(n, i)，ASCII）
+  // 群库默认折起（2026-10-07 方案二），先展开再扫
   await page.click('.bench-plus')
-  await page.waitForTimeout(900)
+  await page.waitForTimeout(700)
+  await page.click('.bench-plus-panel .plus-lib-head')
+  await page.waitForTimeout(700)
   await checkVisible('工作台：＋ 导入面板（群库 93 chip）')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)

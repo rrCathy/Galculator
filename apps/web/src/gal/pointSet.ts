@@ -11,6 +11,10 @@
  * 而"让 G 作用在**你自己的**集合上"根本表达不出来：
  * `customAction(S_4, asSet(Syl(S_4, 3)), s12 -> (12))` 报「作用点集的基数 n 必须是正整数」。
  *
+ * > 2026-10-07 补：`{a, b, c}` 如今**通了** —— 它是 `labeledSet` 的输入糖
+ * > （`evalDef#normalizeBraces`，用户点名「你不能直接写 {a, b, c}？」）；
+ * > 展示名也换成了花括号形态（见 `planLabeledPointSet`）。
+ *
  * 这个模块补两件事：
  *   ① **凭空造点集**：`pointSet(5)` → 5 个抽象点（点号 `1..5`）；`labeledSet(a, b, c)` → 标号由你定；
  *   ② **点记号解析**：循环记号里的**非数字**记号 → Ω 的位置下标。
@@ -90,10 +94,14 @@ export function planCountPointSet(n: number, label?: string): PointSetPlan {
 }
 
 /**
- * 造一个点集，**标号就是你写的那串记号**（`labeledSet(a, b, c)`）。
+ * 造一个点集，**标号就是你写的那串记号**（`labeledSet(a, b, c)`，也可写糖 `{a, b, c}`）。
  *
  * 首关挡"只给一个纯整数"那一支：`labeledSet(5)` 读不出你要 5 个点还是要一个叫 `5` 的点，
  * 所以直接报错指路 `pointSet(5)` —— 见模块头的"为什么是两个 op"。
+ *
+ * ⚠️ **默认展示名是花括号形态**（`\{a, b, c\}`，2026-10-07）：数学里集合就长这样，
+ * `labeledSet(…)` 是构造式（def），不该当名字用 —— 用户点名（「什么叫 labeledSet(a, b, c)？」）。
+ * `\{` `\}` 是 KaTeX 的字面花括号转义；纯文本面由 `asciiSymbol` 换回 `{a, b, c}`。
  */
 export function planLabeledPointSet(rawLabels: string[], label?: string): PointSetPlan {
   const labels = rawLabels.map((s) => s.trim()).filter((s) => s !== '')
@@ -129,7 +137,7 @@ export function planLabeledPointSet(rawLabels: string[], label?: string): PointS
       hint: '标号里不能有空格 / 圆括号 / 逗号（那三个是循环记号自己的语法）；如 labeledSet(a, b, c)',
     }
   }
-  return { ok: true, set: make(labels, label ?? `labeledSet(${labels.join(', ')})`), labels }
+  return { ok: true, set: make(labels, label ?? `\\{${labels.join(', ')}\\}`), labels }
 }
 
 /**

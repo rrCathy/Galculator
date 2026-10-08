@@ -1,19 +1,23 @@
 /**
- * 走查：**工作台 v2 —— 玻璃计算器**（`ui/Workbench.tsx`，2026-10-06 落地，本套 2026-10-07 按 v2 DOM 重写）。
+ * 走查：**工作台 —— 玻璃计算器**（`ui/Workbench.tsx`，v2 于 2026-10-06 落地，
+ * 2026-10-07 按**方案二「横排计算器」**重排：左列=显示屏+键盘(三块)+`＋`、右列=明细；
+ * 本套同日按新 DOM 再翻一次账）。
  *
  * ── 这一套守的是什么 ────────────────────────────────────────────
- * v2 的形态（用户三轮逼出来的定案，别退回任何一版）：**显示条 + 符号键盘 + 明细区 + 台面 + `＋` 导入**。
- * 拆成可测的承诺：
+ * 形态（用户三轮逼出来的定案 + 方案二拍板，别退回任何一版）：
+ * **左键盘 / 右明细 + 台面在标题栏 + `＋` 紧凑手风琴**。拆成可测的承诺：
  *
  *   ① **贴底常驻、点它才升起**，画布当背景（升起时画布尺寸不变）；
- *   ② **显示条写数学身份**（`S₄` 不是 `smallGroup(12,3)`），副行才是定义；
+ *   ② **显示屏写数学身份**（`S₄` 不是 `smallGroup(12,3)`），副行才是定义；
  *   ③ **明细区一页铺开**（平铺 tab，不是手风琴），内容与信息面板**同源**（同一份 `SectionBody`）；
- *   ④ **键盘随焦点变**（P7）：焦点是群 27 键 5 族，是集合只剩「造结构」1 键；
+ *   ④ **键盘随焦点变**（P7）：焦点是群 27 键 **3 块**（造新东西 6 / 读它的结构 12 /
+ *      作用与集合 9），是集合只剩「造新东西」里的「造结构」1 键；
  *      关系 op（`contains` / `isomorphism`）**不在**键盘（T2：关系归画布）；
  *   ⑤ **键盘键发起的 op 能在自己台内凑齐参数**（T1 槽位）—— 工作台升起时画布节点全被盖住，
- *      "去画布点对象"那条路真实用户走不通，槽位是唯一通路；
- *   ⑥ **`＋` 导入**：空画布不离开工作台就能造对象（常见群 chips + 93 群库）；
- *   ⑦ **台面**：碰过的对象留在台上（存 id，与画布同一份），chip 写数学名，`x` 拿下不删对象；
+ *      "去画布点对象"那条路真实用户走不通，槽位是唯一通路；pending 时键盘仍可用（换主意）；
+ *   ⑥ **`＋` 导入**：空画布不离开工作台就能造对象（常见群 chips + 93 群库，**群库默认折起**）；
+ *      **Esc / 点外关得掉**（2026-10-07 修的旧账：以前 Esc 关不掉还清焦点）；
+ *   ⑦ **台面**：碰过的对象留在标题栏右侧（存 id，与画布同一份），chip 写数学名，`x` 拿下不删对象；
  *   ⑧ **文案纪律**：`·` / `…` / 字面 `**` 不许出现（no-unicode-leak 同判据，这里再钉一遍）。
  *
  * ── 期望值全部手算（`S_4`，阶 24 = 2³·3）─────────────────────────
@@ -149,6 +153,10 @@ const bench = () =>
       screenSub: el.querySelector('.bench-screen-sub')?.textContent ?? '',
       padHint: el.querySelector('.bench-pad-hint')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
       padLabels: [...el.querySelectorAll('.bench-pad-label')].map((x) => x.textContent.trim()),
+      famKeys: [...el.querySelectorAll('.bench-pad-row')].map((r) => [
+        r.dataset.fam ?? '',
+        r.querySelectorAll('.bench-key').length,
+      ]),
       keyOps: [...el.querySelectorAll('.bench-key')].map((k) => k.dataset.op ?? ''),
       keyTitles: [...el.querySelectorAll('.bench-key')].map((k) => k.getAttribute('title') ?? ''),
       keyN: [...el.querySelectorAll('.bench-key-n')].map((k) => k.textContent.trim()),
@@ -328,11 +336,13 @@ console.log('\n== 场景 4：符号键盘随焦点变 ==')
   let b = await bench()
   ok('群焦点：27 枚键（实测注册表里"第一参吃画布对象"且 canPick 放行的全部）',
     b?.keyOps.length === 27, `keys=${b?.keyOps.length}`)
-  ok('分成 5 族（结构映射作用 / 群与分解 / 子群与正规性 / 作用与轨道 / 集合运算）',
-    b?.padLabels.length === 5 &&
-      /结构 \/ 映射 \/ 作用/.test(b.padLabels.join('|')) && /群与分解/.test(b.padLabels.join('|')) &&
-      /子群与正规性/.test(b.padLabels.join('|')) && /作用与轨道/.test(b.padLabels.join('|')) &&
-      /集合运算/.test(b.padLabels.join('|')), JSON.stringify(b?.padLabels))
+  ok('分成 3 块（造新东西 / 读它的结构 / 作用与集合 —— 2026-10-07 方案二重排）',
+    b?.padLabels.length === 3 &&
+      /造新东西/.test(b.padLabels.join('|')) && /读它的结构/.test(b.padLabels.join('|')) &&
+      /作用与集合/.test(b.padLabels.join('|')), JSON.stringify(b?.padLabels))
+  ok('块的键数手算全对（造 6 / 读 12 / 作用与集合 9；6+12+9 = 27）',
+    JSON.stringify(b?.famKeys) === JSON.stringify([['build', 6], ['read', 12], ['actset', 9]]),
+    JSON.stringify(b?.famKeys))
   ok('键集里有用户要的核心动作（Z / Sub / Syl / 直积 / 商 / 共轭作用 / 底集）',
     ['center', 'subgroups', 'sylow', 'directProduct', 'quotient', 'conjugationAction', 'underlyingSet']
       .every((op) => b.keyOps.includes(op)), JSON.stringify(b?.keyOps))
@@ -385,22 +395,29 @@ console.log('\n== 场景 5：＋ 导入对象 ==')
 
   let b = await bench()
   ok('空画布上升起：显示条明说「还没有对象」', clean(b?.screenTitle) === '还没有对象', clean(b?.screenTitle))
-  ok('键盘区说实话：要先有一个对象（不摆死按钮）',
-    /键盘要先有一个对象/.test(b?.padHint ?? '') && /＋/.test(b?.padHint ?? ''), b?.padHint)
+  ok('键盘区不摆死按钮（没有对象就没有键、没有块，也不写教学句子）',
+    (b?.keyOps.length ?? -1) === 0 && (b?.padLabels.length ?? -1) === 0 && (b?.padHint ?? 'x') === '',
+    JSON.stringify({ keys: b?.keyOps.length, labels: b?.padLabels.length, hint: b?.padHint }))
 
   await page.click('.bench-plus')
   await page.waitForTimeout(900)
   const plus = await page.evaluate(() => ({
     panel: !!document.querySelector('.bench-plus-panel'),
     quick: [...document.querySelectorAll('.bench-plus-panel .plus-quick .plus-chip')].map((c) => c.textContent.trim()),
+    libOpen: !!document.querySelector('.bench-plus-panel .plus-lib-body'),
+  }))
+  ok('＋ 面板拉出来（左列内联的紧凑手风琴）', plus.panel)
+  ok('常见群 chips 在（S_3 / S_4 / A_4 / Q_8 …）',
+    plus.quick.includes('S_3') && plus.quick.includes('S_4') && plus.quick.includes('Q_8'), JSON.stringify(plus.quick))
+  ok('群库**默认折起**（2026-10-07 紧凑化，用户点名）', plus.libOpen === false, `libOpen=${plus.libOpen}`)
+  await page.click('.bench-plus-panel .plus-lib-head')
+  await page.waitForTimeout(700)
+  const lib = await page.evaluate(() => ({
     libRows: document.querySelectorAll('.bench-plus-panel .plus-lib-row').length,
     libChips: document.querySelectorAll('.bench-plus-panel .plus-lib .plus-chip').length,
   }))
-  ok('＋ 面板浮出来（不挤动键盘/明细区）', plus.panel)
-  ok('常见群 chips 在（S_3 / S_4 / A_4 / Q_8 …）',
-    plus.quick.includes('S_3') && plus.quick.includes('S_4') && plus.quick.includes('Q_8'), JSON.stringify(plus.quick))
-  ok('群库按阶分组：31 行（手算 1–31 阶）', plus.libRows === 31, `rows=${plus.libRows}`)
-  ok('群库共 93 枚 chip（手算：1–31 阶共 93 个群）', plus.libChips === 93, `chips=${plus.libChips}`)
+  ok('展开后按阶分组：31 行（手算 1–31 阶）', lib.libRows === 31, `rows=${lib.libRows}`)
+  ok('群库共 93 枚 chip（手算：1–31 阶共 93 个群）', lib.libChips === 93, `chips=${lib.libChips}`)
 
   /* 点常见群 S_3 ⇒ 真造出对象、焦点切过去、自动上台面 */
   await page.evaluate(() => {
@@ -437,6 +454,33 @@ console.log('\n== 场景 6：槽位凑参数与直接执行 ==')
   await addLine('G', 'S_4')
   await addLine('Q', 'C_6')
   await focusViaNode('G')
+
+  /*
+   * 旧账（2026-10-07 修）：`＋` 面板的 **Esc / 点外关闭**。
+   * 以前按 Esc 关不掉面板、反而把焦点清掉（真机复现过）——现在层叠：
+   * 面板开着时 Esc 先关面板（捕获段拦截），再按一次才轮到 App 的取消。
+   */
+  await page.click('.bench-plus')
+  await page.waitForTimeout(500)
+  ok('＋ 面板开得出来（给"关法"钉钉子用）', (await page.locator('.bench-plus-panel').count()) === 1)
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
+  let b0 = await bench()
+  ok('Esc 关掉面板**且不动焦点**（显示条仍是 S_4、键盘仍是 27 键）',
+    (await page.locator('.bench-plus-panel').count()) === 0 && clean(b0?.screenTitle) === 'S4' &&
+      (b0?.keyOps.length ?? 0) === 27,
+    `title=${clean(b0?.screenTitle)} keys=${b0?.keyOps.length}`)
+  await page.click('.bench-plus')
+  await page.waitForTimeout(400)
+  const screenPt = await page.evaluate(() => {
+    const el = document.querySelector('.bench-screen')
+    const r = el.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  })
+  await page.mouse.click(screenPt.x, screenPt.y)
+  await page.waitForTimeout(300)
+  ok('点面板外面（显示屏上）也关得掉，焦点不动',
+    (await page.locator('.bench-plus-panel').count()) === 0 && (await bench())?.node === 'G')
 
   const nodesBefore = await page.locator('svg.canvas g.gnode').count()
   ok('点「直积」进 pending（第 2 位等一个群）', await clickKey('directProduct'))

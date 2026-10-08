@@ -396,6 +396,9 @@ export function run(): void {
     eq('S_4', asciiSymbol('S_{4}'), 'S_4')
     eq('Aut(C_6)', asciiSymbol('\\operatorname{Aut}(C_{6})'), 'Aut(C_6)')
     eq('半直积', asciiSymbol('C_{4} \\rtimes_{\\varphi} C_{2}'), 'C_4 : _phi C_2')
+    // 集合记号的**字面花括号**要留下来（`\{a, b, c\}` → `{a, b, c}`，2026-10-07）：
+    // 它是集合展示名（`planLabeledPointSet` 的默认 label），纯文本面不许丢括号。
+    eq('字面花括号（集合）', asciiSymbol('\\{a, b, c\\}'), '{a, b, c}')
     eq('空的进去还是空的', asciiSymbol(''), '')
 
     // 手算过的那三个都必须是纯 ASCII（这是这个函数存在的**全部理由**）

@@ -37,6 +37,15 @@ export interface NewObjectFormsProps {
   heading?: string
 }
 
+/**
+ * `{a, b, c}` 与 `a, b, c` 都收（2026-10-07 花括号糖进输入层之后）。
+ * 表单**落行也落花括号形态** —— 用户看到的 def 就是数学写法；
+ * `labeledSet(…)` 是 evalExpr 内部的构造式，不再示人。
+ */
+function unwrapBraces(s: string): string {
+  return s.trim().replace(/^\{/, '').replace(/\}$/, '').trim()
+}
+
 export function NewObjectForms({ onAdd, onBuildStructure, heading }: NewObjectFormsProps) {
   const [points, setPoints] = useState('5')
   const [labels, setLabels] = useState('a, b, c')
@@ -73,17 +82,17 @@ export function NewObjectForms({ onAdd, onBuildStructure, heading }: NewObjectFo
           value={labels}
           onChange={(e) => setLabels(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && labels.trim()) onAdd(`labeledSet(${labels.trim()})`)
+            if (e.key === 'Enter' && labels.trim()) onAdd(`{${unwrapBraces(labels)}}`)
           }}
-          placeholder="a, b, c"
-          title="按你的标号造点集：labeledSet(a, b, c)"
+          placeholder="{a, b, c}"
+          title="造一个集合：标号由你定，如 {a, b, c}（标号能直接写进循环记号）"
           spellCheck={false}
           autoComplete="off"
         />
         <button
           className="cat-go"
           disabled={!labels.trim()}
-          onClick={() => onAdd(`labeledSet(${labels.trim()})`)}
+          onClick={() => onAdd(`{${unwrapBraces(labels)}}`)}
         >
           按标号造
         </button>
@@ -95,17 +104,17 @@ export function NewObjectForms({ onAdd, onBuildStructure, heading }: NewObjectFo
           onChange={(e) => setStructLabels(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && structLabels.trim())
-              onBuildStructure(`labeledSet(${structLabels.trim()})`)
+              onBuildStructure(`{${unwrapBraces(structLabels)}}`)
           }}
           placeholder="1, 2, 3"
-          title="造一个代数结构：先造就这批点，再打开运算表编辑器"
+          title="造一个代数结构：先造这批点（如 {1, 2, 3}），再打开运算表编辑器"
           spellCheck={false}
           autoComplete="off"
         />
         <button
           className="cat-go"
           disabled={!structLabels.trim()}
-          onClick={() => onBuildStructure(`labeledSet(${structLabels.trim()})`)}
+          onClick={() => onBuildStructure(`{${unwrapBraces(structLabels)}}`)}
         >
           造结构
         </button>

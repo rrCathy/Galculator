@@ -95,11 +95,55 @@ function normalizeAngle(s: string): string {
 }
 
 /**
+ * `{a, b, c}` → `labeledSet(a, b, c)`（**花括号糖**，2026-10-07 用户点名）。
+ *
+ * > 用户原话：「什么叫 labeledSet(a, b, c)？你不能直接写 {a, b, c}？」
+ *
+ * 数学里集合就是这么写的，没道理逼人学一个函数名。转换放在**规范化层**（与
+ * `⟨S⟩` → `closure(S)` 同一层、同一理由）：
+ *   · 在 `splitCall` 折参数**之前**执行 ⇒ `{a, b}` 里的逗号不会把它当两个实参拆开；
+ *   · 非嵌套、有收尾的 `{…}` 一律转；没有收尾的（`{a, b`）原样留着走普通报错。
+ *
+ * ⚠️ `labeledSet` 仍是一等公民（老写法一条不改）；糖只是**多一条腿**。
+ * `{5}` 这种单整数会撞上 `planLabeledPointSet` 的歧义关（不许猜），报错照旧指路
+ * `pointSet(5)`。
+ *
+ * ⚠️ **三种前缀豁免**（notation.ts 的 `\alpha_{2}` 教的）：`_` / `^` / `\` 后面的花括号
+ * 是**元素记号的下标语法**（`ord(A, \alpha_{2})` 与 `ord(A, \alpha_2)` 必须同值）
+ * 或已转义的形态，**不许转**。
+ */
+function normalizeBraces(s: string): string {
+  let out = ''
+  let i = 0
+  while (i < s.length) {
+    const c = s[i]
+    if (c === '{') {
+      const prev = s[i - 1] ?? ''
+      const end = s.indexOf('}', i + 1)
+      if (prev !== '_' && prev !== '^' && prev !== '\\' && end > i) {
+        const inner = s.slice(i + 1, end)
+        if (!/[{}]/.test(inner)) {
+          out += `labeledSet(${inner.trim()})`
+          i = end + 1
+          continue
+        }
+      }
+    }
+    out += c
+    i++
+  }
+  return out
+}
+
+/**
  * Unicode 运算符 → 规范化 ASCII 形态（`C_2 × C_3` → `C_2 x C_3`）。
  *
  * `angle: false` 时不改写 `⟨⟩` —— **实参位置上的 `⟨H⟩` 是 Ω 里那个点的记号**，
  * 不能解释成闭包：`stabilizer(A, ⟨r⟩)` 里的 `⟨r⟩` 指 Ω 的成员，
  * 而 Sylow III 的 Ω = `Syl_p(G)` 成员正是这种写法。
+ *
+ * ⚠️ 花括号糖**与 `angle` 无关、两侧都转**：Ω 的实参位置正是 `{a, b}` 最有用处的地方
+ * （`customAction(G, {a, b}, …)`），而"标号里含花括号"是把语法当名字用的退化写法。
  */
 export function normalizeExpr(s: string, angle = true): string {
   let t = s.trim()
@@ -118,6 +162,7 @@ export function normalizeExpr(s: string, angle = true): string {
    * 元素记号（`ord(G, α₂)` 与 `ord(G, \alpha_2)` 同值）。
    */
   if (angle) t = normalizeAngle(t)
+  t = normalizeBraces(t)
   return t.replace(/\s+/g, ' ').trim()
 }
 

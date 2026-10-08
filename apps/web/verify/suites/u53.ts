@@ -190,7 +190,7 @@ export function run(): void {
     eq('3 个点', S?.members.length, 3)
     eq('标号就是写的那串', S?.members.map((m) => m.label).join(','), 'a,b,c')
     ok('同样没有母群', S?.group === null)
-    eq('展示名带上标号', S?.label, 'labeledSet(a, b, c)')
+    eq('展示名是花括号形态（\\{…\\} 是 KaTeX 的字面花括号，2026-10-07）', S?.label, '\\{a, b, c\\}')
     eq('副行列出点号', shownOf(['X = labeledSet(a, b, c)']).sub, '|Omega| = 3, 点号 a b c')
 
     // 中文标号也认（`no-unicode-leak` 放行中文，所以这不是泄漏面）
@@ -198,6 +198,39 @@ export function run(): void {
     eq('中文标号能建', cn.err('X'), null)
     eq('  2 个点', setOf(cn, 'X')?.members.length, 2)
     eq('  标号保真', setOf(cn, 'X')?.members.map((m) => m.label).join(','), '红,绿')
+  }
+
+  /* ══ 2b · 花括号糖：`{a, b, c}` 直接写（2026-10-07 用户点名）══════════════ */
+
+  suite('u53 \\cdot 花括号糖：{a, b, c} 直接写，不必学函数名')
+
+  {
+    const b = build(['X = {a, b, c}'])
+    eq('{a, b, c} 能建出来', b.err('X'), null)
+    const S = setOf(b, 'X')
+    eq('3 个点', S?.members.length, 3)
+    eq('标号就是写的那串', S?.members.map((m) => m.label).join(','), 'a,b,c')
+    ok('没有母群', S?.group === null)
+    eq('展示名与 labeledSet 同一形态', S?.label, '\\{a, b, c\\}')
+
+    // 与手写 labeledSet 一个答案：糖只是输入层的改写，不另造一套构造
+    const lb = build(['Y = labeledSet(a, b, c)'])
+    eq('与 labeledSet(a, b, c) 逐点相同',
+      JSON.stringify(S?.members.map((m) => m.label)),
+      JSON.stringify(setOf(lb, 'Y')?.members.map((m) => m.label)))
+
+    // 带空格的写法照样归一（规范化层顺手 trim）
+    const sp = build(['X = { a , b , c }'])
+    eq('{ a , b , c }（带空格）同样能建', setOf(sp, 'X')?.members.length, 3)
+
+    // 歧义关照旧：{5} 不许猜（单整数两种读法），报错沿 labeledSet 的口径指路
+    const amb = shownOf(['X = {5}'])
+    ok('{5} 拦下（两种读法，不许猜）', amb.err.includes('读不出来'), amb.err)
+    ok('  hint 指路 pointSet(5)', amb.hint.includes('pointSet(5)'), amb.hint)
+
+    // 空集合照旧拦
+    const empty = shownOf(['X = {}'])
+    ok('{} 拦下（至少要给一个点）', empty.err.includes('至少要给一个点'), empty.err)
   }
 
   /* ══ 3 · 报错：每一条都要指路，不许猜 ═════════════════════ */

@@ -3152,182 +3152,44 @@ body {
   padding: 0 6px;
 }
 
-.bench-secs {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-
-/* 分区头那枚「收起 / 展开」—— 贴右，跟着摘要走 */
-.bench-sec {
-  margin-left: auto;
-  padding: 1px 6px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-faint);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.bench-sec:hover {
-  border-color: var(--border);
-  background: #fff;
-  color: var(--text);
-}
-
-.bench-sec:hover {
-  background: #eceae3;
-}
-
-.bench-sec.closed {
-  color: var(--text-faint);
-  border-style: dashed;
-}
-
 /*
- * ⚠️ **升起时**（`.risen`）才允许吃高度。
- * 不升起时（焦点是映射 / 作用 / 数值）它只是底部一条信息带 ——
- * 那些值 `homeOf` 判 `canvas`（它们是**边**，那条线本身就是答案）。
- */
-/*
- * 两栏：任务栏（左，固定宽）+ 细节区（右，吃剩余）。
+ * **左键盘 / 右明细**（2026-10-07 方案二「横排计算器」，用户拍板）：
+ * 左列 384px = 显示屏 + 待选 + 键盘（三块）+ `＋`；右列 = 明细大阅读区。
+ * 右列在操作（按键盘 / 翻台面 / 凑参数）时**纹丝不动** —— 这是横排的目的。
  *
- * ⚠️ **P1-2 是 row（两栏），W3（2026-10-06）翻回 column** —— 用户否掉了"左栏按钮 + 右栏折叠列表"
- * 那套（"还是不行"）。现在的纵向三段是**计算器**的顺序：
- * 显示条（显示屏）→ 符号键盘（按键）→ 明细区（摊开读）。三段各占一行、各自不抢宽度。
+ * ⚠️ 历史：P1-2 是两栏 → W3 翻回纵向三段（计算器的行序）→ **2026-10-07 翻回两栏**。
+ * 这次不是"任务栏 + 折叠列表"（那套被否过），是"键盘 + 明细"：
+ * 左边只放**动手**的东西，右边全给**读**的东西。
  */
 .bench-body {
   display: flex;
   flex: 1 1 auto;
-  flex-direction: column;
+  flex-direction: row;
   align-items: stretch;
-  gap: 8px;
+  gap: 14px;
   min-height: 0;
   padding: 4px 14px 12px;
   overflow: hidden;
 }
 
-/* ── 左栏：任务栏 ────────────────────────────────────────── */
-
-.bench-tasks {
-  flex: 0 0 232px;
-  min-width: 0;
-  overflow-y: auto;
-  padding-right: 8px;
-  border-right: 1px solid var(--border);
-}
-
-.bench-fam {
-  margin-bottom: 4px;
-}
-
-.bench-fam-head {
+/* 左列：动手的（显示 / 待选 / 键盘 / ＋）。内容多时自己滚（pending 候选多了、窄窗）*/
+.bench-left {
   display: flex;
-  align-items: center;
-  gap: 5px;
-  width: 100%;
-  padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: #f3f1ea;
-  color: var(--text);
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.bench-fam-head:hover {
-  background: #eceae3;
-}
-
-/* 展开的族用实边框 + 白底：**族是"当前打开的那一摞"**，
-   不展开时它只是个待点项，不该看起来也是打开的。 */
-.bench-fam.open .bench-fam-head {
-  border-color: var(--border-strong);
-  background: #fff;
-  font-weight: 500;
-}
-
-.bench-fam-caret {
-  width: 9px;
-  color: var(--text-faint);
-  font-size: 10px;
-  font-family: var(--mono);
-}
-
-.bench-fam-label {
-  flex: 1 1 auto;
-}
-
-/* 族右上角的条数 —— 抬眼就知道哪一族最重（「子群与正规性」7 条，
-   「群与分解」9 条）。用户抱怨过"这么多功能在哪"，这个数字就是答案。 */
-.bench-fam-n {
-  padding: 0 5px;
-  border-radius: 8px;
-  background: var(--border);
-  color: var(--text-dim);
-  font-family: var(--mono);
-  font-size: 10.5px;
-}
-
-.bench-fam-hint {
-  margin: 3px 0 5px;
-  padding: 0 6px;
-  color: var(--text-faint);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.bench-fam-ops {
-  display: flex;
+  flex: 0 0 384px;
   flex-direction: column;
-  gap: 3px;
-  padding: 0 2px 6px;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
-.bench-op {
+/* 右列：读的（明细大阅读区）*/
+.bench-right {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
-  width: 100%;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: #fff;
-  color: var(--text);
-  font-size: 11.5px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.bench-op:hover {
-  border-color: var(--purple-text);
-  background: var(--purple-fill);
-}
-
-/* 要弹编辑器的那三条（结构 / 同态 / 作用）**画一道左边** ——
-   "点它会开一张表"是用户预期里很重的一件事，值得一个视觉标记。 */
-.bench-op.ed {
-  border-left: 3px solid var(--purple-text);
-  padding-left: 4px;
-}
-
-.bench-op-name {
   flex: 1 1 auto;
-  font-family: var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 角标：这条要几个对象 / 是不是要填表。判据 `benchArity`（gal/workbench.ts）*/
-.bench-op-how {
-  flex: 0 0 auto;
-  color: var(--text-faint);
-  font-size: 10.5px;
-  white-space: nowrap;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* ── 右栏：细节区 ────────────────────────────────────────── */
@@ -3389,39 +3251,25 @@ body {
    因为那时工作台是全宽）。`.composer-orb` 的 `left` 是内联 style，那条 `dockRight`
    prop 现在只服务编辑器卡片（P0-1）—— 别把两件事混在一处。 */
 
-/* 窄窗（≤1080px）：底部输入球在工作台升起时更容易撞上，
-   让它先贴着右边（工作台占满底宽）。 */
+/* 窄窗（≤1080px）：左右两列各自太窄 ⇒ 折回上下两段（左列在上、明细在下）。
+   键盘块改成横排的小组，别把左列竖着拉太长。 */
 @media (max-width: 1080px) {
-  .bench {
-    max-height: 58vh;
-  }
-  .bench.risen .bench-body {
-    max-height: 58vh;
-  }
-
-  /* 两栏在窄窗里各自太窄（任务栏 232px + 细节区只剩一点点）
-     ⇒ 改成**上下两段**：任务栏收成一条横向滚动的族带，细节区在下。 */
   .bench-body {
     flex-direction: column;
   }
 
-  .bench-tasks {
+  .bench-left {
     flex: 0 0 auto;
-    max-height: 132px;
-    padding-right: 0;
-    padding-bottom: 6px;
-    border-right: none;
-    border-bottom: 1px solid var(--border);
+    overflow: visible;
   }
 
-  .bench-fam {
-    display: inline-block;
-    margin: 0 6px 0 0;
-    vertical-align: top;
+  .bench-pad {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
-  .bench-fam-ops {
-    min-width: 168px;
+  .bench-pad-row {
+    min-width: 160px;
   }
 }
 
@@ -3436,17 +3284,11 @@ body {
 }
 
 /*
- * ⚠️ **工作台的滚动链**（P1 真机截断过一次）：
- * `.bench-body` 是 `flex-direction: column`，要让**内容区自己滚**就得给中间那层
- * `flex: 1 1 auto; min-height: 0` —— 缺 `min-height: 0` 时 flex 子项不肯缩到
- * 容器高度以下，于是内容被 `overflow: hidden` **直接切掉**（截图里最后一行
- * `Out(G) = 1` 被吃掉了半行）。
- * `.info-acc` 自带 `overflow-y: auto`，所以滚的是它。
+ * ⚠️ **工作台的滚动链**（P1 真机截断过一次，教训仍在）：
+ * 要让"面板带滚动"就得在每一层给 `min-height: 0` —— 缺了它 flex 子项不肯缩到
+ * 容器高度以下，内容会被 `overflow: hidden` **直接切掉**。
+ * v2.1 起滚的是两处：`.bench-left`（左列整体）与 `.bench-page`（右列明细页）。
  */
-.bench-body > .info-acc {
-  flex: 1 1 auto;
-  min-height: 0;
-}
 
 /*
  * 编辑器卡片开着 ⇒ 细节区让位（P1-2）。
@@ -3470,8 +3312,13 @@ body {
  * 三块：头（在做哪条 op）/ 槽位（已填 · 待填）/ 候选（点一下就填）。
  */
 
+/* ⚠️ `flex: 0 0 auto` 是钉子：槽位区在左列里**不许被挤扁** —— 它一旦可收缩
+   （默认 `0 1 auto` + `min-height: 0`），键盘就会压到候选上面、候选点不中
+   （2026-10-07 真机走查抓到的：`elementFromPoint` 命中 `.bench-pad-label`）。
+   左列整体自己滚（`.bench-left` 的 `overflow-y: auto`），槽位保持自然高度。 */
 .bench-slots {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
@@ -3488,13 +3335,6 @@ body {
   border-radius: 4px;
   background: #f3f1ea;
   font-family: var(--mono);
-  font-size: 11.5px;
-}
-
-/* 「不用去画布」这句是**刻意**的：用户刚发现画布点不动，得明确告诉他这条路存在 */
-.bench-slot-hint {
-  margin-left: 6px;
-  color: var(--purple-text);
   font-size: 11.5px;
 }
 
@@ -3606,7 +3446,7 @@ body {
 }
 
 .bench-cand-def {
-  max-width: 220px;
+  max-width: 150px;
   overflow: hidden;
   color: var(--text-dim);
   font-family: var(--mono);
@@ -3683,19 +3523,19 @@ body {
    `.bench-*` 基规则，只能排在它们之后（写在前面 = 没写）。
    ══════════════════════════════════════════════════════════════════ */
 
-/* ── ① 显示条 ─────────────────────────────────────────────── */
+/* ── ① 显示屏（左列顶：身份 + 识别 + 状态；pending 时加算式行）── */
 
 .bench-display {
   display: flex;
   flex: 0 0 auto;
-  align-items: stretch;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .bench-screen {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 9px 14px;
+  padding: 10px 14px;
   border-radius: 12px;
   background: rgba(230, 241, 251, 0.72);
   border: 1px solid rgba(133, 183, 235, 0.5);
@@ -3719,20 +3559,48 @@ body {
   white-space: nowrap;
 }
 
-/* `＋ 导入对象` —— 用户点名要的那枚按钮 */
+/* pending 的算式行（方案二）：已选对象 . op 符号 . 空格子 . `= ...` */
+.bench-eq {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(133, 183, 235, 0.55);
+  font-size: 15px;
+  color: #0c447c;
+}
+
+/* 空格子：**无文本的样式盒**（`▢` 键盘打不出来，不能进文本流）*/
+.bench-eq-blank {
+  display: inline-block;
+  width: 42px;
+  height: 22px;
+  border: 1.5px dashed #85b7eb;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.bench-eq-tail {
+  color: #185fa5;
+}
+
+/* `＋ 导入对象` —— 用户点名要的那枚按钮。
+ * ⚠️ **不整宽**（2026-10-07 用户：「导入对象按钮也太宽了吧，有必要吗」）——
+ * 左列底部一枚小胶囊，靠左站，跟键盘块对齐；开着的面板自己有标题与 x。 */
 .bench-plus {
   flex: 0 0 auto;
+  align-self: flex-start;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 1px;
-  min-width: 78px;
-  padding: 4px 12px;
+  gap: 6px;
+  padding: 7px 14px;
   border: 1px solid rgba(133, 183, 235, 0.6);
-  border-radius: 12px;
+  border-radius: 999px;
   background: rgba(230, 241, 251, 0.72);
   color: #0c447c;
+  font-size: 12.5px;
   cursor: pointer;
 }
 
@@ -3746,34 +3614,30 @@ body {
 }
 
 .bench-plus-glyph {
-  font-size: 20px;
+  font-size: 15px;
   line-height: 1;
 }
 
 .bench-plus-word {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /*
- * ⚠️ **这是一个浮层（popover），不是排版流里的一条**（2026-10-06 第二次返工）。
+ * `＋` 面板（2026-10-07 方案二）：**左列内联的紧凑手风琴** —— 键盘让位给它，
+ * 右列明细**不动**（边造边看）。不再是贴按钮的浮层。
  *
- * 第一版把它塞进 `.bench-body` 的纵向流里 ⇒ 一条往下压的长带，把键盘与明细区
- * 全顶下去，用户原话：「**改了约等于没改。。。**」。
- * ⇒ 改成锚在 `＋` 按钮下面的浮层：**不挤动任何东西**，选完就关。
+ * 用户原话：「导入按钮拉出来的手风琴太大了，明显可以紧凑一点」
+ * ⇒ 常见群一排小 chip / 群库默认折起 / 自定义三行紧凑表单。
  */
 .bench-plus-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 4;
-  width: min(560px, 84vw);
-  max-height: 54vh;
-  overflow-y: auto;
-  padding: 10px 14px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.97);
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--border-strong, var(--border));
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.18);
 }
 
 .plus-head {
@@ -3783,7 +3647,6 @@ body {
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text);
-  margin-bottom: 8px;
 }
 
 .plus-close {
@@ -3798,13 +3661,14 @@ body {
   color: var(--text);
 }
 
-/* ── ② 符号键盘（随焦点变）────────────────────────────────── */
+/* ── ② 符号键盘（随焦点变；三块按动作：造新东西 / 读它的结构 / 作用与集合）── */
 
 .bench-pad {
+  display: flex;
   flex: 0 0 auto;
-  max-height: 30vh;
-  overflow-y: auto;
-  padding: 2px 2px 4px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px;
 }
 
 .bench-pad-hint {
@@ -3813,18 +3677,18 @@ body {
   color: var(--text-faint);
 }
 
+/* 一块 = 一个小标题 + 一组键（块间留白，不再"一族一行挂左名"）*/
 .bench-pad-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 5px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .bench-pad-label {
-  flex: 0 0 96px;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-faint);
-  text-align: right;
+  letter-spacing: 0.12em;
+  padding-left: 2px;
 }
 
 .bench-pad-keys {
@@ -3962,9 +3826,8 @@ body {
 .plus-quick {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  margin-bottom: 8px;
 }
 
 .plus-quick-label {
@@ -3974,12 +3837,12 @@ body {
 }
 
 .plus-chip {
-  padding: 4px 10px;
+  padding: 3px 8px;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.86);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -3988,27 +3851,30 @@ body {
   border-color: #85b7eb;
 }
 
-/* `＋` 浮层参考系：面板锚在按钮下面（`top: 100%` 相对这一格）*/
-.bench-display {
-  position: relative;
-}
-
-/* 浮层里的三个表单：**输入框铺满**，别留右边一片空
+/* 面板里的三个表单：**输入框铺满** + 紧凑行（别留右边一片空）
    （用户实测：「那你右边不就空了？右边空了也没东西展示啊？」）*/
 .bench-plus-panel .cat-form {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+
+.bench-plus-panel .cat-form:last-child {
+  margin-bottom: 0;
 }
 
 .bench-plus-panel .cat-input {
   flex: 1 1 auto;
   min-width: 0;
+  padding: 5px 8px;
+  font-size: 12px;
 }
 
 .bench-plus-panel .cat-go {
   flex: 0 0 auto;
+  padding: 5px 10px;
+  font-size: 12px;
 }
 
 /* ── 台面上的对象（W2-②，2026-10-06）──────────────────────────
@@ -4017,13 +3883,13 @@ body {
  * 谁会用丢东西的工作台？」⇒ 台面自己记一份"摆上来的对象"，点一下切回去、`x` 拿下去。
  * 存的是 id，对象与画布**是同一份**。 */
 
+/* 台面 chips（方案二起挂在**标题栏右侧**，不另占一行）*/
 .bench-stage {
   display: flex;
-  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
-  padding: 0 2px;
+  margin-left: auto;
+  overflow: hidden;
 }
 
 .bench-stage-label {
@@ -4072,22 +3938,43 @@ body {
   flex: 0 0 auto;
 }
 
-/* ── `＋` 面板里的群库（按阶浏览，**显示可读名**）──────────────
+/* ── `＋` 面板里的群库（**默认折起**的手风琴段）──────────────────
  *
  * 用户实测：「什么叫群库导入是输入阶和序数？谁记得住 A4 是 12,3？」
- * ⇒ 不再让用户填坐标；把 93 个群**按阶铺开**，名字用可读结构名（`A4` / `C6` / `D8`）。 */
+ * ⇒ 不再让用户填坐标；展开后把 93 个群**按阶铺开**，名字用可读结构名。
+ * 2026-10-07 方案二：**默认折起**（用户：「手风琴太大了，明显可以紧凑一点」）。 */
 
 .plus-lib {
-  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .plus-lib-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  font-size: 11px;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #faf9f5;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plus-lib-head:hover {
+  border-color: var(--border-strong);
+  background: #fff;
+}
+
+.plus-lib-caret {
+  width: 10px;
   color: var(--text-faint);
-  margin-bottom: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
 }
 
 .plus-lib-hint {
@@ -4096,9 +3983,9 @@ body {
 }
 
 .plus-lib-body {
-  max-height: 26vh;
+  max-height: 168px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 2px 2px 0;
 }
 
 .plus-lib-row {
@@ -4109,8 +3996,8 @@ body {
 }
 
 .plus-lib-order {
-  flex: 0 0 46px;
-  font-size: 11px;
+  flex: 0 0 40px;
+  font-size: 10.5px;
   color: var(--text-faint);
   padding-top: 5px;
   text-align: right;

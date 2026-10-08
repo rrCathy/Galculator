@@ -441,7 +441,7 @@ bash verify/e2e-ledger.sh point-set connect  # 调试时只跑这几套
     显示名从这天起是**中文**（`menuLabel` → `gal/opLabels.ts#OP_LABEL`，如「直积」「所有子群」
     「建同态」）—— 它**会随文案漂移**，照它写期望值必然过一阵就红。
     所以凡是**找 op 按钮 / 比对 op 名字**的地方（`.orb-op` · `.orb-sat` · `.row-op` ·
-    `.connect-item` · `.bench-op`），一律取元素上的 `data-op` 属性，期望值写 **op id**：
+    `.connect-item` · `.bench-key`），一律取元素上的 `data-op` 属性，期望值写 **op id**：
     `center` · `centralizer` · `normalizer` · `subgroups` · `pSubgroups` · `sylow` ·
     `contains` · `quotient` · `semidirectProduct` · `directProduct` · `customAction` ·
     `leftTranslationAction` · `commutatorGroup` · `elementOrder` · `underlyingSet` ·

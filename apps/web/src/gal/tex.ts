@@ -52,6 +52,39 @@ function wrapCJK(s: string): string {
 const cache = new Map<string, string>()
 
 /**
+ * **生料花括号转义**（2026-10-07）：展示串里用户写的 `{a, b, c}` 要显示成**真花括号**，
+ * 不能让 KaTeX 把它们当分组吃掉（否则 def 行 `X = {a, b, c}` 渲染成 `X = a,b,c`）。
+ *
+ * 两条豁免（用栈配对，外层保留组里的花括号跟着保留）：
+ *   · 前一个字符是 `\` —— 已经转义过的（`\{a\}`）；
+ *   · 前一个字符是 `_` / `^` —— 上下标的分组（`C_{2}`），那是 TeX 语法不是生料。
+ *
+ * ⚠️ 这一步在**所有改写之前**跑：`_{…}` / `\text{…}` / `\operatorname{…}` 都是
+ * 后面几步才生成的，生成出来的花括号天然不受影响。
+ */
+function escapeRawBraces(s: string): string {
+  let out = ''
+  const stack: boolean[] = [] // true = 保留（TeX 语法），false = 转义（生料）
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    const prev = s[i - 1] ?? ''
+    if (c === '{') {
+      const kept = prev === '\\' || prev === '_' || prev === '^' || stack[stack.length - 1] === true
+      stack.push(kept)
+      out += kept ? '{' : '\\{'
+      continue
+    }
+    if (c === '}') {
+      const kept = stack.pop() ?? false
+      out += kept ? '}' : '\\}'
+      continue
+    }
+    out += c
+  }
+  return out
+}
+
+/**
  * **已经是 LaTeX 的串**：含 `\命令`（`\hookrightarrow` / `\operatorname{Aut}` / `\pi_1`）。
  *
  * 判据用"反斜杠 + 字母"而不是"含反斜杠"：集合差 `A \ B` 里的孤立反斜杠不算命令，
@@ -87,6 +120,9 @@ export function toTex(label: string): string {
   }
 
   let s = label
+
+  // ⓪ 生料花括号先转义（`{a, b, c}` 要显示成真花括号，见 `escapeRawBraces`）
+  s = escapeRawBraces(s)
 
   // ① Unicode 上下标 → _{...} / ^{...}
   s = s.replace(SUB_RE, (m) => `_{${[...m].map((c) => SUB_FROM[c] ?? c).join('')}}`)

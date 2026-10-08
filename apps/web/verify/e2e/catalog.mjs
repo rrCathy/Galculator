@@ -272,8 +272,9 @@ console.log('== ④ 造点集 / 按标号造 ==')
   const ids = await nodeIds()
   ok('长出第二个集合节点', ids.length === before.length + 1, `${before.join(',')} -> ${ids.join(',')}`)
   const rows = await defRows()
-  const line = rows.find((r) => r.def === 'labeledSet(a, b, c)')
-  ok('落成一行 labeledSet(a, b, c)', !!line, JSON.stringify(rows))
+  // ⚠️ def 含花括号 ⇒ 走 KaTeX 渲染，math mode 吃空格 ⇒ 断言对空格宽容
+  const line = rows.find((r) => /^\{a,\s*b,\s*c\}$/.test(r.def))
+  ok('落成一行 {a, b, c}（2026-10-07 花括号形态）', !!line, JSON.stringify(rows))
   /*
    * 名字不是 `C` 而是 `D` —— 因为 **`C` 是二项式系数 op 的调用名**
    * （`call: ['C', 'binomial', 'choose']`），`RESERVED_CALL_NAMES` 收全部 op 的

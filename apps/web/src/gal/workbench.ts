@@ -34,10 +34,17 @@ import { takesCanvasObject } from './ops'
  *
  * | 档 | 谁 | 为什么 |
  * |---|---|---|
- * | **键盘族**（`BENCH_FAMILIES`）| 31 条 | 都要**一个已有对象**当第一参数 ⇒ 是键盘键（"对这个对象做点什么"）|
+ * | **键盘族**（`BENCH_FAMILIES`）| 34 条 | 都要**一个已有对象**当第一参数 ⇒ 是键盘键（"对这个对象做点什么"）|
  * | **`＋` 面板**（`BENCH_PLUS`）| `pointSet` / `labeledSet` / `smallGroup` | 实参**全是标量**、一个对象都不吃 ⇒ 键盘上按不出来，只能从 `＋` 进 |
  * | **排除**（`BENCH_EXCLUDED`）| `contains` / `isomorphism` | 两个对象之间的**关系**（产出 `relation`，画布上落成一条可点的边）⇒ 用户 2026-10-05 拍板归**画布** |
  * | | `factorize` / `binomial` / `binomialMod` / `gcd` / `lcm` / `eulerPhi` | 纯整数算术，与群论无关（U47「计算先不弄」）|
+ *
+ * ⚠️ **2026-10-07（工作台 UX 方案二「横排计算器」）：族从 6 族重排为 3 块。**
+ * 用户否掉了"一族一行、左挂族名"的横排摆法——原话：「工作台是比较宽的，结果你的内容和
+ * 按钮摆放也是一行一行放，这样显然会压缩用户想看的信息」。重排后的工作台是**左键盘/右明细**，
+ * 键盘按**动作**分三块：**造新东西**（7 条，从焦点出发造新对象）/ **读它的结构**（14 条，
+ * 焦点自己有什么 + 映射的核与像）/ **作用与集合**（13 条）。合计仍是 34 条，
+ * `assertPartition()` 判据不变（不漏不重），只是"块"的画法变了。
  *
  * ⚠️ **2026-10-06（W2）翻过一次账**：`pointSet`/`labeledSet`/`smallGroup` 从前在**排除名单**里，
  * 理由写的是"属目录"。用户实测第一条就是「**为什么不能在工作台内就创建出任意集合？**」——
@@ -60,31 +67,20 @@ export interface BenchFamily {
 export const BENCH_FAMILIES: BenchFamily[] = [
   {
     key: 'build',
-    label: '结构 / 映射 / 作用',
-    hint: '填表、填像、填置换——这三件事文本一行表达不了，必须逐项填',
-    ops: ['structure', 'map', 'customAction'],
+    label: '造新东西',
+    hint: '从焦点出发造新对象：造结构、造映射、造作用、造新群',
+    ops: ['structure', 'map', 'customAction', 'directProduct', 'semidirectProduct', 'quotient', 'closure'],
   },
   {
-    key: 'group',
-    label: '群与分解',
-    hint: '造新群、拆成两个群、看一个群自己的性质',
+    key: 'read',
+    label: '读它的结构',
+    hint: '焦点自己有什么：中心、换位子、自同构、子群；映射问核与像',
     ops: [
-      'directProduct',
-      'semidirectProduct',
-      'quotient',
-      'closure',
       'center',
       'commutatorGroup',
       'automorphismGroup',
       'innerAutomorphismGroup',
       'elementOrder',
-    ],
-  },
-  {
-    key: 'sub',
-    label: '子群与正规性',
-    hint: '同构定理的另一半：哪些子群、哪些正规',
-    ops: [
       'subgroups',
       'maximalSubgroups',
       'normalSubgroups',
@@ -92,12 +88,14 @@ export const BENCH_FAMILIES: BenchFamily[] = [
       'pSubgroups',
       'centralizer',
       'normalizer',
+      'kernel',
+      'image',
     ],
   },
   {
-    key: 'act',
-    label: '作用与轨道',
-    hint: 'G 动点集上：轨道、稳定子、点数——证明的主舞台',
+    key: 'actset',
+    label: '作用与集合',
+    hint: '动点集上做点什么（轨道 / 稳定子），以及集合之间的运算',
     ops: [
       'conjugationAction',
       'leftTranslationAction',
@@ -107,19 +105,12 @@ export const BENCH_FAMILIES: BenchFamily[] = [
       'stabilizers',
       'fixedPoints',
       'orbitCount',
+      'intersection',
+      'union',
+      'difference',
+      'productSet',
+      'underlyingSet',
     ],
-  },
-  {
-    key: 'img',
-    label: '映射的核与像',
-    hint: '给出一个同态之后，问它丢了多少、留下了多少',
-    ops: ['kernel', 'image'],
-  },
-  {
-    key: 'set',
-    label: '集合运算',
-    hint: '两批元素凑一起看（结果若是子群会升级成群对象）',
-    ops: ['intersection', 'union', 'difference', 'productSet', 'underlyingSet'],
   },
 ]
 
