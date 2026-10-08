@@ -1,3 +1,16 @@
+/**
+ * **信息内容层**（原「信息面板 / InfoDock」的内容部分）。
+ *
+ * 2026-10-08：用户拍板「把信息栏砍了，所有信息合并到工作台里面显示」——
+ * 左上那个独立面板（`InfoDock` 组件）已删除，这里留下的是**工作台右列**要用的一切：
+ *   · `INFO_SECTIONS` / `STRUCT_SECTIONS` —— 分节定义（工作台竖排节导航同源）；
+ *   · `Insights` / `insightsOf` / `MapFacts` / `MapCorrespondence` —— 结论层与事实表；
+ *   · `SectionBody` —— 各节正文（群 / 结构）；
+ *   · `EdgeSection` —— 结构伴生边（「这条箭头」）；
+ *   · `OtherTab` —— 非分节对象（集合 / 元素集 / 子群集 / 作用 / 关系）的扁平排版。
+ *
+ * ⚠️ 别再把这个文件当"面板"——它现在是一个**内容库**，唯一渲染方是 `ui/Workbench.tsx`。
+ */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   isGroupCyclic,
@@ -21,6 +34,7 @@ import { STRUCTURE_LEVEL_LABEL } from '../gal/algebra'
 // 公理读数行（S2c）：与表格编辑器**同一份**排版 —— 两个面不许各写一份
 import { axiomRows, verdictText } from './axiomReadout'
 import { prettySymbol } from '../gal/pretty'
+import { toTex } from '../gal/tex'
 import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/structure'
 // 「已知群」（U48）：结论表给的群只有符号 + 阶，没有元素表 —— 面板各节都得改口径
 // `knownFacts` 则相反：常见族的**闭式结论**（Aut / Out / Z / [G,G] / 幂指数）先查表，
@@ -106,7 +120,7 @@ export const STRUCT_SECTIONS: { id: InfoTab; label: string }[] = [
  * **结论层**：这个对象"所以呢" —— 同构于什么 / 第一同构定理在这里具体是什么。
  *
  * ⚠️ **判据只有这一份**：`groupInsights` / `mapInsights` / `actionInsights`
- * 由这里统一分派。信息面板与工作台**共用它**（内容一份两处显示）。
+ * 由这里统一分派。**唯一的面**是工作台右列（2026-10-08 信息面板砍掉后）。
  */
 export function insightsOf(node: GalObject | null): Insight[] {
   const v = node?.value
@@ -127,6 +141,7 @@ export function insightsOf(node: GalObject | null): Insight[] {
  * > 「映射的详细信息呢？**把信息栏收起了不知道把信息挪过去？？？**」
  *
  * —— 收起信息面板却不把内容搬进工作台，那**不是取舍，是丢东西**。
+ * （2026-10-08：信息面板整个砍了 —— 那位用户最终还是把它要的"一份"变成了"唯一一份"。）
  * 抽成组件之后两处渲染的是同一份 `Insight[]`，不会再出现"收了一处、另一处没有"。
  */
 export function Insights({ items }: { items: Insight[] }) {
@@ -140,7 +155,16 @@ export function Insights({ items }: { items: Insight[] }) {
           <span className="insight-label">{ins.label}</span>
           <div className="insight-body">
             <Tex tex={ins.tex} />
-            {ins.detail && <div className="insight-detail">{ins.detail}</div>}
+            {/*
+             * 副行也走**渲染面**（2026-10-08）：`->` / 核对符 / `识别为 C_3` 这类记号
+             * 从前在纯文本里裸奔（用户截图点名「许多地方都没有 tex 渲染好」）。
+             * 纯中文的副行照旧（会被 `\text{}` 包排），不损失什么。
+             */}
+            {ins.detail && (
+              <div className="insight-detail">
+                <TexOrText text={ins.detail} />
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -156,32 +180,62 @@ export function Insights({ items }: { items: Insight[] }) {
  * > 「映射的详细信息呢？**把信息栏收起了不知道把信息挪过去？？？**」
  * > 「工作台还看不了映射的信息，还得去信息栏看，那样工作台用同态功能的意义是什么？」
  *
- * ⇒ 与 `Insights` 同一个道理：**一份两处显示**（信息面板 + 工作台），
+ * ⇒ 与 `Insights` 同一个道理：**一份两处显示**（信息面板 + 工作台；2026-10-08 起只剩工作台），
  * 收起任何一处都不会把内容弄丢。
  *
  * 分工：这里只摆**事实**（定义域 / 陪域 / 生成元的像 / 单·满 / 核 / 像）；
  * "所以呢"（第一同构定理那类结论）归 `mapInsights` —— 两者**不重叠**。
  */
+/**
+ * **一条数学值** —— 强制走 KaTeX（不看 `shouldTex`）。
+ *
+ * 为什么这条路上不判：`shouldTex` 的判据（"值不值得渲染"）是为**标签**设计的
+ * ——纯 ASCII 名字（`A` / `G`）跳过。但映射事实表的值**语义上确定是数学**：
+ * `e`、`(12)(34)`、`a ↦ 0` 这些纯 ASCII 串在它眼里与"用户起的名字"无异
+ * ⇒ 从前整表裸奔（2026-10-08 用户截图点名「许多地方都没有 tex 渲染好」）。
+ * 这里按语义强制渲染，不猜。
+ */
+function MV({ s }: { s: string }) {
+  return <Tex tex={toTex(s)} />
+}
+
+/** 元素列表：**逐项渲染**（置换 `(12)(34)` 也要走数学排版），超长截断 —— 别把一面墙塞进面板。 */
+function ElemList({ xs, cap = 12 }: { xs: { label: string }[] | undefined; cap?: number }) {
+  if (!xs || xs.length === 0) return <>（空）</>
+  const head = xs.slice(0, cap)
+  return (
+    <>
+      {head.map((e, i) => (
+        <span key={i}>
+          {i > 0 && ', '}
+          <MV s={e.label} />
+        </span>
+      ))}
+      {xs.length > cap && <> ... 共 {xs.length} 个</>}
+    </>
+  )
+}
+
 export function MapFacts({ map }: { map: GalMap }) {
   const yn = (v: boolean | null) => (v === null ? '未判定' : v ? '是' : '否')
-  /** 元素列表（超长就截断 —— 别把一面墙塞进面板） */
-  const elems = (xs: { label: string }[] | undefined, cap = 12) => {
-    if (!xs || xs.length === 0) return '（空）'
-    const head = xs.slice(0, cap).map((e) => e.label)
-    return xs.length > cap ? `${head.join(', ')} ... 共 ${xs.length} 个` : head.join(', ')
-  }
-  const rows: { k: string; v: string }[] = [
-    { k: '定义域', v: groupName(map.domain) },
-    { k: '陪域', v: groupName(map.codomain) },
+  const rows: { k: string; v: ReactNode }[] = [
+    { k: '定义域', v: <MV s={groupName(map.domain)} /> },
+    { k: '陪域', v: <MV s={groupName(map.codomain)} /> },
     { k: '同态', v: map.isHomomorphism ? '是' : '否' },
     { k: '单射', v: yn(map.isInjective) },
     { k: '满射', v: yn(map.isSurjective) },
-    { k: '核 ker', v: elems(map.kernel) },
-    { k: '像 im', v: elems(map.image) },
+    { k: '核 ker', v: <ElemList xs={map.kernel} /> },
+    { k: '像 im', v: <ElemList xs={map.image} /> },
     {
       k: '生成元的像',
+      // `生成元 ↦ 像`（不是 ASCII 的 `->`）——`\mapsto` 由 KaTeX 排版
       v: map.genImages.length
-        ? map.genImages.map((g) => `${g.generator} -> ${g.image.label}`).join(', ')
+        ? map.genImages.map((g, i) => (
+            <span key={i}>
+              {i > 0 && ', '}
+              <Tex tex={`${toTex(g.generator)} \\mapsto ${toTex(g.image.label)}`} />
+            </span>
+          ))
         : '（无）',
     },
   ]
@@ -192,201 +246,12 @@ export function MapFacts({ map }: { map: GalMap }) {
           {rows.map((r) => (
             <tr key={r.k}>
               <th>{r.k}</th>
-              <td>
-                <TexOrText text={r.v} />
-              </td>
+              <td>{r.v}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  )
-}
-
-export function InfoDock({
-  open,
-  onToggle,
-  tab,
-  onTab,
-  node,
-  edge,
-  onExtract,
-}: {
-  open: boolean
-  onToggle: () => void
-  /** 当前**展开**的那一节；`null` = 全收（默认） */
-  tab: InfoTab | null
-  /** 切换展开项（传 `null` 收起全部）；面板内部按"点同一节 = 收起"调用 */
-  onTab: (t: InfoTab | null) => void
-  /** 焦点**对象**——不限于节点：映射只画箭头，但同样有信息可看 */
-  node: GalObject | null
-  /**
-   * 焦点是一条**结构伴生边**（缺口 ⑧）——`π` / `π_1` / `↪` / `=` / `≅`。
-   *
-   * 与 `node` **互斥**：一条边要么背后有对象（那是 `node`），要么只有结构身份
-   * （那是这里）。它只回答"这条箭头是什么、账是多少"。
-   */
-  edge?: { edge: GalEdge; info: StructuralEdge } | null
-  /**
-   * 「取出为对象」：把列表里的一个成员变成一行定义。
-   *
-   * 列表（子群集）不上画布，但它是**入口**不是终点——DIAGRAM_SPEC §3：
-   * "能作为某个映射的源或靶的，才配当顶点"，而子群集里的每一项**本身**就是子群。
-   */
-  onExtract?: (sub: NormalizedSubgroup) => void
-}) {
-  const group = node && node.value.type === 'group' ? node.value.group : null
-  /**
-   * 代数结构（S2c）：`carrier` / `op.table` / `axioms`，够格成群时还有 `group`。
-   *
-   * ⚠️ 够格成群的**结构**在面板上走**两套节**：群那三节（基本 / 元素 / 子群，
-   * 载体就是升格出来的那个群）+ 结构自己的两节（公理档案 / 运算表）。
-   * 这是 §11.6「形状与能力同一个判据」在面板上的落法 —— 画布上它是方（=群），
-   * 球上列得出 `Sub`，那面板里也就该看得到元素表；否则"升格"只升了外观。
-   */
-  const struct = node && node.value.type === 'structure' ? node.value.structure : null
-  /** 面板里"群那几节"要看的群：真群，或结构升格出来的群 */
-  const showGroup = group ?? struct?.group ?? null
-  /** 本节点该有哪几节；`null` = 没有分节（走 `OtherTab` 的扁平排版） */
-  const sections: { id: InfoTab; label: string }[] | null = showGroup
-    ? [...INFO_SECTIONS, ...(struct ? STRUCT_SECTIONS : [])]
-    : struct
-      ? STRUCT_SECTIONS
-      : null
-
-  /**
-   * 「子群」标题行的数字（U45）。**不许卡住渲染** —— 见 `SUB_COUNT_CAP` 那段注释：
-   * 枚举放到当前任务之后，面板先画出来，数字随后补上。
-   */
-  const [subCount, setSubCount] = useState<number | null>(null)
-  useEffect(() => {
-    if (!showGroup || showGroup.order > SUB_COUNT_CAP) {
-      setSubCount(null)
-      return
-    }
-    let alive = true
-    const id = setTimeout(() => {
-      if (!alive) return
-      setSubCount(subgroupClassCount(showGroup))
-    }, 0)
-    return () => {
-      alive = false
-      clearTimeout(id)
-    }
-  }, [showGroup])
-
-  /** 折叠标题行右边的摘要（`axioms` / `table` 两节用结构的读数，不是群的）*/
-  const sumOf = (id: InfoTab): string => {
-    if (id === 'axioms') return struct ? STRUCTURE_LEVEL_LABEL[struct.axioms.level] : ''
-    if (id === 'table') {
-      const n = struct?.carrier.length ?? 0
-      return n > 0 ? `${n} x ${n}` : ''
-    }
-    return showGroup ? sectionSummary(id, showGroup, subCount) : ''
-  }
-
-  /** 结论层：**判据在 `insightsOf`**（工作台共用同一份，别再在这儿分派一遍） */
-  const insights = useMemo<Insight[]>(() => insightsOf(node), [node])
-
-  return (
-    <DockPanel
-      title="信息"
-      open={open}
-      onToggle={onToggle}
-      bodyWidth={298}
-      bodyClass={node ? 'info-split' : undefined}
-    >
-      {!node && !edge && <div className="empty">点画布上的对象，看它的信息</div>}
-
-      {edge && <EdgeSection edge={edge} />}
-
-      {node && (
-        <>
-          {/*
-            摘要区 = **身份 + 结论**，就这两块（U44，2026-10-01）。
-
-            用户原话：「信息栏现状就是信息塞太满了，让用户找不到重点……
-            至于目前面板上的什么关系，什么可做操作，说实话，我都不看。」
-
-            砍掉的两块各有出处：
-              · **关系**（核/像/商/同一/子群/包含/派生）—— 它是把对象表里
-                所有沾边的对象**罗列一遍**。那些关系画布上的箭头已经画了，
-                面板里再抄一遍就成了 wiki；用户在面板里要的是"这个对象是什么"，
-                不是"它和表里哪些行有关系"。
-              · **可做**（≤8 个操作按钮）—— 操作本来该在画布上（悬浮球 / 拖拽）。
-                它当初存在的唯一理由是"不上画布的对象没有悬浮球"，那个缺口
-                现在由「操作」抽屉的列表型行补（见 `ui/OpDock.tsx`）。
-
-            于是摘要区只剩：对象身份（19px 上下）+ 结论（同构 / 第一同构定理 /
-            轨道分解）。这既是"计算器给的那个结果"，也是用户排在第一位的诉求
-            ——「这个群和哪个常见群同构？」。
-
-            U45 起底下不再是 tab 条，而是**可折叠分区**（单开 / 默认全收）。
-            U42 那条"分区里容器高度必须确定"的规矩随之改写：全收时面板本来就该矮，
-            所以高度回到**内容驱动 + max-height 封顶**，由 `.info-acc` 自己滚。
-          */}
-          <div className="info-brief">
-            <div className="info-target">
-              <span className={`chip chip-${node.value.type}`}>
-                {VALUE_TYPE_LABEL[node.value.type]}
-              </span>
-              <strong>
-                <TexOrText text={node.label} />
-              </strong>
-              <span className="info-def">
-                {node.id} = <TexOrText text={node.def} />
-              </span>
-            </div>
-
-            <Insights items={insights} />
-            {/* 映射的**事实**（定义域/陪域/单·满/核/像）—— 与工作台同一份 */}
-            {node.value.type === 'map' && <MapFacts map={node.value.map} />}
-          </div>
-
-          {sections ? (
-            <div className="info-acc">
-              {sections.map((t) => {
-                const openSec = tab === t.id
-                return (
-                  <section key={t.id} className="info-sec" data-sec={t.id}>
-                    <button
-                      type="button"
-                      className={`info-sec-head${openSec ? ' on' : ''}`}
-                      data-sec={t.id}
-                      aria-expanded={openSec}
-                      title={openSec ? `收起「${t.label}」` : `展开「${t.label}」`}
-                      onClick={() => onTab(openSec ? null : t.id)}
-                    >
-                      <span className="info-sec-label">{t.label}</span>
-                      <span className="info-sec-sum">{sumOf(t.id)}</span>
-                      {/* 展开三角用**内联 SVG** —— `▾` 键盘打不出来（no-unicode-leak 会抓） */}
-                      <svg className="info-sec-caret" viewBox="0 0 8 6" aria-hidden="true">
-                        <path d="M0.6 0.8 L7.4 0.8 L4 5.2 Z" fill="currentColor" />
-                      </svg>
-                    </button>
-                    {openSec && (
-                      <div className="info-sec-body">
-                        {t.id === 'basic' && showGroup && <BasicTab group={showGroup} node={node} />}
-                        {t.id === 'elements' && showGroup && <ElementsTable group={showGroup} />}
-                        {t.id === 'subgroups' && showGroup && <SubgroupsTab group={showGroup} />}
-                        {t.id === 'axioms' && struct && <AxiomArchive structure={struct} />}
-                        {t.id === 'table' && struct && <StructureTable structure={struct} />}
-                      </div>
-                    )}
-                  </section>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="info-acc">
-              <div className="info-sec-body">
-                <OtherTab node={node} onExtract={onExtract} />
-              </div>
-            </div>
-          )}
-        </>
-      )}
-    </DockPanel>
   )
 }
 
@@ -401,7 +266,7 @@ export function InfoDock({
  * 底下那句边界是必须的（U18/U19 的教训）：它不是一等对象，别让人以为
  * "能点 = 能用"。要能引用、能删、能进证明的包含，请自己写一行。
  */
-function EdgeSection({ edge }: { edge: { edge: GalEdge; info: StructuralEdge } }) {
+export function EdgeSection({ edge }: { edge: { edge: GalEdge; info: StructuralEdge } }) {
   const { edge: e, info } = edge
   return (
     <>
@@ -1119,7 +984,7 @@ function SubgroupTag({
  * 逐行铺出来就是答案。列头写「元素 / 像」而不是「x / f(x)」——
  * 这一列在 298px 面板里放得下，也不必再渲染一次 KaTeX 公式。
  */
-function MapCorrespondence({ map }: { map: GalMap }) {
+export function MapCorrespondence({ map }: { map: GalMap }) {
   const m = map.mapping
   if (!m || m.size === 0) return null
   const byId = new Map(map.codomain.elements.map((e) => [e.id, e]))
@@ -1197,7 +1062,7 @@ function cycleNotationOf(perm: readonly number[] | undefined, pt: (i: number) =>
  * 映射是"元素 → 另一个元素"，作用是"元素 → **Ω 上的一个置换**"。
  * 数据一直都在 —— `GalAction.perms` 就是"G 的每个元素在 Ω 上的置换"，作用本来就是
  * 由它定义的（`buildActionComputation` 交出来的就是这张表）。可从没人把它铺出来：
- * 信息面板从前只给了 核 / |Ω| / 点列表，等于把"这个作用到底怎么动"藏起来了。
+ * 从前的信息面只给了 核 / |Ω| / 点列表，等于把"这个作用到底怎么动"藏起来了。
  *
  * 三个细节：
  *   ① **点优先用标号写**：标号能直接进循环记号时（`labeledSet(a, b, c)`）就写 `(a b)`，
@@ -1362,7 +1227,7 @@ function StructureTable({ structure }: { structure: GalStructure }) {
   )
 }
 
-function OtherTab({
+export function OtherTab({
   node,
   onExtract,
 }: {
@@ -1577,47 +1442,6 @@ function OtherTab({
  *
  * 分隔一律用 ASCII `-`：`·` 键盘打不出来（`no-unicode-leak` 判据）。
  */
-/** 分区头右边那行摘要（`|G| = 24 · 未交换` / `24 个元素` / `7 类`）。
- *  `Workbench` 复用同一函数 —— 两处显示同一个对象，摘要不许不一样。
- */
-export function sectionSummary(
-  id: 'basic' | 'elements' | 'conj' | 'subgroups',
-  group: Group,
-  subCount: number | null,
-): string {
-  /*
-   * 「已知群」（U48）：只有阶是真的，交换性是**未知**（`isAbelian` 在 stub 上是占位的
-   * false）—— 摘要行不能把"未知"说成"非交换"，那是最容易骗过人的那种谎。
-   */
-  if (isKnownGroup(group)) {
-    switch (id) {
-      case 'basic':
-        return `|G| = ${group.order} - 已知群（无元素表）`
-      case 'elements':
-        return '无元素表'
-      case 'conj':
-        return '无元素表'
-      case 'subgroups':
-        return ''
-    }
-  }
-  switch (id) {
-    case 'basic':
-      return `|G| = ${group.order} - ${group.isAbelian ? '交换' : '非交换'}`
-    case 'elements':
-      return `${group.order} 个元素`
-    case 'conj':
-      /*
-       * 共轭类数 —— 走同一个 `buildElementTable`（`capped` 时不硬算）。
-       * ⚠️ 不复用 `subCount`：那是**子群**的类数，与共轭类不是一回事
-       *（`S_4`：子群 7 类、共轭类 5 类 —— 混用就是撒谎）。
-       */
-      return conjugacyClassCount(group)
-    case 'subgroups':
-      return subCount === null ? '' : `${subCount} 类`
-  }
-}
-
 function Row({ k, children }: { k: string; children: ReactNode }) {
   return (
     <div className="insp-row">

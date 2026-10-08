@@ -220,15 +220,20 @@ console.log('\n== 场景 1b：常驻卡片形态（P0-1）==')
       vw: window.innerWidth,
       boxShadow: getComputedStyle(el).boxShadow,
       appClass: document.querySelector('.app')?.className ?? '',
+      /* 2026-10-08：卡片嵌进工作台右列 —— 判据从"贴底/居中"改成"在 bench-detail 里" */
+      inRead: !!document.querySelector('.bench-detail .map-builder'),
+      benchOpen: !!document.querySelector('.bench.open'),
     }
   })
   ok('卡片在场', box !== null)
-  // 判据：**贴底**（不是居中）—— 底边距视口底 < 40px
-  ok('**贴底常驻**（底边距视口底 < 40px，P0-1 把它从居中弹层改成了贴底）',
-    box !== null && box.vh - box.bottom < 40, `距底 ${box === null ? '?' : Math.round(box.vh - box.bottom)}px`)
-  // 判据：**不再居中**（上边距应显著大于下边距）
-  ok('**不在居中**（上边距 > 下边距，这是从 `top:46%` 改过来的）',
-    box !== null && box.top > box.vh - box.bottom, `top=${box === null ? '?' : Math.round(box.top)} 距底=${box === null ? '?' : Math.round(box.vh - box.bottom)}`)
+  /*
+   * ⚠️ **2026-10-08：从「贴底常驻」改「嵌进工作台右列」**（用户拍板：
+   * 「卡片位置应该挪到中间或者直接嵌入到工作台里面」⇒ 选了后者）。
+   * 旧判据（贴底 < 40px / 上边距 > 下边距 / dockRight 让位）整套作废 ——
+   * 卡片不再是浮层，它是 `.bench-detail` 里的内容；工作台没开时进编辑器会**自动升起**。
+   */
+  ok('**嵌在工作台右列**（`bench-detail` 里；不再是贴底/居中浮层）',
+    box !== null && box.inRead && box.benchOpen, `inRead=${box?.inRead} benchOpen=${box?.benchOpen}`)
   // 判据：**没有投影**（投影是"浮在上层"的语言，常驻卡片不该有）
   ok('没有投影（常驻卡片的语言不是"浮在上层"）',
     box !== null && (box.boxShadow === 'none' || box.boxShadow === ''), box?.boxShadow)
@@ -248,8 +253,8 @@ console.log('\n== 场景 1b：常驻卡片形态（P0-1）==')
     const r = o.getBoundingClientRect()
     return { left: r.left, right: r.right, bottom: r.bottom, vw: window.innerWidth }
   })
-  ok('底部输入球让到右侧去了（dockRight prop；不再与卡片同处居中）',
-    orb !== null && orb.left > (box?.vw ?? 0) / 2, orb === null ? '' : `left=${Math.round(orb.left)} vw=${box?.vw}`)
+  ok('输入球**靠左停**（工作台升起 ⇒ `dockLeft`；卡片嵌入后不再需要 `dockRight` —— 两者不再重叠）',
+    orb !== null && orb.left < (box?.vw ?? 0) / 2, orb === null ? '' : `left=${Math.round(orb.left)} vw=${box?.vw}`)
 
   // **点画布空白不关编辑器**（常驻的核心承诺：用户还要点画布看别的对象）
   await page.evaluate(() => {
@@ -264,16 +269,9 @@ console.log('\n== 场景 1b：常驻卡片形态（P0-1）==')
   await page.click('.map-builder .mb-x')
   await page.waitForTimeout(420)
   ok('右上角「×」仍然关得掉（常驻 ≠ 不可关）', (await page.locator('.map-builder').count()) === 0)
-  // 关掉后输入球要回到居中（dockRight 跟着退）
-  const orbBack = await page.evaluate(() => {
-    const o = document.querySelector('.composer-orb')
-    if (!o) return null
-    const r = o.getBoundingClientRect()
-    return { left: r.left, vw: window.innerWidth }
-  })
-  ok('关掉后输入球回到居中（dockRight 跟着退）',
-    orbBack !== null && Math.abs(orbBack.left - orbBack.vw / 2) < 40,
-    orbBack === null ? '' : `left=${Math.round(orbBack.left)} vw=${orbBack.vw}`)
+  /* 关掉卡片后**工作台仍开着**（卡片只是右列的内容，关它不动台）—— 2026-10-08 */
+  ok('关掉卡片后工作台仍开着（卡片只是右列的内容）',
+    (await page.locator('.bench.open').count()) === 1)
 }
 
 /* ══ 场景 2：进去能用（填像 → 边填边判 → 提交长出对象）══════════ */

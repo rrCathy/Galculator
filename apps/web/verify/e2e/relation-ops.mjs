@@ -126,24 +126,35 @@ const canvasState = () =>
   })
 
 /**
- * U45：信息面板默认**全收**，而「阶」「生成元」这些属性栏住在「基本」这一节里 ——
- * 读数前先保证它开着（**幂等**：已经开着就不要再点，手风琴里再点一下是收起）。
+ * 「阶」「生成元」这些属性栏住在「基本」节里 —— 读数前先保证切到它
+ * （2026-10-08：信息面板并入工作台，手风琴改竖排节导航；点它=切过去，幂等）。
  */
 const ensureBasic = async () => {
   await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    const h = document.querySelector('.bench-tab[data-tab="basic"]')
     if (h && !h.classList.contains('on')) h.click()
   })
   await page.waitForTimeout(240)
 }
 
+/**
+ * 台收着才能和画布说话（2026-10-08：**点节点会自动升起工作台** —— 升起的台会盖住
+ * ⊕ 球向下铺开的面板 / 球 / 卫星，真实鼠标点不动它们）。
+ */
+const benchDown = async () => {
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
+}
+
 const infoState = async () => {
   await ensureBasic()
   return page.evaluate(() => ({
-    chip: document.querySelector('.info-target .chip')?.textContent?.trim() ?? '',
-    head: document.querySelector('.info-target')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-    keys: [...document.querySelectorAll('.insp-row .insp-k')].map((e) => e.textContent.trim()),
-    vals: [...document.querySelectorAll('.insp-row .insp-v')].map((e) =>
+    chip: document.querySelector('.bench-screen .chip')?.textContent?.trim() ?? '',
+    head: document.querySelector('.bench-screen-title')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    keys: [...document.querySelectorAll('.bench .insp-row .insp-k')].map((e) => e.textContent.trim()),
+    vals: [...document.querySelectorAll('.bench .insp-row .insp-v')].map((e) =>
       e.textContent.replace(/[\u200b\u2061\u2062]/g, '').replace(/\s+/g, ' ').trim(),
     ),
   }))
@@ -304,6 +315,7 @@ await page.waitForTimeout(420)
 
 await page.keyboard.press('Escape')
 await page.waitForTimeout(300)
+await benchDown() // 2026-10-08：⊕ 球面板向下的部分会被升起的台盖住
 await page.click('.multi-orb .orb-center')
 await page.waitForTimeout(300)
 {

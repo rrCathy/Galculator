@@ -116,9 +116,23 @@ const clickEl = async (sel) => {
   return true
 }
 
+/**
+ * 台收着才能和画布说话（2026-10-08：**点节点会自动升起工作台** —— 升起的台会盖住
+ * 球/环，真实鼠标点不动它们；走查里凡"点节点 -> 点球/拖拽"的链都要先收台）。
+ */
+const benchDown = async () => {
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
+}
+
 /** 选中画布节点 -> 点球 -> 铺开环。`orb-sat` 是球的**兄弟**节点，别写成 `.orb .orb-sat`。 */
 const openRing = async (id) => {
+  await benchDown()
   await clickSvg(`svg.canvas g.gnode[data-id="${id}"] .gnode-hit`)
+  // 点节点（哪怕是合成事件）也会触发「自动升起工作台」—— 收掉，球才点得到
+  await benchDown()
   await clickEl('.orb:not(.orb-center)')
 }
 
@@ -318,6 +332,11 @@ console.log('== ② 从 ⊕ 球点 `customAction` -> 空着手 pending，等你�
   ok('  Ω 回落到 `|G|` = 8（用户没指过 Ω）', e.omega === '8', JSON.stringify(e))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(320)
+  /* 2026-10-08：编辑器开着时工作台是升起的（卡片嵌在右列）—— 收台才能继续点画布 */
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(300)
+  }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -444,6 +463,8 @@ await page.waitForTimeout(320)
   ok('另建一个干净点集 `Q = pointSet(3)` 当靶（P 上已经有作用了）', await addLine('Q', 'pointSet(3)'))
   await page.keyboard.press('Escape')
   await page.waitForTimeout(380)
+  /* 2026-10-08：拖拽是画布手势 —— 先把工作台收掉（点节点会自动升起它） */
+  await benchDown()
 
   const nodes = await canvasNodes()
   const g = nodes.find((n) => n.id === 'G')

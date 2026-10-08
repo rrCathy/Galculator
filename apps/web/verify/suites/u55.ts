@@ -389,7 +389,7 @@ export function run(): void {
      * 于是 `fs.length > 1` 这个判据把"素数幂"错判成了"素数阶"。
      */
     const c7 = groupInsOf(['G = C_7'])
-    ok('C_7（真素数阶）说「素数阶 -> 循环群」', c7.insights.some((i) => (i.detail ?? '').includes('素数阶 -> 循环群')), c7.insights.map((i) => i.detail).join(' | '))
+    ok('C_7（真素数阶）说「素数阶 -> 循环群」', c7.insights.some((i) => (i.detail ?? '').includes('素数阶 → 循环群')), c7.insights.map((i) => i.detail).join(' | '))
 
     const c8 = groupInsOf(['K = directProduct(directProduct(C_2, C_2), C_2)'])
     ok('8 阶（2^3）**不**冒充素数阶', !c8.insights.some((i) => (i.detail ?? '').includes('素数阶')), c8.insights.map((i) => i.detail).join(' | '))
@@ -398,10 +398,17 @@ export function run(): void {
     const c12 = groupInsOf(['G = C_12'])
     ok('12 阶（2^2·3）说「素因子分解」', c12.insights.some((i) => (i.detail ?? '').includes('素因子分解')), c12.insights.map((i) => i.detail).join(' | '))
 
-    audit([
-      ...c7.insights.map((i) => ({ what: 'C_7 阶 detail', text: i.detail ?? '' })),
-      ...c8.insights.map((i) => ({ what: '8 阶 detail', text: i.detail ?? '' })),
-      ...c12.insights.map((i) => ({ what: '12 阶 detail', text: i.detail ?? '' })),
-    ])
+    /*
+     * 2026-10-08：detail 升级为**渲染面**（`Insights` 里过 `TexOrText`）——`→` 这类
+     * 是合法渲染源，旧的"纯文本面无不可打字字符"检查退役。只留一条底线：
+     * 不许出现 HTML 尖括号 / 控制字符（防注入、防手滑）。
+     */
+    const details = [
+      ...c7.insights.map((i) => i.detail ?? ''),
+      ...c8.insights.map((i) => i.detail ?? ''),
+      ...c12.insights.map((i) => i.detail ?? ''),
+    ]
+    const badDetail = details.filter((t) => /[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(t))
+    ok('detail 里没有 HTML 尖括号 / 控制字符', badDetail.length === 0, badDetail.join(' | '))
   }
 }

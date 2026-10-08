@@ -113,6 +113,17 @@ const dragPointer = async (a, b) => {
   await page.waitForTimeout(420)
 }
 
+/**
+ * 台收着才能和画布说话（2026-10-08：**点节点会自动升起工作台** —— 台会盖住节点，
+ * 拖拽手势会打在工作台上）。拖拽前先收台（幂等）。
+ */
+const benchDown = async () => {
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
+}
+
 /** 连线菜单里的候选 op id（第一项在最前）—— 按 `data-op` 收集，不按显示文本。 */
 const menuItems = () =>
   page.evaluate(() =>
@@ -188,6 +199,7 @@ console.log('== ① 拖 V₄ → S₄（用户报的那条）==')
   const before = await canvasState()
   const edgesBefore = before.edges.length
   const rowsBefore = (await rowIds()).length
+  await benchDown() // 台升起会盖住节点 —— 拖拽前先收（2026-10-08）
   await dragPointer(
     before.nodes.find((n) => n.id === 'V'),
     before.nodes.find((n) => n.id === 'S4'),
@@ -221,6 +233,7 @@ console.log('')
 console.log('== ①b 对照：A₄ → S₄（判得出正规）==')
 {
   const before = await canvasState()
+  await benchDown() // 台升起会盖住节点 —— 拖拽前先收（2026-10-08）
   await dragPointer(
     before.nodes.find((n) => n.id === 'A'),
     before.nodes.find((n) => n.id === 'S4'),
@@ -250,6 +263,7 @@ console.log('== ② 拖 C₃ → S₄ ==')
 {
   await closeMenu()
   const before = await canvasState()
+  await benchDown() // 台升起会盖住节点 —— 拖拽前先收（2026-10-08）
   await dragPointer(
     before.nodes.find((n) => n.id === 'C'),
     before.nodes.find((n) => n.id === 'S4'),
@@ -273,6 +287,7 @@ console.log('== ③ 拖 C₃ → V₄（3 ∤ 4，本来就不该有）==')
 {
   await closeMenu()
   const before = await canvasState()
+  await benchDown() // 台升起会盖住节点 —— 拖拽前先收（2026-10-08）
   await dragPointer(
     before.nodes.find((n) => n.id === 'C'),
     before.nodes.find((n) => n.id === 'V'),
@@ -316,10 +331,10 @@ console.log('== ⑤ 信息面板「子群」这一节：⊴ 渲染 + 文案不�
   ok('点得中 S₄ 节点', picked, '画布上只有 S4/V/C 三个节点')
   await page.waitForTimeout(400)
 
-  /* U45：标题行是折叠开关，`textContent` 现在是「子群 + 摘要」，按**标签**找 */
+  /* 2026-10-08：信息面板并入工作台、手风琴改**竖排节导航** —— 按标签找 `.bench-tab` */
   const opened = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('.info-sec-head')].find(
-      (x) => x.querySelector('.info-sec-label')?.textContent.trim() === '子群',
+    const b = [...document.querySelectorAll('.bench-tab')].find(
+      (x) => x.querySelector('.bench-tab-label')?.textContent.trim() === '子群',
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -370,6 +385,7 @@ console.log('== ⑦ 商群（陪集层）：拖 C₃ → S₄/V₄ ==')
   ok('画布上有 S₄/V₄ 与 C₃ 两个节点', !!qNode && !!cNode)
 
   if (qNode && cNode) {
+    await benchDown() // 台升起会盖住节点 —— 手写拖拽前先收（2026-10-08）
     await page.mouse.move(cNode.x, cNode.y)
     await page.mouse.down()
     await page.mouse.move((cNode.x + qNode.x) / 2, (cNode.y + qNode.y) / 2, { steps: 8 })

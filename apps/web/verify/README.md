@@ -47,7 +47,6 @@ node verify/e2e/batch9.mjs            # 第十七批：连线把手 / 同一性 
 node verify/e2e/batch10.mjs           # 第十八批：独立构造的群之间的包含（U38）
 node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来的字符（U25，输入 + 显示两半）
 node verify/e2e/narrow-docks.mjs      # 窄窗口下面板之间不许互相盖（U41）
-node verify/e2e/info-split.mjs        # 信息面板的折叠分区 + 字号层级（U42 → U45）
 node verify/e2e/known-facts.mjs       # 已知结论层 + A_6 建得出 + U50 的 Aut/GL/S_7（U48/U49/U50）
 node verify/e2e/semidirect-op.mjs     # 半直积 ⋊ 的三态分诊 + 连线菜单不撒谎（U51）
 node verify/e2e/custom-action.mjs     # 自定义作用：作用编辑器 + 核的披露 + G ↷ Ω（U52）
@@ -57,7 +56,7 @@ node verify/e2e/action-entries.mjs    # 群作用的四条入口：⊕ 球 / 点
 node verify/e2e/action-omega.mjs      # 群作用这件事本身：Ω 能选 / 子群集当 Ω / 元素送到哪（U58）
 node verify/e2e/set-menu.mjs          # 集合那一侧的菜单不撒谎：asSet/closure 收窄（U59）
 node verify/e2e/map-builder.mjs       # 映射构建器的卡片形态（三编辑器包壳）
-node verify/e2e/workbench.mjs         # 工作台 v2 玻璃计算器：显示条 / 键盘随焦点变 / 槽位 / ＋导入 / 台面
+node verify/e2e/workbench.mjs         # 工作台 v2.2：显示屏 / 对象槽 / 键盘随焦点变 / 竖排节导航 / 槽位 / ＋导入 / 编辑器嵌入
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 

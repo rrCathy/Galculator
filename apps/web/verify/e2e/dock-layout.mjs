@@ -1,9 +1,9 @@
 /**
  * 走查：**左上抽屉的列布局**（U16）。
  *
- * 规格：**「对象」与「操作」叠在同一列**，「信息」另占一列（两列顶对齐）。
- * 理由：前两栏是同一件事的两半（手写的定义 / 运算的产物），用户来回复查的就是它们；
- * 「信息」是另一类活（"看"）。
+ * 规格：**「对象」「操作」「目录」叠在同一列**。
+ * 理由：这三栏是同一件事的三半（手写的定义 / 运算的产物 / 库里挑的），用户来回复查的就是它们。
+ * （2026-10-08：原第四栏「信息」已砍、并入工作台 —— 它原来另占一列，现在这一组只有一列。）
  *
  * 叠成一列会带来一个新风险：**两栏都展开时总高越过视口**。所以验两件事：
  *   \\cdot 静态几何 —— 同列（x 相等）、上下相邻（gap 一致）、信息另起一列且顶对齐；
@@ -67,7 +67,6 @@ const readGeo = (page) =>
       op: R(dock('操作')),
       // 「目录」（U56）也在这列里 —— 列高断言要把它算上
       cat: R(dock('目录')),
-      info: R(dock('信息')),
       col: R(document.querySelector('.dock-col')),
       colRight: R(document.querySelector('.dock-topleft'))?.right,
       body: {
@@ -79,7 +78,7 @@ const readGeo = (page) =>
     }
   })
 
-/* ══ 一、「对象」与「操作」同列，信息另起一列 ═════════════ */
+/* ══ 一、左上抽屉同列叠加（对象 / 操作 / 目录） ═══ */
 
 {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
@@ -88,10 +87,10 @@ const readGeo = (page) =>
   page.on('pageerror', (e) => logs.push('pageerror: ' + e.message))
   await page.goto(`${BASE}/`, { waitUntil: 'load' })
   await page.waitForTimeout(1000)
-  await openDocks(page, ['对象', '操作', '信息'])
+  await openDocks(page, ['对象', '操作'])
 
   const g = await readGeo(page)
-  ok('三个抽屉都展开了', !!g.obj && !!g.op && !!g.info, JSON.stringify(g))
+  ok('两个抽屉都展开了', !!g.obj && !!g.op, JSON.stringify(g))
   ok('对象与操作**左边缘对齐**（同一列）', g.obj.x === g.op.x, `obj.x=${g.obj.x} op.x=${g.op.x}`)
   ok('对象与操作**等宽**', g.obj.w === g.op.w, `${g.obj.w} vs ${g.op.w}`)
   ok(
@@ -99,13 +98,8 @@ const readGeo = (page) =>
     g.op.y - g.obj.bottom === 8,
     `op.y=${g.op.y} obj.bottom=${g.obj.bottom}`,
   )
-  ok('信息在**另一列**（左边缘 = 该列右边界 + gap）', g.info.x > g.obj.right, `info.x=${g.info.x} obj.right=${g.obj.right}`)
-  ok('两列**顶对齐**', g.info.y === g.obj.y, `${g.info.y} vs ${g.obj.y}`)
-  ok(
-    '信息没有跟着叠进那一列（y 仍在上方）',
-    g.info.y < g.op.y,
-    `info.y=${g.info.y} op.y=${g.op.y}`,
-  )
+  ok('目录也在**同一列**（左边缘对齐；2026-10-08 信息栏砍后这一组就一列）',
+    g.cat !== null && g.cat.x === g.obj.x, `cat.x=${g.cat?.x} obj.x=${g.obj.x}`)
   ok('整组不越出视口右边', g.colRight <= g.vw, `right=${g.colRight} vw=${g.vw}`)
   /*
    * 列高 = 各项高度之和 + gap（即**没有多余空隙**）。

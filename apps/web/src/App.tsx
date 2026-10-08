@@ -44,7 +44,7 @@ import { ObjectDock } from './ui/ObjectDock'
 import { Workbench } from './ui/Workbench'
 import { OpDock } from './ui/OpDock'
 import { CatalogDock } from './ui/CatalogDock'
-import { InfoDock, type InfoTab } from './ui/InfoDock'
+import type { InfoTab } from './ui/InfoDock'
 import { NumericDock } from './ui/NumericDock'
 import type { GalValue, NormalizedSubgroup } from './gal/value'
 
@@ -147,16 +147,15 @@ export default function App() {
    * 93 个群的长列表，常驻会把画布压掉。
    */
   const [openCatalog, setOpenCatalog] = useState(false)
-  const [openInfo, setOpenInfo] = useState(false)
   const [openNumeric, setOpenNumeric] = useState(true)
   /**
    * **工作台**的升起 / 收起（P1，2026-10-05）。
    *
-   * 与 `openInfo` 是**两个独立开关**，不是同一个：用户定的是"工作台从底部升起"，
-   * 而 `InfoDock` 仍留在左上那一列抽屉里（它是"随手瞄一眼"的入口）。
-   * 两者显示同一批内容（`SectionBody`）—— **内容一份、两个地方**。
+   * 2026-10-08 起它是**唯一的信息面**：左上的「信息」面板已砍掉（用户原话：
+   * 「把信息栏砍了，所有信息合并到工作台里面显示」）——点画布对象 / 点对象行 /
+   * 球菜单的「元素 · 子群」入口全部改道到这里（`setBenchOpen(true)` / `benchJump`）。
    *
-   * 默认**收起**：它一升起就吃掉 45vh 的画布高度，而用户可能只是瞄一眼。
+   * 默认**收起**：它一升起就吃掉大半画布高度，而用户可能只是瞄一眼。
    */
   const [benchOpen, setBenchOpen] = useState(false)
   /**
@@ -182,21 +181,24 @@ export default function App() {
   const [benchStage, setBenchStage] = useState<string[]>([])
 
   /**
-   * **工作台升起 ⇒ 自动收起信息面板**（2026-10-06，用户实测第 4 条）。
+   * **进编辑器 ⇒ 升起工作台**（2026-10-08）。
    *
-   * > 「又是工作台，又是信息栏，不知道取舍？不会收起信息栏？」
-   *
-   * 工作台的明细区本来就是 `InfoDock#SectionBody` 的**同一份内容**（一份两处显示），
-   * 同时摆出来就是两遍。收掉的那份用户还能自己再点开（这条只在他"升起工作台"那一下触发）。
+   * 编辑器卡片从"贴底浮层"改嵌工作台右列（用户拍板：「直接嵌入到工作台里面」）——
+   * 卡片开着的时候工作台必须开着，否则卡片无处安放。任何进 `editor` 态的路径
+   * （球菜单 / 待选凑参 / 目录造结构）都在这里被接住。
    */
   useEffect(() => {
-    if (benchOpen) setOpenInfo(false)
-  }, [benchOpen])
+    if (inter.kind === 'editor') setBenchOpen(true)
+  }, [inter.kind])
   /**
-   * 信息面板**展开的那一节**（U45 起是手风琴，不再是 tab）。
-   * `null` = 全收 —— 默认状态就是它：不点开，面板只剩摘要 + 三行标题。
+   * 工作台明细区的**跳转请求**（球菜单的「元素 / 子群」入口，2026-10-08）。
+   *
+   * `seq` 让"重复点同一节"也能触发（不然 effect 依赖不变、跳不动）。
+   * 信息面板砍掉之后（用户：「把信息栏砍了，所有信息合并到工作台」），
+   * "想看第几节"的入口统一跳进工作台。
    */
-  const [infoTab, setInfoTab] = useState<InfoTab | null>(null)
+  const [benchJump, setBenchJump] = useState<{ tab: InfoTab; seq: number } | null>(null)
+  const jumpSeq = useRef(0)
   const [dragged, setDragged] = useState<NumericEntry[]>([])
   const [composerOpen, setComposerOpen] = useState(false)
   /**
@@ -394,7 +396,7 @@ export default function App() {
     const ro = new ResizeObserver(measure)
     els.forEach((el) => ro.observe(el))
     return () => ro.disconnect()
-  }, [openObjects, openOps, openCatalog, openInfo, openNumeric, lines])
+  }, [openObjects, openOps, openCatalog, openNumeric, lines])
 
   const reset = useCallback(() => {
     setInter(IDLE)
@@ -517,11 +519,11 @@ export default function App() {
     [lines, usedNames],
   )
 
-  /** 面板里点对象行 = 选中它：画布高亮 + 对象球出现 + 信息面板打开（信息都在那边看） */
+  /** 面板里点对象行 = 选中它：画布高亮 + 对象球出现 + **工作台升起**（信息都在工作台看） */
   const selectFromDock = useCallback((id: string) => {
     setInter({ kind: 'selected', target: id })
     setOrbStage('closed')
-    setOpenInfo(true)
+    setBenchOpen(true)
     setNotice(null)
   }, [])
 
@@ -950,8 +952,9 @@ export default function App() {
       }
       setInter({ kind: 'selected', target: id })
       setOrbStage('closed')
-      // 点对象 = 想看它 —— 信息面板直接打开（与"点对象行"的行为一致）
-      setOpenInfo(true)
+      // 点对象（或点一条结构边）= 想看它 —— **工作台直接升起**
+      // （2026-10-08：信息面板已并入工作台，这里替代原来"弹信息栏"的行为）
+      setBenchOpen(true)
     },
     [inter, pendOp, runOp, orderForUi],
   )
@@ -1252,8 +1255,9 @@ export default function App() {
           onClose={() => setOrbStage('closed')}
           onToggleOps={() => setOrbStage(orbStage === 'ops' ? 'ring' : 'ops')}
           onInspect={(tab) => {
-            setInfoTab(tab)
-            setOpenInfo(true)
+            // 球菜单的「元素 / 子群」入口：升起工作台并跳到那一节（信息面板已并入工作台）
+            setBenchJump({ tab, seq: ++jumpSeq.current })
+            setBenchOpen(true)
             setOrbStage('closed')
           }}
           value={focusedObj.value}
@@ -1303,16 +1307,6 @@ export default function App() {
             onBuildStructure={startStructureFromCatalog}
           />
         </div>
-        <InfoDock
-          open={openInfo}
-          onToggle={() => setOpenInfo((v) => !v)}
-          tab={infoTab}
-          onTab={setInfoTab}
-          node={busy ? null : focusedObj}
-          // 焦点也可能是一条**结构伴生边**（缺口 ⑧）——它与 `node` 互斥
-          edge={busy ? null : focusedEdge}
-          onExtract={extractSubgroup}
-        />
       </div>
 
       <MultiOrb
@@ -1351,19 +1345,15 @@ export default function App() {
         onAdd={(l) => (editing ? replaceLine(editing.index, l) : setLines((p) => [...p, l]))}
         minLeft={barriers.bottom}
         /*
-         * 让位给底部那两个（**走 prop 不走 CSS** —— `.composer-orb` 的 `left` 是内联
-         * style，内联压过样式表规则，P0-1 已栽过一次）：
-         *   · 编辑器卡片常驻底部居中（P0-1）⇒ 让到右边；
-         *   · 工作台贴底**全宽**（P1）⇒ 让到右上角（右边那条已被编辑器占的语义不冲突：
-         *     两者基本不会同时，真同时也是"最上层那个让开"）。
+         * ⚠️ **`dockRight` 已撤**（2026-10-08）：它当年是给"贴底居中的编辑器卡片"让位用的
+         * —— 卡片已嵌进工作台右列（不占底部），输入球与它不再重叠，无需右侧让位。
+         * 现在只剩下面那条"工作台升起 ⇒ 靠左停"。
          */
-        dockRight={inter.kind === 'editor'}
         /*
          * **工作台升起 ⇒ 输入球靠左停**（2026-10-06，用户实测第 3 条）。
          *
          * 用户原话：「工作台展开后上面一个输入口也太神秘了，不会挪个位置？比如放左边？」
          * 上一版只治了遮挡（把球整体上移），没治语义 ⇒ 一个孤零零的球浮在台面上方。
-         * `dockLeft` 优先于 `dockRight`（工作台是更大的面，编辑器会收进它里面）。
          */
         dockLeft={benchOpen}
       />
@@ -1404,8 +1394,8 @@ export default function App() {
          * 就是换主意（`dispatchOp` 直接替换 `inter`，语义安全）。
          * （`onRunOp` 里那把 `busy ? null` 是**另一件事**：busy 中发起的新 op
          *   不携带焦点当第一参 —— 那是守卫，不是丢焦点。）
-         * （上方 `InfoDock` 那把 `busy ? null` 不在此列 —— 信息面板 busy 时让位
-         *   是它自己的语义，工作台恰恰是 busy 时的接盘者。）
+         * （2026-10-08：信息面板砍掉后，"busy 时让位"的旧语义只剩画布选中态
+         *   `selectedId={busy ? null : focus}` 那一处 —— 与工作台无关。）
          */
         node={focusedObj}
         /*
@@ -1420,7 +1410,51 @@ export default function App() {
         pending={inter.kind === 'pending' && pendOp ? { op: pendOp, picked: inter.picked } : null}
         objects={objects}
         onPick={onNodeClick}
-        editorBusy={inter.kind === 'editor'}
+        /*
+         * **编辑器卡片嵌进工作台右列**（2026-10-08 用户拍板：「直接嵌入到工作台里面」）。
+         *
+         * 原来它是贴底居中的浮层（P0-1），工作台开着时吊在台面下沿 —— 用户看着别扭。
+         * 现在编辑器就是右列的内容：工作台没开时进编辑器会自动升起（见上面的 effect），
+         * 编辑器开着时工作台也不许收起（见 `Workbench` 的 toggle 守卫）。
+         *
+         * 三个编辑器共用同一个出口（`submitEditorLine`）与同一条取消路（`reset`）——
+         * 与从前挂在 App 底部时**逐字同源**，只是换了个渲染位置。
+         */
+        editor={
+          inter.kind === 'editor' && pendOp && editorNodes ? (
+            pendOp.id === 'customAction' ? (
+              <ActionBuilder
+                op={pendOp}
+                src={editorNodes[0]}
+                objects={objects}
+                presetOmega={presetOmegaOf}
+                onSubmit={submitEditorLine}
+                onCancel={reset}
+              />
+            ) : pendOp.id === 'structure' ? (
+              <StructureBuilder
+                op={pendOp}
+                carrier={editorNodes[0]}
+                objects={objects}
+                onSubmit={submitEditorLine}
+                onCancel={reset}
+              />
+            ) : (
+              <MapBuilder
+                op={pendOp}
+                src={editorNodes[0]}
+                tgt={editorNodes[1]}
+                objects={objects}
+                onSubmit={submitEditorLine}
+                onCancel={reset}
+              />
+            )
+          ) : null
+        }
+        /* 结构伴生边（原信息面板的「这条箭头」）——与 `node` 互斥，工作台里显示 */
+        edge={busy ? null : focusedEdge}
+        /* 球菜单的「元素 / 子群」跳转请求（`seq` 变化时工作台切到那一节）*/
+        jumpTo={benchJump}
         viewportH={canvasSize.h}
         onExtract={extractSubgroup}
         /* 工作台把升起高度报上来 ⇒ App 拾起输入球让位（见 `benchH` 的注释）*/
@@ -1450,40 +1484,11 @@ export default function App() {
 
       {banner}
 
-      {inter.kind === 'editor' &&
-        pendOp &&
-        editorNodes &&
-        (pendOp.id === 'customAction' ? (
-          <ActionBuilder
-            op={pendOp}
-            src={editorNodes[0]}
-            objects={objects}
-            presetOmega={presetOmegaOf}
-            onSubmit={submitEditorLine}
-            onCancel={reset}
-          />
-        ) : pendOp.id === 'structure' ? (
-          /*
-           * 结构编辑器（S2a）：载体是 `editorNodes[0]`（集合或元素集）。
-           * 它**产出的是定义行的表达式**，与手打的 `structure(P, ...)` 逐字同源。
-           */
-          <StructureBuilder
-            op={pendOp}
-            carrier={editorNodes[0]}
-            objects={objects}
-            onSubmit={submitEditorLine}
-            onCancel={reset}
-          />
-        ) : (
-          <MapBuilder
-            op={pendOp}
-            src={editorNodes[0]}
-            tgt={editorNodes[1]}
-            objects={objects}
-            onSubmit={submitEditorLine}
-            onCancel={reset}
-          />
-        ))}
+      {/*
+        ⚠️ 编辑器卡片**不再挂在这里**（2026-10-08）：它现在渲染在 `<Workbench>` 的
+        右列里（见上面 `editor={...}` 那个 prop）。挂在这里的那一版是贴底浮层，
+        工作台开着时吊在台面下沿 —— 用户点名「卡片位置应该挪到中间或者直接嵌入到工作台里面」。
+      */}
 
       {snapshotOpen && (
         <SnapshotCard

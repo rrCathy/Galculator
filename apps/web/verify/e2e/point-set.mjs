@@ -126,12 +126,25 @@ const clickEl = async (sel) => {
   return true
 }
 
+/**
+ * 台收着才能和画布说话（2026-10-08：**点节点会自动升起工作台** —— 升起的台会盖住
+ * 球/卫星，真实鼠标点不动它们）。
+ */
+const benchDown = async () => {
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
+}
+
 /** 选中一个画布节点（悬浮球的唯一入口）。 */
 const selectNode = (id) => clickSvg(`svg.canvas g.gnode[data-id="${id}"] .gnode-hit`)
 
 /** 选中节点 -> 点球 -> 点「操作」-> 单对象操作面板。 */
 const openOpsPanel = async (id) => {
+  await benchDown()
   await selectNode(id)
+  await benchDown() // 点节点升了台 —— 收掉，球才点得到
   await clickEl('.orb:not(.orb-center)')
   await clickEl('.orb-sat:text-is("操作")')
 }
@@ -157,20 +170,20 @@ const clickOrbOp = async (opId) => {
   return hit
 }
 
-/** 展开「基本」（U45：默认全收；手风琴里再点一下是收起，所以先看 class）。 */
+/** 切到「基本」（2026-10-08：信息面板并入工作台，手风琴改竖排节导航）。 */
 const openBasic = async () => {
   await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    const h = document.querySelector('.bench-tab[data-tab="basic"]')
     if (h && !h.classList.contains('on')) h.click()
   })
   await page.waitForTimeout(320)
 }
 
-/** 信息面板的读数（`.insp-k` / `.insp-v`）。 */
+/** 明细区的读数（`.insp-k` / `.insp-v`）。 */
 const inspRows = async () => {
   await openBasic()
   return page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft .insp-row')].map((r) => ({
+    [...document.querySelectorAll('.bench .insp-row')].map((r) => ({
       k: r.querySelector('.insp-k')?.textContent?.trim() ?? '',
       v: (r.querySelector('.insp-v')?.textContent ?? '')
         .replace(/[\u200b\u2061\u2062]/g, '')
@@ -180,10 +193,10 @@ const inspRows = async () => {
   )
 }
 
-/** 信息面板里集合的成员记号（`.insp-tags .sub-tag`）。 */
+/** 明细区里集合的成员记号（`.insp-tags .sub-tag`）。 */
 const inspTags = () =>
   page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft .insp-tags .sub-tag')].map((e) =>
+    [...document.querySelectorAll('.bench .insp-tags .sub-tag')].map((e) =>
       (e.textContent ?? '').replace(/[\u200b\u2061\u2062]/g, '').trim(),
     ),
   )

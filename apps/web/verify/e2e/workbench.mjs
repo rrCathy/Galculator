@@ -1,15 +1,17 @@
 /**
  * 走查：**工作台 —— 玻璃计算器**（`ui/Workbench.tsx`，v2 于 2026-10-06 落地，
- * 2026-10-07 按**方案二「横排计算器」**重排：左列=显示屏+键盘(三块)+`＋`、右列=明细；
- * 本套同日按新 DOM 再翻一次账）。
+ * 2026-10-07 按**方案二「横排计算器」**重排，2026-10-08 按 **v2.2 批**再翻一次账：
+ * 对象槽进左列 + 明细区竖排节导航 + 编辑器卡片嵌入 + 点节点自动升起）。
  *
  * ── 这一套守的是什么 ────────────────────────────────────────────
- * 形态（用户三轮逼出来的定案 + 方案二拍板，别退回任何一版）：
- * **左键盘 / 右明细 + 台面在标题栏 + `＋` 紧凑手风琴**。拆成可测的承诺：
+ * 形态（用户四轮逼出来的定案 + 2026-10-08 八条点名，别退回任何一版）：
+ * **左键盘（显示屏 + 对象槽 + 键盘三块 + `＋`）/ 右明细（竖排节导航 + 内容或编辑器卡片）**。
+ * 拆成可测的承诺：
  *
  *   ① **贴底常驻、点它才升起**，画布当背景（升起时画布尺寸不变）；
+ *      2026-10-08 起**点画布对象也自动升起**（信息面板并入工作台，点对象=想看它）；
  *   ② **显示屏写数学身份**（`S₄` 不是 `smallGroup(12,3)`），副行才是定义；
- *   ③ **明细区一页铺开**（平铺 tab，不是手风琴），内容与信息面板**同源**（同一份 `SectionBody`）；
+ *   ③ **明细区一页铺开**（竖排节导航，不是手风琴），节标签**只写名字**（「基本」就「基本」）；
  *   ④ **键盘随焦点变**（P7）：焦点是群 27 键 **3 块**（造新东西 6 / 读它的结构 12 /
  *      作用与集合 9），是集合只剩「造新东西」里的「造结构」1 键；
  *      关系 op（`contains` / `isomorphism`）**不在**键盘（T2：关系归画布）；
@@ -17,8 +19,12 @@
  *      "去画布点对象"那条路真实用户走不通，槽位是唯一通路；pending 时键盘仍可用（换主意）；
  *   ⑥ **`＋` 导入**：空画布不离开工作台就能造对象（常见群 chips + 93 群库，**群库默认折起**）；
  *      **Esc / 点外关得掉**（2026-10-07 修的旧账：以前 Esc 关不掉还清焦点）；
- *   ⑦ **台面**：碰过的对象留在标题栏右侧（存 id，与画布同一份），chip 写数学名，`x` 拿下不删对象；
- *   ⑧ **文案纪律**：`·` / `…` / 字面 `**` 不许出现（no-unicode-leak 同判据，这里再钉一遍）。
+ *      2026-10-08 起 chips 显示**标准记号**（KaTeX 渲染：`C₆` 不是 `C_6` 文本）；
+ *   ⑦ **对象槽**（原「台面」，2026-10-08 挪进**左列**）：碰过的对象存 id（与画布同一份），
+ *      chip 写数学名，点一下切焦点、`x` 拿下不删对象；
+ *   ⑧ **编辑器卡片嵌进右列**（2026-10-08 用户拍板「直接嵌入到工作台里面」）：
+ *      卡片在 `.bench-detail` 里、键盘留着、工作台收起按钮被禁（卡片没地方显示）；
+ *   ⑨ **文案纪律**：`·` / `…` / 字面 `**` 不许出现（no-unicode-leak 同判据，这里再钉一遍）。
  *
  * ── 期望值全部手算（`S_4`，阶 24 = 2³·3）─────────────────────────
  *   · 非交换；生成元 2 个（σ12、σ1234）；Z(S_4) = 1（中心平凡）；
@@ -31,6 +37,7 @@
  * v1 套件断言的 `.bench-fam-head` / `.bench-op` / `.info-sec-label`（手风琴 + 任务栏）
  * 在 v2 里**已不存在**——工作台 v2 落地时这套没跟上，工作台整整一个迭代零 e2e 覆盖。
  * 教训进 `verify/README.md` 坑 75：**改 DOM 的批次，收尾必须重跑该面的走查**。
+ * （2026-10-08 v2.2 批又验证了一遍：8 条改动动了大半 DOM，这套同步翻账。）
  *
  * 跑法（先起 dev server 5273，**cwd 必须是 apps/web**）：`node verify/e2e/workbench.mjs`
  */
@@ -95,7 +102,13 @@ const clickNode = async (id) => {
   return true
 }
 
-/** 设焦点而不被工作台盖住：**先收台 → 点节点 → 再升台**（顺序反了就是 T1 那个卡死） */
+/**
+ * 设焦点而不被工作台盖住：**先收台 → 点节点**。
+ *
+ * 2026-10-08：点节点会**自动升起工作台**（信息面板并入后的新行为）——
+ * 所以这里不再补一次 toggle（补了反而把它点回去）。T1 那个卡死反之不再存在：
+ * 就算台开着，点被盖住的节点也点不准 —— 先收台仍然是对的动作。
+ */
 const focusViaNode = async (id) => {
   const cls = await page.evaluate(() => document.querySelector('.bench')?.className ?? '')
   if (/ open/.test(cls)) {
@@ -103,8 +116,7 @@ const focusViaNode = async (id) => {
     await page.waitForTimeout(420)
   }
   const hit = await clickNode(id)
-  await page.click('.bench-toggle')
-  await page.waitForTimeout(600)
+  await page.waitForTimeout(500)
   return hit
 }
 
@@ -149,7 +161,16 @@ const bench = () =>
       hasBody: !!el.querySelector('.bench-body'),
       peek: el.querySelector('.bench-peek')?.textContent?.trim() ?? '',
       target: el.querySelector('.bench-target')?.textContent?.trim() ?? '',
-      screenTitle: el.querySelector('.bench-screen-title')?.textContent ?? '',
+      /* 2026-10-08：标题行多了**值类型 chip**（群/子群集…）——掐掉 chip 再读数学名，
+         另给 screenChip 单独一栏（与 structure-ops 的 `.bench-screen .chip` 同源）*/
+      screenTitle: (() => {
+        const t = el.querySelector('.bench-screen-title')
+        if (!t) return ''
+        const clone = t.cloneNode(true)
+        clone.querySelector('.chip')?.remove()
+        return clone.textContent ?? ''
+      })(),
+      screenChip: el.querySelector('.bench-screen .chip')?.textContent?.trim() ?? '',
       screenSub: el.querySelector('.bench-screen-sub')?.textContent ?? '',
       padHint: el.querySelector('.bench-pad-hint')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
       padLabels: [...el.querySelectorAll('.bench-pad-label')].map((x) => x.textContent.trim()),
@@ -161,9 +182,16 @@ const bench = () =>
       keyTitles: [...el.querySelectorAll('.bench-key')].map((k) => k.getAttribute('title') ?? ''),
       keyN: [...el.querySelectorAll('.bench-key-n')].map((k) => k.textContent.trim()),
       tabs: [...el.querySelectorAll('.bench-tab')].map((t) => t.dataset.tab ?? ''),
-      tabSums: [...el.querySelectorAll('.bench-tab')].map(
-        (t) => `${t.dataset.tab}:${t.querySelector('.bench-tab-sum')?.textContent?.trim() ?? ''}`,
-      ),
+      /* 2026-10-08：节导航**竖排**、标签只写名字（副文案全砍——用户「基本就是基本」）*/
+      tabLabels: [...el.querySelectorAll('.bench-tab .bench-tab-label')].map((x) => x.textContent.trim()),
+      tabVertical: (() => {
+        const box = el.querySelector('.bench-tabs')
+        if (!box) return null
+        const r = box.getBoundingClientRect()
+        return { w: Math.round(r.width), h: Math.round(r.height) }
+      })(),
+      inRead: !!el.querySelector('.bench-left .bench-stage'),
+      stageLabel: el.querySelector('.bench-stage-label')?.textContent?.trim() ?? '',
       inspRows: [...el.querySelectorAll('.bench .insp-row')].map((x) => x.textContent),
       etables: el.querySelectorAll('.etable').length,
       elementRows: el.querySelectorAll('.etable tbody tr').length,
@@ -231,13 +259,21 @@ console.log('\n== 场景 1：贴底常驻，默认收起 ==')
   await clickNode('G')
   b = await bench()
   ok('选中后标题条报出对象名（`G`）', b !== null && b.node === 'G', `node=${b?.node}`)
-  ok('选中后**仍不自动升起**（用户定的：点它才升起）', b !== null && !/ open/.test(b.cls), b?.cls)
+  ok('**点节点自动升起**（2026-10-08：信息面板并入工作台后，「点对象 = 想看它」）',
+    b !== null && / open/.test(b.cls), b?.cls)
 }
 
 /* ══ 场景 2：点它升起 + 画布当背景 + 不挡输入球 ═══════════════ */
 
-console.log('\n== 场景 2：点它升起，画布当背景 ==')
+console.log('\n== 场景 2：收起 / 升起，画布当背景 ==')
 {
+  // 场景 1 结束时台是开着的（点节点自动升起）——先点 toggle 收回去，再走"点它升起"
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(420)
+  const collapsed = await bench()
+  ok('点 toggle 收得回去（胶囊态，内容区不渲染）',
+    collapsed !== null && !/ open/.test(collapsed.cls) && !collapsed.hasBody, collapsed?.cls)
+
   const before = await canvasBox()
   await page.click('.bench-toggle')
   await page.waitForTimeout(520)
@@ -272,14 +308,17 @@ console.log('\n== 场景 3：显示条与明细区 ==')
   const b = await bench()
   ok('显示条标题是**数学身份** S4（不是 smallGroup(12,3) 那种构造式）',
     clean(b?.screenTitle) === 'S4', clean(b?.screenTitle))
+  ok('标题行头上有**值类型 chip**（"群"）——信息面板并入时补搬的',
+    b?.screenChip === '群', String(b?.screenChip))
   ok('显示条副行报阶（手算 |S_4| = 24）', /阶\s*24/.test(clean(b?.screenSub)), clean(b?.screenSub))
 
-  ok('明细区是平铺 tab：基本 / 元素 / 共轭类 / 子群（这个顺序）',
+  ok('明细区是**竖排**节导航：基本 / 元素 / 共轭类 / 子群（这个顺序）',
     JSON.stringify(b?.tabs) === JSON.stringify(['basic', 'elements', 'conj', 'subgroups']), JSON.stringify(b?.tabs))
-  const sums = (b?.tabSums ?? []).join(' | ')
-  ok('tab 摘要手算全对（|G| = 24 - 非交换 · 24 个元素 · 5 类 · 7 类）',
-    /basic:\|G\| = 24 - 非交换/.test(sums) && /elements:24 个元素/.test(sums) &&
-      /conj:5 类/.test(sums) && /subgroups:7 类/.test(sums), sums)
+  ok('节标签**只写名字**（副文案全砍——用户：「基本就是基本，还写什么『基本 |G|=3，交换』」）',
+    JSON.stringify(b?.tabLabels) === JSON.stringify(['基本', '元素', '共轭类', '子群']), JSON.stringify(b?.tabLabels))
+  ok('导航条是**竖的**（宽 < 高：一列，不是一行）',
+    (b?.tabVertical?.w ?? 999) < (b?.tabVertical?.h ?? 0),
+    JSON.stringify(b?.tabVertical))
 
   /* 结论层按行读（KaTeX 零宽先抹掉，坑 19） */
   const rows = (b?.inspRows ?? []).map(clean)
@@ -299,7 +338,7 @@ console.log('\n== 场景 3：显示条与明细区 ==')
   })
   await page.waitForTimeout(600)
   const b2 = await bench()
-  ok('切到「元素」tab 后元素表在场（与信息面板同一个 `.etable`）', (b2?.etables ?? 0) >= 1, `tables=${b2?.etables}`)
+  ok('切到「元素」tab 后元素表在场（工作台右列的元素表，`.etable` 一份排版）', (b2?.etables ?? 0) >= 1, `tables=${b2?.etables}`)
   ok('元素表 24 行（手算：S_4 有 24 个元素，逐元素一行）', b2?.elementRows === 24, `rows=${b2?.elementRows}`)
 
   /* 「共轭类」tab：类方程 + 轨道-稳定子逐行对账 */
@@ -372,14 +411,18 @@ console.log('\n== 场景 4：符号键盘随焦点变 ==')
     open: !!document.querySelector('.struct-builder'),
     cells: document.querySelectorAll('.sb-cell').length,
     busy: !!document.querySelector('.bench-detail.busy'),
+    inRight: !!document.querySelector('.bench-detail .struct-builder'),
+    toggleDisabled: !!document.querySelector('.bench-toggle')?.disabled,
     keys: document.querySelectorAll('.bench-key').length,
   }))
   ok('点「造结构」编辑器直接开（不用去别处找入口）', ed.open)
   ok('表已铺好（3 x 3 = 9 格，手算：载体 3 个元素）', ed.cells === 9, `cells=${ed.cells}`)
-  ok('编辑器开着时细节区让位（两者贴底会重叠）', ed.busy)
+  ok('**卡片嵌在工作台右列**（2026-10-08 用户拍板「直接嵌入到工作台里面」）', ed.busy && ed.inRight)
+  ok('编辑器开着时收起按钮被禁（卡片没地方显示 —— 防"填一半消失"）', ed.toggleDisabled)
   ok('**键盘留着**（改主意不必先关编辑器 —— 2026-10-07 修：焦点不再在 busy 时被掐掉）',
     ed.keys === 1, `keys=${ed.keys}`)
-  await page.evaluate(() => document.querySelector('.map-builder .mb-x')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  /* 关卡片用**真实鼠标**点它的 x（2026-10-08 起卡片在右列里、无遮挡，合成事件不再必要） */
+  await page.click('.map-builder .mb-x')
   await page.waitForTimeout(500)
   ok('x 关得掉', (await page.locator('.map-builder').count()) === 0)
 }
@@ -403,42 +446,47 @@ console.log('\n== 场景 5：＋ 导入对象 ==')
   await page.waitForTimeout(900)
   const plus = await page.evaluate(() => ({
     panel: !!document.querySelector('.bench-plus-panel'),
-    quick: [...document.querySelectorAll('.bench-plus-panel .plus-quick .plus-chip')].map((c) => c.textContent.trim()),
+    quickTitles: [...document.querySelectorAll('.bench-plus-panel .plus-quick .plus-chip')].map((c) => c.getAttribute('title') ?? ''),
+    quickKatex: document.querySelectorAll('.bench-plus-panel .plus-quick .plus-chip .katex').length,
     libOpen: !!document.querySelector('.bench-plus-panel .plus-lib-body'),
   }))
   ok('＋ 面板拉出来（左列内联的紧凑手风琴）', plus.panel)
-  ok('常见群 chips 在（S_3 / S_4 / A_4 / Q_8 …）',
-    plus.quick.includes('S_3') && plus.quick.includes('S_4') && plus.quick.includes('Q_8'), JSON.stringify(plus.quick))
+  ok('常见群 chips 在（S_3 / S_4 / A_4 / Q_8 …，按 title 里的输入语法认）',
+    plus.quickTitles.includes('导入 S_3') && plus.quickTitles.includes('导入 S_4') && plus.quickTitles.includes('导入 Q_8'),
+    JSON.stringify(plus.quickTitles))
+  ok('常见群 chips 是**标准记号渲染**（9 枚全走 KaTeX —— 2026-10-08 用户：「没有 tex 渲染」）',
+    plus.quickKatex === 9, `katex=${plus.quickKatex}`)
   ok('群库**默认折起**（2026-10-07 紧凑化，用户点名）', plus.libOpen === false, `libOpen=${plus.libOpen}`)
   await page.click('.bench-plus-panel .plus-lib-head')
   await page.waitForTimeout(700)
   const lib = await page.evaluate(() => ({
     libRows: document.querySelectorAll('.bench-plus-panel .plus-lib-row').length,
     libChips: document.querySelectorAll('.bench-plus-panel .plus-lib .plus-chip').length,
+    libKatex: document.querySelectorAll('.bench-plus-panel .plus-lib .plus-chip .katex').length,
   }))
   ok('展开后按阶分组：31 行（手算 1–31 阶）', lib.libRows === 31, `rows=${lib.libRows}`)
   ok('群库共 93 枚 chip（手算：1–31 阶共 93 个群）', lib.libChips === 93, `chips=${lib.libChips}`)
+  ok('群库 chip 也全渲染（`C_5:C_4` 排成 C₅:C₄、`SL(2,3)` 正体 —— 用户：「标准群记号」）',
+    lib.libKatex === 93, `katex=${lib.libKatex}`)
 
-  /* 点常见群 S_3 ⇒ 真造出对象、焦点切过去、自动上台面 */
-  await page.evaluate(() => {
-    const chip = [...document.querySelectorAll('.bench-plus-panel .plus-quick .plus-chip')].find(
-      (c) => c.textContent.trim() === 'S_3',
-    )
-    chip?.click()
-  })
+  /* 点常见群 S_3 ⇒ 真造出对象、焦点切过去、自动进对象槽（**真实鼠标**，按 title 定位） */
+  await page.click('.bench-plus-panel .plus-quick .plus-chip[title="导入 S_3"]')
   await page.waitForTimeout(900)
   b = await bench()
   ok('点 chip 后面板收起、焦点切到新对象', (await page.locator('.bench-plus-panel').count()) === 0 && b?.node !== '')
   ok('新对象是 S_3（数学身份上屏）', clean(b?.screenTitle) === 'S3', clean(b?.screenTitle))
   ok('手算 |S_3| = 6（副行报阶）', /阶\s*6/.test(clean(b?.screenSub)), clean(b?.screenSub))
   ok('键盘跟着换焦点（群键回来了）', (b?.keyOps.length ?? 0) > 20, `keys=${b?.keyOps.length}`)
-  ok('新对象自动上台面（chip 在，且写数学名 S3）', (b?.stage.length ?? 0) === 1 && clean(b.stage[0].main) === 'S3',
+  ok('新对象自动进对象槽（chip 在，且写数学名 S3）', (b?.stage.length ?? 0) === 1 && clean(b.stage[0].main) === 'S3',
     JSON.stringify(b?.stage.map((c) => clean(c.main))))
+  ok('对象槽在**左列**、标签写「对象槽」（2026-10-08 用户点名：「这个台面可以放到工作台左边」）',
+    b?.inRead === true && b?.stageLabel === '对象槽', `inRead=${b?.inRead} label=${b?.stageLabel}`)
 
-  /* S_3 的明细手算：非交换 / 3 个共轭类 / 2 类子群 */
-  const sums = (b?.tabSums ?? []).join(' | ')
-  ok('S_3 摘要手算全对（|G| = 6 - 非交换 · 3 类 · 2 类）',
-    /basic:\|G\| = 6 - 非交换/.test(sums) && /conj:3 类/.test(sums) && /subgroups:2 类/.test(sums), sums)
+  /* S_3 的明细手算：切「共轭类」—— 3 行（手算：S_3 有 3 个共轭类） */
+  await page.click('.bench-tab[data-tab="conj"]')
+  await page.waitForTimeout(600)
+  const s3conj = await page.evaluate(() => document.querySelectorAll('.bench .conj-table tbody tr').length)
+  ok('S_3 共轭类 3 行（手算：3 个共轭类）', s3conj === 3, `rows=${s3conj}`)
 }
 
 /* ══ 场景 6：键盘发起 op —— 槽位凑参数（不碰画布）+ 单对象直接执行 ═
@@ -504,66 +552,53 @@ console.log('\n== 场景 6：槽位凑参数与直接执行 ==')
   ok('直积阶 = 144（手算 24 x 6），结果自动成焦点',
     /阶\s*144/.test(clean(b?.screenSub)), clean(b?.screenSub))
   /*
-   * 台面记的是"**工作台开着时碰过的对象**"（App.tsx：只 `benchOpen` 时记焦点）。
-   * Q 建行时工作台没开 ⇒ 不在台上；G（focusViaNode）与产物（自动成焦点）在。
+   * 对象槽记的是"**工作台开着时碰过的对象**"（App.tsx：只 `benchOpen` 时记焦点）。
+   * Q 建行时工作台没开 ⇒ 不在槽里；G（focusViaNode）与产物（自动成焦点）在。
    */
-  ok('产物自动上台面（台面上是 G 与直积；Q 没在开台时碰过所以不在）',
+  ok('产物自动进对象槽（槽里是 G 与直积；Q 没在开台时碰过所以不在）',
     (b?.stage.length ?? 0) === 2 &&
       b.stage.some((c) => clean(c.main) === 'S4') && /S4.*C6/.test(clean(b.stage[b.stage.length - 1].main)),
     JSON.stringify(b?.stage.map((c) => clean(c.main))))
 
-  /* 切回 G（点台面 chip），再试单对象 op：焦点就是全部参数 ⇒ 直接执行（W5 连续演算） */
-  ok('点台面 chip 切回焦点 G',
-    await page.evaluate(() => {
-      const chip = [...document.querySelectorAll('.bench-chip .bench-chip-main')].find(
-        (c) => c.getAttribute('title') === '切到 G',
-      )
-      if (!chip) return false
-      chip.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      return true
-    }))
+  /* 切回 G（点对象槽 chip —— 真实鼠标），再试单对象 op：焦点就是全部参数 ⇒ 直接执行（W5 连续演算） */
+  await page.click('.bench-chip-main[title="切到 G"]')
   await page.waitForTimeout(500)
+  const bChip = await bench()
+  ok('点对象槽 chip 切回焦点 G', bChip?.node === 'G', `node=${bChip?.node}`)
   const stageBefore = (await bench())?.stage.length ?? 0
   ok('点「中心 Z(G)」直接算（S_4 中心平凡，无 pending）', await clickKey('center'))
   await page.waitForTimeout(900)
   b = await bench()
   ok('没有 pending（单对象 op 一步到位）', b?.slots === 0, `slots=${b?.slots}`)
   ok('结果自动成焦点：Z(S_4) 阶 1（手算中心平凡）', /阶\s*1/.test(clean(b?.screenSub)), clean(b?.screenSub))
-  ok('台面又多了一枚（连续演算都留在台上）', (b?.stage.length ?? 0) === stageBefore + 1,
+  ok('对象槽又多了一枚（连续演算都留在槽里）', (b?.stage.length ?? 0) === stageBefore + 1,
     JSON.stringify(b?.stage.map((c) => clean(c.main))))
 }
 
-/* ══ 场景 7：台面 chip —— 数学名 / 切焦点 / x 拿下不删 ═════════ */
+/* ══ 场景 7：对象槽 chip —— 数学名 / 切焦点 / x 拿下不删 ═════════ */
 
-console.log('\n== 场景 7：台面 ==')
+console.log('\n== 场景 7：对象槽 ==')
 {
   const b = await bench()
   ok('chip 上写的是数学名（S4），对象名进 title（切到 G）',
     b.stage.some((c) => clean(c.main) === 'S4' && c.title === '切到 G'), JSON.stringify(b.stage))
 
-  /* 点 chip = 切焦点（与"点画布节点"同一个函数 onPick） */
-  await page.evaluate(() => {
-    const chip = [...document.querySelectorAll('.bench-chip')].find(
-      (c) => c.querySelector('.bench-chip-main')?.getAttribute('title') === '切到 G',
-    )
-    chip?.querySelector('.bench-chip-main')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
+  /* 点 chip = 切焦点（与"点画布节点"同一个函数 onPick）——真实鼠标 */
+  await page.click('.bench-chip-main[title="切到 G"]')
   await page.waitForTimeout(500)
   const b2 = await bench()
   ok('点 chip 切回焦点 G（显示条回到 S_4）', b2?.node === 'G' && clean(b2?.screenTitle) === 'S4',
     `node=${b2?.node} title=${clean(b2?.screenTitle)}`)
 
-  /* x = 拿下台面，**不删对象** */
+  /* x = 拿下对象槽，**不删对象**（真实鼠标点那小 `x`） */
   const nodesBefore = await page.locator('svg.canvas g.gnode').count()
-  await page.evaluate(() => {
-    const chip = [...document.querySelectorAll('.bench-chip')].find(
-      (c) => c.querySelector('.bench-chip-main')?.getAttribute('title') === '切到 G',
-    )
-    chip?.querySelector('.bench-chip-x')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
+  await page
+    .locator('.bench-chip', { has: page.locator('.bench-chip-main[title="切到 G"]') })
+    .locator('.bench-chip-x')
+    .click()
   await page.waitForTimeout(500)
   const b3 = await bench()
-  ok('x 把 G 拿下台面（chip 少一枚）', b3?.stage.length === (b2?.stage.length ?? 0) - 1,
+  ok('x 把 G 拿下对象槽（chip 少一枚）', b3?.stage.length === (b2?.stage.length ?? 0) - 1,
     JSON.stringify(b3?.stage.map((c) => c.title)))
   ok('但对象还在画布上（拿下 != 删除）',
     (await page.locator('svg.canvas g.gnode').count()) === nodesBefore, `nodes=${nodesBefore}`)

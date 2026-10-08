@@ -12,6 +12,9 @@
  *
  * 修法：窄屏（≤1080px）两块各占一半宽。这一套钉住的就是这条。
  *
+ * 2026-10-08：原第四栏「信息」并入工作台 —— 后段的被守护对象从「信息面板」改成**工作台**
+ * （窄窗里证明面板会不会盖住工作台的节导航 / 元素表，同一个问题同一个判据）。
+ *
  * 判据一律用 `elementFromPoint`（真命中测试），不用几何"看着没重叠"——
  * 重叠是**点得中点不中**的问题，就得按命中测。
  *
@@ -95,66 +98,76 @@ ok('画布上的对象点得中（没被证明面板挡住）', hit?.hitId === '
 await page.mouse.click(hit.x, hit.y)
 await page.waitForTimeout(500)
 // ⚠️ T3（2026-10-05）加了「共轭类」一节 ⇒ 3 节变 4 节。
-// 这条**数节数**是有意的：它守的是"信息面板真的渲染出来了"，
-// 所以节数变了要跟着改，而不是改成 `>= 3`（那样面板半坏也过得去）。
-ok('点完之后信息面板起来了（4 节：基本/元素/共轭类/子群）', (await page.locator('.info-sec-head').count()) === 4)
+// 这条**数节数**是有意的：它守的是"工作台明细真的渲染出来了"，
+// 所以节数变了要跟着改，而不是改成 `>= 3`（那样半坏也过得去）。
+// （2026-10-08：点节点 ⇒ 工作台**自动升起** —— 信息面板并入后的行为。）
+ok('点完之后**工作台自动升起**（竖排节导航 4 节：基本/元素/共轭类/子群）',
+  (await page.locator('.bench-tab').count()) === 4)
 
-/* ── ③ 信息面板的三个折叠标题都点得动（U45 起 tab 条改手风琴）──── */
+/* ── ③ 工作台的竖排节导航都点得动（窄窗下不被证明面板盖住）──── */
 const tabsHit = await page.evaluate(() =>
-  [...document.querySelectorAll('.info-sec-head')].map((b) => {
+  [...document.querySelectorAll('.bench-tab')].map((b) => {
     const r = b.getBoundingClientRect()
     const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
-    return { label: b.querySelector('.info-sec-label')?.textContent.trim(), reachable: el === b || b.contains(el) }
+    return { label: b.querySelector('.bench-tab-label')?.textContent.trim(), reachable: el === b || b.contains(el) }
   }),
 )
 ok(
-  '四个折叠标题都点得中（没被证明面板盖住）',
+  '四个节标签都点得中（没被证明面板盖住）',
   tabsHit.length === 4 && tabsHit.every((t) => t.reachable),
   JSON.stringify(tabsHit),
 )
 
 /* ── ④ 用户报的那条：元素表看不看得全 ─────────────────── */
-await page.locator('.info-sec-head[data-sec="elements"]').click({ timeout: 8000 })
+await page.locator('.bench-tab[data-tab="elements"]').click({ timeout: 8000 })
 await page.waitForTimeout(600)
 const el = await page.evaluate(() => {
   const wrap = document.querySelector('.etable-wrap')
   const table = wrap?.querySelector('table')
-  const body = document.querySelector('.info-acc')?.closest('.dock-body')
+  const body = document.querySelector('.bench-detail')
   if (!wrap || !table || !body) return null
   const br = body.getBoundingClientRect()
-  const tr = table.getBoundingClientRect()
+  const wr = wrap.getBoundingClientRect()
   const rows = [...document.querySelectorAll('.etable tbody tr[data-el]')]
-  const scroller = document.querySelector('.info-acc')
+  const scroller = document.querySelector('.bench-detail')
   return {
     rows: rows.length,
     firstRow: rows[0] ? rows[0].textContent.replace(/\s+/g, ' ').trim() : null,
-    // 24 行在 298px 面板里不可能全露出来 —— 要看的是**滚得到**（内滚量 > 0），
+    // 24 行在窄面板里不可能全露出来 —— 要看的是**滚得到**（内滚量 > 0），
     // 不是"一屏看完"（那是 v3.2 折叠想解决的，代价是把单个元素藏起来了）
     scrollable: scroller ? scroller.scrollHeight > scroller.clientHeight : false,
     heads: [...document.querySelectorAll('.etable thead th')].map((t) => t.textContent.replace(/\s+/g, '')),
-    tableOverflows: Math.round(tr.right - br.right),
+    /*
+     * 2026-10-08：判据从"表格的完整矩形"改成**滚动容器本身** ——
+     * 表格比 wrap 宽时它在 wrap 里横滚（隐藏部分本来就超，比 table.right 是假越出）；
+     * 要守的是"wrap 不越出面板"（右边两列被裁的故事就是这么发生的）。
+     */
+    wrapOverflows: Math.round(wr.right - br.right),
   }
 })
 ok('元素表逐元素一行（S_4 是 24 行，不再折成 5 个共轭类）', el?.rows === 24, JSON.stringify(el))
 ok('每一行行首就是那个元素（单个元素信息看得见）', !!el?.firstRow, el?.firstRow)
-ok('24 行能滚得完（表格不横向出面板；纵向交给折叠区滚）', el?.scrollable === true, JSON.stringify(el))
+ok('明细区能滚得完（纵向交给它滚；表格横向在 wrap 内自滚）', el?.scrollable === true, JSON.stringify(el))
 ok(
   '六列一列不少（元素 / 阶 / inZ / 共轭类 / 类大小 / 中心化子）',
   el?.heads.length === 6,
   JSON.stringify(el?.heads),
 )
 ok(
-  '表格不横向越出面板（右边两列从前就是这么被裁掉的）',
-  (el?.tableOverflows ?? 99) <= 1,
-  `越出 ${el?.tableOverflows}px`,
+  '表格的滚动容器不横向越出面板（右边两列从前就是这么被裁掉的）',
+  (el?.wrapOverflows ?? 99) <= 1,
+  `越出 ${el?.wrapOverflows}px`,
 )
 await page.screenshot({ path: '../../docs/assets/u43-narrow-elements.png' })
 
 /* ── ⑤ 「子群」这一节里的组头也点得动 ───────────────────── */
-await page.locator('.info-sec-head[data-sec="subgroups"]').click({ timeout: 8000 })
+await page.locator('.bench-tab[data-tab="subgroups"]').click({ timeout: 8000 })
 await page.waitForTimeout(500)
+/* 窄窗的自然流布局里组头在滚动区下方 —— 先把第一个滚进来（2026-10-08） */
+await page.evaluate(() => document.querySelector('.sub-group-head')?.scrollIntoView({ block: 'center' }))
+await page.waitForTimeout(400)
 const subHeads = await page.evaluate(() => {
-  const body = document.querySelector('.info-acc')?.closest('.dock-body')
+  const body = document.querySelector('.bench-detail')
   const br = body?.getBoundingClientRect()
   return [...document.querySelectorAll('.sub-group-head')].map((b) => {
     const r = b.getBoundingClientRect()

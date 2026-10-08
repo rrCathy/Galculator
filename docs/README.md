@@ -51,7 +51,7 @@
 | [PROPOSAL-zones.md](PROPOSAL-zones.md) | 工作台 / 画布 / 草稿区三区（**部分落地**：P0/P1 工作台已落地，P2 草稿区待拍板，P3 画布减法未做）|
 | [PROPOSAL-workbench-v2.md](PROPOSAL-workbench-v2.md) | 工作台重做：**玻璃「计算器」**（符号键盘 + `＋`导入 + 明细区，键盘随焦点变）（**已落地**，现行规范在 INTERACTION §4.9）|
 | [PROPOSAL-ui-refresh.md](PROPOSAL-ui-refresh.md) | 界面三方向：静水 / 仪器台 / 演算纸（**主题已定调**：深色=仪器台、浅色=演算纸，换肤另批）|
-| [PROPOSAL-workbench-ux.md](PROPOSAL-workbench-ux.md) | 工作台内部优化：显示 / 键盘 / `＋`手风琴 / 引导 的摆放（**已落地**：方案二「横排计算器」+ 紧凑手风琴，规范在 INTERACTION §4.9）|
+| [PROPOSAL-workbench-ux.md](PROPOSAL-workbench-ux.md) | 工作台内部优化：显示 / 键盘 / `＋`手风琴 / 引导 的摆放（**已落地**：方案二「横排计算器」+ 紧凑手风琴；后续 v2.2（2026-10-08）对象槽 / 竖排节导航 / 信息面板并入 / 卡片嵌入，见 HISTORY 丙编补七。规范在 INTERACTION §4.9）|
 
 ## 账本（长，按需检索）
 

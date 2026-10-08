@@ -4,8 +4,9 @@ import type { ReactNode } from 'react'
  * 浮层面板（UI v3）。
  *
  * 面板不再是"占据布局的侧栏"，而是**浮在画布上、可弹出可收起**的小抽屉：
- * 收起时只剩一个标题胶囊，展开时往下一拉。左上一排并排放三个（对象 / 操作 / 信息），
+ * 收起时只剩一个标题胶囊，展开时往下一拉。左上一排并排放三个（对象 / 操作 / 目录），
  * 左下角那个用 `up` 让它往上拉（数值区）。
+ * （2026-10-08：原来的第四个「信息」面板已并入工作台 —— 见 `InfoDock.tsx` 模块头。）
  */
 export function DockPanel({
   title,
@@ -14,7 +15,6 @@ export function DockPanel({
   onToggle,
   direction = 'down',
   bodyWidth,
-  bodyClass,
   actions,
   children,
 }: {
@@ -26,15 +26,9 @@ export function DockPanel({
   direction?: 'down' | 'up'
   /**
    * 面板体宽度（px）。默认 168（一行定义的宽度）；
-   * **信息面板要宽一档**——它装的是结论、元素表格、子群列表这些"看的东西"，
-   * 窄了只能横滚，等于没显示。
+   * 装"看的东西"的面板要宽一档（目录 196 / 证明 356）——窄了只能横滚，等于没显示。
    */
   bodyWidth?: number
-  /**
-   * 面板体的附加类名。信息面板用它挂 `.info-split` ——
-   * 那一处的 body 要**分区**（摘要区 + tab 区各自滚），外层反而不能再滚。
-   */
-  bodyClass?: string
   /** 展开后标题栏右侧的附加按钮 */
   actions?: ReactNode
   children: ReactNode
@@ -50,7 +44,7 @@ export function DockPanel({
         {open && actions}
       </header>
       {open && (
-        <div className={`dock-body${bodyClass ? ` ${bodyClass}` : ''}`} style={bodyWidth ? { width: bodyWidth } : undefined}>
+        <div className="dock-body" style={bodyWidth ? { width: bodyWidth } : undefined}>
           {children}
         </div>
       )}

@@ -90,6 +90,17 @@ const clickEl = async (sel) => {
   return true
 }
 
+/**
+ * 台收着才能和画布说话（2026-10-08：**点节点会自动升起工作台** —— 台会盖住球 / 环上
+ * 卫星 / ⊕ 球面板，真实鼠标点不动它们）。凡点球/卫星前先收台（幂等）。
+ */
+const benchDown = async () => {
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
+}
+
 // 按 data-op 找，不按显示文本（显示名 2026-10-06 起是中文，会随文案漂移）。
 const clickElByOp = (sel, opId) =>
   page.evaluate(
@@ -128,8 +139,10 @@ const clickOpsPanelOp = (opId) =>
 /** 从**群节点球**进 `customAction`：环上直接有就点它，否则先开「操作」抽屉。 */
 const openFromGroupOrb = async (id) => {
   await clickSvg(`svg.canvas g.gnode[data-id="${id}"] .gnode-hit`)
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb:not(.orb-center)')
   if (await clickElByOp('.orb-sat', 'customAction')) return true
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb-sat:text-is("操作")')
   await page.waitForTimeout(420)
   return clickOpsPanelOp('customAction')
@@ -169,6 +182,7 @@ const setOmega = async (v) => {
 const openMultiCustom = async () => {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(340)
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.multi-orb .orb-center')
   const hit = await clickCenterOp('customAction')
   await page.waitForTimeout(400)

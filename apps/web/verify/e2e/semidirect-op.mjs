@@ -170,20 +170,20 @@ const clickNode = async (id) => {
   return hit
 }
 
-/** 展开「基本」（U45：默认全收；手风琴里再点一下是收起，所以先看 class）。 */
+/** 切到「基本」（2026-10-08：信息面板并入工作台，手风琴改竖排节导航 —— 点它=切过去）。 */
 const openBasic = async () => {
   await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    const h = document.querySelector('.bench-tab[data-tab="basic"]')
     if (h && !h.classList.contains('on')) h.click()
   })
   await page.waitForTimeout(320)
 }
 
-/** 信息面板的读数。 */
+/** 明细区的读数。 */
 const inspRows = async () => {
   await openBasic()
   return page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft .insp-row')].map((r) => ({
+    [...document.querySelectorAll('.bench .insp-row')].map((r) => ({
       k: r.querySelector('.insp-k')?.textContent?.trim() ?? '',
       v: (r.querySelector('.insp-v')?.textContent ?? '').replace(/[\u200b\u2061\u2062]/g, '').replace(/\s+/g, '').trim(),
     })),
@@ -388,7 +388,14 @@ const scanPlain = async (stage, sel) => {
   const rows = await page.evaluate((s) => {
     const out = []
     for (const el of document.querySelectorAll(s)) {
-      const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+      /*
+       * ⚠️ 2026-10-08：`.katex` 子树是**渲染豁免面** —— 状态行预览改走 KaTeX 之后，
+       * `⋊` / `ϕ` 这类字形会出现在 textContent 里（它们是排版出来的，不是文本流）。
+       * 剔除后再扫"纯文本面"（与 `no-unicode-leak` 同判据）。
+       */
+      const clone = el.cloneNode(true)
+      clone.querySelectorAll('.katex').forEach((k) => k.remove())
+      const t = (clone.textContent ?? '').replace(/\s+/g, ' ').trim()
       if (t) out.push({ t, where: el.className || el.tagName })
     }
     for (const el of document.querySelectorAll(`${s} [title]`)) {

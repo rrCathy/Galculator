@@ -42,7 +42,7 @@ export function run(): void {
       const concrete = ins.find((i) => i.label === '具体结论')
       ok('满射时给出 G/ker f \\cong H', !!concrete && concrete.tex.includes('C_{3}'), concrete?.tex)
       const main = ins.find((i) => i.label === '第一同构定理')
-      ok('数字核对：|G|/|ker| = |im|', !!main && main.detail?.includes('相等 v'), main?.detail)
+      ok('数字核对：|G|/|ker| = |im|', !!main && main.detail?.includes('相等 \\checkmark'), main?.detail)
     } else {
       ok('\\varphi 是映射值', false)
     }

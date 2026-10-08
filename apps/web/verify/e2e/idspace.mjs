@@ -51,6 +51,16 @@ const ensureCard = async () => {
 }
 const status = () =>
   page.evaluate(() => document.querySelector('.composer-status')?.textContent?.replace(/\s+/g, ' ').trim() ?? '')
+
+/**
+ * 状态行现在走**渲染面**（2026-10-08：label/sub 过 KaTeX）—— `closure(A, (12)(34), …)`
+ * 排版后空格与零宽字符形态都变，文案断言一律先 **去空白 + 去零宽** 再比。
+ */
+const flatStatus = (t) =>
+  String(t ?? '')
+    .replace(/[\u200b-\u200f\u2061-\u2064\s]+/g, '')
+    /* KaTeX 的竖线用 ∣（U+2223）排 —— 归一回 |，断言的写法才跟手打的一致 */
+    .replace(/\u2223/g, '|')
 /** 只填不提交：用来读**预览**（提交后输入框清空，状态行就换了内容） */
 const typeExpr = async (expr) => {
   await ensureCard()
@@ -95,16 +105,13 @@ const clickRow = async (id) => {
   }, id)
 }
 /**
- * 展开信息面板的第 `name` 节 —— **幂等**（U45 起标题行是**开关**，不是 tab）。
- *
- * 从前这里直接 `.click()`，在 tab 模型下"点=切过去"是幂等的；换成手风琴之后
- * 再点同一节就是**收起** —— 走查里第二次 `openTab('元素')` 于是把表收没了
- * （`rows=0`）。助手要的是"保证它开着"，所以先看 `on` 再决定点不点。
+ * 切到工作台明细区的第 `name` 节（2026-10-08：信息面板并入工作台，手风琴改**竖排节导航**；
+ * 点它 = 切过去 —— **幂等**，已选中就不点）。
  */
 const openTab = async (name) => {
   await page.evaluate((n) => {
-    const h = [...document.querySelectorAll('.info-sec-head')].find(
-      (b) => b.querySelector('.info-sec-label')?.textContent.trim() === n,
+    const h = [...document.querySelectorAll('.bench-tab')].find(
+      (b) => b.querySelector('.bench-tab-label')?.textContent.trim() === n,
     )
     if (h && !h.classList.contains('on')) h.click()
   }, name)
@@ -134,7 +141,7 @@ const mulStatus = await status()
 ok('积集不再是红字（预览成功）', !mulStatus.includes('不在'), mulStatus)
 ok(
   '积集写明"翻译过"并给出配方',
-  mulStatus.includes('自动取') && mulStatus.includes('closure(A, (12)(34), (13)(24))'),
+  flatStatus(mulStatus).includes('自动取') && flatStatus(mulStatus).includes('closure(A,(12)(34),(13)(24))'),
   mulStatus,
 )
 ok('|A_4 · V_4| = 12', mulStatus.includes('12'), mulStatus)
@@ -187,10 +194,10 @@ const qStatus = await status()
 ok('商不再问"要用哪一个"', !qStatus.includes('指明'), qStatus)
 ok(
   '商自动取唯一同构的正规子群（配方写出来）',
-  qStatus.includes('自动取') && qStatus.includes('closure(A, (12)(34), (13)(24))'),
+  flatStatus(qStatus).includes('自动取') && flatStatus(qStatus).includes('closure(A,(12)(34),(13)(24))'),
   qStatus,
 )
-ok('商的预览是成功的：|G/N| = 3', qStatus.includes('|G/N| = 3'), qStatus)
+ok('商的预览是成功的：|G/N| = 3', flatStatus(qStatus).includes('|G/N|=3'), qStatus)
 
 ok('Q0 = A / V 提交', await addLine('Q0', 'A / V'))
 ok('点得中 Q0 这一行', await clickRow('Q0'))

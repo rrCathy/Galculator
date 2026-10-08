@@ -264,7 +264,7 @@ const clickNodeAt = async (id) => {
   await page.waitForTimeout(300)
 
   await clickNodeAt('G')
-  await page.click('.bench-toggle')
+  // 2026-10-08：点节点会**自动升起工作台** —— 不用再点 toggle（点了反而收回去）
   await page.waitForTimeout(700)
   await checkVisible('工作台：升起 + 焦点群（键盘键 title 全扫）')
   await checkSource('工作台：升起 + 焦点群')
@@ -289,36 +289,50 @@ const clickNodeAt = async (id) => {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
 
-  // 焦点换成集合：先收台再点节点（升起时节点被盖，T1），扫完把台收回（还旧几何给后面的段落）
+  // 焦点换成集合：先收台再点节点（升起时节点被盖，T1）——点 P 后它**自动升起**，
+  // 扫完把台收回（还旧几何给后面的段落）
   await page.click('.bench-toggle')
   await page.waitForTimeout(500)
   await clickNodeAt('P')
-  await page.click('.bench-toggle')
   await page.waitForTimeout(700)
   await checkVisible('工作台：焦点集合（单键键盘）')
   await page.click('.bench-toggle')
   await page.waitForTimeout(500)
 }
 
+/*
+ * 2026-10-08：信息面板并入工作台 —— 改成**工作台明细区**逐节巡检
+ * （点对象行会自动升起工作台；明细区就是原来那些内容）。
+ */
 for (const id of ['G', 'K', '\\varphi']) {
   await clickRow(id)
-  await page.waitForTimeout(360)
-  await checkVisible(`信息面板：${id}`)
-  const tabs = await page.locator('.info-sec-head, .dock-tab').count()
+  await page.waitForTimeout(520)
+  await checkVisible(`工作台：焦点 ${id}（明细区）`)
+  const tabs = await page.locator('.bench-tab').count()
   for (let i = 0; i < Math.min(tabs, 5); i++) {
-    const t = page.locator('.info-sec-head, .dock-tab').nth(i)
+    const t = page.locator('.bench-tab').nth(i)
     if (await t.isVisible()) {
       await t.click()
       await page.waitForTimeout(260)
-      await checkVisible(`信息面板 ${id} 的第 ${i + 1} 个 tab`)
+      await checkVisible(`工作台 ${id} 的第 ${i + 1} 个节`)
     }
   }
+}
+// 收台，把几何还给后面的段落（球巡检要点画布）
+if ((await page.locator('.bench.open').count()) > 0) {
+  await page.click('.bench-toggle')
+  await page.waitForTimeout(320)
 }
 
 /* ── 悬浮球：环 + 操作菜单 ── */
 {
   await clickRow('G')
-  await page.waitForTimeout(300)
+  await page.waitForTimeout(500)
+  /* 2026-10-08：点对象行会**自动升起工作台** —— 球会被台盖住，先收台再点球 */
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
   const orb = page.locator('.orb-center').first()
   if (await orb.count()) {
     await orb.click({ force: true })

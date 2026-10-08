@@ -31,7 +31,13 @@ const SUP_RE = new RegExp(`[${Object.keys(SUP_FROM).join('')}]+`, 'g')
  * `S·u·b` 三个变量的连写（数学排版里那确实是乘积的意思，但这里不是）。
  * 单字母的 `Z` / `C` / `N` 不在此列——它们是群名。
  */
-const FUNC_NAMES = ['pSub', 'Sub', 'Syl', 'Aut', 'Orb', 'Stab', 'Fix', 'ord', 'ker', 'im', 'det']
+const FUNC_NAMES = [
+  // 操作名（`Aut(S_4)` / `ker f` / `im f` …）
+  'pSub', 'Sub', 'Syl', 'Sylow', 'Aut', 'Orb', 'Stab', 'Fix', 'ord', 'ker', 'im', 'det',
+  // 群名（2026-10-08 补：群库/识别结果里 `SL(2,3)` / `SmallGroup(16,13)` / `QD_{16}`
+  // 这类多字母记号的字母段要正体，否则 KaTeX 把它们排成斜体字母连乘）
+  'SL', 'PSL', 'PGL', 'GL', 'QD', 'SmallGroup',
+]
 
 /**
  * 中文串要包进 `\text{}`——math mode 下的 CJK 会渲染失败。
@@ -134,8 +140,12 @@ export function toTex(label: string): string {
   }
 
   // ③ 函数名 → \operatorname{}
+  //
+  // ⚠️ 边界判据（2026-10-08 换）：从前是 `\b${name}\b`，而 `\b` 只认 ASCII 词字符 ——
+  // `QD_{16}` 里的 `QD` 后跟 `_`（也是词字符）⇒ **无边界、匹配不上**，于是 `QD` 排成
+  // 斜体字母连乘。换成"前后非字母"（后瞻允许 `_`），顺带把已转义形态 `\SL` 挡在外面。
   for (const name of FUNC_NAMES) {
-    const re = new RegExp(`\\b${name}\\b`, 'g')
+    const re = new RegExp(`(?<![A-Za-z\\\\])${name}(?![A-Za-z])`, 'g')
     s = s.replace(re, `\\operatorname{${name}}`)
   }
 

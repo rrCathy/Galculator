@@ -89,16 +89,16 @@ let lastPick = ''
 
 async function pickNode(id) {
   /*
-   * ⚠️ 先**收起**面板再点：左上面板是浮层（画布不让位），后加进来的节点可能正好落在
-   * 它底下 —— 那时 `page.mouse.click` 打的是面板，选中状态不变，读到的还是上一个对象的
-   * 结论（本轮走查就栽在这上面：读 `H = S_7` 的结论区，读出来的是 `GL(2,4)` 的 180）。
-   * 这是**走查的坑，不是产品的坑**，所以这里先收面板、点完再开。
+   * ⚠️ 先**收起工作台**再点：工作台是大浮层（画布不让位），后加进来的节点可能正好落在
+   * 它底下 —— 那时 `page.mouse.click` 打的是工作台，选中状态不变，读到的还是上一个对象的
+   * 结论（当年就栽在这上面：读 `H = S_7` 的结论区，读出来的是 `GL(2,4)` 的 180）。
+   * 这是**走查的坑，不是产品的坑**：先收台、点节点 —— 2026-10-08 起点完它会**自动升起**。
    */
-  await page.evaluate(() => {
-    const t = [...document.querySelectorAll('.dock-topleft .dock-toggle')].find((b) => b.textContent.includes('信息'))
-    if (t && t.closest('.dock').className.includes('open')) t.click()
-  })
-  await page.waitForTimeout(250)
+  const benchWasOpen = await page.evaluate(() => !!document.querySelector('.bench.open'))
+  if (benchWasOpen) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
 
   const nodes = await NODES()
   const n = nodes.find((x) => x.id === id)
@@ -116,12 +116,8 @@ async function pickNode(id) {
   }
   lastPick = `命中 ${id}`
   await page.mouse.click(n.x, n.y)
-  await page.waitForTimeout(500)
-  const t = page.locator('.dock-topleft .dock-toggle', { hasText: '信息' })
-  if (!(await t.evaluate((b) => b.closest('.dock').className.includes('open')))) {
-    await t.click({ timeout: 5000 })
-    await page.waitForTimeout(450)
-  }
+  // 点节点 ⇒ 工作台**自动升起**（2026-10-08：信息面板并入后「点对象 = 想看它」）
+  await page.waitForTimeout(650)
   return true
 }
 
@@ -145,17 +141,15 @@ async function clickObjectRow(id) {
 
 /** 幂等地展开「基本」（手风琴里再点一下是收起 —— 所以先看 class）。 */
 async function openBasic() {
-  await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
-    if (h && !h.classList.contains('on')) h.click()
-  })
-  await page.waitForTimeout(400)
+  /* 2026-10-08：信息面板并入工作台 ——「基本」是明细区竖排节导航的第一节（默认就在） */
+  await page.click('.bench-tab[data-tab="basic"]')
+  await page.waitForTimeout(300)
 }
 
 /** 「课本结论」块的行（`data-book-plain` 放纯文本形态当断言锚点）。 */
 const BOOK_ROWS = () =>
   page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft [data-book="facts"] .insp-row')].map((r) => ({
+    [...document.querySelectorAll('.bench [data-book="facts"] .insp-row')].map((r) => ({
       k: r.querySelector('.insp-k')?.textContent?.trim() ?? '',
       plain: r.querySelector('[data-book-plain]')?.getAttribute('data-book-plain') ?? '',
     })),
@@ -177,7 +171,7 @@ ok('整条路当场返回（事故时是 240s 没完）', autMs < 6000, `${autMs
 
 await pickNode('A')
 const autIns = await page.evaluate(
-  () => document.querySelector('.dock-topleft .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
+  () => document.querySelector('.bench .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
 )
 ok('Aut(S_6) 的结论区说出 1440', autIns.includes('1440'), autIns.slice(0, 160))
 ok('而且说明它是「已知结论」', autIns.includes('已知结论'), autIns.slice(0, 160))
@@ -186,8 +180,9 @@ ok('而且说明它是「已知结论」', autIns.includes('已知结论'), autI
 
 console.log('')
 console.log('== ② S_6 的「课本结论」 ==')
-ok('默认不展开时，DOM 里没有这块（零视觉成本）', (await page.locator('[data-book="facts"]').count()) === 0)
 ok('点中 S_6 这个节点', await pickNode('G'))
+ok('「基本」节（明细区默认节）里出现「课本结论」块',
+  (await page.locator('.bench [data-book="facts"]').count()) >= 1)
 await openBasic()
 const rows = await BOOK_ROWS()
 ok('展开后出现「课本结论」块', rows.length >= 5, JSON.stringify(rows.map((r) => r.k)))
@@ -195,7 +190,7 @@ ok('第一行是「自同构」，且写着 1440', rows[0]?.k === '自同构' &&
 ok('「中心」行说平凡', rows.some((r) => r.k === '中心' && r.plain.includes('平凡')), JSON.stringify(rows))
 ok('「外自同构」写出 |Out| = 2（S_6 那个著名例外）', rows.some((r) => r.k === '外自同构' && r.plain.includes('2')), JSON.stringify(rows))
 ok('「幂指数」写出 60 = lcm(1..6)', rows.some((r) => r.k === '幂指数' && r.plain.includes('60')), JSON.stringify(rows))
-ok('底部附了一句「凭什么」（来源）', (await page.locator('.dock-topleft [data-book="facts"] .insp-line').count()) === 1)
+ok('底部附了一句「凭什么」（来源）', (await page.locator('.bench [data-book="facts"] .insp-line').count()) === 1)
 ok('页面无 console 错误', logs.length === 0, logs.join(' | '))
 
 await page.screenshot({ path: '../../docs/assets/u48-known-facts.png' })
@@ -229,7 +224,7 @@ ok('画布上真的有了这个节点（不是"预览过了但没落地"）', (a
 
 await pickNode('G')
 const a6ins = await page.evaluate(
-  () => document.querySelector('.dock-topleft .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
+  () => document.querySelector('.bench .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
 )
 ok('A_6 的结论区说 |G| = 360', a6ins.includes('360'), a6ins.slice(0, 160))
 
@@ -245,36 +240,25 @@ ok('「外自同构」写出 4（Out(A_6) ≅ V_4，与 S_6 的 2 不同）', a6
 await page.screenshot({ path: '../../docs/assets/u49-a6-known-facts.png' })
 
 const tE = Date.now()
-await page.evaluate(() => {
-  const h = document.querySelector('.info-sec-head[data-sec="elements"]')
-  if (h && !h.classList.contains('on')) h.click()
-})
+await page.evaluate(() => document.querySelector('.bench-tab[data-tab="elements"]')?.click())
 await page.waitForTimeout(150)
-await page.waitForFunction(() => document.querySelectorAll('.dock-topleft .etable tbody tr').length > 0, { timeout: 8000 })
-const etRows = await page.locator('.dock-topleft .etable tbody tr').count()
+await page.waitForFunction(() => document.querySelectorAll('.bench .etable tbody tr').length > 0, { timeout: 8000 })
+const etRows = await page.locator('.bench .etable tbody tr').count()
 ok('展开「元素」能渲染完（不是空表也不是卡死）', etRows === 360, `${etRows} 行 / ${Date.now() - tE}ms`)
 ok('展开元素表当场返回（< 5s）', Date.now() - tE < 5000, `${Date.now() - tE}ms`)
 
-// 收起元素表（不然下面 `pickNode('A')` 会再渲染一份 360 行）
-await page.evaluate(() => {
-  const h = document.querySelector('.info-sec-head[data-sec="elements"]')
-  if (h && h.classList.contains('on')) h.click()
-})
-await page.waitForTimeout(200)
-
+/*
+ * 2026-10-08：工作台明细区没有"收起节"这回事（节导航是切换、不是手风琴）——
+ * 也不需要手动收面板：`pickNode` 自己会先把工作台收掉再点。
+ */
 // `Aut(A_6)` 那条路（U48 时它是"无处触发"的空头结论）
-await page.evaluate(() => {
-  const t = [...document.querySelectorAll('.dock-topleft .dock-toggle')].find((b) => b.textContent.includes('信息'))
-  if (t && t.closest('.dock').className.includes('open')) t.click()
-})
-await page.waitForTimeout(250)
 const tAu = Date.now()
 ok('`A = Aut(G)` 提交得了', await addLine('A', 'Aut(G)'))
 await closeComposer()
 ok('Aut(A_6) 当场返回（< 5s）', Date.now() - tAu < 5000, `${Date.now() - tAu}ms`)
 await pickNode('A')
 const autA6 = await page.evaluate(
-  () => document.querySelector('.dock-topleft .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
+  () => document.querySelector('.bench .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
 )
 ok('Aut(A_6) 的结论区说出 1440', autA6.includes('1440'), autA6.slice(0, 180))
 
@@ -302,7 +286,7 @@ ok('画布上真的落了三个节点（不是"预览过了但没落地"）', ['
 
 const insights = () =>
   page.evaluate(
-    () => document.querySelector('.dock-topleft .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
+    () => document.querySelector('.bench .insights')?.textContent?.replace(/[\u200b\u2061\u2062]/g, '') ?? '',
   )
 
 await pickNode('A')
@@ -316,24 +300,16 @@ const insGl = await insights()
 ok('GL(2,4) 的结论区说 |G| = 180', insGl.includes('180'), insGl.slice(0, 160))
 
 // 元素表：180 行**真渲染得出来**——只"建出群对象"不够，用户看得见的是这张表
-await page.evaluate(() => {
-  const h = document.querySelector('.info-sec-head[data-sec="elements"]')
-  if (h && !h.classList.contains('on')) h.click()
-})
+await page.evaluate(() => document.querySelector('.bench-tab[data-tab="elements"]')?.click())
 await page.waitForTimeout(200)
-await page.waitForFunction(() => document.querySelectorAll('.dock-topleft .etable tbody tr').length > 0, {
+await page.waitForFunction(() => document.querySelectorAll('.bench .etable tbody tr').length > 0, {
   timeout: 8000,
 })
-const glRows = await page.locator('.dock-topleft .etable tbody tr').count()
+const glRows = await page.locator('.bench .etable tbody tr').count()
 ok('GL(2,4) 的元素表渲染完 180 行（真群，不是「已知群」）', glRows === 180, `${glRows} 行`)
 await page.screenshot({ path: '../../docs/assets/u50-gl24-elements.png' })
 
-// 收起元素表（不然下面 pickNode 会再渲染一份 180 行）
-await page.evaluate(() => {
-  const h = document.querySelector('.info-sec-head[data-sec="elements"]')
-  if (h && h.classList.contains('on')) h.click()
-})
-await page.waitForTimeout(200)
+/* （2026-10-08：不需要"收起元素表"——工作台切焦点时那张表随之换内容，不会渲染第二份。） */
 
 const t7 = Date.now()
 ok('`H = S_7` 提交得了（U50：门窄的族补到 n = 7）', await addLine('H', 'S_7'))

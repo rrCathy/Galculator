@@ -36,6 +36,13 @@ const clean = (s) => !String(s ?? '').includes('\\')
 const hasNonAscii = (s) =>
   /[^\x00-\x7F\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF\u2013\u2014\u2018-\u201D\u2026]/.test(String(s ?? ''))
 
+/**
+ * KaTeX 渲染会在 textContent 里留**零宽字符**（`\u200b` 等，上下标之间那层）——
+ * `hasNonAscii` 判定"键盘打不出"之前先剔掉（2026-10-08：composer 预览改走渲染面后暴露）。
+ */
+const stripInvisible = (s) =>
+  String(s ?? '').replace(/[\u200b-\u200f\u2061-\u2064\u00a0\u2009\u200a\u2007]/g, '')
+
 const { chromium } = await import(PW)
 const browser = await chromium.launch({ args: ['--no-proxy-server'] })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
@@ -65,23 +72,25 @@ const declare = async (rhs) => {
 
 // ── 1. 建 Aut(S₄)：引擎给的元素记号是 LaTeX ──
 const st = await declare('Aut(S_4)')
-ok('输入框预览认得 Aut(S_4)（不报"无法识别"）', !st.includes('无法识别') && st.length > 0 && !hasNonAscii(st), st)
+ok('输入框预览认得 Aut(S_4)（不报"无法识别"，预览走渲染面）',
+  !st.includes('无法识别') && st.length > 0 && !hasNonAscii(stripInvisible(st)), JSON.stringify(stripInvisible(st)).slice(0, 120))
 await page.locator('.composer-orb .composer-row button').click()
 await page.waitForTimeout(700)
 
-// ── 2. 点对象行 \\to 信息面板（Aut 是运算产物，行在「操作」抽屉里）──
+// ── 2. 点对象行 to **工作台**（Aut 是运算产物，行在「操作」抽屉里）──
+// 2026-10-08：信息面板并入工作台——点行会**自动升起工作台**，明细区默认就在「基本」节。
 await openDock('操作')
 const rowCount = await page.locator('.row-click').count()
 ok('对象行出现', rowCount >= 1, `rows=${rowCount}`)
 await page.locator('.row-click').first().click()
-await page.waitForTimeout(500)
-/* U45：信息面板默认**全收**，属性栏住在「基本」这一节里 —— 得先点开它 */
-await page.click('.info-sec-head[data-sec="basic"]')
+await page.waitForTimeout(700)
+ok('点对象行 ⇒ 工作台自动升起（信息面板并入后）',
+  (await page.locator('.bench.open').count()) === 1)
 await page.waitForTimeout(500)
 
 const rows = async () =>
   page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft .insp-row')].map((r) => ({
+    [...document.querySelectorAll('.bench .insp-row')].map((r) => ({
       k: r.querySelector('.insp-k')?.textContent?.trim() ?? '',
       v: r.querySelector('.insp-v')?.textContent?.trim() ?? '',
       katex: r.querySelectorAll('.katex').length,
@@ -90,7 +99,7 @@ const rows = async () =>
 
 const r1 = await rows()
 const gen = r1.find((r) => r.k === '生成元')
-ok('信息面板里有「生成元」栏', !!gen, r1.map((r) => r.k).join('/'))
+ok('工作台明细里有「生成元」栏', !!gen, r1.map((r) => r.k).join('/'))
 ok('生成元栏不含反斜杠', clean(gen?.v), gen?.v)
 ok('生成元栏是数学排版（有 katex 节点）', (gen?.katex ?? 0) > 0, `katex=${gen?.katex}`)
 // KaTeX 排版之后 textContent 里就是 `α2`（下标是 CSS 排的，不是字符）——
@@ -100,7 +109,7 @@ ok('生成元栏排版出希腊字母（不是裸字面量 alpha）', /\u03b1/.t
 await page.screenshot({ path: '../../docs/assets/u14-panel-tex.png' })
 
 // ── 3. 元素 tab：一屏元素记号 ──
-await page.click('.info-sec-head[data-sec="elements"]')
+await page.click('.bench-tab[data-tab="elements"]')
 await page.waitForTimeout(500)
 const elems = await page.evaluate(() => {
   const t = document.querySelector('.etable')
@@ -115,7 +124,7 @@ ok('元素表行首是数学排版', elems.katex > 0, `katex=${elems.katex}`)
 ok('元素表排版出 α1（α 后跟下标 1）', /\u03b1\s*1/.test(elems.head), elems.head)
 
 // ── 4. 子群 tab ──
-await page.click('.info-sec-head[data-sec="subgroups"]')
+await page.click('.bench-tab[data-tab="subgroups"]')
 await page.waitForTimeout(500)
 const subs = await page.evaluate(() =>
   [...document.querySelectorAll('.insp-subs .insp-sub')].map((x) => x.textContent.trim()).join(' | '),
@@ -123,11 +132,11 @@ const subs = await page.evaluate(() =>
 ok('子群列表不含反斜杠', clean(subs), subs.slice(0, 80))
 
 // ── 5. 解析失败时，提示串是给用户抄的 \\to 必须可读 ──
-await page.click('.info-sec-head[data-sec="basic"]')
+await page.click('.bench-tab[data-tab="basic"]')
 const bad = await declare('ord(A, zzz)')
 // 提示串现在**就是** ASCII LaTeX（`\alpha_1`）——反斜杠是"能照样敲回去"的保证，
 // 不再是要消灭的东西；要消灭的是"键盘打不出来的字符"
-ok('失败提示里没有键盘打不出的字符', !hasNonAscii(bad), bad.slice(0, 90))
+ok('失败提示里没有键盘打不出的字符', !hasNonAscii(stripInvisible(bad)), bad.slice(0, 90))
 ok('失败提示列出展示形态的元素', bad.includes('\\alpha_1'), bad.slice(0, 90))
 // 再留一张：用户截图里那屏反斜杠，现在是 `元素：id, \\alpha₁, …, \\alpha₂₃`
 await page.screenshot({ path: '../../docs/assets/u14-hint-tex.png' })

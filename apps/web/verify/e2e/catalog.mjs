@@ -166,7 +166,14 @@ const scanPlain = async (stage) => {
     const out = []
     for (const sel of sels) {
       for (const el of document.querySelectorAll(sel)) {
-        const t = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+        /*
+         * ⚠️ 2026-10-08：群名条目改走 **KaTeX 渲染**（标准群记号）——`.katex` 子树是
+         * "显示靠排版、文本流要 ASCII"的豁免面（与 `no-unicode-leak` 同判据）。
+         * 不剔除的话 `C₄×C₂` 的 `×`（KaTeX 字形）会被当成泄漏误报。
+         */
+        const clone = el.cloneNode(true)
+        clone.querySelectorAll('.katex').forEach((k) => k.remove())
+        const t = (clone.textContent ?? '').replace(/\s+/g, ' ').trim()
         if (t) out.push({ t, where: el.className || el.tagName })
         const v = el.getAttribute('title')
         if (v?.trim()) out.push({ t: v, where: 'title' })
@@ -236,7 +243,8 @@ console.log('== ③ 点「阶 8」的第 3 条（= D_4）长出一个群 ==')
     eight.map((x) => x.title).join(','),
   )
   // 条目上的结构串是**纯文本面**写法（`asciiSymbol`），不是 KaTeX 源
-  ok('第 3 条显示 D_4', eight[2]?.t.includes('D_4'), JSON.stringify(eight[2]))
+  ok('第 3 条显示 D_4 的记号（2026-10-08 起是 KaTeX 渲染形态，textContent 是 `D4`）',
+    /D4/.test(eight[2]?.t ?? ''), JSON.stringify(eight[2]))
 }
 
 const beforeNodes = await nodeIds()
@@ -316,7 +324,7 @@ console.log('== ⑥ 目录里的编号 = 结论层印的编号 ==')
   const items = await catItems()
   const t24 = items.filter((x) => x.title.startsWith('smallGroup(24,'))
   ok('阶 24 列出 15 条（GAP 口径）', t24.length === 15, `${t24.length}`)
-  ok('第 12 条的结构串说 S_4', t24[11]?.t.includes('S_4'), JSON.stringify(t24[11]))
+  ok('第 12 条的结构串说 S_4（渲染形态 `S4`）', /S4/.test(t24[11]?.t ?? ''), JSON.stringify(t24[11]))
 }
 
 /* ══ ⑦ 纯文本面 + 控制台 ═════════════════════════════════════ */

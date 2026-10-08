@@ -121,12 +121,12 @@ const expandSubgroupGroups = async () => {
 }
 
 /**
- * U45：信息面板默认**全收**，而「结构」节（合成列 / 导来列 / 分解）住在「基本」里 ——
- * 读数前先保证它开着（**幂等**：已经开着就不要再点，手风琴里再点一下是收起）。
+ * 「结构」节（合成列 / 导来列 / 分解）住在「基本」里 —— 读数前先保证切到它
+ * （2026-10-08：信息面板并入工作台，手风琴改**竖排节导航**；点它 = 切过去，幂等）。
  */
 const ensureBasic = async () => {
   await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    const h = document.querySelector('.bench-tab[data-tab="basic"]')
     if (h && !h.classList.contains('on')) h.click()
   })
   await page.waitForTimeout(240)
@@ -136,9 +136,9 @@ const ensureBasic = async () => {
 const infoState = async () => {
   await ensureBasic()
   return page.evaluate(() => ({
-    chip: document.querySelector('.info-target .chip')?.textContent?.trim() ?? '',
-    label: document.querySelector('.info-target strong')?.textContent?.trim() ?? '',
-    def: document.querySelector('.info-def')?.textContent?.trim() ?? '',
+    chip: document.querySelector('.bench-screen .chip')?.textContent?.trim() ?? '',
+    label: document.querySelector('.bench-screen-title')?.textContent?.trim() ?? '',
+    def: document.querySelector('.bench-foot')?.textContent?.trim() ?? '',
     rows: [...document.querySelectorAll('.insp-row')].map((r) => ({
       k: r.querySelector('.insp-k')?.textContent?.trim() ?? '',
       v: (r.querySelector('.insp-v')?.textContent ?? '').replace(/[\u200b\u2061\u2062]/g, '').replace(/\s+/g, '').trim(),
@@ -225,7 +225,7 @@ await openDock('操作')
 ok('在「操作」抽屉里点中 M', await clickRow('M'))
 {
   const inf = await infoState()
-  ok('信息面板说这是子群集', inf.chip === '子群集', `${inf.chip} :: ${inf.def}`)
+  ok('工作台说这是子群集', inf.chip === '子群集', `${inf.chip} :: ${inf.def}`)
   /**
    * 「全部子群」这类长列表从第十七批起**按结构折成组**（`C_2 x9` 那种），
    * 成员要点开组头才渲染 —— 所以先全摊开再数（这也是用户看长列表的实际动作）。
@@ -258,10 +258,9 @@ ok('点中 H（S₄）', await clickRow('H'))
   ok('分解 = A_4 \\rtimes C_2（半直积）', inf.decomp === 'A_4 \\rtimes C_2' && inf.decompKind === 'semidirect', `${inf.decomp} :: ${inf.decompKind}`)
   ok('  S₄ 不完美', inf.perfect === '0', inf.perfect)
 }
-// 截图前把信息面板滚到「结构」节（面板本来就带 overflow —— 让配图看得见导来列与分解）
+// 截图前把明细区滚到「结构」节（工作台明细自带 overflow —— 让配图看得见导来列与分解）
 await page.evaluate(() => {
-  const dock = [...document.querySelectorAll('.dock')].find((d) => d.querySelector('.dock-title')?.textContent?.trim() === '信息')
-  const body = dock?.querySelector('.dock-body')
+  const body = document.querySelector('.bench-page')
   if (body) body.scrollTop = body.scrollHeight
 })
 await page.waitForTimeout(260)
@@ -311,7 +310,7 @@ const nodeLabels = () =>
 ok('点中 I', await clickRow('I'))
 {
   const inf = await infoState()
-  ok('信息面板说这是群', inf.chip === '群', inf.chip)
+  ok('工作台说这是群', inf.chip === '群', inf.chip)
   // 手算：Inn(D₄) ≅ D₄/Z(D₄)，|Z| = 2（{e, r²}）-> 4
   ok('阶 = |G| / |Z| = 8 / 2 = 4', inf.rows.some((r) => r.k === '阶' && r.v.includes('4')), JSON.stringify(inf.rows))
   ok(

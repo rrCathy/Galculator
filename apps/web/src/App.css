@@ -1060,7 +1060,7 @@ body {
   color: var(--text-faint);
 }
 
-/* ── 信息面板 ──────────────────────────────────────────── */
+/* ── 结构伴生边的卡片头（`EdgeSection`）────────────────────── */
 
 .info-target {
   display: flex;
@@ -1078,151 +1078,6 @@ body {
   color: var(--text-faint);
   font-family: var(--mono);
   font-size: 11.5px;
-}
-
-/* ── 信息面板的分区（U42 → U45）──────────────────────────────
-   用户第三次报元素列表：「你不会不知道信息栏有限高吧，关系条目太多给元素列表挤没了不知道？」
-
-   实测病根（1500×950，点 S₄ 的 A₄）：`.dock-body` 限高 540px，摘要区一路吃到底 ——
-   info-target 19 + 结论 129 + 关系 199（**只 2 条**）+ 可做 95 = 442，
-   于是 tab 头落到 top 502，元素表只剩 **38px** 可视（还被 flex 压扁）。
-
-   U42 的解法是**分区 + 把容器高度钉死**（`height: min(62vh, 540px)`）——
-   因为当时下半区是 tab，tab 头得钉住、内容得吃满剩余，长不起来就等于没分。
-
-   U45 换成了**可折叠分区**（单开 / 默认全收），这条前提没了：全收时面板本来就
-   该矮，用户要的正是"没点开就别占地方"。所以高度回到**内容驱动 + 封顶**，
-   滚动交给 `.info-acc`。`overflow: hidden` 留着 —— 免得 `.dock-body` 自己那条
-   `overflow-y: auto` 与内层滚动条打架（滚谁要说得清，U42 那条"分清被裁与被压扁"）。 */
-.dock-body.info-split {
-  overflow: hidden;
-}
-
-.info-brief {
-  display: flex;
-  /*
-   * `flex: none` 是必须的（U44）：摘要区**不许被邻居压**。
-   * U42 时这里是 `0 1 auto`，靠"内容 > 240 被 `max-height` 夹住 → 把空间还给下半区"
-   * 撑着；U44 砍掉关系段 / 可做行后摘要区变矮（内容 < 240），缩量就改由**邻居的内容高**
-   * 决定了 —— 切 tab 时（元素表 24 行 vs 子群分组列表）摘要区高度跟着变，tab 头上下跳
-   * （实测 160 → 176）。`flex: none` 之后摘要区**只由自己的内容决定**：
-   *   内容 < `max-height` ⇒ 贴内容高、不滚；内容溢出 ⇒ 封顶 240 自己滚。
-   * （U45 折叠分区同理：展开「元素」那张 24 行的表时，摘要区不许被它挤扁。）
-   */
-  flex: none;
-  flex-direction: column;
-  gap: 5px;
-  min-height: 0;
-  /* 封顶（U46 从 `min(28vh, 240px)` 放宽到 `min(30vh, 268px)`）：
-     结论头条字号从 13px 提到 20px 之后，**四条结论**的「作用」对象
-     （轨道分解 / Sylow III / 轨道-稳定子 / 正规⟺唯一）会顶破 240 触发滚动 ——
-     放宽一档让它自然装下。`.dock-body` 上限是 min(62vh, 540px)，30vh 与之同源。 */
-  max-height: min(30vh, 268px);
-  overflow-y: auto;
-}
-
-/* ── 可折叠分区（U45，2026-10-01）─────────────────────────────
-   用户：「重点还是不够突出，基本/元素/子群 tab 明显可以折叠起来不是吗」。
-   手风琴：单开（展开一个自动收其余）· 默认全收 · 标题行带一行摘要。
-
-   `.info-acc` 是**滚动容器**：面板高度内容驱动（全收时只有摘要 + 三行标题那么高），
-   展开的内容顶到 `.dock-body` 的 `max-height` 上限之后由这里滚。
-   —— 与 U42/U43 那条"`.etable-wrap` 交给外层滚、自己 `flex: none`"是同一套规矩，
-   换了个容器而已（表格再被压扁一次的话，"谁在滚"又会说不清）。 */
-.info-acc {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 5px;
-  min-height: 0;
-  overflow-y: auto;
-}
-
-.info-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-/* 标题行 = 整行可点的一张"卡片头"（不是小胶囊：它是分区的门，要好点） */
-.info-sec-head {
-  display: flex;
-  flex: none;
-  align-items: baseline;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 14px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.info-sec-head:hover {
-  border-color: var(--border-strong);
-}
-
-.info-sec-head.on {
-  border-color: var(--blue);
-  background: var(--blue-fill);
-  color: var(--blue-text);
-}
-
-.info-sec-label {
-  /* 500 不是 600：分区标题是**导航**，不该跟头条（`.insight-lead`）抢眼 */
-  font-weight: 500;
-}
-
-/* 摘要推到右边；拿不到数字时是空的，不留痕 */
-.info-sec-sum {
-  margin-left: auto;
-  color: var(--text-faint);
-  font-family: var(--mono);
-  font-size: 12px;
-}
-
-.info-sec-head.on .info-sec-sum {
-  color: inherit;
-  opacity: 0.8;
-}
-
-/* 展开三角：内联 SVG（`▾` 键盘打不出来）。收起时指向右，展开时朝下 */
-.info-sec-caret {
-  flex: none;
-  width: 8px;
-  height: 6px;
-  align-self: center;
-  margin-left: 2px;
-  transform: rotate(-90deg);
-  transition: transform 0.12s ease;
-}
-
-.info-sec-head.on .info-sec-caret {
-  transform: rotate(0deg);
-}
-
-.info-sec-body {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 2px 2px 4px;
-}
-
-/*
- * 表格在分区里交出自己的 300px 上限：外层（`.info-acc`）在滚，它吃满内容高。
- *
- * `flex: none` 是必须的（U43）：`.info-sec-body` 是 flex column，子项默认
- * `flex-shrink: 1` —— 24 行的表会被**压扁**到容器高，于是滚动落到表格自己身上
- * （`.etable-wrap` 本来就有 overflow: auto），外层反而没得滚。
- * 压扁本身不报错，但"谁在滚"就说不清了（U42 那条"分清被裁与被压扁"）。
- */
-.info-sec-body .etable-wrap {
-  max-height: none;
-  flex: none;
 }
 
 /* ── 结构伴生边（缺口 ⑧）：点画布上 π / ↪ / ≅ 时的那一节 ── */
@@ -1871,34 +1726,25 @@ body {
  *   · `App.tsx` 要写特判防误触（`onBackgroundClick` 里 `if (inter.kind !== 'editor') reset()`）；
  *   · 填了一半的像被点空白就没了（那正是用户 2026-10-03 报的"只能选择一个对象？"的同源问题）。
  *
- * 位置选**底部居中**（不是右侧）：左上被「对象/操作/目录/信息」四抽屉占着、
- * 右上被「证明」占着、右侧窄窗下要与左上各占一半（见 §窄窗口）——
- * **底部输入球之上那条带是唯一不挤占任何区的地方**，而编辑器本来就是"输入的一种"。
- *
- * 保持 `position: absolute`（与三个抽屉同级）而不是 fixed：它们跟着 `.app` 走，
- * `.app` 是全屏容器，两者等价，但 absolute 少一层定位上下文。
+ * 位置（2026-10-08 第三次变）：**嵌进工作台右列**。用户拍板原话：
+ * 「卡片位置应该挪到中间或者直接嵌入到工作台里面」⇒ 选后者。
+ * 上一版是 P0-1 的"贴底常驻" → W2-② 的"抬进台面"，卡片始终"飘"在台面下沿/台面上。
+ * 现在它不再浮：工作台没开时进编辑器会自动升起（`App` 的 effect），
+ * 编辑器开着时工作台不许收起（`Workbench` 的 toggle 守卫）——卡片总有着落。
  */
 .map-builder {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  z-index: 18;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  width: 430px;
-  max-width: calc(100vw - 24px);
-  /* 底边给底部输入球让位（它 `bottom: 12px` + 自己的高度），别压住那个 ✎ */
-  max-height: calc(100vh - 200px);
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
   padding: 12px 14px;
-  transform: translateX(-50%);
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.98);
-  /* 常驻卡片**不要投影**：投影是"浮在上层"的语言（弹层才需要），而它现在贴底常驻 */
-  box-shadow: none;
-  /* 常驻的视觉锚点：**左边一道实线**（颜色跟 op 的 chip 走，三个编辑器各自不同）——
-     没有它，卡片贴着底边会读成"画布底部有个残留物"；有了它读成"这里停着一个编辑器"。 */
+  /* 视觉锚点：**左边一道实线**（颜色跟 op 的 chip 走，三个编辑器各自不同）——
+     没有它，卡片会读成"右列里随便一坨"；有了它读成"这里停着一个编辑器"。 */
   border-left: 3px solid var(--purple);
 }
 
@@ -2095,11 +1941,9 @@ body {
 
 /*
  * 表格编辑器比映射编辑器宽：四阶就是 16 个格子，三阶也要 9 个。
- * 但**不许吃满屏幕** —— 它是个弹层，画布还得看得见（用户填表时要瞄着色子）。
+ * 2026-10-08 起卡片嵌进工作台右列（不再是浮层）——宽度跟基类走（`max-width: 640px`），
+ * 网格自己滚（见下面的 `.sb-scroll`）。
  */
-.struct-builder {
-  width: 470px;
-}
 
 /* 网格滚动壳：行列多的时候靠它滚，**不是**把弹层撑大（`.map-builder` 的高度由内容定）*/
 .sb-scroll {
@@ -3023,8 +2867,9 @@ body {
  *   · **底部有输入球**（`.composer-orb`）⇒ 工作台升起时它**让到右上**
  *     （编辑器卡片 P0-1 已经用 `dockRight` 做过同一件事，见 `ComposerOrb` 的注释）。
  *
- * ⚠️ 内容区**复用** `.info-acc` / `.info-sec` / `.etable` 等类名 ——
- * 那是 `InfoDock` 那边 50+ 条走查按着定位的，**同一批内容只能有一份排版**。
+ * ⚠️ 明细区**复用** `SectionBody` 的 `.insp-*` / `.etable` 等类名 ——
+ * 那是走查按着定位的，**同一批内容只能有一份排版**（2026-10-08 信息面板砍掉后，
+ * 这一份就是唯一的一份；工作台右列 = 旧信息面板的内容层）。
  */
 
 /*
@@ -3107,7 +2952,8 @@ body {
   flex: 0 0 auto;
   align-items: center;
   gap: 10px;
-  min-height: 30px;
+  /* 2026-10-08：30 → 38 —— 收起态那条胶囊就是它的高度，太矮不好点（用户点名） */
+  min-height: 38px;
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -3119,13 +2965,14 @@ body {
 .bench-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 2px 6px;
+  gap: 8px;
+  /* 2026-10-08 加大（用户：「工作台收起按钮太小了」）—— 收起/展开是最高频的按钮，别抠 */
+  padding: 5px 10px;
   border: none;
-  border-radius: 5px;
+  border-radius: 7px;
   background: transparent;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13.5px;
   cursor: pointer;
 }
 
@@ -3135,7 +2982,7 @@ body {
 
 .bench-caret {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .bench-title {
@@ -3154,7 +3001,8 @@ body {
 
 /*
  * **左键盘 / 右明细**（2026-10-07 方案二「横排计算器」，用户拍板）：
- * 左列 384px = 显示屏 + 待选 + 键盘（三块）+ `＋`；右列 = 明细大阅读区。
+ * 左列 340px（2026-10-08 从 384 收窄：用户「左边还是有点宽，可以再窄一点」）
+ * = 显示屏 +（对象槽）+ 待选 + 键盘（三块）+ `＋`；右列 = 明细大阅读区。
  * 右列在操作（按键盘 / 翻台面 / 凑参数）时**纹丝不动** —— 这是横排的目的。
  *
  * ⚠️ 历史：P1-2 是两栏 → W3 翻回纵向三段（计算器的行序）→ **2026-10-07 翻回两栏**。
@@ -3172,10 +3020,10 @@ body {
   overflow: hidden;
 }
 
-/* 左列：动手的（显示 / 待选 / 键盘 / ＋）。内容多时自己滚（pending 候选多了、窄窗）*/
+/* 左列：动手的（显示 / 对象槽 / 待选 / 键盘 / ＋）。内容多时自己滚（pending 候选多了、窄窗）*/
 .bench-left {
   display: flex;
-  flex: 0 0 384px;
+  flex: 0 0 340px;
   flex-direction: column;
   gap: 10px;
   min-height: 0;
@@ -3216,11 +3064,6 @@ body {
   background: #f3f1ea;
   font-family: var(--mono);
   font-size: 11.5px;
-}
-
-/* 内容区内部的滚动交给 `.info-acc`（它自带 `overflow-y: auto`）*/
-.bench-body .info-acc {
-  min-height: 0;
 }
 
 .bench-foot {
@@ -3291,17 +3134,15 @@ body {
  */
 
 /*
- * 编辑器卡片开着 ⇒ 细节区让位（P1-2）。
+ * 编辑器卡片开着 ⇒ **右列就是卡片**（2026-10-08）。
  *
- * ⚠️ 那三张卡片是 `position: absolute; bottom: 12px` 的**贴底居中浮层**（P0-1），
- * 而工作台也贴底 ⇒ 必然重叠。真机截图里编辑器把任务栏右半压掉一半，
- * 按钮点不到（`.map-builder` z-index 18 > `.bench` 14）。
- *
- * ⇒ 工作台右栏改窄成一条提示，**不试图躲开** —— 躲开只会有半块按钮露在外面，
- * 比明确让位更糟（"为什么这几个按钮点不到"比"这里暂时没有细节"更难懂）。
+ * 历史：P1-2 起这里是"让位成一条提示"（卡片当时是贴底浮层，必然与工作台重叠）；
+ * 现在卡片改嵌右列（用户拍板「直接嵌入到工作台里面」）⇒ 让位语义取消，
+ * 右列只剩一个职责：给卡片一个稳定、可滚的家。
  */
 .bench-detail.busy {
-  flex: 0 0 auto;
+  /* 卡片超高时自己滚（12 阶运算表那种），别把右列撑破 */
+  overflow-y: auto;
 }
 
 /* ── 工作台对象槽位（T1，2026-10-05）────────────────────────────
@@ -3542,12 +3383,22 @@ body {
 }
 
 .bench-screen-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   font-size: 15px;
   font-weight: 500;
   color: #0c447c;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 值类型 chip（群 / 子群集 / 映射…）——信息面板并入时补搬的小徽标 */
+.bench-screen-title .chip {
+  flex: none;
+  font-size: 10px;
+  font-weight: 400;
 }
 
 .bench-screen-sub {
@@ -3734,43 +3585,59 @@ body {
   color: var(--text-faint);
 }
 
-/* ── ③ 明细区（平铺 tab，**不是手风琴**）──────────────────── */
+/* ── ③ 明细区：**左缘竖排节导航 + 右内容**（2026-10-08）──────────
+ *
+ * 用户：「这个基本，元素，共轭类等等全部竖着放，不要横着摆。」
+ * 横排 tab 一字排开太长太挤；竖着一列像阅读目录，内容在右。
+ * 标签**只写名字**（「基本」就写「基本」）——计数/级别都在内容区里，不在标签上重复。 */
+
+.bench-read {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  gap: 12px;
+  min-height: 0;
+}
 
 .bench-tabs {
   display: flex;
   flex: 0 0 auto;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  gap: 2px;
+  width: 86px;
+  overflow-y: auto;
 }
 
 .bench-tab {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 4px 11px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-dim, var(--text));
   font-size: 12.5px;
+  text-align: left;
   cursor: pointer;
 }
 
 .bench-tab:hover {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .bench-tab.on {
   background: rgba(230, 241, 251, 0.95);
-  border-color: rgba(133, 183, 235, 0.7);
   color: #0c447c;
   font-weight: 500;
 }
 
-.bench-tab-sum {
-  font-size: 11px;
-  color: var(--text-faint);
+/* 内容列：结论层（若有）在上、当前节在下 */
+.bench-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .bench-page {
@@ -3778,6 +3645,46 @@ body {
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+/*
+ * ⚠️ **窄窗的明细区覆写——必须放在上面那几条基规则「之后」**：
+ * 同特异性下"写在后面"胜；这一版最初放进了文件前面的 1080px 媒体查询里，
+ * 被这里的基础规则（`.bench-tabs` 的 `width: 86px`）整条压过 ⇒ 竖导航在
+ * 691px 窗口里被裁掉后一半、"共轭类 / 子群"点不中（2026-10-08 走查实测抓到）。
+ */
+@media (max-width: 1080px) {
+  /* 竖排节导航在窄窗（上下两段布局）没有足够高度 —— 折回**横排胶囊**（v2.1 形态）。
+     宽窗的竖排是阅读目录，窄窗要省高度。 */
+  .bench-tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: auto;
+    gap: 5px;
+    overflow: visible;
+    margin-bottom: 2px;
+  }
+
+  /* 窄窗明细区没有"内部分区"的余地：结论层 + 内容整体**自然流**，
+     由 `.bench-detail` 一处滚（避免 insights 溢出压到导航 / 脚注上）。 */
+  .bench-read {
+    flex: none;
+    flex-direction: column;
+  }
+
+  .bench-main {
+    flex: none;
+  }
+
+  .bench-brief,
+  .bench-page {
+    flex: none;
+    overflow: visible;
+  }
+
+  .bench-detail {
+    overflow-y: auto;
+  }
 }
 
 /* ── 工作台升起时，输入球让位（W3）───────────────────────────
@@ -3883,18 +3790,26 @@ body {
  * 谁会用丢东西的工作台？」⇒ 台面自己记一份"摆上来的对象"，点一下切回去、`x` 拿下去。
  * 存的是 id，对象与画布**是同一份**。 */
 
-/* 台面 chips（方案二起挂在**标题栏右侧**，不另占一行）*/
+/* 对象槽（原「台面」，2026-10-08 挪进左列 —— 用户：「这个台面可以放到工作台左边作为『对象槽』」）
+   竖直一小块：标签 + chips（chips 横排 wrap，左列窄，数量多了换行）。 */
 .bench-stage {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  overflow: hidden;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .bench-stage-label {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-faint);
+  letter-spacing: 0.12em;
+  padding-left: 2px;
+}
+
+.bench-stage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .bench-chip {
@@ -4010,26 +3925,14 @@ body {
   min-width: 0;
 }
 
-/* ── 编辑器卡片**收进台面**（W2-②，2026-10-06）────────────────────
+/* ── 编辑器卡片的位置（W2-② → 2026-10-08）────────────────────
  *
- * 用户实测原话：「这又弄得啥？**窗口乱摆**？」
- *
- * 病根：`.map-builder` 是 P0-1 定的「贴底居中」浮层（`bottom: 12px`），
- * 而工作台的底边在 `bottom: 52px` ⇒ 卡片**吊在台面下面**，一半压着台面、
- * 一半露在台外，还跟台内的按钮错位 —— 看着就像"飘在那儿"。
- *
- * ⇒ 工作台展开时把它**抬到台面里**：`bottom = 52 + 14`，并补一道投影
- * （贴底常驻时不要投影是 P0-1 定的；可**浮在台面上**就该有投影，
- * 否则读不出"它在台面之上"这一层）。
- * 高度也跟着台面走，别顶出台面。
+ * 历史两跳：W2-② 把它"抬进台面"（`bottom = 52 + 14` + 投影）——那是"贴底浮层"时代的补丁；
+ * 2026-10-08 卡片直接嵌进工作台右列（`.bench-detail` 里），浮层定位整套作废。
+ * 现在这里没有 `.app.bench-open .map-builder` 规则了 —— 卡片跟着右列走。
  */
-.app.bench-open .map-builder {
-  bottom: calc(52px + 14px);
-  max-height: calc(var(--bench-h, 100vh) - 130px);
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.16);
-}
 
-/* 映射的事实表（定义域/陪域/单·满/核/像）—— 信息面板与工作台共用一份。
+/* 映射的事实表（定义域/陪域/单·满/核/像）—— 工作台（2026-10-08 起是它唯一的面）。
    用表而不是纯文本：**键与值要对齐**，不然"核 ker: e, (12)..." 读起来是一锅粥。 */
 .map-facts {
   margin-top: 8px;

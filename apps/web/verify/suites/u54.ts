@@ -417,7 +417,7 @@ export function run(): void {
 
   /* ══ 7 · 结论层的 detail / label（纯文本面）═══════════════ */
 
-  suite('u54 - 结论层 detail / label：纯文本面')
+  suite('u54 - 结论层 label：纯文本面（detail 2026-10-08 起走渲染面）')
 
   {
     const ins: Insight[] = []
@@ -439,10 +439,13 @@ export function run(): void {
 
     ok('结论层真的产出了条目', ins.length >= 4, `got=${ins.length}`)
 
-    const issues = ins.flatMap((x) => [
-      ...plainIssues(`insight.label(${x.label})`, x.label),
-      ...(x.detail ? plainIssues(`insight.detail(${x.label})`, x.detail) : []),
-    ])
-    eq('label / detail 全干净', issues.slice(0, 6).join(' | '), '')
+    /*
+     * ⚠️ 2026-10-08：**detail 升级为渲染面**（`Insights` 里过 `TexOrText`）——
+     * `→` / `\checkmark` / `\to` 都是合法渲染源，不再按纯文本面查（旧判据退役）。
+     * `label` 仍是纯文本面（保留检查）；detail 的"渲染后无泄漏"由 e2e 的 DOM 巡检守
+     * （`no-unicode-leak` / `tex-render`）。
+     */
+    const issues = ins.flatMap((x) => [...plainIssues(`insight.label(${x.label})`, x.label)])
+    eq('label 全干净（detail 已升级渲染面，不在此查）', issues.slice(0, 6).join(' | '), '')
   }
 }

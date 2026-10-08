@@ -5,7 +5,8 @@ import {
   parseGroupNotation,
   type Group,
 } from '@groupviz/core'
-import { asciiSymbol } from './pretty'
+import { prettySymbol } from './pretty'
+import { toTex } from './tex'
 
 /**
  * **小群表**（U55）—— 把引擎内嵌的 1–31 阶小群库接成可导入的对象。
@@ -157,7 +158,14 @@ export function planSmallGroup(order: number, i: number): SmallGroupPlan {
   return { ok: true, group }
 }
 
-/** 目录条目（给界面列用）。`structure` 是**纯文本面**写法（`asciiSymbol`）。 */
+/**
+ * 目录条目（给界面列用）。
+ *
+ * `structure` 是**渲染面 TeX 源**（2026-10-08 从 `asciiSymbol` 换过来）：
+ * 用户点名群库名字要「标准群记号」——`C_5:C_4` 渲染成 $C_5{:}C_4$、
+ * `C_{10}\times C_{2}` 渲染成乘法号、`SL(2,3)` / `SmallGroup(16,13)` 的字母段
+ * 正体（`toTex` 的多字母函数名规则）。消费端一律 `<Tex tex={structure} />`。
+ */
 export interface SmallGroupListEntry {
   /** GAP 编号（1 起）—— 就是 `smallGroup(n, i)` 的 `i` */
   i: number
@@ -184,7 +192,7 @@ export function smallGroupCatalog(): SmallGroupList[] {
     const i = gapNumberOf(e.order, e.index)
     if (i === null) continue
     const list = byOrder.get(e.order) ?? []
-    list.push({ i, structure: asciiSymbol(e.group.symbol) })
+    list.push({ i, structure: toTex(prettySymbol(e.group.symbol)) })
     byOrder.set(e.order, list)
   }
   return [...byOrder.entries()]

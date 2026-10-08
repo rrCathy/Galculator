@@ -3,6 +3,7 @@ import { evalExpr, type EvalResult } from '../gal/evalDef'
 import { checkName, isNameLike, nextAutoName, normalizeName, RESERVED_CALL_NAMES } from '../gal/naming'
 import { VALUE_TYPE_LABEL } from '../gal/value'
 import type { GalObject } from '../gal/types'
+import { TexOrText } from './Tex'
 
 /**
  * 兼容"整行粘贴"：`G = D_4` 拆成名字与表达式。
@@ -243,8 +244,20 @@ function ComposerStatus({
           <span className={`chip chip-${preview.value.type}`}>
             {VALUE_TYPE_LABEL[preview.value.type]}
           </span>
-          <span className="status-label">{preview.label}</span>
-          {preview.sub && <span className="status-meta">{preview.sub}</span>}
+          {/*
+           * 预览的数学名走**渲染面**（2026-10-08）：`label` 是 LaTeX 源
+           * （map 的 label 就是 `A_4 \to C_3`）——字面显示的话反斜杠裸奔
+           * （用户点名「许多地方都没有 tex 渲染好」）。`sub` 同理。
+           * 纯 ASCII 的构造式（`labeledSet(5)`）由 `shouldTex` 挡下，照旧文本。
+           */}
+          <span className="status-label">
+            <TexOrText text={preview.label} />
+          </span>
+          {preview.sub && (
+            <span className="status-meta">
+              <TexOrText text={preview.sub} />
+            </span>
+          )}
           <span className="status-meta">回车提交</span>
         </div>
       </>

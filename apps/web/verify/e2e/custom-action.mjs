@@ -133,6 +133,17 @@ const clickEl = async (sel) => {
   return true
 }
 
+/**
+ * 台收着才能和画布说话（2026-10-08：**点节点会自动升起工作台** —— 台会盖住球 / 环上
+ * 卫星 / ⊕ 球面板，真实鼠标点不动它们）。凡点球/卫星前先收台（幂等）。
+ */
+const benchDown = async () => {
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
+}
+
 /** 选中一个画布节点（悬浮球的唯一入口）。 */
 const selectNode = (id) => clickSvg(`svg.canvas g.gnode[data-id="${id}"] .gnode-hit`)
 
@@ -177,7 +188,9 @@ const clickOrbOp = async (opId) => {
 /** 选中节点 -> 点球 -> 点「操作」-> 单对象操作面板。 */
 const openOpsPanel = async (id) => {
   await selectNode(id)
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb:not(.orb-center)')
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb-sat:text-is("操作")')
 }
 
@@ -204,25 +217,25 @@ const setCycle = async (v) => {
   await page.waitForTimeout(320)
 }
 
-/** 展开「基本」（U45：默认全收；手风琴里再点一下是收起，所以先看 class）。 */
+/** 切到「基本」（2026-10-08：信息面板并入工作台，手风琴改竖排节导航）。 */
 const openBasic = async () => {
   await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    const h = document.querySelector('.bench-tab[data-tab="basic"]')
     if (h && !h.classList.contains('on')) h.click()
   })
   await page.waitForTimeout(320)
 }
 
 /**
- * 信息面板的读数（`.insp-k` / `.insp-v`）。
+ * 明细区的读数（`.insp-k` / `.insp-v`）。
  *
- * 群对象的分区**默认全收**（U45），所以先展「基本」；作用这类非群对象走 `OtherTab`，
- * 没有分区头，`openBasic` 自然什么也不做。
+ * 群对象走分节（先切「基本」）；作用这类非群对象走 `OtherTab`（没有节导航），
+ * `openBasic` 自然什么也不做。
  */
 const inspRows = async () => {
   await openBasic()
   return page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft .insp-row')].map((r) => ({
+    [...document.querySelectorAll('.bench .insp-row')].map((r) => ({
       k: r.querySelector('.insp-k')?.textContent?.trim() ?? '',
       v: (r.querySelector('.insp-v')?.textContent ?? '').replace(/[\u200b\u2061\u2062]/g, '').replace(/\s+/g, '').trim(),
     })),

@@ -417,20 +417,19 @@ console.log('\n== 场景 6/7：半群结构 = 双线圆，球上没有群操作 
   ok('半群结构的球上也没有「操作」面板（一条群操作都列不出）', !ring.includes('操作'), ring.join(', '))
   ok('  但它不是死路：还有「信息」', ring.includes('信息'), ring.join(', '))
 
-  // 面板：公理档案 + 运算表（§11.2：级别在面板，不在画布）
-  await clickRingItem('信息')
   /*
-   * ⚠️ 手风琴是**单开**的（U45 定的：展开一节自动收其余）。所以两节要**分两趟读**：
-   *   ① 点「信息」⇒ 展开的是 `axioms`，先把它读掉；
-   *   ② 再点「运算表」标题 ⇒ `axioms` 被收起、`table` 摊开，然后读表。
-   * 想一趟把两节都读到，会两边都拿到空值（本节第一次就栽在这里）。
+   * 面板：公理档案 + 运算表（§11.2：级别在面板，不在画布）。
+   *
+   * ⚠️ 2026-10-08：信息面板并入工作台、手风琴改**竖排节导航**（一次摊一节）——
+   * 两节仍然要**分两趟读**：先切 `axioms` 读掉，再切 `table` 读表。
    */
+  await clickRingItem('信息') // 升起工作台（球菜单的「信息」入口 = 升台 + basic）
+  await page.evaluate(() => document.querySelector('.bench-tab[data-tab="axioms"]')?.click())
+  await page.waitForTimeout(420)
   const axioms = await page.evaluate(() => {
-    const secs = [...document.querySelectorAll('.info-acc .info-sec')].map((s) =>
-      s.getAttribute('data-sec'),
-    )
-    const v = document.querySelector('.info-sec[data-sec="axioms"] .sb-verdict')
-    const rows = [...document.querySelectorAll('.info-sec[data-sec="axioms"] .sb-ax')].map((r) => ({
+    const secs = [...document.querySelectorAll('.bench-tab')].map((s) => s.dataset.tab)
+    const v = document.querySelector('.bench .sb-verdict')
+    const rows = [...document.querySelectorAll('.bench .sb-ax')].map((r) => ({
       k: r.querySelector('.sb-ax-k')?.textContent?.trim() ?? '',
       mark: r.querySelector('.sb-mark')?.textContent?.trim() ?? '',
     }))
@@ -453,13 +452,10 @@ console.log('\n== 场景 6/7：半群结构 = 双线圆，球上没有群操作 
   ok('  结合 ✓（左零带确实结合）', axioms.assoc === 'v', axioms.assoc)
   ok('  单位元 ✗（左零带没有单位元 —— 这就是它停在半群的原因）', axioms.unit === 'x', axioms.unit)
 
-  await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="table"]')
-    if (h) h.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  })
+  await page.evaluate(() => document.querySelector('.bench-tab[data-tab="table"]')?.click())
   await page.waitForTimeout(400)
   const tbl = await page.evaluate(() => {
-    const table = document.querySelector('.info-sec[data-sec="table"] .struct-table')
+    const table = document.querySelector('.bench .struct-table')
     return {
       hasTable: !!table,
       tableSize: table?.getAttribute('data-size') ?? null,
@@ -481,7 +477,7 @@ console.log('\n== 场景 8：新增界面的纯文本面 ==')
 {
   const texts = await page.evaluate(() => {
     const out = []
-    for (const sel of ['.notice', '.orb', '.info-acc', '.dock-topleft', '.map-builder']) {
+    for (const sel of ['.notice', '.orb', '.bench', '.dock-topleft', '.map-builder']) {
       for (const el of document.querySelectorAll(sel)) {
         out.push(el.textContent.replace(/\s+/g, ' ').trim())
       }

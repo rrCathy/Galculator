@@ -10,7 +10,7 @@ import {
   type GroupElement,
   type Subgroup,
 } from '@groupviz/core'
-import { asciiSymbol, prettySymbol, superscript } from './pretty'
+import { prettySymbol, superscript } from './pretty'
 import { groupFingerprint } from './identity'
 // 小群表（U55）：识别结果给的 `SmallGroup(阶, 编号)` 坐标必须与 op `smallGroup(n, i)`
 // **同一个口径**（GAP 的 1 起编号），否则印出来的坐标抄进去会拿到另一个群。
@@ -299,9 +299,9 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
        * 而 `(C_4 x C_2):C_2`（16 阶）**既不素也不循环**。素数阶要**真判素数**。
        */
       detail: isPrimeOrder
-        ? '素数阶 -> 循环群'
+        ? '素数阶 → 循环群'
         : fs.length === 1
-          ? '素数幂阶 -> 幂零（Sylow 分析的入口）'
+          ? '素数幂阶 → 幂零（Sylow 分析的入口）'
           : '素因子分解（Sylow 分析的入口）',
     })
   }
@@ -325,7 +325,7 @@ export function mapInsights(map: GalMap): Insight[] {
     tex: `${G.symbol}/\\ker f \\;\\cong\\; \\operatorname{im} f`,
     detail:
       `|G| / |ker| = ${G.order} / ${k} = ${G.order / k}` +
-      `，|im| = ${im} ---- 两边 ${G.order / k === im ? '相等 v' : '不等 x'}`,
+      `，|im| = ${im}，两边 ${G.order / k === im ? '相等 \\checkmark' : '不等 \\times'}`,
   })
 
   // ② 具体到这个映射：商群同构于什么
@@ -337,7 +337,7 @@ export function mapInsights(map: GalMap): Insight[] {
       label: '具体结论',
       tone: 'key',
       tex: `${G.symbol}/\\ker f \\;\\cong\\; ${H.symbol}`,
-      detail: `满射 -> 商群与靶群同构${qIso ? `（识别为 ${asciiSymbol(qIso)}）` : ''}`,
+      detail: `满射 \\to 商群与靶群同构${qIso ? `（识别为 ${prettySymbol(qIso)}）` : ''}`,
     })
   } else if (qIso) {
     out.push({
@@ -389,7 +389,7 @@ export function actionInsights(A: GalAction): Insight[] {
       tone: transitive ? 'key' : 'note',
       tex: `\\lvert \\Omega \\rvert = ${A.n} = ${sizes.join(' + ')}`,
       detail: transitive
-        ? '只有一个轨道 \\to 作用**传递**'
+        ? '只有一个轨道 \\to 作用传递'
         : `${sizes.length} 个轨道${isConj ? '（这正是类方程）' : ''}`,
     })
   }
@@ -441,8 +441,8 @@ export function actionInsights(A: GalAction): Insight[] {
       tone: 'key',
       tex: `n_{${p}} = ${np} \\equiv 1 \\pmod{${p}}, \\qquad n_{${p}} \\mid ${m}`,
       detail:
-        `核对：${np} mod ${p} = ${np % p}${np % p === 1 ? ' v' : ' x'}` +
-        `，${m} / ${np} = ${m / np}${m % np === 0 ? ' v' : ' x'}`,
+        `核对：${np} \\bmod ${p} = ${np % p}${np % p === 1 ? ' \\checkmark' : ' \\times'}` +
+        `，${m} / ${np} = ${m / np}${m % np === 0 ? ' \\checkmark' : ' \\times'}`,
     })
 
     // 轨道-稳定子：n_p 就是唯一那个轨道的大小，Stab 即 N_G(H)
@@ -453,7 +453,7 @@ export function actionInsights(A: GalAction): Insight[] {
         label: '轨道-稳定子',
         tone: 'key',
         tex: `n_{${p}} = [G : N_G(H)] = ${G.order} / ${stab.length} = ${G.order / stab.length}`,
-        detail: `|Orb| * |Stab| = ${np} * ${stab.length} = ${np * stab.length} = |G| ${ok ? 'v' : 'x'}`,
+        detail: `|Orb| \\cdot |Stab| = ${np} \\cdot ${stab.length} = ${np * stab.length} = |G| ${ok ? '\\checkmark' : '\\times'}`,
       })
     }
 
@@ -481,7 +481,7 @@ export function actionInsights(A: GalAction): Insight[] {
       label: '中心',
       tone: 'note',
       tex: `Z(G) = \\operatorname{Fix}(G \\curvearrowright G)`,
-      detail: `长度 1 的轨道有 ${fix} 个 ---- 它们对应 G 的中心元`,
+      detail: `长度 1 的轨道有 ${fix} 个，它们对应 G 的中心元`,
     })
   }
 

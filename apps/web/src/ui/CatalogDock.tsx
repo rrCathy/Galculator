@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { smallGroupCatalog, type SmallGroupList } from '../gal/smallGroups'
 import { DockPanel } from './DockPanel'
 import { NewObjectForms } from './NewObjectForms'
+import { Tex } from './Tex'
 
 /**
  * 「目录」浮层面板（U56）—— 从库里**挑**群、**凭空造**集合，点了就落成一行定义。
@@ -121,14 +122,17 @@ export function CatalogDock({
                   key={e.i}
                   className="cat-g"
                   /*
-                   * `title` 是**纯文本面**：这里给的是用户能照抄的调用（`smallGroup(8, 3)`），
-                   * 不是 `structure` 那个展示串（后者可能带 `^` 之类，但仍是 ASCII）。
+                   * `title` 是**纯文本面**：这里给的是用户能照抄的调用（`smallGroup(8, 3)`）。
                    */
                   title={`smallGroup(${g.order}, ${e.i})`}
                   onClick={() => onAdd(`smallGroup(${g.order}, ${e.i})`)}
                 >
                   <span className="cat-i">{e.i}</span>
-                  <span className="cat-sym">{e.structure}</span>
+                  {/* 群名走**渲染面**（2026-10-08）：`structure` 是 TeX 源（`toTex` 规范过）——
+                      `C_5:C_4` 排成 C₅:C₄、`SL(2,3)` 字母段正体（用户点名「标准群记号」）*/}
+                  <span className="cat-sym">
+                    <Tex tex={e.structure} />
+                  </span>
                 </button>
               ))}
             </div>

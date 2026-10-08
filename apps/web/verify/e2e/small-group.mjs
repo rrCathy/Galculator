@@ -105,17 +105,17 @@ const NODES = () =>
 let lastPick = ''
 
 /**
- * 点一个画布节点并展开「信息」。
+ * 点一个画布节点（2026-10-08：点节点会**自动升起工作台**，信息就在它的明细区）。
  *
- * ⚠️ 左上面板是**浮层**（画布不让位）：先收起面板，点之前用 `elementFromPoint` 验命中，
+ * ⚠️ 工作台是**大浮层**（画布不让位）：先收起它，点之前用 `elementFromPoint` 验命中，
  * 不对就返回 `false`（**不静默读上一个对象的结论**）。这两条都是 U50 走查踩出来的。
  */
 const pickNode = async (id) => {
   await page.evaluate(() => {
-    const t = [...document.querySelectorAll('.dock-topleft .dock-toggle')].find((b) => b.textContent.includes('信息'))
-    if (t && t.closest('.dock').className.includes('open')) t.click()
+    const b = document.querySelector('.bench.open')
+    if (b) document.querySelector('.bench-toggle')?.click()
   })
-  await page.waitForTimeout(250)
+  await page.waitForTimeout(320)
   const nodes = await NODES()
   const n = nodes.find((x) => x.id === id)
   if (!n) {
@@ -132,12 +132,8 @@ const pickNode = async (id) => {
   }
   lastPick = `命中 ${id}`
   await page.mouse.click(n.x, n.y)
-  await page.waitForTimeout(500)
-  const t = page.locator('.dock-topleft .dock-toggle', { hasText: '信息' })
-  if (!(await t.evaluate((b) => b.closest('.dock').className.includes('open')))) {
-    await t.click({ timeout: 5000 })
-    await page.waitForTimeout(450)
-  }
+  // 点节点 ⇒ 工作台**自动升起**（2026-10-08：信息面板并入后「点对象 = 想看它」）
+  await page.waitForTimeout(650)
   return true
 }
 
@@ -174,10 +170,10 @@ const clickObjectRow = async (id) => {
 /** 选中一个对象：先试画布（有命中校验），被浮层挡了就改走「对象」抽屉那一行。 */
 const pickAny = async (id) => (await pickNode(id)) || clickObjectRow(id)
 
-/** 幂等地展开某个信息分区（手风琴里再点一下是收起 —— 所以先看 class）。 */
+/** 切到某个信息节（2026-10-08：**竖排节导航**，点它 = 切过去；已选中就不点）。 */
 const openSection = async (sec) => {
   await page.evaluate((s) => {
-    const h = document.querySelector(`.info-sec-head[data-sec="${s}"]`)
+    const h = document.querySelector(`.bench-tab[data-tab="${s}"]`)
     if (h && !h.classList.contains('on')) h.click()
   }, sec)
   await page.waitForTimeout(360)
@@ -187,37 +183,37 @@ const openSection = async (sec) => {
 const elementOrders = async () => {
   await openSection('elements')
   return page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft .etable tr[data-el]')]
+    [...document.querySelectorAll('.bench .etable tr[data-el]')]
       .map((tr) => tr.querySelectorAll('.etable-cell')[0]?.textContent?.trim() ?? '')
       .filter(Boolean)
       .sort(),
   )
 }
 
-/** 幂等地展开「基本」。 */
+/** 切到「基本」。 */
 const openBasic = async () => {
   await page.evaluate(() => {
-    const h = document.querySelector('.info-sec-head[data-sec="basic"]')
+    const h = document.querySelector('.bench-tab[data-tab="basic"]')
     if (h && !h.classList.contains('on')) h.click()
   })
   await page.waitForTimeout(320)
 }
 
-/** 信息面板读数（`.insp-k` / `.insp-v`）—— 真值是 `|G|=16` 这种形态，别自己造。 */
+/** 明细区读数（`.insp-k` / `.insp-v`）—— 真值是 `|G|=16` 这种形态，别自己造。 */
 const inspRows = async () => {
   await openBasic()
   return page.evaluate(() =>
-    [...document.querySelectorAll('.dock-topleft .insp-row')].map((r) => ({
+    [...document.querySelectorAll('.bench .insp-row')].map((r) => ({
       k: r.querySelector('.insp-k')?.textContent?.trim() ?? '',
       v: (r.querySelector('.insp-v')?.textContent ?? '').replace(/[\u200b\u2061\u2062]/g, '').replace(/\s+/g, '').trim(),
     })),
   )
 }
 
-/** 结论区（`.dock-topleft .insights`）的全文 —— 识别坐标就在这儿。 */
+/** 结论层（`.bench .insights`）的全文 —— 识别坐标就在这儿。 */
 const insights = () =>
-  page.evaluate(() => (document.querySelector('.dock-topleft .insights')?.textContent ?? '').replace(/[\u200b\u2061\u2062]/g, ''))
-const insightsOk = () => page.evaluate(() => document.querySelectorAll('.dock-topleft .insights').length > 0)
+  page.evaluate(() => (document.querySelector('.bench .insights')?.textContent ?? '').replace(/[\u200b\u2061\u2062]/g, ''))
+const insightsOk = () => page.evaluate(() => document.querySelectorAll('.bench .insights').length > 0)
 
 /** 纯文本面扫描：只扫明确是纯文本的节点（KaTeX 渲染的串带零宽字符，别混进来）。 */
 const PLAIN_SELECTORS = [
@@ -226,8 +222,8 @@ const PLAIN_SELECTORS = [
   '.orb-ops-panel .orb-op',
   '.orb-ops-panel .orb-op code',
   '.orb-ops-panel .orb-op-doc',
-  '.dock-topleft .insp-k',
-  '.dock-topleft .info-sec-label',
+  '.bench .insp-k',
+  '.bench-tab-label',
 ]
 const scanPlain = async (stage) => {
   const rows = await page.evaluate((sels) => {
@@ -300,7 +296,7 @@ ok('点得中 Q', await pickNode('Q'), lastPick)
   const ins = await insights()
   // 识别结果走 KaTeX 渲染，`textContent` 里 `D_4` 是 `D4`（下标被渲染掉了）—— 两种形态都认
   ok('  结论区说出 D_4（GAP (8,3) 是二面体群）', ins.includes('D4') || ins.includes('D_4'), ins.slice(0, 220))
-  ok('  且坐标就是 SmallGroup(8, 3)', ins.includes('SmallGroup(8, 3)'), ins.slice(0, 220))
+  ok('  且坐标就是 SmallGroup(8, 3)', ins.replace(/\s+/g, '').includes('SmallGroup(8,3)'), ins.slice(0, 220))
 }
 await page.keyboard.press('Escape')
 await page.waitForTimeout(300)
@@ -374,7 +370,7 @@ ok('点得中 A', await pickNode('A'), lastPick)
 ok('结论区开着', await insightsOk())
 {
   const ins = await insights()
-  ok('结论里给出坐标 SmallGroup(24, 12)', ins.includes('SmallGroup(24, 12)'), ins.slice(0, 240))
+  ok('结论里给出坐标 SmallGroup(24, 12)', ins.replace(/\s+/g, '').includes('SmallGroup(24,12)'), ins.slice(0, 240))
   await page.screenshot({ path: '../../docs/assets/u55-small-group-coord.png' })
 }
 {
@@ -393,7 +389,7 @@ ok('点得中 B', await pickNode('B'), lastPick)
 }
 {
   const ins = await insights()
-  ok('  它自己也报同一个坐标 SmallGroup(24, 12)', ins.includes('SmallGroup(24, 12)'), ins.slice(0, 240))
+  ok('  它自己也报同一个坐标 SmallGroup(24, 12)', ins.replace(/\s+/g, '').includes('SmallGroup(24,12)'), ins.slice(0, 240))
 }
 await page.keyboard.press('Escape')
 await page.waitForTimeout(300)

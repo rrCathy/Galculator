@@ -51,6 +51,17 @@ const clickEl = async (sel) => {
   return true
 }
 
+/**
+ * 台收着才能和画布说话（2026-10-08：**点节点会自动升起工作台** —— 台会盖住球 / 环上
+ * 卫星 / ⊕ 球面板，真实鼠标点不动它们）。凡点球/卫星前先收台（幂等）。
+ */
+const benchDown = async () => {
+  if ((await page.locator('.bench.open').count()) > 0) {
+    await page.click('.bench-toggle')
+    await page.waitForTimeout(320)
+  }
+}
+
 const selectNode = async (id) => {
   const done = await clickSvg(`g.gnode[data-id="${id}"] .gnode-hit`)
   await page.waitForTimeout(380)
@@ -81,8 +92,9 @@ const ui = () =>
       pending: document.querySelectorAll('.pending-bar').length,
       hint: document.querySelector('.pending-hint')?.textContent?.trim() ?? null,
       fillFields: document.querySelectorAll('.fill-field input').length,
-      infoTab: document.querySelector('.info-sec-head.on .info-sec-label')?.textContent?.trim() ?? null,
-      infoOpen: document.querySelectorAll('.insights').length > 0,
+      /* 2026-10-08：信息面板并入工作台 —— 「信息」入口 = 升台 + 跳对应节 */
+      infoTab: document.querySelector('.bench-tab.on .bench-tab-label')?.textContent?.trim() ?? null,
+      infoOpen: !!document.querySelector('.bench.open'),
       nodes: [...document.querySelectorAll('svg.canvas g.gnode')].map((g) => g.dataset.id),
       dim: document.querySelectorAll('g.gnode.dim').length,
       errs: [...document.querySelectorAll('.row-err')].map((e) => e.textContent.trim()),
@@ -149,6 +161,7 @@ console.log('== ① 选中一个对象 -> 球出现 ==')
 console.log('')
 console.log('== ② 点球 -> 环绕按钮 ==')
 {
+  await benchDown()
   ok('点得中球', await clickEl('.orb:not(.orb-center)'))
   st = await ui()
   ok('球变成"展开"态', st.orbOn)
@@ -164,9 +177,10 @@ console.log('== ② 点球 -> 环绕按钮 ==')
 console.log('')
 console.log('== ③ 「基本」是"看"这一类 ==')
 {
+  await benchDown()
   ok('点得中「基本」', await clickEl('.orb-sat:text-is("基本")'))
   st = await ui()
-  ok('信息面板打开了', st.infoOpen)
+  ok('工作台升起来了', st.infoOpen)
   ok('而且切到了「基本」页', st.infoTab === '基本', String(st.infoTab))
   ok('看完自动把球收起（不挡路）', !st.orbOn)
 }
@@ -177,7 +191,9 @@ console.log('')
 console.log('== ④ 「操作」铺出单对象操作 ==')
 {
   await selectNode('G')
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb:not(.orb-center)')
+  await benchDown()
   ok('点得中「操作」', await clickEl('.orb-sat:text-is("操作")'))
 
   st = await ui()
@@ -221,6 +237,7 @@ console.log('== ⑥ 多对象球：进 pending ==')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(320)
 
+  await benchDown()
   ok('点得中 \\oplus 球', await clickEl('.multi-orb .orb-center'))
   st = await ui()
   ok('多对象面板出现了', st.centerPanel === 1)
@@ -274,7 +291,9 @@ console.log('')
 console.log('== ⑧ 缺标量的操作进补参条 ==')
 {
   await selectNode('G')
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb:not(.orb-center)')
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb-sat:text-is("操作")')
   const clicked = await page.evaluate(() => {
     const btns = [...document.querySelectorAll('.orb-ops-panel:not(.orb-center-panel) .orb-op')]
@@ -330,6 +349,7 @@ console.log('== ⑨ 映射（只画箭头）的球 ==')
   ok('球落在箭头的横向范围内（没跑到线外）', !!rel && rel.insideX, JSON.stringify(rel))
 
   // 环绕按钮：信息 + 直接铺开的 ker / im（U3.1 的"点箭头、点 ker，完事"）
+  await benchDown() // 台升起会盖住球/环 —— 先收（2026-10-08）
   await clickEl('.orb:not(.orb-center)')
   st = await ui()
   ok(
@@ -339,6 +359,7 @@ console.log('== ⑨ 映射（只画箭头）的球 ==')
   )
 
   const beforeList = (await ui()).nodes
+  await benchDown()
   ok('点得中「核」', await clickEl('.orb-sat[data-op="kernel"]'))
   await page.waitForTimeout(560)
   const st3 = await ui()

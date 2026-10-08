@@ -1,20 +1,28 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import {
   INFO_SECTIONS,
   Insights,
   insightsOf,
+  MapCorrespondence,
   MapFacts,
+  OtherTab,
+  EdgeSection,
   SectionBody,
-  sectionSummary,
   STRUCT_SECTIONS,
   type InfoTab,
 } from './InfoDock'
-import { STRUCTURE_LEVEL_LABEL } from '../gal/algebra'
 import { subgroupClassCount } from './infoHelpers'
 import { Tex, TexOrText } from './Tex'
-import type { GalObject } from '../gal/types'
+import type { GalEdge, GalObject, StructuralEdge } from '../gal/types'
 import type { GalValue, NormalizedSubgroup } from '../gal/value'
-import { homeOf } from '../gal/value'
+import { VALUE_TYPE_LABEL } from '../gal/value'
 import { OPS, takesCanvasObject, type OpDef } from '../gal/ops'
 import { maxObjectArity } from '../gal/compose'
 import { canPick, menuLabel, PARAM_LABEL } from '../gal/interaction'
@@ -85,10 +93,17 @@ export interface WorkbenchProps {
    */
   onPick: (id: string) => void
   /**
-   * **编辑器卡片开着吗**（映射 / 作用 / 运算表那三张）。
-   * 它们是贴底居中的浮层，与工作台重叠 ⇒ 开着时细节区让位，键盘留着。
+   * **编辑器卡片**（映射 / 作用 / 运算表那三张）—— 嵌在右列里（2026-10-08 起）。
+   *
+   * 非空 = 正在编辑：右列让给它，左列键盘留着（"随时可以改主意"）。
+   * 它从"贴底浮层"改嵌进来是用户拍的板（「直接嵌入到工作台里面」）——
+   * 工作台没开时进编辑器会自动升起（`App` 的 effect），编辑器开着时也不许收起（见 toggle 守卫）。
    */
-  editorBusy?: boolean
+  editor?: ReactNode
+  /** **结构伴生边**（原信息面板的「这条箭头」）——`node` 为空时右列显示它 */
+  edge?: { edge: GalEdge; info: StructuralEdge } | null
+  /** **跳转请求**（球菜单的「元素 / 子群」入口）：`jumpTo.seq` 变化 ⇒ 切到 `jumpTo.tab` 那一节 */
+  jumpTo?: { tab: InfoTab; seq: number } | null
   onExtract?: (sub: NormalizedSubgroup) => void
   /** 视口尺寸（算升起高度用；不给就按 CSS 的 max-height 走）*/
   viewportH?: number
@@ -127,8 +142,22 @@ const H_MAX = 0.88
  * 用的全是**输入层本来就认的记号**（`S_4` / `A_4` / `D_4` …），不是 `smallGroup(阶,编号)`：
  * 用户认得 `A₄`，认不得 GAP 编号（用户实测原话：「为什么不能导入常见群？」）。
  * 想浏览全部 93 个群仍然走左栏「目录」。
+ *
+ * ⚠️ `expr`（能敲的 ASCII 输入语法）与 `tex`（渲染面）**分家**（2026-10-08）：
+ * 按钮上显示 `tex`（标准记号：下标 + 乘号），点下去交给输入层的是 `expr`。
+ * `C_2 x C_2` 那个 `x` 是输入语法的一部分（键盘敲得出），渲染时必须换成 `\times`。
  */
-const COMMON_GROUPS = ['C_6', 'C_12', 'D_4', 'S_3', 'S_4', 'A_4', 'A_5', 'Q_8', 'C_2 x C_2']
+const COMMON_GROUPS: { expr: string; tex: string }[] = [
+  { expr: 'C_6', tex: 'C_{6}' },
+  { expr: 'C_12', tex: 'C_{12}' },
+  { expr: 'D_4', tex: 'D_{4}' },
+  { expr: 'S_3', tex: 'S_{3}' },
+  { expr: 'S_4', tex: 'S_{4}' },
+  { expr: 'A_4', tex: 'A_{4}' },
+  { expr: 'A_5', tex: 'A_{5}' },
+  { expr: 'Q_8', tex: 'Q_{8}' },
+  { expr: 'C_2 x C_2', tex: 'C_{2}\\times C_{2}' },
+]
 
 export function Workbench({
   open,
@@ -138,7 +167,9 @@ export function Workbench({
   pending,
   objects,
   onPick,
-  editorBusy,
+  editor,
+  edge,
+  jumpTo,
   onExtract,
   viewportH,
   onHeight,
@@ -231,6 +262,11 @@ export function Workbench({
     setTab('basic')
   }, [node?.id])
 
+  /** 跳转请求（球菜单的「元素 / 子群」入口）：`seq` 变化 ⇒ 切到那一节 */
+  useEffect(() => {
+    if (jumpTo) setTab(jumpTo.tab)
+  }, [jumpTo])
+
   /**
    * **键盘上该有哪几枚键**（P7：随焦点变）。
    *
@@ -258,9 +294,14 @@ export function Workbench({
   /*
    * ⚠️ **升起不再依赖有没有选中对象**（第一版的错就在这里）。
    * 没选对象时显示条仍在、`＋` 仍在 —— 用户能**直接造**（这是他被否的第一条）。
+   *
+   * 明细区怎么显示以 `sections` 为准（群 / 结构 ⇒ 分节表；其余走 `OtherTab` / `MapFacts`）——
+   * 从前这里还有一道 `homeOf(v) === 'bench'` 的闸门（三区投影的旧判据），
+   * 信息面板砍掉之后它会让"集合 / 子群集 / 作用"这类对象在工作台里**没有信息可看**
+   * （那些内容原来只在信息面板的 `OtherTab` 里）⇒ 2026-10-08 撤掉，统一在这里看。
    */
-  const showDetail = !editorBusy && !!node && homeOf(node.value) === 'bench'
-  const hasContent = open && (!!node || !!pending)
+  const busy = !!editor
+  const hasContent = open && (!!node || !!pending || !!edge)
 
   /** 槽位候选（T1）：判据同一份 `canPick` */
   const slotIdx = pending ? pending.picked.length : 0
@@ -357,44 +398,27 @@ export function Workbench({
       {open && <div className="bench-grip" onPointerDown={onGripDown} title="拖动改变工作台高度" />}
 
       {/* 标题条 = 收起后那条胶囊。**贴着底**，所以点它落回去时位置不变。
-          台面 chips 挂在它右侧（2026-10-07 方案二：台面不另占一行）。 */}
+          2026-10-08：台面 chips 已挪进左列当「对象槽」（用户点名），这里只剩标题与焦点 id。 */}
       <header className="bench-head">
-        <button className="bench-toggle" onClick={onToggle} title={open ? '收起工作台' : '展开工作台'}>
+        <button
+          className="bench-toggle"
+          /*
+           * ⚠️ 编辑器开着时**不许收起**（2026-10-08）：卡片嵌在右列里，
+           * 收起工作台 = 卡片没地方显示（填了一半的输入会变成"消失"）。先完成或取消。
+           */
+          onClick={() => {
+            if (busy) return
+            onToggle()
+          }}
+          disabled={busy}
+          title={busy ? '编辑器开着，先完成或取消' : open ? '收起工作台' : '展开工作台'}
+        >
           <span className="bench-caret">{open ? 'v' : '^'}</span>
           <span className="bench-title">工作台</span>
           {/* 收起态也要说清"它能干什么"，否则一条光秃秃的胶囊没人敢点 */}
           {!open && <span className="bench-peek">点开：造对象 - 对它做事 - 翻它的结构</span>}
         </button>
         {node && <span className="bench-target">{node.id}</span>}
-        {open && stage.length > 0 && (
-          <div className="bench-stage">
-            <span className="bench-stage-label">台面</span>
-            {stage.map((id) => {
-              /*
-               * chip 上写**数学名**（`A₄` / `C₆`），不是对象名（`A` / `B`）——
-               * 用户在台面上认的是"这是哪个群"，不是"我给它起的第几个字母"。
-               * 对象名进 `title`，随时能查到。
-               */
-              const obj = objects.find((o) => o.id === id)
-              return (
-                <span key={id} className={`bench-chip${id === node?.id ? ' on' : ''}`}>
-                  {/* 点一下 = 切到它 —— 走的是 `onPick`，与"点画布节点"**同一个函数** */}
-                  <button className="bench-chip-main" onClick={() => onPick(id)} title={`切到 ${id}`}>
-                    {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
-                  </button>
-                  {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}
-                  <button
-                    className="bench-chip-x"
-                    onClick={() => onDrop(id)}
-                    title={`把 ${id} 拿下台面（不删对象）`}
-                  >
-                    x
-                  </button>
-                </span>
-              )
-            })}
-          </div>
-        )}
       </header>
 
       {open && (
@@ -409,9 +433,14 @@ export function Workbench({
                     {/*
                      * ⚠️ 标题写**数学身份**，不是 `def`（用户实测两条：
                      * 「smallgroup(12,3)？不是 A4？」「map(B,D,a→0,b→1)？为什么不用 φ:A₄→C₃？」）。
-                     * `def` 是"它怎么被造出来的"，降为副行。判据在 `gal/mathLabel.ts`。
+                     * `def` 是"它怎么被造出来的"，降为副行（`.bench-foot`）。判据在 `gal/mathLabel.ts`。
+                     * 头前那个 chip 是**值类型**（群 / 子群集 / 映射…）——2026-10-08 信息面板
+                     * 并入时补搬（原 `.info-target .chip`，走查按它认"这是一包子群"）。
                      */}
                     <div className="bench-screen-title">
+                      <span className={`chip chip-${node.value.type}`}>
+                        {VALUE_TYPE_LABEL[node.value.type]}
+                      </span>
                       <TexOrText text={ml?.main ?? node.def} />
                     </div>
                     <div className="bench-screen-sub">
@@ -448,8 +477,38 @@ export function Workbench({
               </div>
             </div>
 
+            {/* ── ② 对象槽（原「台面」，2026-10-08 用户点名挪进左列）────
+                 chips 写**数学名**（`A₄` / `C₆`）——用户在槽里认的是"这是哪个群"，
+                 不是"我给它起的第几个字母"（对象名进 `title`）。
+                 点一下切焦点（走 `onPick`，与"点画布节点"同一个函数）、`x` 拿下不删对象。 */}
+            {stage.length > 0 && (
+              <div className="bench-stage">
+                <span className="bench-stage-label">对象槽</span>
+                <div className="bench-stage-chips">
+                  {stage.map((id) => {
+                    const obj = objects.find((o) => o.id === id)
+                    return (
+                      <span key={id} className={`bench-chip${id === node?.id ? ' on' : ''}`}>
+                        <button className="bench-chip-main" onClick={() => onPick(id)} title={`切到 ${id}`}>
+                          {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
+                        </button>
+                        {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}
+                        <button
+                          className="bench-chip-x"
+                          onClick={() => onDrop(id)}
+                          title={`把 ${id} 拿下对象槽（不删对象）`}
+                        >
+                          x
+                        </button>
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/*
-             * ── ② 待选（pending）：槽位 + 候选，在键盘**上方** ──────
+             * ── ③ 待选（pending）：槽位 + 候选，在键盘**上方** ──────
              * 键盘留在下面（busy 不掐焦点：按另一枚键 = 换主意），列内超长时自己滚。
              */}
             {pending && (
@@ -514,20 +573,20 @@ export function Workbench({
                     x
                   </button>
                 </div>
-                {/* 常见群：直接走**记号**（输入层本来就认它们）*/}
+                {/* 常见群：显示标准记号（`tex`），点一下把输入语法（`expr`）交给输入层 */}
                 <div className="plus-quick">
                   <span className="plus-quick-label">常见群</span>
                   {COMMON_GROUPS.map((g) => (
                     <button
-                      key={g}
+                      key={g.expr}
                       className="plus-chip"
-                      title={`导入 ${g}`}
+                      title={`导入 ${g.expr}`}
                       onClick={() => {
-                        onAdd(g)
+                        onAdd(g.expr)
                         setPlusOpen(false)
                       }}
                     >
-                      {g}
+                      <Tex tex={g.tex} />
                     </button>
                   ))}
                 </div>
@@ -562,7 +621,8 @@ export function Workbench({
                                     setPlusOpen(false)
                                   }}
                                 >
-                                  {e.structure}
+                                  {/* 群名走渲染面（`structure` 已是 TeX 源，见 `gal/smallGroups.ts`）*/}
+                                  <Tex tex={e.structure} />
                                 </button>
                               ))}
                             </div>
@@ -631,94 +691,85 @@ export function Workbench({
             </button>
           </div>
 
-          {/* ══ 右列：明细大阅读区（按键盘 / 翻台面时纹丝不动）══ */}
+          {/* ══ 右列：明细大阅读区（按键盘 / 翻对象槽时纹丝不动）══ */}
           <div className="bench-right">
-            <div className={`bench-detail${editorBusy ? ' busy' : ''}`}>
-              {editorBusy ? (
-                <p className="bench-blank">正在填一张表（下面那张卡片）。</p>
-              ) : !node ? null : !showDetail ? (
+            <div className={`bench-detail${busy ? ' busy' : ''}`}>
+              {busy ? (
                 /*
-                 * **映射 / 作用 / 关系**这类"答案在画布上的"的值 —— 从前这里只有一句
-                 * 「答案在画布上」，用户实测第 9 条问的就是"那详细信息呢？"。
-                 * 现在把**结论层原样铺出来**（`insightsOf`，与信息面板同一份判据）。
+                 * **编辑器卡片**（映射 / 作用 / 运算表）：由 App 传进来的 ReactNode。
+                 * 2026-10-08 起它嵌在这里 —— 不再"贴底浮层吊在台面下沿"
+                 * （用户：「卡片位置应该挪到中间或者直接嵌入到工作台里面」）。
                  */
-                ins.length > 0 || node.value.type === 'map' ? (
-                  <div className="bench-page">
-                    {/* 结论层（"所以呢"）+ **事实表**（定义域/陪域/单·满/核/像）——
-                        两者一份两处显示，与信息面板同源 */}
-                    <Insights items={ins} />
-                    {node.value.type === 'map' && <MapFacts map={node.value.map} />}
+                editor
+              ) : node ? (
+                sections ? (
+                  /* 分节对象（群 / 结构）：**左缘竖排节导航 + 右内容**（2026-10-08 用户：
+                     「基本，元素，共轭类等等全部竖着放，不要横着摆」）。
+                     标签只写名字 —— 计数 / 级别在内容区里都有，不在标签上重复。 */
+                  <div className="bench-read">
+                    <nav className="bench-tabs" aria-label="明细区节导航">
+                      {sections.map((t) => (
+                        <button
+                          key={t.id}
+                          className={`bench-tab${t.id === tab ? ' on' : ''}`}
+                          data-tab={t.id}
+                          onClick={() => setTab(t.id)}
+                        >
+                          <span className="bench-tab-label">{t.label}</span>
+                        </button>
+                      ))}
+                    </nav>
+                    <div className="bench-main">
+                      {/* 结论层（识别 / 第一同构定理 / 轨道分解）—— 与信息面板同源 */}
+                      {ins.length > 0 && (
+                        <div className="bench-brief">
+                          <Insights items={ins} />
+                        </div>
+                      )}
+                      <div className="bench-page">
+                        <SectionBody
+                          section={tab}
+                          group={showGroup}
+                          struct={struct}
+                          node={node}
+                          active={null}
+                          subCount={subCount}
+                          onExtract={onExtract}
+                        />
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <p className="bench-blank">
-                    <code>{node.id}</code> 是
-                    {/* `map` 这一支**走不到这里**（上面那个条件已经把它接走了）——
-                        所以下面不再列它，否则是死代码。 */}
-                    {node.value.type === 'action'
-                      ? '一个作用，画布上那条作用线就是它'
-                      : node.value.type === 'relation'
-                        ? '一条关系边，画布上那条线就是它'
-                        : '一条边，画布上那条线就是它'}
-                    ，答案在画布上。
-                  </p>
-                )
-              ) : sections ? (
-                <>
-                  {/* 结论层（识别 / 第一同构定理 / 轨道分解）—— 与信息面板同一份 */}
-                  {ins.length > 0 && (
-                    <div className="bench-brief">
-                      <Insights items={ins} />
-                    </div>
-                  )}
-                  {/* 平铺 tab 条（**不是手风琴**：进工作台是"摊开读"，不是"一层层点开"）*/}
-                  <div className="bench-tabs">
-                    {sections.map((t) => (
-                      <button
-                        key={t.id}
-                        className={`bench-tab${t.id === tab ? ' on' : ''}`}
-                        data-tab={t.id}
-                        onClick={() => setTab(t.id)}
-                      >
-                        <span className="bench-tab-label">{t.label}</span>
-                        {t.id === 'axioms' && struct ? (
-                          <span className="bench-tab-sum">{STRUCTURE_LEVEL_LABEL[struct.axioms.level]}</span>
-                        ) : t.id === 'table' && struct ? (
-                          <span className="bench-tab-sum">
-                            {struct.carrier.length > 0 ? `${struct.carrier.length} x ${struct.carrier.length}` : ''}
-                          </span>
-                        ) : showGroup &&
-                          (t.id === 'basic' || t.id === 'elements' || t.id === 'conj' || t.id === 'subgroups') ? (
-                          <span className="bench-tab-sum">{sectionSummary(t.id, showGroup, subCount)}</span>
-                        ) : null}
-                      </button>
-                    ))}
-                  </div>
+                  /* 非分节对象（集合 / 元素集 / 子群集 / 作用 / 关系 / 映射）。
+                     ⚠️ 这些内容原来住在**信息面板**（`OtherTab` / `MapFacts` 那一支）——
+                     2026-10-08 信息面板砍掉、全部并进工作台（用户：「所有信息合并到工作台里面显示」）。
+                     这里没有"答案在画布上"的敷衍话：能说的事实全部铺出来。 */
                   <div className="bench-page">
-                    <SectionBody
-                      section={tab}
-                      group={showGroup}
-                      struct={struct}
-                      node={node}
-                      active={null}
-                      subCount={subCount}
-                      onExtract={onExtract}
-                    />
+                    {ins.length > 0 && (
+                      <div className="bench-brief">
+                        <Insights items={ins} />
+                      </div>
+                    )}
+                    {node.value.type === 'map' ? (
+                      <>
+                        {/* 事实表（定义域/陪域/单·满/核/像/生成元的像）逐项渲染 */}
+                        <MapFacts map={node.value.map} />
+                        {/* 「元素送到哪里去」——逐元素对应表（U58） */}
+                        <MapCorrespondence map={node.value.map} />
+                      </>
+                    ) : (
+                      <OtherTab node={node} onExtract={onExtract} />
+                    )}
                   </div>
-                </>
-              ) : (
+                )
+              ) : edge ? (
+                /* 结构伴生边（原信息面板的「这条箭头」）——`node` 与它互斥 */
                 <div className="bench-page">
-                  <SectionBody
-                    section="basic"
-                    group={group}
-                    struct={struct}
-                    node={node}
-                    active={null}
-                    subCount={subCount}
-                    onExtract={onExtract}
-                  />
+                  <EdgeSection edge={edge} />
                 </div>
-              )}
-              {node && (
+              ) : null}
+              {/* def 行（"它怎么被造出来的"）——编辑器开着时不显示（右列是卡片的地盘） */}
+              {node && !busy && (
                 <div className="bench-foot">
                   <TexOrText text={node.def} />
                 </div>

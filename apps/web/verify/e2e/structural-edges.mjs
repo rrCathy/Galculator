@@ -201,7 +201,7 @@ await page.waitForTimeout(420)
 ok('点得中显式映射 f', await clickSvg('.gedge[data-object-id="f"] .gedge-hit'))
 await page.waitForTimeout(420)
 {
-  const chip = await page.evaluate(() => document.querySelector('.info-target .chip')?.textContent?.trim() ?? '')
+  const chip = await page.evaluate(() => document.querySelector('.bench-screen .chip')?.textContent?.trim() ?? '')
   ok('点 f 看到的仍是映射对象', chip === '映射', chip)
 }
 ok('显式映射有悬浮球（对象待遇没变）', (await orbCount()) === 1, `orbs=${await orbCount()}`)

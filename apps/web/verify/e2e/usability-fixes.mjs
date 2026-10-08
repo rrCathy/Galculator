@@ -259,7 +259,7 @@ await page.waitForTimeout(250)
 
 ok('点得中 S_4 那一行', await clickRow('S'))
 await page.waitForTimeout(300)
-await page.click('.info-sec-head[data-sec="subgroups"]')
+await page.click('.bench-tab[data-tab="subgroups"]')
 await page.waitForTimeout(350)
 const subInfo = await infoState()
 ok(
