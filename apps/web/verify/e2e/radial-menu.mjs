@@ -331,8 +331,14 @@ console.log('== ⑨ 映射（只画箭头）的球 ==')
   await page.waitForTimeout(420)
 
   st = await ui()
-  ok('球出现在箭头旁边（映射没有节点，这是唯一的入口）', st.orb)
+  ok('球出现（映射没有节点，这是唯一的入口）', st.orb)
 
+  /*
+   * 2026-10-09：点箭头会**自动升台**，而台升起时球改**靠左停**（新规矩，⑪ 专测）——
+   * 想量"贴着箭头"的旧几何，得先把台收掉（收台后球自动回到锚点旁）。
+   */
+  await benchDown()
+  await page.waitForTimeout(420)
   const rel = await page.evaluate(() => {
     const orb = document.querySelector('.orb:not(.orb-center)')?.getBoundingClientRect()
     const edge = document.querySelector('g.gedge[data-object-id="f"]')?.getBoundingClientRect()
@@ -395,6 +401,66 @@ console.log('== ⑩ 点空白收起球 ==')
     await page.waitForTimeout(380)
     const st2 = await ui()
     ok('球收起了', !st2.orb)
+  }
+}
+
+/* ══ ⑪ 台升起 ⇒ 对象球靠左停（2026-10-09 用户拍板）═══════ */
+
+console.log('')
+console.log('== ⑪ 台升起，对象球靠左停 ==')
+{
+  await benchDown()
+  const gid = await page.evaluate(
+    () => document.querySelector('g.gnode[data-shape="group"]')?.getAttribute('data-id') ?? null,
+  )
+  ok('画布上找得到一个群节点', !!gid, String(gid))
+  await selectNode(gid) // 合成事件点选（本套既有手法）；点完台会**自动升起**
+  await page.waitForTimeout(760)
+  const st = await page.evaluate(() => {
+    const orb = document.querySelector('.orb:not(.orb-center)')
+    const bench = document.querySelector('.bench')
+    if (!orb || !bench) return null
+    const r = orb.getBoundingClientRect()
+    const b = bench.getBoundingClientRect()
+    const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    return {
+      x: Math.round(r.left),
+      y: Math.round(r.top),
+      benchTop: Math.round(b.top),
+      benchOpen: bench.className.includes('open'),
+      docked: orb.className.includes('dock-left'),
+      reachable: !!(el && (el === orb || orb.contains(el))),
+    }
+  })
+  ok('台升起后球**靠左停**（盒左 = 12，带 dock-left）', st?.benchOpen === true && st?.x === 12 && st?.docked === true, JSON.stringify(st))
+  ok('球点得中、不被台盖，且位在台顶之上', st?.reachable === true && (st?.y ?? 9999) <= (st?.benchTop ?? 0), JSON.stringify(st))
+  /* 点球 → 环（右侧半圈），每颗卫星都点得中、不越出屏 */
+  const orbPt = await page.evaluate(() => {
+    const o = document.querySelector('.orb:not(.orb-center)')
+    const r = o.getBoundingClientRect()
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+  })
+  await page.mouse.click(orbPt.x, orbPt.y)
+  await page.waitForTimeout(460)
+  const ring = await page.evaluate(() =>
+    [...document.querySelectorAll('.orb-sat')].map((sEl) => {
+      const r = sEl.getBoundingClientRect()
+      const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      return { t: sEl.textContent.trim(), x: Math.round(r.left), reachable: !!(el && (el === sEl || sEl.contains(el))) }
+    }),
+  )
+  ok(
+    '环铺开且全部点得中（右侧半圈，不越出屏左缘）',
+    ring.length >= 4 && ring.every((sEl) => sEl.reachable) && ring.every((sEl) => sEl.x >= 0),
+    JSON.stringify(ring),
+  )
+  const hasEl = ring.some((sEl) => /元素/.test(sEl.t))
+  ok('有「元素」卫星', hasEl, JSON.stringify(ring))
+  if (hasEl) {
+    await clickEl('.orb-sat:text-is("元素")')
+    await page.waitForTimeout(640)
+    const tab = await page.evaluate(() => document.querySelector('.bench-tab.on')?.dataset.tab ?? null)
+    ok('点卫星 ⇒ 工作台跳到「元素」节（台没被收掉）', tab === 'elements', String(tab))
   }
 }
 

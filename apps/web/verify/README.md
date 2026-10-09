@@ -37,7 +37,7 @@ node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报�
 node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G（U20）
 node verify/e2e/connect.mjs           # 拖拽连线 + 对象列表「操作」（U21，真鼠标拖；U44 入口从面板挪到行上）
 node verify/e2e/grid-drag.mjs         # 格点 / 拖动吸附 / 平移 / 缩放 / 复位（U10 的补线，U22）
-node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）
+node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）；⑪ 台升起 ⇒ 球靠左停（2026-10-09）
 node verify/e2e/copy-label.mjs        # 把画布上的记号抄回去：三条复制路径（U24）
 node verify/e2e/structural-edges.mjs  # 结构伴生边可点：π/↪/=/≅ 的账与三条纪律（U26）
 node verify/e2e/structure-ops.mjs     # gcd/lcm/phi · Burnside · 极大子群 · Inn · 「结构」节（U27）
@@ -46,7 +46,7 @@ node verify/e2e/idspace.mjs           # 跨群元素表示的分诊与翻译（U
 node verify/e2e/batch9.mjs            # 第十七批：连线把手 / 同一性 / ≅ 操作 / 删除改名等（U37）
 node verify/e2e/batch10.mjs           # 第十八批：独立构造的群之间的包含（U38）
 node verify/e2e/no-unicode-leak.mjs    # 界面上不许出现键盘打不出来的字符（U25，输入 + 显示两半）
-node verify/e2e/narrow-docks.mjs      # 窄窗口下面板之间不许互相盖（U41）
+node verify/e2e/narrow-docks.mjs      # 窄窗口面板互盖（U41）+ 工作台 × 证明互斥 / 输入卡层级（2026-10-09）
 node verify/e2e/known-facts.mjs       # 已知结论层 + A_6 建得出 + U50 的 Aut/GL/S_7（U48/U49/U50）
 node verify/e2e/semidirect-op.mjs     # 半直积 ⋊ 的三态分诊 + 连线菜单不撒谎（U51）
 node verify/e2e/custom-action.mjs     # 自定义作用：作用编辑器 + 核的披露 + G ↷ Ω（U52）

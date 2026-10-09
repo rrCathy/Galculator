@@ -928,7 +928,12 @@ body {
   position: absolute;
   bottom: 12px;
   left: 50%;
-  z-index: 12;
+  /*
+   * z=15：**高于工作台（14）**（2026-10-09 实测修）——塌缩态下卡片下缘会被台胶囊条
+   * 盖住（台 14 > 卡 12），错误状态行折两行时下半截直接看不见。比它更高的只剩
+   * `.notice`（16，兜底提示）与快照卡（20）：消息类永远在最上层。
+   */
+  z-index: 15;
   transform: translateX(-50%);
 }
 
@@ -1517,6 +1522,14 @@ body {
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.14);
+}
+
+/*
+ * dock 态（2026-10-09）：台升起时球靠左停，操作面板从球旁铺开、右侧会越过
+ * 工作台左缘 —— 抬到台（14）之上；球与卫星都在左缘沟里（x<150），不用抬。
+ */
+.orb-ops-panel.dock-left {
+  z-index: 15;
 }
 
 .orb-center-panel {

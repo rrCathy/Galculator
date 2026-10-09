@@ -6,7 +6,7 @@ import { DockPanel } from './DockPanel'
 import { ObjectRow } from './ObjectRow'
 
 /**
- * 操作区面板（UI v3）：**运算产生的对象**。
+ * 操作区面板（UI v3）：**用操作构造的对象**（含手写的调用式，如 pointSet(6)）。
  *
  * 与「对象区」对称——那边是你手输声明的，这边是算出来的。
  * 以前那个"可用操作清单"面板取消了：它已经被节点旁的悬浮球和顶部的多对象球取代。
@@ -47,7 +47,7 @@ export function OpDock({
 
   return (
     <DockPanel title="操作" count={rows.length} open={open} onToggle={onToggle}>
-      {rows.length === 0 && <div className="empty">运算产生的对象会落在这里</div>}
+      {rows.length === 0 && <div className="empty">用操作构造的对象会落在这里（手写的 pointSet(6) 这类也算）</div>}
       {rows.map((s) => {
         const o = s.object!
         // 只有**不上画布**的（list 档）才在行上给操作 —— 其余的走悬浮球

@@ -1,5 +1,5 @@
 import type { GalObject } from './types'
-import type { GalValue } from './value'
+import type { GalAction, GalValue } from './value'
 import { identifyGroup } from './insights'
 import type { Group } from '@groupviz/core'
 
@@ -56,11 +56,43 @@ function valueName(v: GalValue): string | null {
       // 映射读作「φ: 定义域 → 陪域」——两端各用**它们自己的数学名**
       return `${groupName(v.map.domain)} → ${groupName(v.map.codomain)}`
     case 'action':
-      // 作用读作「G ↷ Ω」——Ω 用它的标号（`omega.label` 就是它）
-      return `${groupName(v.action.group)} ↷ ${v.action.omega?.label ?? 'Ω'}`
+      // 作用读作「G ↷ Ω」——Ω 用它的数学名（不是构造式，见 `omegaName`）
+      return `${groupName(v.action.group)} ↷ ${omegaName(v.action)}`
+    case 'set':
+      // 集合读作**花括号形态**（`{1, 2, 3}`）——`pointSet(6)` 那种构造式是 def，不是名字
+      return setIdentity(v.set.members.map((m) => m.label))
+    case 'elements':
+      return setIdentity(v.elements.map((e) => e.label))
     default:
       return null
   }
+}
+
+/**
+ * Ω 的数学名（2026-10-09 补齐）。
+ *
+ * - `self`：Ω = G 自身（共轭 / 正则作用）⇒ 用 G 的数学名：`A₄ ↷ A₄`。
+ * - `object`：Ω 是另一个对象 ⇒ 沿用它的标号；标号是**构造式**（`asSet(...)`）时
+ *   退回成员花括号 —— 用户点名过「`A₄ ↷ asSet(B)` 里的构造式要补齐」。
+ * - 没有 Ω（早期数据）⇒ `Ω`。
+ */
+function omegaName(a: GalAction): string {
+  if (a.omegaBase === 'self') return groupName(a.group)
+  const om = a.omega
+  if (!om) return 'Ω'
+  if (/^asSet\(/.test(om.label)) return setIdentity(om.members.map((m) => m.label)) ?? om.label
+  return om.label
+}
+
+/**
+ * 集合的数学身份：花括号形态（与 `labeledSet` 的展示名同一种写法）。
+ * 长列表截断：cap 以内全列，超过给 `{a, b, c, d, …, z}`。
+ */
+function setIdentity(labels: string[], cap = 8): string | null {
+  const ls = labels.map((s) => (s ?? '').trim()).filter((s) => s !== '')
+  if (ls.length === 0) return null
+  if (ls.length <= cap) return `\\{${ls.join(', ')}\\}`
+  return `\\{${ls.slice(0, 4).join(', ')}, \\ldots, ${ls[ls.length - 1]}\\}`
 }
 
 /**
@@ -71,7 +103,8 @@ function valueName(v: GalValue): string | null {
  * | 群 | `A₄`（识别）| 用户点名的就是这句 |
  * | 映射 | `φ: A₄ → C₃` | 用户点名的第二句 |
  * | 作用 | `S₄ ↷ Ω` | 同一个道理：把操作语读成关系 |
- * | 结构 / 集合 / 其它 | `obj.label`（构造时给的记号）| 没有"标准名"可识别，不硬造 |
+ * | 集合 / 元素集 | `{a, b, c}`（花括号形态）| 数学里集合就长这样：`pointSet(6)` 是 def（2026-10-09 补齐）|
+ * | 结构 / 其它 | `obj.label`（构造时给的记号）| 没有"标准名"可识别，不硬造 |
  */
 export function mathLabel(obj: GalObject): MathLabel {
   const name = valueName(obj.value)

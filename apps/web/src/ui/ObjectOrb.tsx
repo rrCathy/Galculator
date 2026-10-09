@@ -133,6 +133,8 @@ export function ObjectOrb({
   value,
   containerW,
   containerH,
+  dock,
+  benchH,
   onOpen,
   onClose,
   onToggleOps,
@@ -148,6 +150,13 @@ export function ObjectOrb({
   value: GalValue
   containerW: number
   containerH: number
+  /**
+   * **靠左停**（2026-10-09 用户拍板）——台升起时球不再贴着被台盖住的节点，
+   * 而是固定到左缘（与输入球同一条竖线、叠在它下面）。环与操作面板随向翻到右侧。
+   */
+  dock?: boolean
+  /** 工作台高度（px）——dock 时贴着台顶算位（与 `--bench-h` 同源） */
+  benchH?: number
   onOpen: () => void
   onClose: () => void
   onToggleOps: () => void
@@ -162,17 +171,24 @@ export function ObjectOrb({
   const clampY = (v: number) => Math.min(Math.max(v, 20), containerH - 20)
 
   const isEdge = anchor.kind === 'edge'
-  // 节点左上角（沿对角线挪一点，别压在节点边上）；箭头则挂在中点正上方
-  const orbX = clampX(isEdge ? anchor.x : anchor.x - anchor.r * 0.74)
-  const orbY = clampY(isEdge ? anchor.y - 28 : anchor.y - anchor.r * 0.74)
-  const ringR = isEdge ? RING_R_EDGE : Math.max(RING_R_MIN, anchor.r + 22)
+  /*
+   * **左停位**（dock，2026-10-09）：中心 x=25（盒左 12，与输入球左缘同一条线）；
+   * 中心 y 叠在输入球正下方 8px —— 输入球盒顶 = `containerH - benchH - 94`，
+   * 球盒顶 = 再降 32+8 ⇒ 球中心 = `containerH - benchH - 41`。
+   */
+  const dockX = 25
+  const dockY = Math.round(containerH - (benchH ?? 0) - 41)
+  // 节点左上角（沿对角线挪一点，别压在节点边上）；箭头挂在中点正上方；dock 固定左缘
+  const orbX = dock ? dockX : clampX(isEdge ? anchor.x : anchor.x - anchor.r * 0.74)
+  const orbY = dock ? dockY : clampY(isEdge ? anchor.y - 28 : anchor.y - anchor.r * 0.74)
+  const ringR = dock ? RING_R_MIN : isEdge ? RING_R_EDGE : Math.max(RING_R_MIN, anchor.r + 22)
 
   const items = ringItems(value, singleOps)
 
   return (
     <>
       <button
-        className={`orb${stage !== 'closed' ? ' on' : ''}`}
+        className={`orb${stage !== 'closed' ? ' on' : ''}${dock ? ' dock-left' : ''}`}
         style={{ left: orbX, top: orbY }}
         title={stage === 'closed' ? '操作这个对象' : '收起'}
         onClick={(e) => {
@@ -188,13 +204,16 @@ export function ObjectOrb({
 
       {stage === 'ring' &&
         items.map((item, i) => {
-          const t = ((angleAt(i, items.length)) * Math.PI) / 180
-          const x = clampX(orbX + Math.cos(t) * ringR)
+          const t = ((dock ? angleAtDock(i, items.length) : angleAt(i, items.length)) * Math.PI) / 180
+          // dock 时只往**右侧半圈**铺（左侧是屏幕外）；x 再兜一道下限，别贴出左缘
+          const x = dock
+            ? Math.max(40, orbX + Math.cos(t) * ringR)
+            : clampX(orbX + Math.cos(t) * ringR)
           const y = clampY(orbY + Math.sin(t) * ringR)
           return (
             <button
               key={item.key}
-              className={`orb-sat${item.tab ? ' orb-info' : ' orb-ops'}`}
+              className={`orb-sat${item.tab ? ' orb-info' : ' orb-ops'}${dock ? ' dock-left' : ''}`}
               data-op={item.opId}
               style={{ left: x, top: y }}
               title={item.title}
@@ -224,10 +243,12 @@ export function ObjectOrb({
 
       {stage === 'ops' && (
         <div
-          className="orb-ops-panel"
+          className={`orb-ops-panel${dock ? ' dock-left' : ''}`}
           style={{
-            left: Math.min(Math.max(orbX - 12, 12), Math.max(12, containerW - 260)),
-            top: Math.min(orbY + 26, Math.max(12, containerH - 320)),
+            left: dock ? 12 : Math.min(Math.max(orbX - 12, 12), Math.max(12, containerW - 260)),
+            top: dock
+              ? Math.min(dockY + 34, Math.max(12, containerH - 330))
+              : Math.min(orbY + 26, Math.max(12, containerH - 320)),
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -264,4 +285,13 @@ export function ObjectOrb({
 function angleAt(i: number, n: number): number {
   if (n <= 1) return -90
   return -180 + (i * 180) / (n - 1)
+}
+
+/**
+ * dock（球靠左停）时的环绕角度：**右侧半圈**（-90° 到 +90°）。
+ * 球在屏幕左缘，左侧是屏幕外 —— 原版"上半圈 + 左侧"在这里会铺到屏幕外。
+ */
+function angleAtDock(i: number, n: number): number {
+  if (n <= 1) return 0
+  return -90 + (i * 180) / (n - 1)
 }

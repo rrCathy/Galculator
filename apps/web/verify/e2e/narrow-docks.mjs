@@ -15,6 +15,10 @@
  * 2026-10-08：原第四栏「信息」并入工作台 —— 后段的被守护对象从「信息面板」改成**工作台**
  * （窄窗里证明面板会不会盖住工作台的节导航 / 元素表，同一个问题同一个判据）。
  *
+ * 2026-10-09：**工作台 × 证明改成互斥**（用户拍板：台升起 ⇒ 证明自动收起；证明再打开
+ * ⇒ 台收起）——「证明盖台」在源头上没了，这一套改成**钉住互斥本身**，
+ * 外加一条：输入卡（z=15）的状态行不许被台胶囊盖（用户 ② 号点名）。
+ *
  * 判据一律用 `elementFromPoint`（真命中测试），不用几何"看着没重叠"——
  * 重叠是**点得中点不中**的问题，就得按命中测。
  *
@@ -104,7 +108,41 @@ await page.waitForTimeout(500)
 ok('点完之后**工作台自动升起**（竖排节导航 4 节：基本/元素/共轭类/子群）',
   (await page.locator('.bench-tab').count()) === 4)
 
-/* ── ③ 工作台的竖排节导航都点得动（窄窗下不被证明面板盖住）──── */
+/*
+ * 2026-10-09 用户拍板：**台升起 ⇒ 证明自动收起**（互斥）。
+ * 收起态 = `.dock-topright` 不带 `open`、卡片体不渲染（`.proof-item` 数 0）、胶囊还在。
+ */
+const proofState = await page.evaluate(() => ({
+  openCount: document.querySelectorAll('.dock-topright .dock.open').length,
+  items: document.querySelectorAll('.dock-topright .proof-item').length,
+  toggle: !!document.querySelector('.dock-topright .dock-toggle'),
+}))
+ok(
+  '台升起 ⇒ 证明**自动收起**（卡片体不渲染，胶囊还在）',
+  proofState.openCount === 0 && proofState.items === 0 && proofState.toggle,
+  JSON.stringify(proofState),
+)
+
+/*
+ * 互斥的另一半（2026-10-09 补全）：证明再打开 ⇒ 台收起 ——
+ * 否则用户手动点开证明，还是那个"看着在、点不动"的半截态。
+ */
+await page.click('.dock-topright .dock-toggle')
+await page.waitForTimeout(560)
+const excl = await page.evaluate(() => ({
+  proofOpen: document.querySelectorAll('.dock-topright .dock.open').length === 1,
+  benchOpen: !!document.querySelector('.bench.open'),
+}))
+ok(
+  '证明再打开 ⇒ 台收起（互斥成立，不留点不动的半截态）',
+  excl.proofOpen === true && excl.benchOpen === false,
+  JSON.stringify(excl),
+)
+/* 复原成「台开、证明收」——后面的用例要用台 */
+await page.click('.bench-toggle')
+await page.waitForTimeout(560)
+
+/* ── ③ 工作台的竖排节导航都点得动（互斥后证明已收起，这条降为底线）──── */
 const tabsHit = await page.evaluate(() =>
   [...document.querySelectorAll('.bench-tab')].map((b) => {
     const r = b.getBoundingClientRect()
@@ -113,7 +151,7 @@ const tabsHit = await page.evaluate(() =>
   }),
 )
 ok(
-  '四个节标签都点得中（没被证明面板盖住）',
+  '四个节标签都点得中（互斥后没有别的东西盖它们）',
   tabsHit.length === 4 && tabsHit.every((t) => t.reachable),
   JSON.stringify(tabsHit),
 )
@@ -183,6 +221,39 @@ ok(
   '可视区内的组头都点得中',
   subHeads.filter((h) => h.visible).length > 0 && subHeads.every((h) => h.reachable),
   JSON.stringify(subHeads.filter((h) => !h.reachable)),
+)
+
+/* ── ⑥ 输入卡的状态行不许被工作台胶囊盖（2026-10-09，卡 z=15）──── */
+await page.click('.bench-toggle') // 先收台（上一步台是开的）
+await page.waitForTimeout(420)
+await page.click('.composer-orb .orb-center')
+await page.waitForTimeout(380)
+await page.fill('.composer-name', '')
+await page.fill('.composer-expr', 'zzz(')
+await page.waitForTimeout(560)
+const statusHit = await page.evaluate(() => {
+  const card = document.querySelector('.composer-card')
+  const last = card?.lastElementChild
+  if (!card || !last) return null
+  const r = last.getBoundingClientRect()
+  const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+  const zc = getComputedStyle(document.querySelector('.composer-orb')).zIndex
+  const zb = (() => {
+    const b = document.querySelector('.bench')
+    return b ? getComputedStyle(b).zIndex : '?'
+  })()
+  return {
+    top: el ? `${el.tagName}.${String(el.className).slice(0, 30)}` : 'null',
+    owned: !!(el && (el === last || last.contains(el) || card.contains(el))),
+    zCard: zc,
+    zBench: zb,
+  }
+})
+ok('错误状态行不被工作台胶囊盖（命中测试）', statusHit?.owned === true, JSON.stringify(statusHit))
+ok(
+  '输入卡层级高于工作台（z 卡 > 台）',
+  Number(statusHit?.zCard ?? 0) > Number(statusHit?.zBench ?? 99),
+  JSON.stringify(statusHit),
 )
 
 console.log('')

@@ -264,6 +264,23 @@ export default function App() {
    */
   const [proofOpen, setProofOpen] = useState(true)
   /**
+   * **工作台 × 证明：互斥**（2026-10-09 用户拍板）。
+   *
+   * 两个面板同屏必互盖（台宽 `min(1240px, 100vw-300px)` 居中 × 证明 `right:12`——
+   * 真机实测 1440 下就叠 220px，且台 z 更高）⇒ 证明的「开始证明」按钮全被盖死、
+   * 卡片文字只剩右半截。用户拍板第一半：**台升起 ⇒ 证明自动收起**（先例：v2.0 收信息栏）。
+   *
+   * 下面第二条是它的**补全**：用户手动把证明再点开时，若台还开着，就还是那个
+   * "看着在、点不动"的半截态 —— 所以证明**打开**也把台收起。两条各自只在对应
+   * 开关"翻到 true"时动作（`if (x)`），不会互相踢成循环。
+   */
+  useEffect(() => {
+    if (benchOpen) setProofOpen(false)
+  }, [benchOpen])
+  useEffect(() => {
+    if (proofOpen) setBenchOpen(false)
+  }, [proofOpen])
+  /**
    * 正在跑的「模板 × 实例」；`null` = 还没开始。
    *
    * `extra` 是**参数槽**的值（M3：点 x / 靶群 / 生成元的像）——群与 p 之外，
@@ -1251,6 +1268,9 @@ export default function App() {
           singleOps={singleOps}
           containerW={canvasSize.w}
           containerH={canvasSize.h}
+          /* 台升起 ⇒ 球**靠左停**（2026-10-09 用户拍板：不再贴着被台盖住的节点）*/
+          dock={benchOpen && benchH > 0}
+          benchH={benchH}
           onOpen={() => setOrbStage('ring')}
           onClose={() => setOrbStage('closed')}
           onToggleOps={() => setOrbStage(orbStage === 'ops' ? 'ring' : 'ops')}
