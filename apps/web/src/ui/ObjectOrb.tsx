@@ -135,7 +135,6 @@ export function ObjectOrb({
   containerW,
   containerH,
   dock,
-  benchH,
   onOpen,
   onClose,
   onToggleOps,
@@ -154,10 +153,11 @@ export function ObjectOrb({
   /**
    * **靠左停**（2026-10-09 用户拍板）——台升起时球不再贴着被台盖住的节点，
    * 而是固定到左缘（与输入球同一条竖线、叠在它下面）。环与操作面板随向翻到右侧。
+   *
+   * ⚠️ 2026-10-10 起左停位**完全钉死**（不随台高动）⇒ 不再需要 `benchH` 传参：
+   * 台左缘恒 ≥150px、球在 x=12 ⇒ 水平不重叠，台永远盖不到它（见 `dockY` 注释）。
    */
   dock?: boolean
-  /** 工作台高度（px）——dock 时贴着台顶算位（与 `--bench-h` 同源） */
-  benchH?: number
   onOpen: () => void
   onClose: () => void
   onToggleOps: () => void
@@ -175,21 +175,19 @@ export function ObjectOrb({
   /*
    * **左停位**（dock，2026-10-09）：中心 x=25（盒左 12，与输入球左缘同一条线）。
    *
-   * **y 从"贴台顶"改成"固定位 + 碰到才让位"**（2026-10-10 用户拍板）——
-   * 从前的 y = `containerH - benchH - 41` 是**贴台顶上方 41px**，
-   * 用户一拖台的高度，台顶一动球就跟着滑（用户原话：
-   * 「当工作台上下拉高度时，对象球会跟着动。我要解绑这个，让对象球固定」）。
+   * **y 完全钉死**（2026-10-10，用户两轮点名）——
+   * 用户原话一：「当工作台上下拉高度时，对象球会跟着动。我要解绑这个，让对象球固定」；
+   * 原话二（看到"碰到才让位"成品后）：「啥意思啊，拖高过 68% 后球就跟着动了，我是这个意思吗？」
+   * ⇒ **任何台高度都不许动**（连同输入球）。
    *
-   * 现在：
-   *   · **固定位** = 默认台高（`BENCH_H_DEFAULT` = 68%）时的台顶上方 41px；
-   *   · **让位值** = 当前台顶上方 41px（旧公式）；
-   *   · 取 `min` ⇒ 台 ≤ 68% 时球**纹丝不动**（让位值更高、够不着它）；
-   *     台拖过 68% 快要碰/盖到它时，才上浮贴住台顶 —— **永不被盖**。
+   * ⚠️ 「让位」为什么根本不需要（此前判断失误的纠正）：台是**居中**的
+   * （宽 `min(1240px, 100vw-300px)`）⇒ 左缘恒在 **≥150px**；两球 dock 在 x=12~38
+   * ⇒ **水平不重叠、台永远盖不到球**。从前"贴台顶上方 41px"跟算出来的 y 其实只是
+   * 美观上的贴线，没有遮挡意义。钉死后球停在**默认台高（`BENCH_H_DEFAULT` = 68%）
+   * 时的停位**，拖台高度纹丝不动、也永不被盖。
    */
   const dockX = 25
-  const dockYFixed = Math.round(containerH * (1 - BENCH_H_DEFAULT) - 41)
-  const dockYSafe = Math.round(containerH - (benchH ?? 0) - 41)
-  const dockY = Math.min(dockYFixed, dockYSafe)
+  const dockY = Math.round(containerH * (1 - BENCH_H_DEFAULT) - 41)
   // 节点左上角（沿对角线挪一点，别压在节点边上）；箭头挂在中点正上方；dock 固定左缘
   const orbX = dock ? dockX : clampX(isEdge ? anchor.x : anchor.x - anchor.r * 0.74)
   const orbY = dock ? dockY : clampY(isEdge ? anchor.y - 28 : anchor.y - anchor.r * 0.74)

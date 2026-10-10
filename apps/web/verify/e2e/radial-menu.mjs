@@ -404,7 +404,7 @@ console.log('== ⑩ 点空白收起球 ==')
   }
 }
 
-/* ══ ⑪ 台升起 ⇒ 对象球靠左停（2026-10-09 用户拍板）═══════ */
+/* ══ ⑪ 台升起 ⇒ 球靠左停 + 拖高度完全钉死（10-09 拍板 / 10-10 用户两轮点名钉死）═══ */
 
 console.log('')
 console.log('== ⑪ 台升起，对象球靠左停 ==')
@@ -433,7 +433,9 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
     }
   })
   ok('台升起后球**靠左停**（盒左 = 12，带 dock-left）', st?.benchOpen === true && st?.x === 12 && st?.docked === true, JSON.stringify(st))
-  ok('球点得中、不被台盖，且位在台顶之上', st?.reachable === true && (st?.y ?? 9999) <= (st?.benchTop ?? 0), JSON.stringify(st))
+  /* 2026-10-10 起球位**钉死**：与台顶的关系不再是判据（台左缘恒 ≥150、球 x=12，
+     水平不重叠）——「不被盖」直接用命中测试说话。 */
+  ok('球点得中、不被台盖（钉死位，2026-10-10）', st?.reachable === true, JSON.stringify(st))
   /* 点球 → 环（右侧半圈），每颗卫星都点得中、不越出屏 */
   const orbPt = await page.evaluate(() => {
     const o = document.querySelector('.orb:not(.orb-center)')
@@ -464,14 +466,13 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
   }
 
   /*
-   * 2026-10-10 新契约：**拖台高度，球不动**（固定位）——
-   * 从前的球位是"贴台顶上方 41px"，拖高度时球跟着滑（用户点名要解绑：
-   * 「当工作台上下拉高度时，对象球会跟着动」）。
-   * 现在：台 ≤ 68% 时球**纹丝不动**；拖过 68% 快要盖住它时，才上浮让位。
+   * 2026-10-10 新契约：**拖台高度，球不动**（完全钉死）——
+   * 用户两轮点名：先「当工作台上下拉高度时，对象球会跟着动。我要解绑这个」
+   * （对象球）、「把'*'输入球也解绑了」（输入球）；再看到"碰到才让位"成品后
+   * **再否**：「拖高过 68% 后球就跟着动了，我是这个意思吗？」
+   * ⇒ 任何台高度、两个球都**纹丝不动**（台水平盖不到它们：台左缘恒 ≥150px、
+   * 球 dock 在 x=12 ⇒ 不重叠，"让位"根本不需要）。
    * 用真鼠标拖 `.bench-grip`（pointerdown 挂 window，见 `Workbench#onGripDown`）。
-   *
-   * 同日追加「**输入球也解绑**」（用户：「把'*'输入球也解绑了」）——
-   * 同款公式（CSS `max(--bench-h-park, --bench-h) + 62`），一并量着。
    */
   const orbY = () =>
     page.evaluate(() => Math.round(document.querySelector('.orb:not(.orb-center)').getBoundingClientRect().top))
@@ -480,8 +481,6 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
       const c = document.querySelector('.composer-orb .orb-center')
       return c ? Math.round(c.getBoundingClientRect().top) : null
     })
-  const benchTopY = () =>
-    page.evaluate(() => Math.round(document.querySelector('.bench').getBoundingClientRect().top))
   const gripPt = () =>
     page.evaluate(() => {
       const g = document.querySelector('.bench-grip')
@@ -499,9 +498,9 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
   await page.waitForTimeout(320)
   const yLow = await orbY()
   const cLow = await composerY()
-  ok('拖矮台：对象球纹丝不动（固定位解绑，2026-10-10）', yLow === y0, `${y0} -> ${yLow}`)
-  ok('拖矮台：输入球同样纹丝不动（2026-10-10 同日解绑）', cLow !== null && cLow === c0, `${c0} -> ${cLow}`)
-  /* ② 往上拖到超过 68%：两个球都让位上浮、仍不被盖 */
+  ok('拖矮台：对象球纹丝不动（钉死，2026-10-10）', yLow === y0, `${y0} -> ${yLow}`)
+  ok('拖矮台：输入球同样纹丝不动（钉死）', cLow !== null && cLow === c0, `${c0} -> ${cLow}`)
+  /* ② 往上拖到超过 68%：两个球**照样不动**；台拖到最高也盖不到它们（命中测试直接验） */
   gp = await gripPt()
   await page.mouse.move(gp.x, gp.y)
   await page.mouse.down()
@@ -510,9 +509,21 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
   await page.waitForTimeout(320)
   const yHigh = await orbY()
   const cHigh = await composerY()
-  const btHigh = await benchTopY()
-  ok('拖过 68% 后对象球上浮让位、仍不被盖（y 在台顶之上）', yHigh < y0 && yHigh <= btHigh, `y=${yHigh} benchTop=${btHigh} y0=${y0}`)
-  ok('拖过 68% 后输入球也上浮让位（落在台顶之上）', cHigh !== null && c0 !== null && cHigh < c0 && cHigh <= btHigh, `${c0} -> ${cHigh} benchTop=${btHigh}`)
+  const reach = await page.evaluate(() => {
+    const hit = (el) => {
+      if (!el) return false
+      const r = el.getBoundingClientRect()
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      return !!(top && (top === el || el.contains(top)))
+    }
+    return {
+      orb: hit(document.querySelector('.orb:not(.orb-center)')),
+      composer: hit(document.querySelector('.composer-orb .orb-center')),
+    }
+  })
+  ok('拖过 68% 后对象球照样不动（完全钉死——"让位"被用户否掉）', yHigh === y0, `${y0} -> ${yHigh}`)
+  ok('拖过 68% 后输入球照样不动（完全钉死）', cHigh !== null && cHigh === c0, `${c0} -> ${cHigh}`)
+  ok('台拖到最高，两球仍点得中（水平不重叠，台盖不到）', reach.orb === true && reach.composer === true, JSON.stringify(reach))
 }
 
 ok('控制台零错误', logs.length === 0, logs.join(' | '))

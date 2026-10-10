@@ -1178,12 +1178,15 @@ export default function App() {
       className={`app${benchOpen && benchH > 0 ? ' bench-open' : ''}`}
       style={
         {
-          '--bench-h': `${benchH}px`,
           /*
-           * **输入球的固定停位高度**（2026-10-10，与对象球同款「固定位 + 碰到才让位」——
-           * 用户：「把'*'输入球也解绑了」）。按**默认台高**算（`BENCH_H_DEFAULT` 判据从
-           * Workbench 导出）：拖台高度时球停在这里不动，台高过它才跟着上浮
-           * （CSS 里 `max(停位, 台高) + 62px`，见 `.app.bench-open .composer-orb`）。
+           * **输入球的固定停位高度**（2026-10-10，用户两轮点名「解绑」后**完全钉死**：
+           * 先「把'*'输入球也解绑了」，看到"碰到才让位"成品后再否——
+           * 「拖高过 68% 后球就跟着动了，我是这个意思吗？」）。
+           * 按**默认台高**算（`BENCH_H_DEFAULT` 判据从 Workbench 导出，与对象球同一份）：
+           * 拖台任意高度输入球纹丝不动（CSS `.app.bench-open .composer-orb`；
+           * 台永远盖不到它——水平不重叠，判据在那条规则的注释里）。
+           *
+           * 注：旧变量 `--bench-h`（台高实时值）已删——自本条起没有 CSS 消费者。
            */
           '--bench-h-park': `${Math.round(canvasSize.h * BENCH_H_DEFAULT)}px`,
         } as CSSProperties
@@ -1279,9 +1282,9 @@ export default function App() {
           singleOps={singleOps}
           containerW={canvasSize.w}
           containerH={canvasSize.h}
-          /* 台升起 ⇒ 球**靠左停**（2026-10-09 用户拍板：不再贴着被台盖住的节点）*/
+          /* 台升起 ⇒ 球**靠左停**（2026-10-09 用户拍板：不再贴着被台盖住的节点）
+             + 2026-10-10 钉死：左停位不随台高动（台左缘 ≥150、球在 x=12，水平不重叠） */
           dock={benchOpen && benchH > 0}
-          benchH={benchH}
           onOpen={() => setOrbStage('ring')}
           onClose={() => setOrbStage('closed')}
           onToggleOps={() => setOrbStage(orbStage === 'ops' ? 'ring' : 'ops')}

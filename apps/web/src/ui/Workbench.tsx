@@ -111,10 +111,10 @@ export interface WorkbenchProps {
   /**
    * 把**当前的升起高度**报给 App（px）。
    *
-   * ⚠️ 为什么需要：工作台现在占大半屏（默认 68vh、还能拖到 88vh）⇒ **会盖住
-   * 底部输入球**（`.composer-orb`，`bottom: 12px`）。真机实测过一次：
-   * playwright 点「添加」报 `<div class="bench-page"> … intercepts pointer events`。
-   * ⇒ App 拿这个高度把输入球抬到工作台顶边之上（`.app.bench-open .composer-orb`）。
+   * 用途史：W3 起 App 拿它把输入球抬到台顶之上（`.app.bench-open .composer-orb`）；
+   * **2026-10-10 起球位钉死**（不随台高动，见 `ui/ObjectOrb.tsx#dockY` 与 App.css
+   * 那条规则的注释）——这个高度现在只服务于 App 的 `benchH > 0`（`bench-open`
+   * 类的复合判据：升起且高度已上报）。
    */
   onHeight?: (h: number) => void
   /** `＋` 面板的两个落行口 —— 与「目录」面板**同一对回调**（见 `ui/NewObjectForms.tsx`）*/
