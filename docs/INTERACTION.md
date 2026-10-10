@@ -562,6 +562,11 @@ ops.ts#takesCanvasObject(t) = !isScalarParam(t) || t === 'omegaOrInt'
   改为**固定位**（按默认台高 68% 的台顶上方算）+「**碰到才让位**」：台 ≤ 68% 时拖高度球**纹丝不动**，
   拖过 68% 快要盖住它时才上浮贴住台顶（`min(固定位, 台顶上方)`，`ui/ObjectOrb.tsx`；
   默认台高比例 `BENCH_H_DEFAULT` 由 `ui/Workbench.tsx` 导出，判据只此一份）。
+- **输入球（`*` 球）同款解绑**（2026-10-10 同日追加，用户：「把'*'输入球也解绑了」）：
+  `.app.bench-open .composer-orb` 的 `bottom` 从 `calc(benchH + 62)` 改为
+  `calc(max(--bench-h-park, --bench-h) + 62)` —— `--bench-h-park` 由 App 按同一个
+  `BENCH_H_DEFAULT` 算好塞进来；台 ≤ 68% 时拖高度输入球**不动**，拖过 68% 才跟着上浮
+  （仍贴台顶上方 62px）；台收起时回贴底（基础规则，与本条无关）。
 - **大部分文字禁选**（2026-10-10 用户：「让大部分文字不能选中复制。（拖到工作台会误识别导致选中许多文字）」）：
   `.app` 整棵树 `user-select: none`；**输入框 / 文本域豁免**（`user-select: text`，打字 / 选词 / 复制照常）。
 - **输入卡（`*` 球）`z-index: 15`，高于工作台（14）**：塌缩态下错误状态行不再被台胶囊截断；
@@ -570,8 +575,8 @@ ops.ts#takesCanvasObject(t) = !isScalarParam(t) || t === 'omegaOrInt'
 走查：`verify/e2e/workbench.mjs`（10 段 98 条：贴底常驻 / 画布不重排 / 点节点自动升起 /
 明细手算 / 竖排节导航 / 键盘随焦点变（三块）/ `＋` 导入（标准记号渲染 + Esc / 点外关）/
 槽位凑参 / 对象槽（最左竖列）/ 文字禁选 / 编辑器嵌入与收起守卫 / 文案纪律）；窄窗几何 +
-互斥与输入卡层级在 `narrow-docks.mjs`，球靠左停与**拖高度解绑**（固定位 / 碰到才让位）在
-`radial-menu.mjs` ⑪。
+互斥与输入卡层级在 `narrow-docks.mjs`，球靠左停与**拖高度解绑**（对象球 + 输入球，固定位 /
+碰到才让位）在 `radial-menu.mjs` ⑪。
 
 ## 5. 面板布局
 

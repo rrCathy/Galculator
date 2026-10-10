@@ -469,9 +469,17 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
    * 「当工作台上下拉高度时，对象球会跟着动」）。
    * 现在：台 ≤ 68% 时球**纹丝不动**；拖过 68% 快要盖住它时，才上浮让位。
    * 用真鼠标拖 `.bench-grip`（pointerdown 挂 window，见 `Workbench#onGripDown`）。
+   *
+   * 同日追加「**输入球也解绑**」（用户：「把'*'输入球也解绑了」）——
+   * 同款公式（CSS `max(--bench-h-park, --bench-h) + 62`），一并量着。
    */
   const orbY = () =>
     page.evaluate(() => Math.round(document.querySelector('.orb:not(.orb-center)').getBoundingClientRect().top))
+  const composerY = () =>
+    page.evaluate(() => {
+      const c = document.querySelector('.composer-orb .orb-center')
+      return c ? Math.round(c.getBoundingClientRect().top) : null
+    })
   const benchTopY = () =>
     page.evaluate(() => Math.round(document.querySelector('.bench').getBoundingClientRect().top))
   const gripPt = () =>
@@ -481,7 +489,8 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
       return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
     })
   const y0 = await orbY()
-  /* ① 往下拖（台变矮）：球不许动 */
+  const c0 = await composerY()
+  /* ① 往下拖（台变矮）：两个球都不许动 */
   let gp = await gripPt()
   await page.mouse.move(gp.x, gp.y)
   await page.mouse.down()
@@ -489,8 +498,10 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
   await page.mouse.up()
   await page.waitForTimeout(320)
   const yLow = await orbY()
-  ok('拖矮台：球纹丝不动（固定位解绑，2026-10-10）', yLow === y0, `${y0} -> ${yLow}`)
-  /* ② 往上拖到超过 68%：球让位上浮、仍不被盖 */
+  const cLow = await composerY()
+  ok('拖矮台：对象球纹丝不动（固定位解绑，2026-10-10）', yLow === y0, `${y0} -> ${yLow}`)
+  ok('拖矮台：输入球同样纹丝不动（2026-10-10 同日解绑）', cLow !== null && cLow === c0, `${c0} -> ${cLow}`)
+  /* ② 往上拖到超过 68%：两个球都让位上浮、仍不被盖 */
   gp = await gripPt()
   await page.mouse.move(gp.x, gp.y)
   await page.mouse.down()
@@ -498,8 +509,10 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
   await page.mouse.up()
   await page.waitForTimeout(320)
   const yHigh = await orbY()
+  const cHigh = await composerY()
   const btHigh = await benchTopY()
-  ok('拖过 68% 后球上浮让位、仍不被盖（y 在台顶之上）', yHigh < y0 && yHigh <= btHigh, `y=${yHigh} benchTop=${btHigh} y0=${y0}`)
+  ok('拖过 68% 后对象球上浮让位、仍不被盖（y 在台顶之上）', yHigh < y0 && yHigh <= btHigh, `y=${yHigh} benchTop=${btHigh} y0=${y0}`)
+  ok('拖过 68% 后输入球也上浮让位（落在台顶之上）', cHigh !== null && c0 !== null && cHigh < c0 && cHigh <= btHigh, `${c0} -> ${cHigh} benchTop=${btHigh}`)
 }
 
 ok('控制台零错误', logs.length === 0, logs.join(' | '))

@@ -41,7 +41,7 @@ import { StructureBuilder } from './ui/StructureBuilder'
 import type { CanvasNode } from './gal/types'
 import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
-import { Workbench } from './ui/Workbench'
+import { BENCH_H_DEFAULT, Workbench } from './ui/Workbench'
 import { OpDock } from './ui/OpDock'
 import { CatalogDock } from './ui/CatalogDock'
 import type { InfoTab } from './ui/InfoDock'
@@ -1176,7 +1176,18 @@ export default function App() {
   return (
     <div
       className={`app${benchOpen && benchH > 0 ? ' bench-open' : ''}`}
-      style={{ '--bench-h': `${benchH}px` } as CSSProperties}
+      style={
+        {
+          '--bench-h': `${benchH}px`,
+          /*
+           * **输入球的固定停位高度**（2026-10-10，与对象球同款「固定位 + 碰到才让位」——
+           * 用户：「把'*'输入球也解绑了」）。按**默认台高**算（`BENCH_H_DEFAULT` 判据从
+           * Workbench 导出）：拖台高度时球停在这里不动，台高过它才跟着上浮
+           * （CSS 里 `max(停位, 台高) + 62px`，见 `.app.bench-open .composer-orb`）。
+           */
+          '--bench-h-park': `${Math.round(canvasSize.h * BENCH_H_DEFAULT)}px`,
+        } as CSSProperties
+      }
     >
       <CanvasView
         ref={canvasRef}
