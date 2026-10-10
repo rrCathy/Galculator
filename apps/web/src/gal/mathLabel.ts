@@ -116,8 +116,16 @@ export function mathLabel(obj: GalObject): MathLabel {
   return { main, sub: defLine(obj) }
 }
 
-/** 副行：`名字 = 定义`；两者恰好重复时给空串（别写两遍一样的东西）。 */
+/**
+ * 副行：`名字 = 定义`；两者恰好重复时给空串（别写两遍一样的东西）。
+ *
+ * ⚠️ **结构对象特判**（2026-10-10 用户点名）：它的 `def` 是 `structure(A, 1, 2, 3, …)`
+ * 的**完整平铺表**（n 阶就 n² 个数字——用户原话「如果用户创建了一个 4 阶代数结构，
+ * 你准备写 16 个数字吗？」）。显示折叠为**载体 + 运算符号**的简洁记号：
+ * `B = (A, *)`（运算表去明细「运算表」节看）。
+ */
 function defLine(obj: GalObject): string {
   if (obj.def === obj.id || obj.def === obj.label) return ''
+  if (obj.value.type === 'structure') return `${obj.id} = ${obj.label}`
   return `${obj.id} = ${obj.def}`
 }

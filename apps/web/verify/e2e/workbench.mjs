@@ -190,7 +190,14 @@ const bench = () =>
         const r = box.getBoundingClientRect()
         return { w: Math.round(r.width), h: Math.round(r.height) }
       })(),
-      inRead: !!el.querySelector('.bench-left .bench-stage'),
+      /* 对象槽位置（2026-10-10 用户点名挪到**最左列竖放**）：
+         正查"在 .bench-body 直接子级"、反查"不在 .bench-left 里"，外加 chips 必须竖排 */
+      stageCol: !!el.querySelector('.bench-body > .bench-stage'),
+      stageInLeft: !!el.querySelector('.bench-left .bench-stage'),
+      stageDir: (() => {
+        const c = el.querySelector('.bench-stage-chips')
+        return c ? getComputedStyle(c).flexDirection : null
+      })(),
       stageLabel: el.querySelector('.bench-stage-label')?.textContent?.trim() ?? '',
       inspRows: [...el.querySelectorAll('.bench .insp-row')].map((x) => x.textContent),
       etables: el.querySelectorAll('.etable').length,
@@ -250,9 +257,10 @@ console.log('\n== 场景 1：贴底常驻，默认收起 ==')
    * 收起条报能力（W1 的措辞翻账后）+ **文案纪律**：
    * 分隔一律 ASCII `-`（`·` 键盘打不出来，no-unicode-leak 判据）—— 2026-10-07 收尾修过一处。
    */
-  ok('收起条写着它能干什么（造对象 / 对它做事 / 翻结构）',
-    b !== null && /造对象/.test(b.peek) && /对它做事/.test(b.peek) && /翻它的结构/.test(b.peek), b?.peek)
-  ok('分隔是 ASCII `-`，不是键盘打不出的 `·`', b !== null && b.peek === '点开：造对象 - 对它做事 - 翻它的结构', b?.peek)
+  ok('收起条写着它能干什么（造对象 / 对它做事 / 看结构）',
+    b !== null && /造对象/.test(b.peek) && /对它做事/.test(b.peek) && /看结构/.test(b.peek), b?.peek)
+  ok('分隔是 ASCII `-`（2026-10-10 文案精简后：造对象 - 对它做事 - 看结构）',
+    b !== null && b.peek === '造对象 - 对它做事 - 看结构', b?.peek)
   ok('收起条**不再**说「先选一个对象」（那是第一版那个错）',
     b !== null && !/先在画布或左栏选一个对象/.test(b.text), clean(b?.text).slice(0, 60))
 
@@ -310,7 +318,9 @@ console.log('\n== 场景 3：显示条与明细区 ==')
     clean(b?.screenTitle) === 'S4', clean(b?.screenTitle))
   ok('标题行头上有**值类型 chip**（"群"）——信息面板并入时补搬的',
     b?.screenChip === '群', String(b?.screenChip))
-  ok('显示条副行报阶（手算 |S_4| = 24）', /阶\s*24/.test(clean(b?.screenSub)), clean(b?.screenSub))
+  /* 2026-10-10 契约变更：副行**不再**拼「- 阶 N」（用户点名「'阶三'也是没必要显示的」，
+     阶在明细「基本」节第一行就有）。断言反着写：副行里**不许再出现「阶」字**。 */
+  ok('显示条副行不再报阶（2026-10-10 用户点名去掉）', !/阶/.test(clean(b?.screenSub)), clean(b?.screenSub))
 
   ok('明细区是**竖排**节导航：基本 / 元素 / 共轭类 / 子群（这个顺序）',
     JSON.stringify(b?.tabs) === JSON.stringify(['basic', 'elements', 'conj', 'subgroups']), JSON.stringify(b?.tabs))
@@ -475,18 +485,50 @@ console.log('\n== 场景 5：＋ 导入对象 ==')
   b = await bench()
   ok('点 chip 后面板收起、焦点切到新对象', (await page.locator('.bench-plus-panel').count()) === 0 && b?.node !== '')
   ok('新对象是 S_3（数学身份上屏）', clean(b?.screenTitle) === 'S3', clean(b?.screenTitle))
-  ok('手算 |S_3| = 6（副行报阶）', /阶\s*6/.test(clean(b?.screenSub)), clean(b?.screenSub))
+  ok('副行不再报阶（S_3 同样口径）', !/阶/.test(clean(b?.screenSub)), clean(b?.screenSub))
   ok('键盘跟着换焦点（群键回来了）', (b?.keyOps.length ?? 0) > 20, `keys=${b?.keyOps.length}`)
   ok('新对象自动进对象槽（chip 在，且写数学名 S3）', (b?.stage.length ?? 0) === 1 && clean(b.stage[0].main) === 'S3',
     JSON.stringify(b?.stage.map((c) => clean(c.main))))
-  ok('对象槽在**左列**、标签写「对象槽」（2026-10-08 用户点名：「这个台面可以放到工作台左边」）',
-    b?.inRead === true && b?.stageLabel === '对象槽', `inRead=${b?.inRead} label=${b?.stageLabel}`)
+  ok('对象槽在**最左列竖放**、标签写「对象槽」（2026-10-10 用户点名：「挪到工作台最左侧竖着放」）',
+    b?.stageCol === true && b?.stageInLeft === false && b?.stageDir === 'column' &&
+      b?.stageLabel === '对象槽',
+    `col=${b?.stageCol} inLeft=${b?.stageInLeft} dir=${b?.stageDir} label=${b?.stageLabel}`)
 
   /* S_3 的明细手算：切「共轭类」—— 3 行（手算：S_3 有 3 个共轭类） */
   await page.click('.bench-tab[data-tab="conj"]')
   await page.waitForTimeout(600)
   const s3conj = await page.evaluate(() => document.querySelectorAll('.bench .conj-table tbody tr').length)
   ok('S_3 共轭类 3 行（手算：3 个共轭类）', s3conj === 3, `rows=${s3conj}`)
+}
+
+/* ══ 场景 3b：文字禁选（2026-10-10 用户点名）════════════════════
+ *
+ * 用户原话：「应该让大部分文字不能选中复制。（拖到工作台会误识别导致选中许多文字）」
+ * 契约：`.app` 上 user-select: none；**输入框 / 文本域豁免**（还要打字、选词、复制）。
+ */
+console.log('\n== 场景 3b：文字禁选 ==')
+{
+  /* 此刻输入卡是收起的（页面上没有 input）⇒ 先点开输入球；
+     测完再点回去、恢复几何，别影响后面场景。若进来时它本来就开着则不动。 */
+  const wasOpen = (await page.locator('.composer-card').count()) > 0
+  if (!wasOpen) {
+    await page.click('.composer-orb .orb-center')
+    await page.waitForTimeout(340)
+  }
+  const sel = await page.evaluate(() => {
+    const app = document.querySelector('.app')
+    const i = document.querySelector('.app input, .app textarea')
+    return {
+      app: app ? getComputedStyle(app).userSelect : null,
+      input: i ? { tag: i.tagName.toLowerCase(), us: getComputedStyle(i).userSelect } : null,
+    }
+  })
+  ok('大部分文字禁选：`.app` 上 user-select: none', sel.app === 'none', String(sel.app))
+  ok('输入框豁免：user-select: text（打字 / 选词照常）', sel.input?.us === 'text', JSON.stringify(sel.input))
+  if (!wasOpen) {
+    await page.click('.composer-orb .orb-center')
+    await page.waitForTimeout(280)
+  }
 }
 
 /* ══ 场景 6：键盘发起 op —— 槽位凑参数（不碰画布）+ 单对象直接执行 ═
@@ -538,9 +580,10 @@ console.log('\n== 场景 6：槽位凑参数与直接执行 ==')
   ok('台内出现槽位区（不用去画布）', b?.slots === 1, `slots=${b?.slots}`)
   ok('槽位头说清在等谁（直积 · 在下面点）',
     /正在选对象/.test(b?.slotHead ?? '') && /直积/.test(b?.slotHead ?? ''), b?.slotHead)
-  /* 2026-10-07 修的钉子：busy 时焦点不再被掐 —— 显示条保持对象并报「正在选参数」 */
-  ok('显示条保持焦点并报进度（阶 24 - 正在选参数：1 / 2）',
-    /正在选参数：1 \/ 2/.test(clean(b?.screenSub)) && /24/.test(clean(b?.screenSub)), clean(b?.screenSub))
+  /* 2026-10-07 修的钉子：busy 时焦点不再被掐 —— 显示条保持对象并报「正在选参数」。
+     2026-10-10 起副行不再拼「阶 24」（去阶批），这里只验选参数进度。 */
+  ok('显示条保持焦点并报进度（正在选参数：1 / 2）',
+    /正在选参数：1 \/ 2/.test(clean(b?.screenSub)), clean(b?.screenSub))
   ok('键盘在 pending 时仍可用（焦点没被掐掉）', (b?.keyOps.length ?? 0) === 27, `keys=${b?.keyOps.length}`)
   ok('候选里有 C_6（Q）', b?.cands.includes('Q'), JSON.stringify(b?.cands))
 
@@ -549,8 +592,10 @@ console.log('\n== 场景 6：槽位凑参数与直接执行 ==')
   ok('选完就真算出来（pending 收了、画布多一个对象）',
     b?.slots === 0 && (await page.locator('svg.canvas g.gnode').count()) === nodesBefore + 1,
     `nodes=${await page.locator('svg.canvas g.gnode').count()}`)
+  /* 2026-10-10：副行不再报阶 ⇒ 阶验证改从明细「基本」节的 `阶` 行读 */
   ok('直积阶 = 144（手算 24 x 6），结果自动成焦点',
-    /阶\s*144/.test(clean(b?.screenSub)), clean(b?.screenSub))
+    (b?.inspRows ?? []).some((r) => /阶/.test(clean(r)) && /144/.test(clean(r))),
+    (b?.inspRows ?? []).map(clean).join(' | ').slice(0, 160))
   /*
    * 对象槽记的是"**工作台开着时碰过的对象**"（App.tsx：只 `benchOpen` 时记焦点）。
    * Q 建行时工作台没开 ⇒ 不在槽里；G（focusViaNode）与产物（自动成焦点）在。
@@ -570,7 +615,9 @@ console.log('\n== 场景 6：槽位凑参数与直接执行 ==')
   await page.waitForTimeout(900)
   b = await bench()
   ok('没有 pending（单对象 op 一步到位）', b?.slots === 0, `slots=${b?.slots}`)
-  ok('结果自动成焦点：Z(S_4) 阶 1（手算中心平凡）', /阶\s*1/.test(clean(b?.screenSub)), clean(b?.screenSub))
+  ok('结果自动成焦点：Z(S_4) 阶 1（手算中心平凡，改读明细）',
+    (b?.inspRows ?? []).some((r) => /阶/.test(clean(r)) && /=\s*1$/.test(clean(r))),
+    (b?.inspRows ?? []).map(clean).join(' | ').slice(0, 160))
   ok('对象槽又多了一枚（连续演算都留在槽里）', (b?.stage.length ?? 0) === stageBefore + 1,
     JSON.stringify(b?.stage.map((c) => clean(c.main))))
 }

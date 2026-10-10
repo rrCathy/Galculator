@@ -29,6 +29,7 @@ import { canPick, menuLabel, PARAM_LABEL } from '../gal/interaction'
 import { BENCH_FAMILIES, benchArity, familyOps } from '../gal/workbench'
 import { opKey } from '../gal/opLabels'
 import { mathLabel } from '../gal/mathLabel'
+import { STRUCTURE_LEVEL_LABEL } from '../gal/algebra'
 import { smallGroupCatalog, type SmallGroupList } from '../gal/smallGroups'
 import type { Group } from '@groupviz/core'
 import { isKnownGroup } from '../gal/known'
@@ -131,8 +132,14 @@ export interface WorkbenchProps {
   onDrop: (id: string) => void
 }
 
-/** 升起的默认高度（视口百分比）· 可拖范围 */
-const H_DEFAULT = 0.68
+/**
+ * 升起的默认高度（视口百分比）· 可拖范围。
+ *
+ * ⚠️ `BENCH_H_DEFAULT` **导出**：对象球的"固定停位"也按它算
+ * （`ui/ObjectOrb.tsx#dockY`，2026-10-10 用户拍板「拖台高度时球不动」）——
+ * 判据只此一份，别在两处各写一个 0.68。
+ */
+export const BENCH_H_DEFAULT = 0.68
 const H_MIN = 0.4
 const H_MAX = 0.88
 
@@ -346,7 +353,7 @@ export function Workbench({
     return m
   }, [])
 
-  const h = viewportH ? Math.round(viewportH * (hRatio ?? H_DEFAULT)) : undefined
+  const h = viewportH ? Math.round(viewportH * (hRatio ?? BENCH_H_DEFAULT)) : undefined
 
   /** 显示条的标题/副行（数学身份 + 定义）。判据在 `gal/mathLabel.ts`。 */
   const ml = useMemo(() => (node ? mathLabel(node) : null), [node])
@@ -369,7 +376,7 @@ export function Workbench({
   /* ── 拖高（抓手在顶边）───────────────────────────────── */
   const onGripDown = (e: ReactPointerEvent) => {
     if (!viewportH) return
-    drag.current = { y: e.clientY, h0: (hRatio ?? H_DEFAULT) * viewportH }
+    drag.current = { y: e.clientY, h0: (hRatio ?? BENCH_H_DEFAULT) * viewportH }
     const move = (ev: PointerEvent) => {
       const d = drag.current
       if (!d) return
@@ -415,14 +422,52 @@ export function Workbench({
         >
           <span className="bench-caret">{open ? 'v' : '^'}</span>
           <span className="bench-title">工作台</span>
-          {/* 收起态也要说清"它能干什么"，否则一条光秃秃的胶囊没人敢点 */}
-          {!open && <span className="bench-peek">点开：造对象 - 对它做事 - 翻它的结构</span>}
+          {/* 收起态也要说清"它能干什么"，否则一条光秃秃的胶囊没人敢点。
+              2026-10-10 精简：删「点开：」（胶囊摆在那，不必教点）+「翻它的结构」→「看结构」。 */}
+          {!open && <span className="bench-peek">造对象 - 对它做事 - 看结构</span>}
         </button>
         {node && <span className="bench-target">{node.id}</span>}
       </header>
 
       {open && (
         <div className="bench-body">
+          {/*
+           * ══ 最左列：对象槽（竖排，2026-10-10 用户点名）════════════
+           *
+           * 用户原话：「对象槽在工作台的位置挪到工作台最左侧竖着放」——
+           * 从"左列里的横排 chips"改成**贴工作台最左缘的独立竖列**：
+           * 对象多了往下长（列内滚动），不再把左列越撑越高。
+           *
+           * chips 写**数学名**（`A₄` / `C₆` / `(A, *)`）——用户在槽里认的是"这是哪个对象"，
+           * 不是"我给它起的第几个字母"（对象名进 `title`）。
+           * 点一下切焦点（走 `onPick`，与"点画布节点"同一个函数）、`x` 拿下不删对象。
+           */}
+          {stage.length > 0 && (
+            <div className="bench-stage">
+              <span className="bench-stage-label">对象槽</span>
+              <div className="bench-stage-chips">
+                {stage.map((id) => {
+                  const obj = objects.find((o) => o.id === id)
+                  return (
+                    <span key={id} className={`bench-chip${id === node?.id ? ' on' : ''}`}>
+                      <button className="bench-chip-main" onClick={() => onPick(id)} title={`切到 ${id}`}>
+                        {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
+                      </button>
+                      {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}
+                      <button
+                        className="bench-chip-x"
+                        onClick={() => onDrop(id)}
+                        title={`把 ${id} 拿下对象槽（不删对象）`}
+                      >
+                        x
+                      </button>
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* ══ 左列：显示屏 + 待选 + 键盘（或 ＋ 面板）+ ＋ 按钮 ══ */}
           <div className="bench-left">
             {/* ── ① 显示屏（计算器的"显示屏"）──────────────────── */}
@@ -436,17 +481,26 @@ export function Workbench({
                      * `def` 是"它怎么被造出来的"，降为副行（`.bench-foot`）。判据在 `gal/mathLabel.ts`。
                      * 头前那个 chip 是**值类型**（群 / 子群集 / 映射…）——2026-10-08 信息面板
                      * 并入时补搬（原 `.info-target .chip`，走查按它认"这是一包子群"）。
+                     *
+                     * 2026-10-10 用户点名：结构的 chip 别写泛称「代数结构」，
+                     * **直接说它是哪一级**（原群 / 半群 / 幺半群 / 群）——级别判定复用
+                     * `algebra.ts#STRUCTURE_LEVEL_LABEL`（与公理档案同一份读数）。
                      */}
                     <div className="bench-screen-title">
                       <span className={`chip chip-${node.value.type}`}>
-                        {VALUE_TYPE_LABEL[node.value.type]}
+                        {node.value.type === 'structure'
+                          ? STRUCTURE_LEVEL_LABEL[node.value.structure.axioms.level]
+                          : VALUE_TYPE_LABEL[node.value.type]}
                       </span>
                       <TexOrText text={ml?.main ?? node.def} />
                     </div>
                     <div className="bench-screen-sub">
                       {[
                         ml?.sub,
-                        showGroup ? `阶 ${showGroup.order}` : null,
+                        /*
+                         * ⚠️ 副行的「- 阶 N」已撤（2026-10-10 用户点名：「'阶三'也是没必要显示的」）——
+                         * 阶在明细「基本」节第一行就有，显示屏副行别再重复。
+                         */
                         pending
                           ? `正在选参数：${pending.picked.length} / ${maxObjectArity(pending.op)}`
                           : null,
@@ -476,36 +530,6 @@ export function Workbench({
                 )}
               </div>
             </div>
-
-            {/* ── ② 对象槽（原「台面」，2026-10-08 用户点名挪进左列）────
-                 chips 写**数学名**（`A₄` / `C₆`）——用户在槽里认的是"这是哪个群"，
-                 不是"我给它起的第几个字母"（对象名进 `title`）。
-                 点一下切焦点（走 `onPick`，与"点画布节点"同一个函数）、`x` 拿下不删对象。 */}
-            {stage.length > 0 && (
-              <div className="bench-stage">
-                <span className="bench-stage-label">对象槽</span>
-                <div className="bench-stage-chips">
-                  {stage.map((id) => {
-                    const obj = objects.find((o) => o.id === id)
-                    return (
-                      <span key={id} className={`bench-chip${id === node?.id ? ' on' : ''}`}>
-                        <button className="bench-chip-main" onClick={() => onPick(id)} title={`切到 ${id}`}>
-                          {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
-                        </button>
-                        {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}
-                        <button
-                          className="bench-chip-x"
-                          onClick={() => onDrop(id)}
-                          title={`把 ${id} 拿下对象槽（不删对象）`}
-                        >
-                          x
-                        </button>
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             {/*
              * ── ③ 待选（pending）：槽位 + 候选，在键盘**上方** ──────
@@ -600,12 +624,12 @@ export function Workbench({
                   <button className="plus-lib-head" onClick={() => setLibOpen((v) => !v)}>
                     <span className="plus-lib-caret">{libOpen ? 'v' : '>'}</span>
                     <span>群库</span>
-                    <span className="plus-lib-hint">93 个 - 按阶分组，点名字导入</span>
+                    <span className="plus-lib-hint">93 个群 - 点名字导入</span>
                   </button>
                   {libOpen && (
                     <div className="plus-lib-body">
                       {orders === null ? (
-                        <span className="plus-lib-hint">正在载入...</span>
+                        <span className="plus-lib-hint">载入中...</span>
                       ) : (
                         orders.map((g) => (
                           <div key={g.order} className="plus-lib-row">
@@ -684,7 +708,7 @@ export function Workbench({
             <button
               className={`bench-plus${plusOpen ? ' on' : ''}`}
               onClick={() => setPlusOpen((v) => !v)}
-              title="造一个对象放上台面（集合 / 群 / 结构）"
+              title="造对象（集合 / 群 / 结构）"
             >
               <span className="bench-plus-glyph">＋</span>
               <span className="bench-plus-word">导入对象</span>
@@ -768,8 +792,11 @@ export function Workbench({
                   <EdgeSection edge={edge} />
                 </div>
               ) : null}
-              {/* def 行（"它怎么被造出来的"）——编辑器开着时不显示（右列是卡片的地盘） */}
-              {node && !busy && (
+              {/* def 行（"它怎么被造出来的"）——编辑器开着时不显示（右列是卡片的地盘）。
+                  ⚠️ 结构对象的 def 是 `structure(A, 1, 2, 3, …)` 的完整平铺表（n 阶 = n² 个数字）
+                  —— 2026-10-10 用户点名「就不能换个更简洁的记号吗？4 阶要写 16 个数字吗」
+                  ⇒ 结构对象这一行不显示（记号在显示屏副行 `B = (A, *)`，表在「运算表」节）。 */}
+              {node && !busy && node.value.type !== 'structure' && (
                 <div className="bench-foot">
                   <TexOrText text={node.def} />
                 </div>

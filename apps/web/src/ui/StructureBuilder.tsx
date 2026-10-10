@@ -149,11 +149,12 @@ function StructureEditor({
           </>
         ),
       }}
-      hint={
-        <>
-          每格填「第几行乘第几列得到谁」- 表项按行优先 1..{n} 编号，行列头就是这些编号。
-        </>
-      }
+      /*
+       * ⚠️ hint 是**纯文本面**（见 `ActionBuilder` 的同款注释）。
+       * 2026-10-10 用户点名精简，原话：「直接说『行乘列』就够了」——
+       * 原来那句「表项按行优先 1..n 编号，行列头就是这些编号」整段删（算例：每个面上一句话）。
+       */
+      hint="每格填行乘列"
       name={nameDraft}
       onNameChange={setNameDraft}
       namePlaceholder={autoName}
@@ -163,13 +164,12 @@ function StructureEditor({
       check={
         <div className={`mb-check ${profile ? 'ok' : 'empty'}`}>
           {!profile ? (
-            <span>
-              还有 {n * n - filled} 格没填（共 {n * n} 格）
-            </span>
+            /* 2026-10-10 精简：删「（共 n² 格）」（格子数就在眼前，不必报） */
+            <span>还有 {n * n - filled} 格没填</span>
           ) : (
             <>
               <span className="mb-ok-mark">v</span>
-              <span>表填满了 - 下面是逐条读数</span>
+              <span>表填满 - 逐条读数</span>
             </>
           )}
         </div>

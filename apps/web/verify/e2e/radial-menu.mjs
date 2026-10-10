@@ -462,6 +462,44 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
     const tab = await page.evaluate(() => document.querySelector('.bench-tab.on')?.dataset.tab ?? null)
     ok('点卫星 ⇒ 工作台跳到「元素」节（台没被收掉）', tab === 'elements', String(tab))
   }
+
+  /*
+   * 2026-10-10 新契约：**拖台高度，球不动**（固定位）——
+   * 从前的球位是"贴台顶上方 41px"，拖高度时球跟着滑（用户点名要解绑：
+   * 「当工作台上下拉高度时，对象球会跟着动」）。
+   * 现在：台 ≤ 68% 时球**纹丝不动**；拖过 68% 快要盖住它时，才上浮让位。
+   * 用真鼠标拖 `.bench-grip`（pointerdown 挂 window，见 `Workbench#onGripDown`）。
+   */
+  const orbY = () =>
+    page.evaluate(() => Math.round(document.querySelector('.orb:not(.orb-center)').getBoundingClientRect().top))
+  const benchTopY = () =>
+    page.evaluate(() => Math.round(document.querySelector('.bench').getBoundingClientRect().top))
+  const gripPt = () =>
+    page.evaluate(() => {
+      const g = document.querySelector('.bench-grip')
+      const r = g.getBoundingClientRect()
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+    })
+  const y0 = await orbY()
+  /* ① 往下拖（台变矮）：球不许动 */
+  let gp = await gripPt()
+  await page.mouse.move(gp.x, gp.y)
+  await page.mouse.down()
+  await page.mouse.move(gp.x, gp.y + 180, { steps: 8 })
+  await page.mouse.up()
+  await page.waitForTimeout(320)
+  const yLow = await orbY()
+  ok('拖矮台：球纹丝不动（固定位解绑，2026-10-10）', yLow === y0, `${y0} -> ${yLow}`)
+  /* ② 往上拖到超过 68%：球让位上浮、仍不被盖 */
+  gp = await gripPt()
+  await page.mouse.move(gp.x, gp.y)
+  await page.mouse.down()
+  await page.mouse.move(gp.x, Math.max(30, gp.y - 340), { steps: 8 })
+  await page.mouse.up()
+  await page.waitForTimeout(320)
+  const yHigh = await orbY()
+  const btHigh = await benchTopY()
+  ok('拖过 68% 后球上浮让位、仍不被盖（y 在台顶之上）', yHigh < y0 && yHigh <= btHigh, `y=${yHigh} benchTop=${btHigh} y0=${y0}`)
 }
 
 ok('控制台零错误', logs.length === 0, logs.join(' | '))

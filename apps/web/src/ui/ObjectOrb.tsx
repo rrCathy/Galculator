@@ -4,6 +4,7 @@ import { menuLabel } from '../gal/interaction'
 import type { GalValue } from '../gal/value'
 import type { NodeAnchor } from './CanvasView'
 import type { InfoTab } from './InfoDock'
+import { BENCH_H_DEFAULT } from './Workbench'
 
 export type OrbStage = 'closed' | 'ring' | 'ops'
 
@@ -172,12 +173,23 @@ export function ObjectOrb({
 
   const isEdge = anchor.kind === 'edge'
   /*
-   * **左停位**（dock，2026-10-09）：中心 x=25（盒左 12，与输入球左缘同一条线）；
-   * 中心 y 叠在输入球正下方 8px —— 输入球盒顶 = `containerH - benchH - 94`，
-   * 球盒顶 = 再降 32+8 ⇒ 球中心 = `containerH - benchH - 41`。
+   * **左停位**（dock，2026-10-09）：中心 x=25（盒左 12，与输入球左缘同一条线）。
+   *
+   * **y 从"贴台顶"改成"固定位 + 碰到才让位"**（2026-10-10 用户拍板）——
+   * 从前的 y = `containerH - benchH - 41` 是**贴台顶上方 41px**，
+   * 用户一拖台的高度，台顶一动球就跟着滑（用户原话：
+   * 「当工作台上下拉高度时，对象球会跟着动。我要解绑这个，让对象球固定」）。
+   *
+   * 现在：
+   *   · **固定位** = 默认台高（`BENCH_H_DEFAULT` = 68%）时的台顶上方 41px；
+   *   · **让位值** = 当前台顶上方 41px（旧公式）；
+   *   · 取 `min` ⇒ 台 ≤ 68% 时球**纹丝不动**（让位值更高、够不着它）；
+   *     台拖过 68% 快要碰/盖到它时，才上浮贴住台顶 —— **永不被盖**。
    */
   const dockX = 25
-  const dockY = Math.round(containerH - (benchH ?? 0) - 41)
+  const dockYFixed = Math.round(containerH * (1 - BENCH_H_DEFAULT) - 41)
+  const dockYSafe = Math.round(containerH - (benchH ?? 0) - 41)
+  const dockY = Math.min(dockYFixed, dockYSafe)
   // 节点左上角（沿对角线挪一点，别压在节点边上）；箭头挂在中点正上方；dock 固定左缘
   const orbX = dock ? dockX : clampX(isEdge ? anchor.x : anchor.x - anchor.r * 0.74)
   const orbY = dock ? dockY : clampY(isEdge ? anchor.y - 28 : anchor.y - anchor.r * 0.74)

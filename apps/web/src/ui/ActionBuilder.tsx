@@ -358,8 +358,9 @@ function ActionBuilderEditor({
        * hint 是**纯文本面**（按钮、title、状态行都在这儿）：不许出现
        * 希腊字母这类键盘打不出的字符（回归 `e2e/no-unicode-leak.mjs`）。
        * 所以这里一律用「点」说话：数学上就是 Ω，字面上不写它。
+       * 2026-10-10 精简：一句定义 + 一句填法（原来那段把两件事各说两遍）。
        */
-      hint="一个作用就是一个同态 G 到置换群：先定作用点集，再填每个生成元把点映到哪。点集填一个点数，或一个点集表达式（点集 / 集合 / 子群集 / 底集）。"
+      hint="作用 = 同态 G 到置换群。点集填点数或点集表达式。"
       name={nameDraft}
       onNameChange={setNameDraft}
       namePlaceholder={autoName}

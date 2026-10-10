@@ -47,6 +47,21 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  /*
+   * 大部分文字**不许选中**（2026-10-10 用户点名：「应该让大部分文字不能选中复制。
+   * （拖到工作台会误识别导致选中许多文字）」）——拖拽 / 调参 / 拖高台时
+   * 不再把沿途的标签文字刷成一片选区。
+   * 输入框 / 文本域**豁免**：打字、选词、复制粘贴都要正常（见下一条）。
+   */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 例外：输入框里选择 / 复制必须照常（`.app` 上的 none 会继承下去）。 */
+.app input,
+.app textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .canvas-wrap {
@@ -1095,7 +1110,7 @@ body {
 
 .edge-doc {
   padding: 5px 0 2px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -1107,14 +1122,15 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 13.5px;
+  /* 2026-10-10 放大一档（用户：「右侧显示的信息，字体太小了」） */
+  font-size: 15px;
 }
 
 .insp-k {
   flex: none;
   min-width: 48px;
   color: var(--text-faint);
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .insp-v {
@@ -1124,21 +1140,21 @@ body {
 .insp-v code {
   color: var(--text-dim);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13.5px;
   word-break: break-all;
 }
 
 .insp-elems {
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13.5px;
   line-height: 1.65;
   word-break: break-all;
 }
 
 .insp-line {
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .insp-line.dim {
@@ -1165,7 +1181,7 @@ body {
 
 .insp-sub-note {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12.5px;
   line-height: 1.4;
 }
 
@@ -1180,7 +1196,7 @@ body {
   flex: none;
   color: var(--text);
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 /*
@@ -1204,7 +1220,7 @@ body {
 .sub-group-sub {
   color: var(--text-faint);
   font-family: var(--font);
-  font-size: 10.5px;
+  font-size: 12px;
   font-style: normal;
   white-space: nowrap;
 }
@@ -1233,14 +1249,14 @@ body {
   background: var(--surface);
   color: var(--text);
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
 }
 
 .sub-group-head em {
   color: var(--text-faint);
   font-style: normal;
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 .sub-group-head:hover {
@@ -1271,12 +1287,12 @@ body {
   flex: none;
   min-width: 62px;
   color: var(--purple-text);
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .insp-sub-meta {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 /* 列表的语义说明（如"这是共轭类代表，不是全部子群"）——不写清就会被读错 */
@@ -1285,7 +1301,7 @@ body {
   border-radius: 6px;
   background: var(--panel);
   color: var(--text-dim);
-  font-size: 11.5px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -1315,7 +1331,7 @@ body {
 .etable {
   border-collapse: collapse;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .etable th,
@@ -3342,7 +3358,7 @@ body {
 .conj-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .conj-table th {
@@ -3350,7 +3366,7 @@ body {
   border-bottom: 1px solid var(--border);
   color: var(--text-faint);
   font-weight: 400;
-  font-size: 11px;
+  font-size: 12.5px;
   text-align: left;
 }
 
@@ -3366,7 +3382,7 @@ body {
 
 .conj-note {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12.5px;
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -3629,7 +3645,7 @@ body {
   border-radius: 8px;
   background: transparent;
   color: var(--text-dim, var(--text));
-  font-size: 12.5px;
+  font-size: 13.5px;
   text-align: left;
   cursor: pointer;
 }
@@ -3803,13 +3819,18 @@ body {
  * 谁会用丢东西的工作台？」⇒ 台面自己记一份"摆上来的对象"，点一下切回去、`x` 拿下去。
  * 存的是 id，对象与画布**是同一份**。 */
 
-/* 对象槽（原「台面」，2026-10-08 挪进左列 —— 用户：「这个台面可以放到工作台左边作为『对象槽』」）
-   竖直一小块：标签 + chips（chips 横排 wrap，左列窄，数量多了换行）。 */
+/* 对象槽（原「台面」——2026-10-10 用户点名：「挪到工作台最左侧竖着放」）。
+   贴工作台**最左缘**的独立窄列（`.bench-body` 的第一个子元素）：标签 + chips 竖排，
+   对象多了列内自己滚（`min-height: 0` + `overflow-y: auto` 是钉子，缺了会被切掉）。 */
 .bench-stage {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
   gap: 5px;
+  width: 120px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .bench-stage-label {
@@ -3819,15 +3840,19 @@ body {
   padding-left: 2px;
 }
 
+/* chips **竖排**（原来横排 wrap；竖列里一件一件往下摞，不再撑高左列）。 */
 .bench-stage-chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 5px;
 }
 
+/* 竖列里 chip 占满列宽：数学名在左、`x` 在右（`space-between`）——
+   名字超长时省略号截断（title 里还有全名）。 */
 .bench-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.8);
@@ -3840,11 +3865,17 @@ body {
 }
 
 .bench-chip-main {
-  padding: 3px 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 4px 3px 10px;
   border: none;
   background: transparent;
   color: var(--text);
   font-size: 12.5px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 
@@ -3859,6 +3890,40 @@ body {
 
 .bench-chip-x:hover {
   color: var(--text);
+}
+
+/*
+ * 对象槽竖列的**窄窗折回**（≤1080px：左列折上下两段，竖列在横向上没地方站）
+ * ⇒ chips 回横排 wrap。
+ *
+ * ⚠️ 必须放在上面那几条**基础规则之后**：同特异性"后写胜"，
+ * 若放进文件前面那处 1080px 媒体查询里，会被这里的基础规则整条压过
+ * （`.bench-chip` 的 `display: flex` / `.bench-stage` 的 `width: 120px`）——
+ * 与 2026-10-08 `.bench-tabs` 栽过的是同一个坑，位置别动。
+ */
+@media (max-width: 1080px) {
+  .bench-stage {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+    overflow: visible;
+  }
+
+  .bench-stage-chips {
+    flex: 1 1 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .bench-chip {
+    display: inline-flex;
+  }
+
+  .bench-chip-main {
+    flex: 0 1 auto;
+    max-width: 168px;
+    padding: 3px 10px;
+  }
 }
 
 /* 结论层在工作台里也要占满宽（`.bench-brief` 只是给它一点上边距）*/
@@ -3954,7 +4019,7 @@ body {
 .map-facts table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12.5px;
+  font-size: 13.5px;
 }
 
 .map-facts th {

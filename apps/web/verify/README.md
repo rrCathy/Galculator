@@ -37,7 +37,7 @@ node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报�
 node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G（U20）
 node verify/e2e/connect.mjs           # 拖拽连线 + 对象列表「操作」（U21，真鼠标拖；U44 入口从面板挪到行上）
 node verify/e2e/grid-drag.mjs         # 格点 / 拖动吸附 / 平移 / 缩放 / 复位（U10 的补线，U22）
-node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）；⑪ 台升起 ⇒ 球靠左停（2026-10-09）
+node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）；⑪ 球靠左停 + 拖台高度解绑（固定位 / 碰到才让位，2026-10-10）
 node verify/e2e/copy-label.mjs        # 把画布上的记号抄回去：三条复制路径（U24）
 node verify/e2e/structural-edges.mjs  # 结构伴生边可点：π/↪/=/≅ 的账与三条纪律（U26）
 node verify/e2e/structure-ops.mjs     # gcd/lcm/phi · Burnside · 极大子群 · Inn · 「结构」节（U27）
@@ -56,7 +56,7 @@ node verify/e2e/action-entries.mjs    # 群作用的四条入口：⊕ 球 / 点
 node verify/e2e/action-omega.mjs      # 群作用这件事本身：Ω 能选 / 子群集当 Ω / 元素送到哪（U58）
 node verify/e2e/set-menu.mjs          # 集合那一侧的菜单不撒谎：asSet/closure 收窄（U59）
 node verify/e2e/map-builder.mjs       # 映射构建器的卡片形态（三编辑器包壳）
-node verify/e2e/workbench.mjs         # 工作台 v2.2：显示屏 / 对象槽 / 键盘随焦点变 / 竖排节导航 / 槽位 / ＋导入 / 编辑器嵌入
+node verify/e2e/workbench.mjs         # 工作台 v2.2：显示屏（级别词 / 无阶副行）/ 对象槽（最左竖列）/ 键盘随焦点变 / 竖排节导航 / 槽位 / ＋导入 / 编辑器嵌入 / 文字禁选
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 

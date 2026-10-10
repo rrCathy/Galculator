@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { evalExpr, type EvalResult } from '../gal/evalDef'
 import { checkName, isNameLike, nextAutoName, normalizeName, RESERVED_CALL_NAMES } from '../gal/naming'
 import { VALUE_TYPE_LABEL } from '../gal/value'
+import { STRUCTURE_LEVEL_LABEL } from '../gal/algebra'
 import type { GalObject } from '../gal/types'
 import { TexOrText } from './Tex'
 
@@ -242,7 +243,11 @@ function ComposerStatus({
         <div className="composer-status good">
           <span className="ok-mark">v</span>
           <span className={`chip chip-${preview.value.type}`}>
-            {VALUE_TYPE_LABEL[preview.value.type]}
+            {/* 结构与工作台同口径（2026-10-10）：直接说级别（原群/半群/幺半群/群），
+                不写泛称「代数结构」——判据同一份 `STRUCTURE_LEVEL_LABEL`。 */}
+            {preview.value.type === 'structure'
+              ? STRUCTURE_LEVEL_LABEL[preview.value.structure.axioms.level]
+              : VALUE_TYPE_LABEL[preview.value.type]}
           </span>
           {/*
            * 预览的数学名走**渲染面**（2026-10-08）：`label` 是 LaTeX 源

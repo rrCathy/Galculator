@@ -447,6 +447,24 @@ console.log('\n== 场景 6/7：半群结构 = 双线圆，球上没有群操作 
   ok('面板里有「公理档案」节', axioms.secs.includes('axioms'), axioms.secs.join(','))
   ok('面板里有「运算表」节', axioms.secs.includes('table'), axioms.secs.join(','))
   ok('公理档案说：半群', axioms.verdict === 'semigroup', String(axioms.verdict))
+
+  /* ── 2026-10-10 新契约（用户点名，三条）─────────────────────────
+     ① chip 直接说**级别**（原群 / 半群 / 幺半群 / 群）——此前是泛称「代数结构」；
+     ② 副行换**简洁记号** `S2 = (Q, *)`——此前是 `S2 = structure(Q, 1,1,2,2)` 平铺表
+        （用户：「如果用户创建了一个 4 阶代数结构，你准备写 16 个数字吗？」）；
+     ③ 结构对象**底部 def 行不显示**（完整构造串不再铺在底部）。
+     KaTeX 零宽字符先抹掉再断言（按文本断言的纪律）。 */
+  const disp = await page.evaluate(() => ({
+    chip: document.querySelector('.bench-screen .chip')?.textContent?.trim() ?? '',
+    sub: (document.querySelector('.bench-screen-sub')?.textContent ?? '')
+      .replace(/[\u200b-\u200f\u2061-\u2064]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+    hasFoot: !!document.querySelector('.bench-foot'),
+  }))
+  ok('chip 直接说级别：半群（不再是泛称「代数结构」）', disp.chip === '半群', JSON.stringify(disp))
+  ok('副行换简洁记号（无 structure( 平铺表）', !/structure\(/.test(disp.sub) && /\(.*[∗*]\)/.test(disp.sub), disp.sub)
+  ok('结构对象底部 def 行不显示（完整表不进底部）', disp.hasFoot === false, JSON.stringify(disp))
   ok('  「就差一步：单位元」（failsAt 上了屏）', /单位元/.test(axioms.header), axioms.header)
   ok('  逐条都上屏（10 条读数）', axioms.rowCount === 10, String(axioms.rowCount))
   ok('  结合 ✓（左零带确实结合）', axioms.assoc === 'v', axioms.assoc)

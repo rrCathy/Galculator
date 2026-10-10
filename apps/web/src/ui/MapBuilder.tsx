@@ -178,7 +178,8 @@ function MapBuilderEditor({ op, src, tgt, objects, onSubmit, onCancel }: MapBuil
           </>
         ),
       }}
-      hint="同态由生成元的像唯一决定----填每个生成元映到哪"
+      /* 2026-10-10 精简：删后半句「填每个生成元映到哪」——表格就在下面，不必教 */
+      hint="同态由生成元的像唯一决定"
       name={nameDraft}
       onNameChange={setNameDraft}
       namePlaceholder={autoName}
