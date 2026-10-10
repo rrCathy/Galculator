@@ -246,6 +246,15 @@ export function Workbench({
       ? STRUCT_SECTIONS
       : null
 
+  /**
+   * 当前**有效**的节（2026-10-10 视觉版顺手修）——半群 / 原群结构没有 `basic` 节
+   * （`sections` 只有 axioms/table），而换对象时 `tab` 重置到 `'basic'`
+   * ⇒ 导航里一个都不亮、右列**完全空白**（真机验证：`pageLen = 0`）。
+   * 派生式修正（不动 state、无 effect）：`tab` 不在当前 sections 里就落到第一节。
+   */
+  const activeTab: InfoTab =
+    sections && sections.length > 0 && !sections.some((s) => s.id === tab) ? sections[0].id : tab
+
   /** 「已知群」只有符号与阶，没有元素表（U48）—— 子群数那一格要改口径。 */
   const canCount = !!showGroup && !isKnownGroup(showGroup)
   const [subCount, setSubCount] = useState<number | null>(null)
@@ -735,7 +744,7 @@ export function Workbench({
                       {sections.map((t) => (
                         <button
                           key={t.id}
-                          className={`bench-tab${t.id === tab ? ' on' : ''}`}
+                          className={`bench-tab${t.id === activeTab ? ' on' : ''}`}
                           data-tab={t.id}
                           onClick={() => setTab(t.id)}
                         >
@@ -752,7 +761,7 @@ export function Workbench({
                       )}
                       <div className="bench-page">
                         <SectionBody
-                          section={tab}
+                          section={activeTab}
                           group={showGroup}
                           struct={struct}
                           node={node}

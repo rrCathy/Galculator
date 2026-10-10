@@ -336,6 +336,31 @@ let structId = null
 
 console.log('\n== 场景 5：群结构的球上有 Sub，点下去真算得出 ==')
 {
+  /*
+   * 2026-10-10 新契约（用户点名）：自建结构**够格成群**时给识别/同构结论——
+   * 原话「为什么用户自建的群（比如 (A,*)）不显示和什么常见群同构？」
+   * （此前 `insightsOf` 对 structure 直接返回 []，识别行根本没生成）。
+   * 先点节点升台读结论层，再还回去（后面的 `openOrb` 会先收台）。
+   */
+  await page.evaluate((nid) => {
+    const el = document.querySelector(`svg.canvas g.gnode[data-id="${nid}"] .gnode-hit`)
+    if (el) el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  }, structId)
+  await page.waitForTimeout(760)
+  const brief = await page.evaluate(() =>
+    (document.querySelector('.bench-brief')?.textContent ?? '')
+      .replace(/[\u200b-\u200f\u2061-\u2064]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  )
+  console.log('  [诊断] 群结构结论层 = ' + brief)
+  ok(
+    '群结构的结论层头条：同构 ≅ C₂×C₂ / V₄（structure 分派补上）',
+    /同构/.test(brief) && /≅/.test(brief) && /C2|C₂|V4|V₄/.test(brief),
+    brief,
+  )
+  ok('  副注带惯用名（Klein 四元群）', /Klein/.test(brief), brief)
+
   await openOrb(structId)
   const ring = await ringLabels()
   console.log('  [诊断] 结构节点的环 = ' + ring.join(', '))
@@ -424,6 +449,12 @@ console.log('\n== 场景 6/7：半群结构 = 双线圆，球上没有群操作 
    * 两节仍然要**分两趟读**：先切 `axioms` 读掉，再切 `table` 读表。
    */
   await clickRingItem('信息') // 升起工作台（球菜单的「信息」入口 = 升台 + basic）
+  /* 反面（2026-10-10 新契约）：半群不够格成群 ⇒ **没有**结论层 brief
+     （层级与"就差一步"在「公理档案」节里说，结论层不重复）。 */
+  ok(
+    '半群结构没有结论层（不够格成群；层级在「公理档案」节里说）',
+    await page.evaluate(() => !document.querySelector('.bench-brief')),
+  )
   await page.evaluate(() => document.querySelector('.bench-tab[data-tab="axioms"]')?.click())
   await page.waitForTimeout(420)
   const axioms = await page.evaluate(() => {

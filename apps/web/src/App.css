@@ -1122,7 +1122,9 @@ body {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  /* 2026-10-10 放大一档（用户：「右侧显示的信息，字体太小了」） */
+  /* 2026-10-10：放大一档（用户：「右侧显示的信息，字体太小了」）·
+     同日视觉版：加 2px 上下呼吸（行距 21 → 25）——原来行贴着行、一页读数糊成一片 */
+  padding: 2px 0;
   font-size: 15px;
 }
 
@@ -2228,9 +2230,12 @@ body {
    （U44 砍了信息面板的「关系」层与「可做」行，只剩这两条还用得上） */
 
 .rel-head {
-  color: var(--text-dim);
-  font-size: 12px;
-  letter-spacing: 0.04em;
+  /* 小节标题降到"分节标签"级（与键盘/对象槽标签同一语言）：11px 字距 faint，
+     上方留 8px 气——它管分区，不与内容争视线（2026-10-10 视觉版）*/
+  margin-top: 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+  letter-spacing: 0.14em;
 }
 
 .rel-note {
@@ -2929,6 +2934,13 @@ body {
   display: flex;
   flex-direction: column;
   /*
+   * **台内正文加深一档**（2026-10-10 视觉版）——全局 `--text: #2c2c2a` 在台内
+   * 与 `--text-dim`(#8a8880) / `--text-faint`(#a9a69d) 挤在一起，三档灰阶差
+   * 只有 ~20%，15px 中文字重在玻璃底上发灰、整台"平"。
+   * 只在 `.bench` 作用域覆盖：台内所有 `var(--text)`（明细值 / 键名 / chip…）一起变实。
+   */
+  --text: #201f1d;
+  /*
    * **宽度**（工作台 v2 / W3）：用户 2026-10-06 定「工作台没必要那么小，
    * 占大半个屏幕没什么问题」。左侧 300px 让给左下「数值」抽屉（168px + 余量）。
    */
@@ -3405,19 +3417,25 @@ body {
 .bench-screen {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 10px 14px;
-  border-radius: 12px;
+  /* 2026-10-10 视觉版：屏幕块略微加大呼吸（12/16 + 圆角 14），与键盘拉开 */
+  padding: 12px 16px;
+  border-radius: 14px;
   background: rgba(230, 241, 251, 0.72);
   border: 1px solid rgba(133, 183, 235, 0.5);
 }
 
+/* **全场唯一的大字**（视觉锚一号）：焦点对象的数学身份。
+   15px 时它和明细行、键盘字同尺寸 ⇒ 整台"平"；22px/600 把"当前在看谁"
+   拉成一屏最先落下视线的地方。KaTeX 随容器字号整体放大。
+   长主行（>18 字符的映射/子群名）仍会被 nowrap 裁尾——明细/副行/对象槽有全名兜底。 */
 .bench-screen-title {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 500;
-  color: #0c447c;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #0a3560;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3426,13 +3444,13 @@ body {
 /* 值类型 chip（群 / 子群集 / 映射…）——信息面板并入时补搬的小徽标 */
 .bench-screen-title .chip {
   flex: none;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
 }
 
 .bench-screen-sub {
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: 3px;
+  font-size: 12.5px;
   color: #185fa5;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3448,15 +3466,16 @@ body {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed rgba(133, 183, 235, 0.55);
-  font-size: 15px;
+  /* 屏幕主行 22px 后，算式行升到次级 18px（视觉版 10-10）*/
+  font-size: 18px;
   color: #0c447c;
 }
 
 /* 空格子：**无文本的样式盒**（`▢` 键盘打不出来，不能进文本流）*/
 .bench-eq-blank {
   display: inline-block;
-  width: 42px;
-  height: 22px;
+  width: 46px;
+  height: 26px;
   border: 1.5px dashed #85b7eb;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.72);
@@ -3475,21 +3494,24 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
-  border: 1px solid rgba(133, 183, 235, 0.6);
+  /* 2026-10-10 视觉版：全台**唯一的实心色**给唯一的"造对象"主入口——
+     原来浅蓝底蓝字，跟 tab 选中/显示屏同一个色调分不出主次。 */
+  padding: 8px 16px;
+  border: 1px solid #0c447c;
   border-radius: 999px;
-  background: rgba(230, 241, 251, 0.72);
-  color: #0c447c;
-  font-size: 12.5px;
+  background: #0c447c;
+  color: #fff;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .bench-plus:hover {
-  background: rgba(213, 232, 250, 0.9);
+  background: #0a3560;
+  border-color: #0a3560;
 }
 
 .bench-plus.on {
-  background: rgba(190, 221, 250, 0.95);
+  background: #0a3560;
   border-color: #85b7eb;
 }
 
@@ -3547,7 +3569,8 @@ body {
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 12px;
+  /* 2026-10-10 视觉版：12 → 16，三块键盘之间用呼吸感分区（块内是"一组键"）*/
+  gap: 16px;
   padding: 2px;
 }
 
@@ -3565,9 +3588,10 @@ body {
 }
 
 .bench-pad-label {
-  font-size: 10.5px;
+  /* 分组标签与对象槽标签同一视觉语言：11px / 字距 / faint（"脚手架"级）*/
+  font-size: 11px;
   color: var(--text-faint);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.15em;
   padding-left: 2px;
 }
 
@@ -3585,8 +3609,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 46px;
-  height: 34px;
+  /* 2026-10-10 视觉版：46×34 → 48×36（键面稍大更有"键"的存在感）*/
+  min-width: 48px;
+  height: 36px;
   padding: 0 10px;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: 9px;
@@ -3601,7 +3626,7 @@ body {
 }
 
 .bench-key-glyph {
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1;
 }
 
@@ -3657,7 +3682,9 @@ body {
 .bench-tab.on {
   background: rgba(230, 241, 251, 0.95);
   color: #0c447c;
-  font-weight: 500;
+  font-weight: 600;
+  /* 阅读目录式的"当前节"标记：内阴影左条，不占布局（视觉版 10-10）*/
+  box-shadow: inset 2px 0 0 #85b7eb;
 }
 
 /* 内容列：结论层（若有）在上、当前节在下 */
@@ -3843,9 +3870,10 @@ body {
 }
 
 .bench-stage-label {
-  font-size: 10.5px;
+  /* 与键盘分组标签同一语言：11px / 0.15em / faint（视觉版 10-10）*/
+  font-size: 11px;
   color: var(--text-faint);
-  letter-spacing: 0.12em;
+  letter-spacing: 0.15em;
   padding-left: 2px;
 }
 
@@ -3880,7 +3908,7 @@ body {
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   text-align: left;
   white-space: nowrap;
   overflow: hidden;

@@ -221,7 +221,13 @@ export interface Insight {
  * 手写的群（`G = S₄`）依旧只给**惯用名**：它自己就有记号，再补一个库内坐标是噪音。
  * 给坐标的是**没有名字的那些** —— **构造物**（`ker f`）与**真同构**（`F ≅ C₂`）。
  */
-export function groupInsights(group: Group, node?: GalObject): Insight[] {
+/**
+ * `displaySymbol`（2026-10-10 补）：**显示用的符号**，缺省用 `group.symbol`。
+ * 结构对象（`(A, *)`）的 `group.symbol` 是 core 给的占位 `Import(n)`——
+ * 按它拼 tex 会裸出一个没意义的 `Import(3) ≅ C₃`；调用方（`insightsOf` 的
+ * structure 分支）传对象 id ⇒ `B ≅ C₃`。判定（`same`）仍按 `group.symbol` 原值。
+ */
+export function groupInsights(group: Group, node?: GalObject, displaySymbol?: string): Insight[] {
   const out: Insight[] = []
 
   /**
@@ -247,6 +253,7 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
   const iso = identifyGroup(group)
   if (iso) {
     const same = canonSymbol(iso) === canonSymbol(group.symbol)
+    const sym = displaySymbol ?? group.symbol
     const entry = smallGroupEntry(group.order, iso)
     const common = ISO_COMMON_NAME[iso] ?? null
     if (!same || !!node?.opId || !!common) {
@@ -271,7 +278,7 @@ export function groupInsights(group: Group, node?: GalObject): Insight[] {
       out.push({
         label: same ? '识别' : '同构',
         tone: 'key',
-        tex: same ? group.symbol : `${group.symbol} \\;\\cong\\; ${iso}`,
+        tex: same ? sym : `${sym} \\;\\cong\\; ${iso}`,
         detail,
       })
     }

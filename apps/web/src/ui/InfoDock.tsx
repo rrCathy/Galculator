@@ -130,6 +130,16 @@ export function insightsOf(node: GalObject | null): Insight[] {
   if (v.type === 'map') return mapInsights(v.map)
   // 作用：轨道分解 + （Sylow III）n_p 的三条等式 —— MVP 的落点
   if (v.type === 'action') return actionInsights(v.action)
+  /*
+   * **结构对象：够格成群时跑群结论**（2026-10-10 用户点名）——
+   * 原话：「为什么用户自建的群（比如 (A,*)）不显示和什么常见群同构？」
+   * 此前这里对 structure 直接返回 []，识别/同构行根本没被生成。
+   * 显示符号用**对象 id**（`B ≅ C₃`）：`struct.group.symbol` 是 core 的
+   * `Import(n)` 占位，裸奔难看且无意义。
+   * 不够格的（原群/半群/幺半群）不给结论行——层级与公理在「公理档案」节，别重复。
+   */
+  if (v.type === 'structure' && v.structure.group)
+    return groupInsights(v.structure.group, node ?? undefined, node?.id)
   return []
 }
 
