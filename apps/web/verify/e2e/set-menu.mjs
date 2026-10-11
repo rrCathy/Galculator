@@ -186,20 +186,24 @@ ok('前置：G 与 P 都在画布上', (await nodeIds()).includes('G') && (await
   await dragPointer(g, p)
   const menu = await connectMenu()
   /*
-   * 修复前这里列 **10 条**（9 条必报错）⇒ 弹菜单；现在只剩 1 条 ⇒ 走
-   * `App#onConnect` 的 `cands.length === 1` 分支：**直接执行**。
-   * 「不弹菜单」本身就是 F1 的核心读数之一（候选从 10 掉到 1）。
+   * ⚠️ **2026-10-11 翻**：customAction 是"要填表的 op"（`needsEditor`）——
+   * 修后走"先弹菜单、点了再进编辑器"那条（`App#onConnect` 的 `!needsEditor` 分支，
+   * 详见 action-entries ⑥）。F1 的核心读数**不变**：候选从 10 条降到 **1 条**
+   * （不再列那 9 条必报错的）—— 只是"不弹菜单"这一半不再成立：唯一候选
+   * 但需要填表时**要点一下菜单项**才进编辑器（一步确认，换回因果）。
    */
   ok(
-    '不弹候选菜单 ⇒ 候选已降到 1 条（修复前 10 条）',
-    !menu || menu.items.length === 0,
+    '候选降到 1 条（只列 customAction，不再列修复前那 9 条必报错的）',
+    !!menu && menu.items.length === 1 && menu.items[0] === 'customAction',
     menu ? menu.items.join(', ') : '(没弹)',
   )
+  await page.click('.connect-menu .connect-item')
+  await page.waitForTimeout(520)
   const st = await page.evaluate(() => ({
     editor: document.querySelectorAll('.action-builder').length,
     notice: document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
   }))
-  ok(' 唯一那条（customAction）直接进了编辑器 —— 列出来 = 跑得动', st.editor === 1, JSON.stringify(st))
+  ok(' 点了菜单项：customAction 进编辑器 —— 列出来 = 跑得动', st.editor === 1, JSON.stringify(st))
   ok(
     ' 没有报错提示（修复前点第一条就报"商需要第二个参数是子群"）',
     !st.notice || !/需要|不是|不能|没有|算不了|失败/.test(st.notice),

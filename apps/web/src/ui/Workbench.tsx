@@ -449,7 +449,9 @@ export function Workbench({
            *
            * chips 写**数学名**（`A₄` / `C₆` / `(A, *)`）——用户在槽里认的是"这是哪个对象"，
            * 不是"我给它起的第几个字母"（对象名进 `title`）。
-           * 点一下切焦点（走 `onPick`，与"点画布节点"同一个函数）、`x` 拿下不删对象。
+           * 点一下 = **用这个对象**（走 `onPick` = `App#onNodeClick`，与"点画布节点 /
+           * 点左栏对象行"**同一个函数**）：pending 时填当前槽位（能填的带虚线边）、
+           * 否则切焦点；`x` 拿下不删对象。（2026-10-11 归一到这条唯一的路，见 HISTORY 补十一。）
            */}
           {stage.length > 0 && (
             <div className="bench-stage">
@@ -457,9 +459,30 @@ export function Workbench({
               <div className="bench-stage-chips">
                 {stage.map((id) => {
                   const obj = objects.find((o) => o.id === id)
+                  /*
+                   * ⚠️ 2026-10-11：pending 时**"点它意味着什么"在点之前就要能看见** ——
+                   * 能填这一位的 chip 画**虚线蓝边**（判据＝候选区同一份：非已选 +
+                   * `canPick`，经 `cands` 复用，不新写），title 同步说明"填进第 N 位"。
+                   * 不能填的点击由 `App#onNodeClick` 统一给反馈（用户原话：
+                   * 「你想点对象槽来导入对象，结果是切换对象，这谁想得到？」）。
+                   */
+                  const canFill = !!pending && cands.some((c) => c.id === id)
+                  const inParams = !!pending && pending.picked.includes(id)
+                  const param = pending?.op.params[slotIdx]
+                  let chipTitle = `切到 ${id}`
+                  if (pending) {
+                    chipTitle = canFill
+                      ? `填进第 ${slotIdx + 1} 位${param ? `：${param.name}（${PARAM_LABEL[param.type]}）` : ''}`
+                      : inParams
+                        ? '已经在参数里了'
+                        : '填不进这一位'
+                  }
                   return (
-                    <span key={id} className={`bench-chip${id === node?.id ? ' on' : ''}`}>
-                      <button className="bench-chip-main" onClick={() => onPick(id)} title={`切到 ${id}`}>
+                    <span
+                      key={id}
+                      className={`bench-chip${id === node?.id ? ' on' : ''}${canFill ? ' can-fill' : ''}`}
+                    >
+                      <button className="bench-chip-main" onClick={() => onPick(id)} title={chipTitle}>
                         {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
                       </button>
                       {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}

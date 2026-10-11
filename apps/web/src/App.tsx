@@ -16,6 +16,7 @@ import {
   pairMissHint,
   pickedIds,
   pendingHint,
+  PARAM_LABEL,
   singleOpsFor,
   type Interaction,
   type PairCandidate,
@@ -536,13 +537,14 @@ export default function App() {
     [lines, usedNames],
   )
 
-  /** 面板里点对象行 = 选中它：画布高亮 + 对象球出现 + **工作台升起**（信息都在工作台看） */
-  const selectFromDock = useCallback((id: string) => {
-    setInter({ kind: 'selected', target: id })
-    setOrbStage('closed')
-    setBenchOpen(true)
-    setNotice(null)
-  }, [])
+  /*
+   * 点左栏对象行 = 与点画布节点**同一件事**（"用这个对象"）——直接复用
+   * `onNodeClick`（它在 pending 时会把该对象填进当前槽位），不在这里写第二份。
+   *
+   * ⚠️ 2026-10-11 删掉原来那份"无条件 selected"的实现：pending 中点行会把
+   * **正在进行的操作静默清掉**（用户原话：「你想点对象槽来导入对象，结果是
+   * 切换对象，这谁想得到？」）。同语义的入口从此只留一条路（`canPick` 判据）。
+   */
 
   /* ── 证明：走一步 = 写一行 ────────────────────────────── */
 
@@ -796,7 +798,16 @@ export default function App() {
         setConnectMenu(null)
         return
       }
-      if (cands.length === 1) {
+      /*
+       * ⚠️ 2026-10-11：唯一候选也要看**它是什么 op** ——
+       * "直接执行"的方便只对**立即出结果**的 op 成立（`image(f, ·)`：拖 H 到 f
+       * 就该直接出 `f(H)`，connect.mjs ① 守着的）。而**要编辑器的 op**
+       * （`customAction` 的填像 / `map`）直接执行 = 用户松手瞬间**台轰然弹起 +
+       * 一张要填的表**，没有任何"我点了什么"的因果（用户原话：「当选中群和点集后，
+       * 自动弹起工作台？反正这个群作用功能是卡没了」）。⇒ 改成**先弹菜单把它亮
+       * 出来**，用户点了再进编辑器：一步确认，换回因果。
+       */
+      if (cands.length === 1 && !needsEditor(cands[0].op)) {
         const c = cands[0]
         setConnectMenu(null)
         dispatchPairOp(c.op, from, to, c.swapped)
@@ -933,6 +944,35 @@ export default function App() {
       if (inter.kind === 'editor') return
       setNotice(null)
       if (inter.kind === 'pending' && pendOp) {
+        /*
+         * ⚠️ 2026-10-11 修：**"点对象"的任何入口都先过同一道门** ——
+         * 能不能填这一位，判据与候选区（`Workbench#cands` =
+         * `!picked.includes && canPick`）**同一份**，一行都不新写。
+         *
+         * 从前这里不校验，三条入口（画布节点 / 对象槽 chip / 左栏对象行）各养各的病：
+         * 点了个填不进这一位的对象也照样塞进 `picked`，一路带进编辑器；左栏行那份
+         * 更狠 —— 无条件 `selected`，把**正在进行的操作静默清掉**（用户原话：
+         * 「你想点对象槽来导入对象，结果是切换对象，这谁想得到？」）。
+         * 现在不合法就不动手，**说清为什么**（"点了没反应"正是用户口中的"卡"）。
+         */
+        const slotIdx = inter.picked.length
+        const valOf = (x: string): GalValue | undefined =>
+          valuesById.get(x) ?? graph.nodes.find((n) => n.id === x)?.value
+        const v = valOf(id)
+        if (!v) return
+        if (inter.picked.includes(id)) {
+          setNotice({ text: `${id} 已经在第 ${inter.picked.indexOf(id) + 1} 位了` })
+          return
+        }
+        const pickedVals = inter.picked.map(valOf).filter((x): x is GalValue => !!x)
+        if (!canPick(pendOp, slotIdx, pickedVals, v)) {
+          const p = pendOp.params[slotIdx]
+          setNotice({
+            text: `${id} 不能填这一位`,
+            hint: p ? `要找：${PARAM_LABEL[p.type]}` : '换一个对象试试',
+          })
+          return
+        }
         const picked = [...inter.picked, id]
         /*
          * 上界是 `maxObjectArity`（含可选对象位）：`image(f, ·)` 停在 pending 时，
@@ -973,7 +1013,7 @@ export default function App() {
       // （2026-10-08：信息面板已并入工作台，这里替代原来"弹信息栏"的行为）
       setBenchOpen(true)
     },
-    [inter, pendOp, runOp, orderForUi],
+    [inter, pendOp, runOp, orderForUi, valuesById, graph.nodes],
   )
 
   useEffect(() => {
@@ -1319,7 +1359,7 @@ export default function App() {
             lineStates={lineStates}
             onRemove={removeLine}
             onEdit={startEdit}
-            onSelect={selectFromDock}
+            onSelect={onNodeClick}
           />
           <OpDock
             open={openOps}
@@ -1327,7 +1367,7 @@ export default function App() {
             lineStates={lineStates}
             onRemove={removeLine}
             onEdit={startEdit}
-            onSelect={selectFromDock}
+            onSelect={onNodeClick}
             // 不上画布的对象（子群集）只有这条路能跑操作 —— 它们没有悬浮球
             onRunOp={(op, id) => startOp(op, id)}
           />

@@ -57,7 +57,7 @@ export function ObjectRow({
               }
             : undefined
         }
-        title={onSelect ? '选中，在信息面板查看详情' : undefined}
+        title={onSelect ? '选中，在工作台看它' : undefined}
       >
         <span className="row-name">{o.id}</span>
         <span className="row-eq">=</span>

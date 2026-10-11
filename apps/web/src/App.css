@@ -3863,7 +3863,8 @@ body {
   flex: 0 0 auto;
   flex-direction: column;
   gap: 5px;
-  width: 120px;
+  /* 96px：2026-10-11 用户点名「宽度可以缩小一点」（120 → 96，chip 同步拉高）。 */
+  width: 96px;
   min-height: 0;
   overflow-y: auto;
   padding-right: 2px;
@@ -3901,10 +3902,18 @@ body {
   background: rgba(230, 241, 251, 0.95);
 }
 
+/* pending 时"这一位能填"的 chip —— **虚线边**（"可以放到这"的停靠语义，
+   2026-10-11）。判据与候选区同一份（`canPick`，经 Workbench 的 `cands`）。 */
+.bench-chip.can-fill {
+  border-style: dashed;
+  border-color: #85b7eb;
+}
+
 .bench-chip-main {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 3px 4px 3px 10px;
+  /* 7px：2026-10-11 用户点名「高度可以拉大」（3 → 7，chip 更厚好点好读）。 */
+  padding: 7px 4px 7px 9px;
   border: none;
   background: transparent;
   color: var(--text);
@@ -3917,7 +3926,7 @@ body {
 }
 
 .bench-chip-x {
-  padding: 3px 8px 3px 2px;
+  padding: 7px 8px 7px 2px;
   border: none;
   background: transparent;
   color: var(--text-faint);
@@ -3935,7 +3944,7 @@ body {
  *
  * ⚠️ 必须放在上面那几条**基础规则之后**：同特异性"后写胜"，
  * 若放进文件前面那处 1080px 媒体查询里，会被这里的基础规则整条压过
- * （`.bench-chip` 的 `display: flex` / `.bench-stage` 的 `width: 120px`）——
+ * （`.bench-chip` 的 `display: flex` / `.bench-stage` 的 `width: 96px`）——
  * 与 2026-10-08 `.bench-tabs` 栽过的是同一个坑，位置别动。
  */
 @media (max-width: 1080px) {
@@ -3959,7 +3968,8 @@ body {
   .bench-chip-main {
     flex: 0 1 auto;
     max-width: 168px;
-    padding: 3px 10px;
+    /* 与竖排同款拉高（2026-10-11） */
+    padding: 7px 10px;
   }
 }
 

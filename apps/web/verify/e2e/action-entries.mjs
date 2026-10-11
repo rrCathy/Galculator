@@ -447,15 +447,19 @@ await setCycles(['(1 2 3 4)', '(2 4)'])
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ⑥ Shift 拖 G 到点集上：唯一候选直接执行（不弹菜单） ==')
+console.log('== ⑥ Shift 拖 G 到点集上：唯一候选（customAction）—— 先弹菜单，点它才进编辑器 ==')
 await page.keyboard.press('Escape')
 await page.waitForTimeout(320)
 {
   /*
-   * ⚠️ **2026-10-04 翻（F1 修复）**：改前拖 G→P 列 **10 条**候选（9 条必报错）
-   * ⇒ 弹候选菜单。F1 修完只剩 **1 条**（`customAction`）
-   * ⇒ 走 `App#onConnect` 的 `cands.length === 1` 分支：**直接执行、不弹菜单**。
-   * 这不是回归 —— 用户少点一次；要守的是"那唯一一条真的跑到编辑器里去"。
+   * ⚠️ **2026-10-11 翻**（修"这一类问题"）：改前拖 G→点集只剩 1 条候选
+   * （`customAction`）⇒ 走 `onConnect` 的 `cands.length === 1` 分支**直接执行**。
+   * 而 customAction 是"要填表的 op"，直接执行 = 松手瞬间**台弹起 + 一张要填的
+   * 表**，用户视角没有任何"我点了什么"的因果（用户原话：「当选中群和点集后，
+   * 自动弹起工作台？反正这个群作用功能是卡没了」）。
+   * 修后：**"立即出结果"的 op 才直接执行**（`image(f, ·)` 那条，connect.mjs ①
+   * 守着）；**要编辑器的 op 先弹菜单**把它亮出来，用户点了再进编辑器 ——
+   * 一步确认，换回因果。要守的变成两段："先弹菜单"、"点完真的进编辑器"。
    *
    * ⚠️ 靶子换成**新点集 Q**：⑤ 已经造了一条 `G ↷ Ω=P` 的作用，再拖 G→P 会被
    * "这条线已经有了"挡住（手画动作不会重复造同一条）。换 Q 才是"拖群到抽象点集"这条手势本身。
@@ -475,15 +479,21 @@ await page.waitForTimeout(320)
     [...document.querySelectorAll('.connect-menu .connect-item')].map((e) => e.dataset.op),
   )
   ok(
-    '拖 G 到点集：只剩 1 条候选 ⇒ **不弹菜单、直接执行**（`onConnect` 的 length===1 分支）',
-    menu.length === 0,
+    '拖 G 到点集：只剩 1 条候选（customAction）但它要填表 ⇒ **弹菜单**（不直接跳编辑器）',
+    menu.length === 1 && menu[0] === 'customAction',
     menu.join(' | ') || '(没弹)',
   )
+  await scanPlain('连线菜单')
+  await page.screenshot({ path: '../../docs/assets/u57-drag-menu.png' })
+
+  /* 点菜单项 —— 这时才进编辑器 */
+  await page.click('.connect-menu .connect-item')
+  await page.waitForTimeout(520)
   const st = await page.evaluate(() => ({
     editor: document.querySelectorAll('.action-builder').length,
     notice: document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
   }))
-  ok('  唯一那条（customAction）真的进了编辑器', st.editor === 1, JSON.stringify(st))
+  ok('  点了菜单项：customAction 进编辑器', st.editor === 1, JSON.stringify(st))
   ok(
     '  不是 0 条候选那条路（"暂时没有可做的操作"）',
     !st.notice || !st.notice.includes('暂时没有'),
@@ -491,8 +501,106 @@ await page.waitForTimeout(320)
   )
   await page.keyboard.press('Escape')
   await page.waitForTimeout(260)
-  await scanPlain('连线菜单')
-  await page.screenshot({ path: '../../docs/assets/u57-drag-menu.png' })
+}
+
+/* ══════════════════════════════════════════════════════════
+ * ⑦ pending 里"点对象"的入口一致性（2026-10-11 修"这一类问题"）
+ * ══════════════════════════════════════════════════════════ */
+
+console.log('')
+console.log('== ⑦ pending 里点对象：能填的填、不能填的明说（不再切换焦点 / 清操作） ==')
+await page.keyboard.press('Escape')
+await page.waitForTimeout(320)
+{
+  /*
+   * 用户原话：「你想点对象槽来导入对象，结果是切换对象，这谁想得到？」
+   * 病灶：四个"点对象"的入口各养各的病——左栏对象行**无条件 selected**
+   * （pending 被静默清掉 + 焦点切换）、对象槽里不能填的 chip **静默弹编辑器**。
+   * 修后全部走 `App#onNodeClick` 的同一条门（`!picked.includes + canPick`，
+   * 与候选区 `cands` **同一份判据**）。
+   *
+   * 本段守四件事（"旧的不许再出现"写在断言名里）：
+   *   ① 左栏点不能填的行 → pending 保留 + 焦点不变 + 明说"不能填这一位"；
+   *   ② 对象槽点不能填的 chip → 同上（且不弹编辑器）；
+   *   ③ 对象槽点已在位的 chip → "已经在第 N 位了"；
+   *   ④ 对象槽点能填的 chip → 照旧填进去（Ω 是最后一位 ⇒ 收尾进编辑器）。
+   *
+   * 名字用 X / Y / W（前文已用 G / P / Q）。
+   */
+  ok('建 `X = C_3`（作用群）', await addLine('X', 'C_3'))
+  ok('建 `Y = pointSet(6)`（Ω 材料）', await addLine('Y', 'pointSet(6)'))
+  ok('建 `W = S_3`（不能当 Ω 的群）', await addLine('W', 'S_3'))
+  /*
+   * ⚠️ 收起输入卡（真鼠标）：台升起时输入卡靠左向上展开（10-09 裁定，z15 最高），
+   * 会把它下面的左栏对象行**盖住**——本段要真鼠标点 W 行，先把它收掉。
+   * （repro 脚本里用合成事件"点得到"被盖的行；真鼠标点不到——这就是
+   *  '点东西必须真实鼠标' 那条纪律的现场复读。）
+   */
+  await page.click('.composer-orb .orb-center')
+  await page.waitForTimeout(300)
+  /* 攒对象槽（"碰过就摆上台面"）：Y、W、X 各点一次、每次收台 */
+  for (const id of ['Y', 'W', 'X']) {
+    await clickSvg(`svg.canvas g.gnode[data-id="${id}"] .gnode-hit`)
+    await benchDown()
+  }
+  /* 起 pending(1/2)：⊕ 球 → 自定义作用 → 台里候选把 X 填进第 1 位 */
+  await clickEl('.multi-orb .orb-center')
+  ok('⊕ 球里点「自定义作用」', await clickCenterOp('customAction'))
+  await page.click('.bench-toggle') // 开台（此刻确定收着）
+  await page.waitForTimeout(320)
+  /* 候选 = 画布上所有能当作用群的群（前文的 G 也在列，X 未必排第一）——按 id 找 X 那一项 */
+  const candIds = await page.evaluate(() =>
+    [...document.querySelectorAll('.bench-cand-id')].map((e) => e.textContent.trim()),
+  )
+  const xi = candIds.indexOf('X')
+  ok('候选里有 X（作用群；点集 Y 不在列）', xi >= 0 && !candIds.includes('Y'), candIds.join(', '))
+  await page.click(`.bench-cand >> nth=${xi}`)
+  await page.waitForTimeout(420)
+
+  const benchRead = () =>
+    page.evaluate(() => ({
+      target: document.querySelector('.bench-target')?.textContent ?? null,
+      slots: [...document.querySelectorAll('.bench-slot')].map((s) =>
+        [...s.classList].filter((c) => c !== 'bench-slot').join('/'),
+      ),
+      editor: document.querySelectorAll('.action-builder').length,
+      notice: document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+    }))
+
+  /* ① 左栏点不能填的行（W）——旧行为：无条件 selected（清掉 pending + 切焦点）*/
+  await page.click('.dock-topleft .row:has(.row-name:text-is("W"))')
+  await page.waitForTimeout(420)
+  const b1 = await benchRead()
+  ok('① 点 W 行：pending 没被清掉（槽位区还在）', b1.slots.length === 2, JSON.stringify(b1.slots))
+  ok('① 焦点没有被切走（还是 X）—— 旧行为「切换对象」不再出现', b1.target === 'X', String(b1.target))
+  ok('① 明说为什么：不能填这一位', (b1.notice ?? '').includes('不能填这一位'), String(b1.notice))
+
+  /* ② 对象槽点不能填的 chip（W）——旧行为：静默弹编辑器 */
+  await page.click('.bench-chip-main[title="填不进这一位"]')
+  await page.waitForTimeout(420)
+  const b2 = await benchRead()
+  ok('② 点 W chip：没弹编辑器（旧行为：静默进编辑器）', b2.editor === 0, String(b2.editor))
+  ok(
+    '② 仍是 pending + 反馈',
+    b2.slots.length === 2 && (b2.notice ?? '').includes('不能填这一位'),
+    JSON.stringify({ slots: b2.slots, notice: b2.notice }),
+  )
+
+  /* ③ 已在位的 X chip */
+  await page.click('.bench-chip-main[title="已经在参数里了"]')
+  await page.waitForTimeout(420)
+  const b3 = await benchRead()
+  ok('③ 点已在位的 X：说清「已经在第 1 位了」', (b3.notice ?? '').includes('已经在第 1 位'), String(b3.notice))
+  ok('③ pending 仍在', b3.slots.length === 2, JSON.stringify(b3.slots))
+
+  /* ④ 能填的 Y chip —— 照旧填进去（Ω 是最后一位 ⇒ 收尾进编辑器）*/
+  await page.click('.bench-chip-main[title^="填进第 2 位"]')
+  await page.waitForTimeout(520)
+  const b4 = await benchRead()
+  ok('④ 点能填的 Y：填进第 2 位（收尾进编辑器）', b4.editor === 1, JSON.stringify(b4.editor))
+  await scanPlain('⑦ pending 点对象')
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(300)
 }
 
 ok('控制台零错误', logs.length === 0, logs.join(' | '))
