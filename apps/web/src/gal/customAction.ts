@@ -36,6 +36,19 @@
  * 点记号 → 位置号的解析在 `pointSet.ts#labelCycleToNumeric`（**标签优先、位置兜底**），
  * 语法仍然由 core 的 `parseCycleNotation` 负责 —— 不另写一份循环记号解析器。
  *
+ * ## 生成元重名（2026-10-11 解法 —— 拆掉"分不开"那道闸）
+ *
+ * 直积族（`C_2^2` / `C_2^3` / …）在 core 里生成元**重名重号**（都叫 `a`、记号都是 `1`），
+ * 而 `extendAndVerifyPerms` 拿 `gen.symbol` 当 key ⇒ 从前这被当成"表达不出来"**直接拦掉**
+ * （用户 2026-10-11 报告：**V₄ 建不了自定义作用**——V₄ 就是他手边最常用的那个小群）。
+ * 现在改走**改名克隆**：
+ *
+ *   · `distinctGeneratorGroup` 克隆一份**生成元唯一**（`g1/g2/…`）的等价副本
+ *     （元素对象与 `multiply` 原样共享 ⇒ `spread.perms` 的 key 还是原元素 id）；
+ *   · 用户侧照旧写 `a -> ...`，**同名按出现顺序**分别对应第 1、2 个 `a`
+ *     （认领规则见 `planCustomAction`；从前按 symbol 去 find，两条都撞到同一项）；
+ *   · `generatorsDistinct` 从此**只当判据与文档**用，不再拦人。
+ *
  * ## 三条纪律
  *
  * ① **不许静默补**。core 的 `buildActionComputation(G, {kind:'custom', setSize:n})`
@@ -123,12 +136,16 @@ export interface ResolvedGenerator {
  *
  * **判据必须只有一份**：`ops.ts` 的 `generatorOf`（`映射` 那条路）委托到这里，
  * 于是"编辑器填的"与"手打的"对同一串记号永远给同一个答案。
+ *
+ * ⚠️ **重名时这个函数只报"第一个"命中**（向后兼容）——想在重名群上把
+ * 多条同名 draft **分别**派给多个生成元，走 `planCustomAction` 的认领规则
+ * （它按出现顺序消耗，见 `draftTargets`）。
  */
 export function resolveGenerator(group: Group, text: string): ResolvedGenerator | null {
   const t = text.trim()
   if (!t) return null
   const gens = getGeneratorElements(group)
-  const hit = gens.find((g) => g.gen.name === t || g.el.label === t || g.el.id === t)
+  const hit = gens.find((g) => genTextMatches(g, t))
   if (hit) return { gen: hit.gen, el: hit.el, name: hit.gen.name }
   // 循环群的两种通行写法：core 叫 `a`，课本写 `r`（或反之）—— 只有一个生成元时无歧义
   if (gens.length === 1 && /^[A-Za-z]$/.test(t)) {
@@ -137,10 +154,55 @@ export function resolveGenerator(group: Group, text: string): ResolvedGenerator 
   return null
 }
 
+/** 一个生成元的"记号匹配"（不含单字母兜底——那个要 `gens.length` 上下文）。 */
+function genTextMatches(g: { gen: Generator; el: GroupElement }, t: string): boolean {
+  return g.gen.name === t || g.el.label === t || g.el.id === t
+}
+
 /**
- * 这个群的生成元在 core 里**能不能被分别指认**。
+ * 一条 draft 的 `genText` 会不会指到这个生成元（**重名时可能指到好几个**）。
  *
- * ⚠️ **直积群不能**（2026-10-02 实测，探针 `.tmp-u52/probe7.mjs`）：
+ * 与 `resolveGenerator` 共用 `genTextMatches` 与单字母兜底 —— 认领时不用
+ * `resolveGenerator` 本身：它返回**第一个**命中，重名群上两条 `a -> …`
+ * 会指向同一个生成元（那正是修掉的病）。
+ */
+function draftTargets(
+  gens: readonly { gen: Generator; el: GroupElement }[],
+  g: { gen: Generator; el: GroupElement },
+  text: string,
+): boolean {
+  const t = text.trim()
+  if (!t) return false
+  if (genTextMatches(g, t)) return true
+  return gens.length === 1 && /^[A-Za-z]$/.test(t)
+}
+
+/**
+ * 生成元重名（直积族）⇒ **克隆一份"生成元可区分"的等价副本**，只喂给
+ * core 的 `extendAndVerifyPerms`（它拿 `gen.symbol` 当 key，重名会撞成同一个像）。
+ *
+ * 克隆只改生成元的 `name` / `symbol`（`g1`、`g2`…，顺带把 `inverse` 的互相引用
+ * 重指到新数组）——`elements` 与 `multiply` **原样共享**，所以：
+ *   · 传播结果 `spread.perms` 的 key 仍是**原群的元素 id**，下游零翻译；
+ *   · 忠实性 / 核 / 轨道全部照旧。
+ *
+ * 生成元本来就不重名时原样返回（零开销）。
+ */
+function distinctGeneratorGroup(G: Group): { group: Group; keys: string[] } {
+  const gens = G.generators
+  if (generatorsDistinct(G)) return { group: G, keys: gens.map((g) => g.symbol) }
+  const renamed = gens.map((g, i) => ({ ...g, name: `g${i + 1}`, symbol: `g${i + 1}` }))
+  renamed.forEach((g, i) => {
+    const j = gens.indexOf(gens[i].inverse)
+    if (j >= 0) g.inverse = renamed[j]
+  })
+  return { group: { ...G, generators: renamed }, keys: renamed.map((g) => g.symbol) }
+}
+
+/**
+ * 这个群的生成元在 core 里**能不能被分别指认**（当判据与文档用，**不再拿来拦人**）。
+ *
+ * ⚠️ 事实仍然成立（2026-10-02 探针，`.tmp-u52/probe7.mjs`）：
  *
  * | 群 | `gen.name` | `gen.symbol` | `el.id` |
  * |---|---|---|---|
@@ -149,12 +211,14 @@ export function resolveGenerator(group: Group, text: string): ResolvedGenerator 
  * | `S_3` | `s12`, `s23` | `\sigma_{12}`, `\sigma_{23}` | `2,1,3`, `1,3,2` |
  *
  * 而 core 的 `extendAndVerifyPerms` 取像是 `generators[i].symbol` 当 key ——
- * 三个生成元共用 `"1"` ⇒ **它们只能拿到同一个像**（实测：给一个像，`distinct` = 2
- * 而 `|G|` = 8）。也就是说"给每个生成元分别指定像"这件事在这些群上**根本表达不出来**。
+ * 三个生成元共用 `"1"` ⇒ 直接喂它，它们只能拿到同一个像。
  *
- * 于是这里不假装能做：两条路（文本 / 编辑器）都先过这个判据，
- * 判完就报"分不开"，并指向内置作用。**另注**：`ui/MapBuilder.tsx` 的
- * `images` 也是按 `gen.name` 存的，`C_2^3` 上同样撞（老账，见 ROADMAP）。
+ * **解法（2026-10-11）**：不再拦 —— `distinctGeneratorGroup` 用改名克隆绕过去
+ * （`g1/g2/…`），`planCustomAction` 里同名 draft 按**出现顺序**分别认领。
+ * 这个函数现在的用途：① 克隆的分支判据；② 测试与文档的读数。
+ *
+ * **另注**：`ui/MapBuilder.tsx` 的 `images` 也按 `gen.name` 存，`C_2^3` 上同样撞
+ * （老账，见 ROADMAP —— 映射那条路本轮未动）。
  */
 export function generatorsDistinct(group: Group): boolean {
   const gens = getGeneratorElements(group)
@@ -163,7 +227,11 @@ export function generatorsDistinct(group: Group): boolean {
   return names.size === gens.length && syms.size === gens.length
 }
 
-/** 「生成元分不开」时的说明（内核与编辑器共用，措辞只有一份）。 */
+/**
+ * 「生成元分不开」的说明文字 —— **2026-10-11 拆闸后不再有产品消费者**，
+ * 保留它是因为这段话仍是"core 数据事实"的单一出处：语义层审计（`u52.ts`）
+ * 与文档引用它当对照读数，别处要解释同一个事实时也照这份措辞。
+ */
 export function generatorCollisionReason(group: Group): string {
   const gens = getGeneratorElements(group)
   const names = [...new Set(gens.map((g) => g.gen.name))].join('、')
@@ -260,12 +328,18 @@ export interface CustomActionPlanBlocked {
   error: string
   hint?: string
   /**
-   * 出错的那个生成元（core 的 `gen.name`）—— 编辑器据此把**那一栏**标红。
+   * 出错的那个生成元（core 的 `gen.name`）—— 报错语用。
    *
    * 结构化地给出，不让调用方去 `error.includes(名字)`：生成元名可能是 `a` 这种
    * 单字母，在中文里到处都能撞上，"字符串里出现过"根本不是判据。
    */
   genName?: string
+  /**
+   * 出错生成元的**序号**（`gens` 里的下标）—— 编辑器据此把**那一栏**标红。
+   *
+   * 重名群（`C_2^2` 的两个 `a`）上 `genName` 指不出是哪一行，只有序号能。
+   */
+  genIndex?: number
 }
 
 export type CustomActionPlan = CustomActionPlanOk | CustomActionPlanBlocked
@@ -414,22 +488,45 @@ export function planCustomAction(
       hint: '「已知群」只有符号与阶（来自结论表），本地没有生成元表',
     }
   }
-  // 直积群的生成元在 core 里重名重号 ⇒ "分别指定像"这件事表达不出来（见 `generatorsDistinct`）
-  if (!generatorsDistinct(G)) {
+  /*
+   * 生成元重名的群（直积族 `C_2^2` / `C_2^3` / …）：喂给 core 的 `extendAndVerifyPerms`
+   * 之前先**改名克隆**一份生成元唯一的副本（2026-10-11）——元素对象与 `multiply`
+   * 原样共享，所以下面 `spread.perms` 的 key 还是**原群的元素 id**，下游零翻译。
+   * `spreadKeys` 是 `perms` 用的 key（重名群是 `g1/g2/…`，否则原 symbol）。
+   */
+  const { group: spreadGroup, keys: spreadKeys } = distinctGeneratorGroup(G)
+
+  // ── ① 每个生成元都要有像（core 少一个就 THROW，不能靠它兜）──
+  /*
+   * **认领规则**（2026-10-11）：每个生成元**按顺序**认领一条还没被认领的 draft
+   *（匹配见 `draftTargets`）。重名群上两条 `a -> …` 因此分别落到第 1、2 个 `a`；
+   * 不重名时与旧的"按名字找"等价（旧写法按 symbol find，重名时两条都撞到同一项）。
+   */
+  const usedDraft = new Set<number>()
+  const claimed = gens.map((g) => {
+    const i = drafts.findIndex((d, di) => !usedDraft.has(di) && draftTargets(gens, g, d.genText))
+    if (i >= 0) usedDraft.add(i)
+    return i >= 0 ? drafts[i] : undefined
+  })
+  /*
+   * 有 draft 没人认领 ⇒ **报出来，别静默吞**：用户多写一条 / 名字写错，
+   * 被忽略了他还以为生效了。
+   */
+  if (usedDraft.size < drafts.length) {
+    const orphan = drafts.find((_, i) => !usedDraft.has(i))
     return {
       ok: false,
-      error: `${generatorCollisionReason(G)}，给不了它们不同的像`,
-      hint: '想让 G 作用在自己身上用 leftAction，其余三种内置作用也各有现成的路',
+      error: `像「${orphan?.genText ?? ''} -> ${orphan?.cycle ?? ''}」没有对应的生成元`,
+      hint: `本群的生成元是：${[...new Set(gens.map((x) => x.gen.name))].join('、')}（重名时同名按出现顺序依次对应）`,
     }
   }
 
-  // ── ① 每个生成元都要有像（core 少一个就 THROW，不能靠它兜）──
   const missing: string[] = []
   const perms = new Map<string, number[]>()
   const images: { genText: string; cycle: string; order: number }[] = []
 
-  for (const g of gens) {
-    const draft = drafts.find((d) => resolveGenerator(G, d.genText)?.gen.symbol === g.gen.symbol)
+  for (const [gi, g] of gens.entries()) {
+    const draft = claimed[gi]
     const cycle = draft?.cycle.trim() ?? ''
     // 没有这一项、或者像那一栏是空的 —— 都算"没填"（留空**不**当恒等，见 `IDENTITY_TOKEN`）
     if (!draft || cycle === '') {
@@ -450,6 +547,7 @@ export function planCustomAction(
         return {
           ok: false,
           genName: g.gen.name,
+          genIndex: gi,
           error: `生成元 ${g.gen.name} 的像「${cycle}」里的 ${rewritten.token} 不是点集里的点`,
           hint: `${labelsHint(labels)}；恒等写 ${IDENTITY_TOKEN}`,
         }
@@ -459,6 +557,7 @@ export function planCustomAction(
         return {
           ok: false,
           genName: g.gen.name,
+          genIndex: gi,
           // 措辞「不是 N 点上的循环记号」是**契约**（`verify/suites/u52.ts` 按它断言）；
           // U53 只把点集的名字补进了 hint（点集有标号时 hint 会列出它们）。
           error: `生成元 ${g.gen.name} 的像「${cycle}」不是 ${n} 点上的循环记号`,
@@ -478,12 +577,13 @@ export function planCustomAction(
       return {
         ok: false,
         genName: g.gen.name,
+        genIndex: gi,
         error: `${g.gen.name} 在 ${nm(G)} 里的阶是 ${genOrder}，而它的像的阶是 ${imgOrder}`,
         hint: `${imgOrder} 不整除 ${genOrder}，像的阶必须整除生成元的阶，这组像不可能是同态`,
       }
     }
 
-    perms.set(g.gen.symbol, perm)
+    perms.set(spreadKeys[gi], perm)
     images.push({ genText: g.gen.name, cycle, order: imgOrder })
   }
 
@@ -496,13 +596,14 @@ export function planCustomAction(
   }
 
   // ── ④ 传播 + 同态校验（core 的 BFS 一致性检查）──
-  const spread = extendAndVerifyPerms(G, perms, n)
+  const spread = extendAndVerifyPerms(spreadGroup, perms, n)
   if (!spread.ok) {
     const v = spread.violation
     const gLabel = v ? (G.elements.find((e) => e.id === v.g)?.label ?? v.g) : null
-    // `v.a` 是生成元的 **symbol**（`\sigma_{12}` 这种 LaTeX 原串），
-    // 报错语是纯文本面 —— 翻回 `gen.name`（ASCII）再贴出去。
-    const aName = v ? (gens.find((g) => g.gen.symbol === v.a)?.gen.name ?? v.a) : null
+    // `v.a` 是**喂进传播器的 key**（重名群经改名克隆后是 `g1/g2/…`）——
+    // 先翻回生成元的**下标**、再翻回 `gen.name`（ASCII）贴出去。
+    const aIdx = v ? spreadKeys.indexOf(v.a) : -1
+    const aName = v ? (aIdx >= 0 ? gens[aIdx].gen.name : v.a) : null
     return {
       ok: false,
       error: '这组像不构成同态',

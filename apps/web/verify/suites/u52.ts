@@ -46,14 +46,16 @@
  *
  *   一条**不是**数学而是 core 的事实（实测 `.tmp-u52/probe7.mjs`）：
  *   `C_2^2` / `C_2^3` 的生成元在 core 里**重名重号**（都叫 `a`、记号都是 `1`），
- *   而 `extendAndVerifyPerms` 拿 `generator.symbol` 当 key ⇒ 它们只能共用同一个像。
- *   `V_4` 与 `C_2^2` 是**同一个群**，前者能做后者做不了 —— 这不是数学的区别。
+ *   而 `extendAndVerifyPerms` 拿 `generator.symbol` 当 key ⇒ 直接喂它只能共用同一个像。
+ *   `V_4` 与 `C_2^2` 曾是"同一个群、一个能做一个不能做"——
+ *   **2026-10-11 拆闸**（用户报告：「V4 没法创建自定义群作用」）：
+ *   `distinctGeneratorGroup` 改名克隆绕过，两条同名 `a -> …` 按**出现顺序**认领。
  *
  * ── 本套守的四条判据 ──────────────────────────────────────────
  *   ① **不许静默补**：缺生成元的像必须报"还有 k 个没给"（core 会直接 THROW，
  *      而 `buildActionComputation` 不给 arrows 时**静默**返回平凡作用 —— 都不许学）；
  *   ② **忠实性必须披露**：核的大小进 `sub`，信息面板有「核」一行，结论层有一条；
- *   ③ **算不动说清卡在哪**：|G| x n 超线、n 超线、生成元分不开 —— 各自的报错语；
+ *   ③ **算不动说清卡在哪**：|G| x n 超线、n 超线、多写的像没有对应生成元 —— 各自的报错语；
  *   ④ **纯文本面零泄漏**：`sub` / `note` / `error` / `hint` 逐字符比
  *      `e2e/no-unicode-leak.mjs` 的 `ALLOWED`，且 error / hint 里不许出现反斜杠。
  */
@@ -329,45 +331,90 @@ export function run(): void {
     ok('恰好等于上限要放行（边界是闭的）', edge.ok, edge.ok ? '' : edge.error)
   }
 
-  /* ══ 7 · core 的生成元重名：直积群上这件事表达不出来 ═════ */
+  /* ══ 7 · 生成元重名：改名克隆绕过（2026-10-11 拆闸）═══════ */
 
-  suite('u52 \\cdot 直积群的生成元在 core 里分不开（不许假装能做）')
+  suite('u52 \\cdot 直积群的生成元重名 —— 改名克隆绕过（V_4 能建作用了）')
   {
     const c22 = build(['G = C_2^2'])
     const g22 = c22.byId('G')?.value.type === 'group' ? (c22.byId('G')!.value as { group: Group }).group : null
     ok('C_2^2 能建出来', !!g22)
-    eq('C_2^2 的生成元被判为不可分', g22 ? generatorsDistinct(g22) : true, false)
+    // core 的数据事实没有变（生成元仍重名重号）——变的是我们怎么绕过它
+    eq('C_2^2 的生成元在 core 里仍被判为不可分（事实）', g22 ? generatorsDistinct(g22) : true, false)
     const reason = g22 ? generatorCollisionReason(g22) : ''
-    ok('理由里点了名字的重数', reason.includes('2 个生成元') && reason.includes('分不开'), reason)
+    ok('理由函数保留（给文档与测试用）', reason.includes('2 个生成元') && reason.includes('分不开'), reason)
     audit([{ what: '生成元不可分的理由', text: reason }])
 
-    // 同一个群、另一种构造（V_4）的生成元是可分的 —— 区别在 core 的生成元表，不在数学
+    /*
+     * ★ 拆闸（2026-10-11）：**两条 `a -> …` 按出现顺序**分别认领两个 `a`。
+     * 手算：V₄ = {e, a, b, ab}；第 1 条给第 1 个 a、第 2 条给第 2 个 a
+     *（a ↦ (12)(34)、b ↦ (13)(24)）；ab ↦ 两对换之积 = (14)(23)
+     * —— Klein 四元群 ⇒ 忠实；1 ↦ 2/3/4 分别是 a/b/ab 的像 ⇒ 传递。
+     */
+    const plan = g22
+      ? planCustomAction(g22, 4, [
+          { genText: 'a', cycle: '(1 2)(3 4)' },
+          { genText: 'a', cycle: '(1 3)(2 4)' },
+        ])
+      : null
+    ok('C_2^2 上两条同名 `a -> …` 能算出作用', !!plan?.ok, plan && !plan.ok ? `${plan.error} / ${plan.hint ?? ''}` : '')
+    if (plan?.ok) {
+      ok('  忠实（两个生成元拿到了不同的像）', plan.faithful, `faithful=${plan.faithful}`)
+      eq('  两条像都落到了（数量）', plan.images.length, 2)
+      eq('  核只有单位元', plan.kernelIds.length, 1)
+      eq('  4 个点上传递（1 个轨道）', plan.orbitSizes.length, 1)
+    }
+
+    // 反例一侧：两个生成元给同一个像 —— 合法作用（不忠实），要能算出来并披露
+    const same = g22
+      ? planCustomAction(g22, 4, [
+          { genText: 'a', cycle: '(1 2)(3 4)' },
+          { genText: 'a', cycle: '(1 2)(3 4)' },
+        ])
+      : null
+    ok(
+      '同一个像给两个生成元也算得出来（不忠实要披露，不是错误）',
+      !!same?.ok && same.ok === true && same.faithful === false,
+      same && !same.ok ? same.error : '',
+    )
+
+    // 多写的 draft 不静默吞：报"没有对应的生成元"
+    const extra = g22
+      ? planCustomAction(g22, 4, [
+          { genText: 'a', cycle: '(1 2)(3 4)' },
+          { genText: 'a', cycle: '(1 3)(2 4)' },
+          { genText: 'a', cycle: 'e' },
+        ])
+      : null
+    ok(
+      '多写一条 `a -> …` 报「没有对应的生成元」',
+      !!extra && !extra.ok && extra.error.includes('没有对应的生成元'),
+      extra && !extra.ok ? extra.error : '',
+    )
+
+    // V_4（另一种构造：core 的生成元表本来就可分）照旧能做
     const v4 = build(['G = V_4'])
     const gv4 = v4.byId('G')?.value.type === 'group' ? (v4.byId('G')!.value as { group: Group }).group : null
-    eq('V_4（同一个群）的生成元可分', gv4 ? generatorsDistinct(gv4) : false, true)
+    eq('V_4（同一个群、另一种构造）的生成元本就可分', gv4 ? generatorsDistinct(gv4) : false, true)
 
-    // 两条路都要拦：文本路与编辑器（编辑器走的是同一个 `planCustomAction`）
-    const f = failOf(['G = C_2^2', 'A = customAction(G, 4, a -> (12)(34))'])
-    ok('文本路拦下并说清理由', f.err.includes('分不开'), f.err)
-    // U54：提示里点的那个名字必须是**用户敲得出来的 ASCII 名**（从前写的是「正则作用」）
-    ok('hint 指向内置作用 leftAction', f.hint.includes('leftAction'), f.hint)
-    audit([{ what: '生成元不可分 error', text: f.err }, { what: '生成元不可分 hint', text: f.hint }])
+    // 文本路（op 层）整条跑通：C_2^2 上自定义作用能建出来
+    const r = build(['G = C_2^2', 'A = customAction(G, 4, a -> (12)(34), a -> (13)(24))'])
+    const rst = r.line('A')
+    ok('文本路：C_2^2 上自定义作用能建出来', !!rst?.ok, rst?.error ?? '')
+    const act = actionOf(r, 'A')
+    if (act) {
+      eq('  4 个点的作用', act.n, 4)
+      eq('  忠实（核 1 个元素）', actionKernel(act).length, 1)
+    }
 
     /*
-     * **菜单也不许列出它**（U52 把预检钩子收紧之后）。
-     *
-     * 判据与上面那道门共用 `generatorsDistinct`：列出来点下去只能得到一句"做不了"，
-     * 那就是这一批最忌讳的「菜单撒谎」（U38/U51 立的规矩）。
-     * `V_4` 与 `C_2^2` 是**同一个群**，一个列一个不列，区别在 core 的生成元表。
+     * **菜单照列**（U52 的"菜单不撒谎"在新事实下的样子）：从前 C_2^2 上不列
+     * （列出来点下去只能说"做不了"）；现在做得出来 ⇒ 必须列。
      */
     const list22 = c22.byId('G')?.value ? opsFor([c22.byId('G')!.value]).map((o) => o.id) : []
-    ok('C_2^2 上**不列**「自定义作用」', !list22.includes('customAction'), list22.join(','))
-    ok('  同一张菜单里「正则作用」照列（不是"一律不列"）', list22.includes('leftTranslationAction'), list22.join(','))
+    ok('C_2^2 上**照列**「自定义作用」（拆闸后做得出来了）', list22.includes('customAction'), list22.join(','))
+    ok('  同一张菜单里「正则作用」也照列', list22.includes('leftTranslationAction'), list22.join(','))
     const listV4 = v4.byId('G')?.value ? opsFor([v4.byId('G')!.value]).map((o) => o.id) : []
-    ok('V_4（同一个群）上照列', listV4.includes('customAction'), listV4.join(','))
-
-    const plan = planCustomAction(createCyclicGroup(2), 4, [])
-    ok('内核那一层同样拦（不只 UI 拦）', !plan.ok, plan.ok ? 'ok（不该）' : '')
+    ok('V_4 上照列（与 C_2^2 一致了）', listV4.includes('customAction'), listV4.join(','))
   }
 
   /* ══ 8 · 作用的核：四个内置作用各有姓名 ═════════════════ */
@@ -468,7 +515,7 @@ export function run(): void {
       { what: '缺像', lines: ['G = S_4', 'A = customAction(G, 4, s12 -> (12))'] },
       { what: '记号不存在', lines: ['G = S_4', 'A = customAction(G, 4, q -> (12), c -> (1234))'] },
       { what: '阶不整除', lines: ['G = C_4', 'A = customAction(G, 4, a -> (1 2 3))'] },
-      { what: '分不开', lines: ['G = C_2^3', 'A = customAction(G, 8, a -> (12))'] },
+      { what: '多写的像', lines: ['G = C_2^3', 'A = customAction(G, 8, a -> (12), a -> (12), a -> (12), a -> (12))'] },
       { what: 'n 非法', lines: ['G = C_4', 'A = customAction(G, 0, a -> e)'] },
     ]
     const strings: { what: string; text: string }[] = []

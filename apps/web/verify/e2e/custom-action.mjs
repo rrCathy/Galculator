@@ -14,8 +14,9 @@
  *   ⑤ **产出是一等作用值**：`orbits(A, 1)` / `stabilizer(A, 1)` 接着能算。
  *
  * 外加两条纪律（U38/U51 立的）：
- *   · **菜单不撒谎**：直积群的生成元在 core 里重名重号（`C_2^2` 是三个 `a`），
- *     "分别指定像"表达不出来 ⇒ 菜单里**不列** `customAction`，文本路给理由；
+ *   · **菜单不撒谎**（2026-10-11 拆闸后）：直积族（`C_2^2` …）的生成元在 core 里
+ *     **重名重号** —— 从前"菜单里不列 customAction、文本路给理由"；现在改名克隆
+ *     绕过（`distinctGeneratorGroup`），**照列**，两条同名 `a -> …` 按出现顺序认领（见 ⑦ 段）；
  *   · **纯文本面零泄漏**：编辑器的按钮 / title / 状态行，与悬浮球面板的
  *     label / 模板 / 说明，全是键盘打得出的字符（判据与 `e2e/no-unicode-leak.mjs`
  *     的 `ALLOWED` 逐字相同）。
@@ -470,11 +471,11 @@ console.log('== ⑥ 下游：`orbits(A, 1)` / `stabilizer(A, 1)` ==')
 }
 
 /* ══════════════════════════════════════════════════════════
- * ⑦ 菜单不撒谎：直积群的生成元分不开 -> 不列，但要说理由
+ * ⑦ 拆闸（2026-10-11）：`C_2^2` 的两条同名 `a -> …` 能建作用了
  * ══════════════════════════════════════════════════════════ */
 
 console.log('')
-console.log('== ⑦ `C_2^2` 的生成元分不开 -> 菜单里不列 customAction ==')
+console.log('== ⑦ `C_2^2`（直积族重名生成元）现在能建自定义作用 ==')
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
@@ -482,30 +483,63 @@ ok('建 `G = C_2^2`', await addLine('G', 'C_2^2'))
 await page.keyboard.press('Escape')
 await page.waitForTimeout(400)
 
+/*
+ * 用户报告：「V4 没法创建自定义群作用」。旧行为是"菜单不列 + 文本路给理由"
+ * （core 拿 `gen.symbol` 当 key，两个 `a` 共用一个像）；2026-10-11 拆闸：
+ * 改名克隆 + 同名 draft 按**出现顺序**认领。本段守新行为（旧的不许再出现）：
+ *   · 菜单**照列** `customAction`；
+ *   · 点开进编辑器，两行同名 `a` 各带序号（`a (1)` / `a (2)`）；
+ *   · 填两条不同像 -> 状态行进"是同态 + 忠实"；
+ *   · 提交 -> 长出 `G ↷ Omega`。
+ */
 await openOpsPanel('G')
 {
   const labels = await orbOpLabels()
   const ids = await orbOpIds()
   ok('菜单弹得出来（不是空的）', ids.length > 0, ids.join(' | '))
-  // core 给 C_2^2 的生成元起名全是 `a`、记号全是 `1` ⇒ "分别指定像"表达不出来。
-  // 列出来点下去只能得到一句"做不了" —— 那就是撒谎（U38/U51 立的规矩）。
-  // 翻账（W1，2026-10-06）：显示名改中文，断言改按 data-op。
-  ok('**不列**「自定义作用」', !ids.includes('customAction'), ids.join(' | '))
-  ok('同一张菜单里「左平移作用」照列（不是"一律不列"）', ids.includes('leftTranslationAction'), ids.join(' | '))
+  ok('**照列**「自定义作用」（旧行为"不列"不许再出现）', ids.includes('customAction'), ids.join(' | '))
+  ok('同一张菜单里「左平移作用」照列', ids.includes('leftTranslationAction'), ids.join(' | '))
   ok('菜单里没有键盘打不出的字符', labels.every((l) => badChars(l).length === 0), badChars(labels.join('')).join(''))
 
-  // 文本路照旧能进去 —— 那时要**说清为什么**，并给出路
-  await page.keyboard.press('Escape')
-  await page.waitForTimeout(300)
-  await typeExpr('customAction(G, 4, a -> (12)(34))')
-  const s = await status()
-  ok('文本路拦下（红字）', s.cls.includes('bad'), `${s.cls} :: ${s.text}`)
-  ok('  说清是"分不开"，不是"没有生成元 b"', s.text.includes('分不开'), s.text)
-  ok('  给出路（leftAction）', s.text.includes('leftAction'), s.text)
-  await scanPlain('状态行（生成元分不开）')
+  // 点它 -> 编辑器打开（台升起），两行同名生成元带序号
+  ok('点「自定义作用」打开编辑器', await clickOrbOp('customAction'))
+  await page.waitForTimeout(420)
+  ok('编辑器真的开了（旧行为：包装层拦下只给一句话）', (await page.locator('.action-builder').count()) === 1)
+  const ev0 = await editorValues()
+  ok('两行生成元输入框都在（两个 `a`）', ev0.rows === 2, JSON.stringify(ev0))
+  const idxLabels = await page.evaluate(() =>
+    [...document.querySelectorAll('.action-builder .mb-gen-idx')].map((e) => e.textContent.trim()),
+  )
+  ok('行首带同名序号（a (1) / a (2)）', idxLabels.join('|') === '(1)|(2)', idxLabels.join('|'))
+
+  // 填两条**不同**的像（手算：Klein 四元群的忠实作用，ab ↦ (14)(23)）
+  const inputs = page.locator('.action-builder .mb-row input.cycle-input')
+  await inputs.nth(0).fill('(1 2)(3 4)')
+  await page.waitForTimeout(260)
+  await inputs.nth(1).fill('(1 3)(2 4)')
+  await page.waitForTimeout(420)
+  const c = await check()
+  ok(
+    '状态行：是同态 + 忠实（两条同名像各归各的生成元）',
+    !!c && c.cls.includes('ok') && c.text.includes('忠实'),
+    JSON.stringify(c),
+  )
+  ok('  传递（1 个轨道）', !!c && c.text.includes('传递'), String(c?.text))
+  await scanPlain('编辑器（重名群两条像）')
+
+  // 提交 -> 长出 `G ↷ Omega`
+  await page.fill('.action-builder .mb-name', 'A')
+  await page.waitForTimeout(200)
+  await clickEl('.action-builder .mb-foot .mb-btn.primary')
+  await page.waitForTimeout(620)
+  ok('编辑器自己关掉了', (await page.locator('.action-builder').count()) === 0)
+  ok('没有求值失败的行', (await errRows()).length === 0, JSON.stringify(await errRows()))
+  const ids2 = await nodeIds()
+  ok('画布上是 G 与它的 Omega（作用不上节点）', ids2.join(',') === 'G,A/Omega', ids2.join(','))
+  await page.screenshot({ path: '../../docs/assets/u52-c2c2-action.png' })
 }
 
-// 对照组：`V_4` 与 `C_2^2` 是**同一个群**，区别只在 core 的生成元表 —— 它就该列
+// 对照组：`V_4`（另一种构造）与 `C_2^2` 现在**都**列 —— 旧账里"一个列一个不列"已平账
 {
   await page.keyboard.press('Escape')
   await page.waitForTimeout(240)

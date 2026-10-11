@@ -11,8 +11,6 @@ import { composeMapLine } from '../gal/compose'
 import {
   CUSTOM_ACTION_CELL_CAP,
   IDENTITY_TOKEN,
-  generatorCollisionReason,
-  generatorsDistinct,
   isOmegaCarrier,
   omegaSpecOfValue,
   planCustomAction,
@@ -34,7 +32,7 @@ import { TexOrText } from './Tex'
 /** 校验结果（编辑器底部那条状态行）。 */
 type Check =
   | { state: 'empty'; message: string }
-  | { state: 'bad'; error: string; hint?: string; genName?: string }
+  | { state: 'bad'; error: string; hint?: string; genName?: string; genIndex?: number }
   | { state: 'ok'; faithful: boolean; orbitSizes: number[]; kernelSize: number }
 
 interface ActionBuilderProps {
@@ -101,18 +99,11 @@ export function ActionBuilder(props: ActionBuilderProps) {
     )
   }
   /*
-   * 直积群的生成元在 core 里重名重号（`C_2^3` 是三个 `a`、记号都是 `1`）——
-   * 那种群上"给每个生成元分别指定像"表达不出来（详见 `generatorsDistinct` 的注释）。
-   * 挡在**包装层**：硬撑着开一个三行同名的表单只会让人以为能分别填。
+   * 直积群的生成元在 core 里重名重号（`C_2^2` 是两个 `a`）——从前这里也拦
+   * （"分不开"）。**2026-10-11 拆闸**：内核改走"改名克隆 + 同名按出现顺序认领"
+   * （见 `customAction.ts` 的 `distinctGeneratorGroup`），表单照常开，
+   * 两行同名的 `a` 靠行首序号（`a (1)` / `a (2)`）区分。
    */
-  if (g && !generatorsDistinct(g)) {
-    return (
-      <div className="insp-line dim">
-        {generatorCollisionReason(g)}，没法给它们分别指定像。想让 G 作用在自己身上用 leftAction，
-        其余三种内置作用也各有现成的路。
-      </div>
-    )
-  }
   return <ActionBuilderEditor {...props} />
 }
 
@@ -171,9 +162,20 @@ function ActionBuilderEditor({
   const [omegaDraft, setOmegaDraft] = useState(
     () => presetOmega ?? (G && G.order <= 12 ? String(G.order) : '4'),
   )
-  const [images, setImages] = useState<Record<string, string>>({})
+  /*
+   * 每行的像 —— **按生成元的序号存**（数组），不用 `Record<gen.name, …>`：
+   * 直积族（`C_2^2` 两个 `a`）上名字当 key 会塌成同一个格子（2026-10-11 拆闸的配套）。
+   */
+  const [images, setImages] = useState<string[]>([])
   const [nameDraft, setNameDraft] = useState('')
   const [autoNote, setAutoNote] = useState<string | null>(null)
+
+  /** 同名生成元出现几次（重名时行首标序号：`a (1)` / `a (2)`） */
+  const nameCount = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const g of gens) m.set(g.gen.name, (m.get(g.gen.name) ?? 0) + 1)
+    return m
+  }, [gens])
 
   /*
    * Ω 的一格表达式（U53）——与输入球**同一个求值器**，所以
@@ -246,7 +248,7 @@ function ActionBuilderEditor({
     if (omega.kind === 'empty') return { state: 'empty', message: '先填作用点集：一个点数（如 4），或一个点集表达式（如 pointSet(5) / Syl(G, 3) / labeledSet(a, b, c)）' }
     if (omega.kind === 'bad') return { state: 'bad', error: omega.error, hint: omega.hint }
     if (omega.n < 1) return { state: 'empty', message: '点数得是正整数' }
-    const filled = gens.filter((g) => (images[g.gen.name] ?? '').trim())
+    const filled = gens.filter((_, i) => (images[i] ?? '').trim())
     if (filled.length === 0) {
       // 点集有名字的点时，示例就用**它的标号**（写 `(a b)` 比写 `(1 2)` 更贴屏幕）
       const sample = omega.kind === 'set' ? sampleCycle(omega.labels) : '(1 2 3 4)'
@@ -258,9 +260,10 @@ function ActionBuilderEditor({
     const plan = planCustomAction(
       G,
       omega.kind === 'set' ? omega.spec : omega.n,
-      gens.map((g) => ({ genText: g.gen.name, cycle: images[g.gen.name] ?? '' })),
+      gens.map((g, i) => ({ genText: g.gen.name, cycle: images[i] ?? '' })),
     )
-    if (!plan.ok) return { state: 'bad', error: plan.error, hint: plan.hint, genName: plan.genName }
+    if (!plan.ok)
+      return { state: 'bad', error: plan.error, hint: plan.hint, genName: plan.genName, genIndex: plan.genIndex }
     return {
       state: 'ok',
       faithful: plan.faithful,
@@ -271,8 +274,8 @@ function ActionBuilderEditor({
 
   const canSubmit = check.state === 'ok' && !nameCheck.error
 
-  /** 把一组「生成元 → 循环记号」写进输入框（两个按钮共用）。 */
-  const fill = (next: Record<string, string>, note: string, nextOmega?: number) => {
+  /** 把一组「生成元 → 循环记号」写进输入框（两个按钮共用）。按**序号**对齐，见 `images`。 */
+  const fill = (next: string[], note: string, nextOmega?: number) => {
     if (nextOmega !== undefined) setOmegaDraft(String(nextOmega))
     setImages(next)
     setAutoNote(note)
@@ -280,7 +283,10 @@ function ActionBuilderEditor({
 
   /** 平凡作用：每个生成元都映成恒等。必然是同态 —— 与 `MapBuilder` 的平凡映射同款"起点"。 */
   const fillTrivial = () => {
-    fill(Object.fromEntries(gens.map((g) => [g.gen.name, IDENTITY_TOKEN])), '平凡作用（全映成恒等）')
+    fill(
+      gens.map(() => IDENTITY_TOKEN),
+      '平凡作用（全映成恒等）',
+    )
   }
 
   /**
@@ -294,19 +300,18 @@ function ActionBuilderEditor({
   const fillRegular = () => {
     if (!G) return
     const perms = computeLeftTranslationPerms(G)
-    const next: Record<string, string> = {}
-    for (const g of gens) {
+    const next = gens.map((g) => {
       const p = perms.get(g.el.id)
-      if (p) next[g.gen.name] = cycleNotation(p)
-    }
+      return p ? cycleNotation(p) : ''
+    })
     fill(next, '左正则作用（G 左乘在自己身上）', G.order)
   }
 
   const submit = () => {
     if (!canSubmit || !G) return
-    const pairs = gens.map((g) => ({
+    const pairs = gens.map((g, i) => ({
       gen: g.gen.name,
-      img: (images[g.gen.name] ?? '').trim(),
+      img: (images[i] ?? '').trim(),
     }))
     // 第二参原样写回用户填的那一格：`4` / `pointSet(5)` / `labeledSet(a, b, c)` / 画布上某个集合的名字
     const expr = composeMapLine(op, [src.id, omegaDraft.trim()], pairs)
@@ -437,22 +442,31 @@ function ActionBuilderEditor({
       )}
 
       <div className="mb-rows">
-        {gens.map((g) => {
+        {gens.map((g, i) => {
           const genOrder = elementOrder(G, g.el)
-          const value = images[g.gen.name] ?? ''
-          // 标红靠**结构化的 genName**（内核给的），不靠 `error.includes(名字)`：
-          // `a` 这种单字母在中文句子里到处撞得上
-          const bad = check.state === 'bad' && check.genName === g.gen.name
+          const value = images[i] ?? ''
+          // 标红靠**结构化的 genIndex**（内核给的），不靠 `error.includes(名字)`：
+          // `a` 这种单字母在中文句子里到处撞得上；重名群里更只有序号分得清两行。
+          const bad = check.state === 'bad' && check.genIndex === i
+          /* 同名出现多次（直积族 `a, a`）——行首标个序号，两条 `a` 才分得清谁填谁 */
+          const dup = (nameCount.get(g.gen.name) ?? 1) > 1
           return (
-            <label key={g.gen.name} className="mb-row">
+            <label key={i} className="mb-row">
               <span className="mb-gen" data-gen={g.gen.name}>
                 {prettySymbol(g.gen.name)}
+                {dup ? <span className="mb-gen-idx"> ({i + 1})</span> : null}
               </span>
               <span className="mb-to">到</span>
               <input
                 className={`cycle-input${bad ? ' bad' : ''}`}
                 value={value}
-                onChange={(e) => setImages((p) => ({ ...p, [g.gen.name]: e.target.value }))}
+                onChange={(e) =>
+                  setImages((p) => {
+                    const next = [...p]
+                    next[i] = e.target.value
+                    return next
+                  })
+                }
                 placeholder="(1 2 3 4)"
                 title={`循环记号；恒等写 ${IDENTITY_TOKEN}`}
                 spellCheck={false}

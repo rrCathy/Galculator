@@ -53,8 +53,6 @@ import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding
 // 编辑器的下拉与手打的字形因此永远给出同一个答案。
 import {
   IDENTITY_TOKEN,
-  generatorCollisionReason,
-  generatorsDistinct,
   isOmegaCarrier,
   planCustomAction,
   resolveGenerator,
@@ -2227,29 +2225,19 @@ export const OPS: OpDef[] = [
     editor: true,
     result: 'action',
     /*
-     * **候选预检**（U52）：直积群（`C_2^2` / `C_2^3` …）的生成元在 core 里重名重号，
-     * "给每个生成元分别指定像"这件事**表达不出来**（见 `generatorsDistinct`）。
-     * 判据与 `run` 里的那道门、与编辑器包装层的守卫**共用同一个函数** ——
-     * 于是"菜单里列着的"与"点下去能做的"永远是同一批（菜单不撒谎）。
+     * **候选预检**（U52）：从前这里要拦直积群（`C_2^2` / `C_2^3` … 的生成元在 core 里
+     * 重名重号，"分别指定像"被当成表达不出来）。
+     *
+     * ⚠️ **2026-10-11 拆闸**：用户报告「V4 没法创建自定义群作用」——重名群现在走
+     * `customAction.ts` 的**改名克隆**（`distinctGeneratorGroup`），同名 draft 按
+     * 出现顺序分别认领。所以这里**不再有预检**（缺省=放行）——
+     * "菜单里列着的"与"点下去能做的"依旧是同一批（菜单不撒谎）。
      *
      * 容忍前缀：`n` 是标量位，画布答不出来 ⇒ 这里只可能拿到 `[G]`（或 `[G, Ω]`）。
      */
-    fits: (vs) => {
-      const G = groupValueOf(vs[0])
-      return !G || generatorsDistinct(G)
-    },
     run: (a) => {
       const G = groupOf(a[0])
       if (!G) return fail('自定义作用的作用群必须是群', '如 customAction(C_4, 4, a -> (1 2 3 4))')
-      // 直积群的生成元在 core 里重名重号（`C_2^3` 是三个 `a`/`1`）—— 那种群上
-      // "给每个生成元分别指定像"表达不出来。**先于生成元名字检查**说这件事：
-      // 否则用户会先撞上"G 里没有生成元 b"（而对着一串 `a` 他不知道该写什么）。
-      if (!generatorsDistinct(G)) {
-        return fail(
-          `${generatorCollisionReason(G)}，给不了它们不同的像`,
-          '想让 G 作用在自己身上用 leftAction，其余三种内置作用也各有现成的路',
-        )
-      }
       const gRef = refText(a[0])
 
       // ── Ω：一个整数（点数）或一个集合对象（U53）──
