@@ -376,7 +376,10 @@ function ActionBuilderEditor({
         <div className={`mb-check ${check.state}`}>
           {check.state === 'empty' && (
             <span>
-              {prettySymbol(G.symbol)} 作用在 {n >= 1 ? `${n} 个点上` : '点集上'}：{check.message}
+              {/* 状态行是**纯文本面** ⇒ 群名走 `asciiSymbol`（2026-10-12 修：
+                  从前 prettySymbol 输出里可能带 `\times` / `\mathrm` 这类命令，
+                  在这条面上直接裸奔） */}
+              {asciiSymbol(G.symbol)} 作用在 {n >= 1 ? `${n} 个点上` : '点集上'}：{check.message}
               {autoNote ? ` -${autoNote}` : ''}
             </span>
           )}
@@ -414,7 +417,8 @@ function ActionBuilderEditor({
           autoComplete="off"
         />
         <span className="mb-to">{omegaSummary}</span>
-        <span className="ab-ord">{prettySymbol(G.symbol)} 的阶是 {G.order}</span>
+        {/* `.ab-ord` 是纯文本面（与状态行同）⇒ `asciiSymbol` */}
+        <span className="ab-ord">{asciiSymbol(G.symbol)} 的阶是 {G.order}</span>
       </label>
 
       {/*
@@ -435,7 +439,8 @@ function ActionBuilderEditor({
               onClick={() => setOmegaDraft(o.id)}
               title={`用 ${o.id} 当作用点集`}
             >
-              {o.id}
+              {/* 2026-10-12 升渲染面：集合名可能是 LaTeX 形态（`\beta` 的作用点集） */}
+              <TexOrText text={o.id} />
             </button>
           ))}
         </div>
@@ -491,7 +496,7 @@ function ActionBuilderEditor({
             disabled={regularTooBig}
             title={
               regularTooBig
-                ? `${prettySymbol(G.symbol)} 是 ${G.order} 阶，左正则作用要 ${G.order} 个点，超出本地上限`
+                ? `${asciiSymbol(G.symbol)} 是 ${G.order} 阶，左正则作用要 ${G.order} 个点，超出本地上限`
                 : `把作用点集的点数设成 G 的阶，并按左乘填像（忠实，这就是 Cayley 定理）`
             }
           >

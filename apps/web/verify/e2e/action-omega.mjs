@@ -244,7 +244,10 @@ console.log('== ① ⊕ 球点 `customAction`：它要**两个**对象，不是"
 
   ok('点得中群节点 G', await clickSvg('svg.canvas g.gnode[data-id="G"] .gnode-hit'))
   const b = await pendText()
-  ok('  已选里出现 S_4', b.picked.includes('S_4'), b.picked)
+  // 翻账（2026-10-12 升渲染面）：`.pending-picked` 里的标号过 `TexOrText`，
+  // textContent 从 `S_4` 变渲染形态 `S4`（KaTeX 的下标是排版不是下划线字符）。
+  // 守的原意不变：**已选里真的出现了那个群**。
+  ok('  已选里出现 S_4（渲染形态 S4）', b.picked.includes('S4'), b.picked)
   ok('  Ω 那一位说清是「可选」', b.hint.includes('可选') && b.hint.includes('Omega'), b.hint)
   ok('  且收尾是「进编辑器填」而不是「直接执行」', b.hint.includes('编辑器') && !b.hint.includes('直接执行'), b.hint)
   ok('  条上那颗按钮同款文案', b.btn.includes('在编辑器里填'), b.btn)

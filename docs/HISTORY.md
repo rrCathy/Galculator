@@ -4869,6 +4869,87 @@ U52 立过一道闸（见 6.36「顺手抓到的真 bug」）：直积族（`C_2
 
 ---
 
+## 丙编补十三 · 2026-10-12 · 第二轮「一些 tex 没渲染出来」：**工作台系字面面全部升渲染**
+
+> 用户截图（工作台：顶栏目标 chip 写 `\alpha`、显示屏副行写
+> `\alpha = customAction(J, 6, a\to (1 2 3 4 5 6))`）+ 一句「一些 tex 没渲染出来」。
+
+### ① 病灶：**字面面**裸奔 —— 上一轮扫的是**内容面**，这一轮扫字面面
+
+补七（2026-10-08）扫过一轮"许多地方都没有 tex 渲染好"，但扫到的是**内容面**
+（结论层明细 / MapFacts / 群库 chips / 输入卡状态行）。这一轮漏的是**字面面** ——
+直接贴 `obj.id` / `obj.def` / `ml.sub` / `label` 的地方。补七之后用户开始起
+LaTeX 名字（`\alpha` / `\beta`）与用编辑器提交含 `\to` 的 def
+（`composeMapLine` 产出的 `a\to (…)`），这些面才显形。
+
+**扫描方法**（`.tmp-tex/probe-1..6`）：全屏扫**文本节点里的 `\命令`**（`/\\[A-Za-z]/`）
+——凡该渲染的面一个逃不掉；再逐面真机确认。钉出 **8 处**（第 9 个候选 `.row-name` 被走查拦回，见 ②）：
+
+| # | 面 | 裸奔内容 | 修法 |
+|---|---|---|---|
+| 1 | `.bench-target`（顶栏目标 chip）| `node.id`（`\alpha`）| `TexOrText` |
+| 2 | `.bench-screen-sub`（显示屏副行）| `ml.sub`（`\alpha = customAction(J, 6, a\to …)`）| 副行走 `TexOrText`；「正在选参数」那截保持纯文本（两截分开渲染，分隔符照旧）|
+| 3 | 对象槽 chip 的**兜底** | 派生节点（作用的 Ω：`\alpha/Omega`）不在对象表 ⇒ `{obj ? … : id}` 落到裸 id | 兜底也 `TexOrText` |
+| 4 | `.bench-slot-id` / `.bench-slot-def`（槽位）| `obj.id` / `obj.def` 裸贴 | `TexOrText` |
+| 5 | `.bench-cand-id` / `.bench-cand-def`（候选）| 同上 | `TexOrText` |
+| 6 | `.pending-picked`（待选条「已选 …」）| `label`（可能是 `\mathrm` / `\pi` / `\alpha_2` 形态）| 逐项 `TexOrText`，` , ` 留在文本流 |
+| 7 | `.ab-set-chip`（编辑器「画布上的集合」）| `o.id` | `TexOrText` |
+| 8 | `.insp-sub-note`（结构「已重建验证（得到 …）」）| `prettySymbol(dec.rebuilt)` 直接插进中文句 | 符号单独 `<Tex>` |
+
+**纯文本面的同类隐患一并收掉**（这些面**不该**渲染，但塞了 `prettySymbol` 的输出 ——
+遇上 `\times` / `\mathrm` 就是裸 LaTeX）：`.mb-check` 空态与 `.ab-ord`（ActionBuilder）、
+MapBuilder 的状态行 / hint / 关系违反的 `label()` —— `prettySymbol` 全换 **`asciiSymbol`**
+（判据见 `pretty.ts` 两兄弟分工；`C_4` / `C_2^2` 这类简单符号的输出逐字不变）。
+**没动的**：title 属性（"照着敲"的原文，ASCII 可敲，契约如此）、⊕球菜单的 `<code>`
+模板（`G \rtimes H` 就是输入语法本体）、原生 `<option>`（塞不进 HTML，注释已立）。
+
+### ② 边界：**对象表不升** —— 名字保持"可敲形态"（09-27 契约）
+
+第一版把 `.row-name`（左栏对象表的名字）也渲染了 —— **`usability-fixes` 走查当场拦回**
+（「对象表里没有任何非 ASCII 的名字（形态统一了）」：`\phi` 行渲染成 `ϕ` 行，断言挂）。
+
+把边界理清楚：那张表是**参考面**（"照着名字敲回去"）—— 输入恰好收 `\phi`、
+真字符 `ϕ` 会被拦"键盘打不出来"；渲染成 `ϕ` 等于教用户一个敲不回去的形态，
+正是 09-27 那批杀掉的"两个形态"病。⇒ **名字（id）只在展示面渲染**（对象槽 chip /
+显示屏 / 目标 chip），**参考面（对象表）保持可敲原文**。`.row-name` 已回退并留注释。
+
+> ⚠️ 目标 chip（`.bench-target`）**升**：它是"你正在看哪个对象"的身份指示，
+> 与对象槽 chips（一直渲染 `α : …`）同屏并排 —— 两个 chip 一个渲染一个不渲染才是 bug。
+
+### ③ TexOrText 的纯文本路径去掉包装 span（走查兼容的关键一改）
+
+`TexOrText` 从前对纯文本也给 `<span>` 包一层 —— 升面之后 **Playwright 的 `:text-is()`
+当场失效**（它的语义是"**最小**的含这段文字的元素"，里层 span 抢走匹配：
+`.row-name:text-is("W")` 实测超时，`action-entries` / `connect` 两套栽）。改成
+**没给 className 时不加包装元素**（fragment）—— 纯 ASCII 名字的 DOM 形态与"没渲染"时代
+逐字相同，整条走查链（大量按 `.row-name` / `:text-is` 找行）零改动。
+
+⚠️ 这就是"升渲染面"的通用纪律：**渲染分支换内容，纯文本分支的 DOM 不能变。**
+
+### ④ 读数
+
+- 复测探针（`.tmp-tex/verify-1.mjs`）**16 PASS / 0 FAIL**：五个状态（左栏 / 作用边 / Ω 节点 /
+  候选＋槽位 / 编辑器）**全屏零反斜杠**（对象表 `.row-name` 按 ② 的边界豁免）；
+  顶栏 target 读出 `α`、副行里出现 `→`。截图 `docs/assets/u61-tex-render.png`。
+- 走查：`action-omega` 翻 1 条（`.pending-picked` 的 `S_4` 渲染为 `S4` —— KaTeX 下标
+  是排版不是下划线字符；守的原意"已选里出现那个群"不变）；其余按原样过。
+- 全量 35 套 **1351 PASS / 0 FAIL**（条数与上批持平：只翻 1 条 · 增 0 条）。
+- `tsc` 0；语义层不受影响（照跑）。
+
+### 教训
+
+1. **"渲染没做全"要按**面**扫，不按用户那张截图扫**：用户只看到工作台两处，同类的
+   还有七处 —— 全屏扫"文本节点里的 `\命令`"是最便宜的完备判据。
+2. **字面面（id / def / sub）与内容面（insights / facts）是两类**，上一轮只扫了后者。
+3. **"升渲染面"有边界：参考面（对象表）不升** —— 名字的可敲形态是 09-27 立的契约，
+   这次捎带渲染被走查拦回。展示面渲染、参考面保持原文，边界写进 `TexOrText` 注释。
+4. **升渲染面动 DOM 形态（多一层 span）会砸走查** —— 纯文本分支必须保持原形态
+   （`:text-is` 的"最小元素"语义；同类教训见补七 · KaTeX 改 textContent）。
+5. **有契约的面不许混用**：`.mb-check` 被 ⑧ 段断言守"零反斜杠" —— 那里塞
+   `prettySymbol` 是隐患，换 `asciiSymbol`；`pretty.ts` 两兄弟的分工又被验证一次。
+
+---
+
 ## 丁一 · 交换图布局的诊断与修复
 
 > 来自 DIAGRAM_SPEC.md §2（原「现状诊断」）。规范本体见 [DIAGRAM_SPEC.md](DIAGRAM_SPEC.md) §1。

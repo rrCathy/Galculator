@@ -59,6 +59,14 @@ export function ObjectRow({
         }
         title={onSelect ? '选中，在工作台看它' : undefined}
       >
+        {/*
+         * ⚠️ **名字保持"可敲形态"，不渲染**（2026-09-27 契约定案，`usability-fixes`
+         * 走查在守：「对象表里没有任何非 ASCII 的名字（形态统一了）」）——
+         * 这张表是"照着名字敲回去"的参考面：显示 `\phi` 而输入恰好收 `\phi`
+         * （真字符 `ϕ` 会被拦"键盘打不出来"）。渲染成 `ϕ` 就等于教用户一个敲不回去的形态。
+         * 2026-10-12 曾试渲染（对象槽 chip 等升渲染面时顺手带过），被走查当场拦回。
+         * 展示面要"好看的名字"看对象槽 chip（`mathLabel`）与工作台显示屏。
+         */}
         <span className="row-name">{o.id}</span>
         <span className="row-eq">=</span>
         <span className="row-def">

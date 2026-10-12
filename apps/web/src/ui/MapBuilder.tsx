@@ -14,7 +14,7 @@ import { CardEditor } from './CardEditor'
 // 「已知群」（U48）：只有符号 + 阶、没有元素表 —— 做不了「填生成元的像」
 import { isKnownGroup } from '../gal/known'
 import { checkName, nextAutoName, normalizeName } from '../gal/naming'
-import { prettySymbol } from '../gal/pretty'
+import { asciiSymbol, prettySymbol } from '../gal/pretty'
 import { TexOrText } from './Tex'
 import type { OpDef } from '../gal/ops'
 import type { CanvasNode, GalObject } from '../gal/types'
@@ -95,17 +95,19 @@ function MapBuilderEditor({ op, src, tgt, objects, onSubmit, onCancel }: MapBuil
       return {
         state: 'bad',
         error: '这组像无法唯一延拓成映射',
-        hint: `${src.label} 里成立的关系，到 ${tgt.label} 里不成立`,
+        hint: `${asciiSymbol(src.label)} 里成立的关系，到 ${asciiSymbol(tgt.label)} 里不成立`,
       }
     }
     const res = verifyHomomorphism(G, H, full)
     if (!res.isHomomorphism) {
       const v = res.violation
-      // 违反关系报的是**元素 id** → 展示前翻 label 并转成展示形态
-      // （core 给自同构群的元素起的名字是 `\alpha_{2}`，原样贴出来是一屏反斜杠）
+      // 违反关系报的是**元素 id** → 展示前翻 label 并转成**纯文本形态**
+      // （core 给自同构群的元素起的名字是 `\alpha_{2}`，原样贴出来是一屏反斜杠；
+      //  2026-10-12 起走 `asciiSymbol` —— 这条面是纯文本面，连 `\alpha_{2}` 这种
+      //  "简化 LaTeX" 也不该留，见 `gal/pretty.ts` 两兄弟的分工）
       const label = (group: Group, id: string) => {
         const e = group.elements.find((x) => x.id === id)
-        return e ? prettySymbol(e.label) : id
+        return e ? asciiSymbol(e.label) : id
       }
       return {
         state: 'bad',
@@ -190,7 +192,8 @@ function MapBuilderEditor({ op, src, tgt, objects, onSubmit, onCancel }: MapBuil
         <div className={`mb-check ${check.state}`}>
           {check.state === 'empty' && (
             <span>
-              {prettySymbol(G.symbol)} 到{prettySymbol(H.symbol)}：{gens.length} 个生成元待填
+              {/* 状态行是纯文本面 ⇒ `asciiSymbol`（与 `ActionBuilder` 同口径，2026-10-12） */}
+              {asciiSymbol(G.symbol)} 到{asciiSymbol(H.symbol)}：{gens.length} 个生成元待填
               {autoNote ? ` -${autoNote}` : ''}
             </span>
           )}

@@ -46,6 +46,7 @@ import { BENCH_H_DEFAULT, Workbench } from './ui/Workbench'
 import { OpDock } from './ui/OpDock'
 import { CatalogDock } from './ui/CatalogDock'
 import type { InfoTab } from './ui/InfoDock'
+import { TexOrText } from './ui/Tex'
 import { NumericDock } from './ui/NumericDock'
 import type { GalValue, NormalizedSubgroup } from './gal/value'
 
@@ -1115,7 +1116,18 @@ export default function App() {
           </code>
           {inter.picked.length > 0 && (
             <span className="pending-picked">
-              已选 {inter.picked.map((id) => byId.get(id)?.label ?? id).join(' , ')}
+              已选{' '}
+              {/*
+               * 2026-10-12 升渲染面：标号可能是展示串（自动构造成果的 label 带
+               * `\mathrm` / `\pi` / `\alpha_2`），逐项走 `TexOrText`；
+               * ` , ` 分隔符留在文本流里（纯 ASCII 标号与从前逐字相同）。
+               */}
+              {inter.picked.map((id, i) => (
+                <span key={id}>
+                  {i > 0 && ' , '}
+                  <TexOrText text={byId.get(id)?.label ?? id} />
+                </span>
+              ))}
             </span>
           )}
           {optionalSlot && (

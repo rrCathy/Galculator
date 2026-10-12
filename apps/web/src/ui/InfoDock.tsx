@@ -671,7 +671,9 @@ function StructureSection({ group }: { group: Group }) {
               />
             </span>
             <span className="insp-sub-note">
-              已重建验证（得到 {prettySymbol(dec.rebuilt)}）
+              {/* 2026-10-12：`prettySymbol` 的输出是给 KaTeX 的形态（`C_2\times C_2`）——
+                  塞进这句中文里就是裸 LaTeX，符号那一截单独走 `<Tex>` */}
+              已重建验证（得到 <Tex tex={prettySymbol(dec.rebuilt)} />）
               {dec.otherVerified > 0 ? `；同类候选另有 ${dec.otherVerified} 条` : ''}
             </span>
           </span>

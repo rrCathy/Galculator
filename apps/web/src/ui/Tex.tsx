@@ -96,7 +96,17 @@ export function Tex({ tex, className }: { tex: string; className?: string }) {
  */
 export function TexOrText({ text, className }: { text: string; className?: string }) {
   const html = useMemo(() => (shouldTex(text) ? renderTex(toTex(text)) : null), [text])
-  if (html === null) return <span className={className}>{text}</span>
+  if (html === null) {
+    /*
+     * 纯文本路径：**没给 className 时不加包装元素**（2026-10-12）。
+     *
+     * 包一层 `<span>` 会让 Playwright 的 `:text-is()` 命中不了外层 ——
+     * 它的语义是"**最小**的含这段文字的元素"，里层 span 抢走了匹配
+     * （实测 `.row-name:text-is("W")` 当场超时，见 `action-entries` / `connect`）。
+     * 纯 ASCII 名字是绝大多数，DOM 形态必须与"没渲染"时代逐字相同。
+     */
+    return className ? <span className={className}>{text}</span> : <>{text}</>
+  }
   return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
 }
 

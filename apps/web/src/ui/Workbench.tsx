@@ -435,7 +435,16 @@ export function Workbench({
               2026-10-10 精简：删「点开：」（胶囊摆在那，不必教点）+「翻它的结构」→「看结构」。 */}
           {!open && <span className="bench-peek">造对象 - 对它做事 - 看结构</span>}
         </button>
-        {node && <span className="bench-target">{node.id}</span>}
+        {/*
+         * 当前焦点对象的**名字**（2026-10-12 升渲染面）：id 可能是 LaTeX 形态
+         * （`\alpha` / `\pi_1`）—— 原样贴出来就是一屏反斜杠（用户截图点名）。
+         * `TexOrText` 对纯 ASCII 名字是恒等（`G` 还是 `G`），只在有数学形态时才走 KaTeX。
+         */}
+        {node && (
+          <span className="bench-target">
+            <TexOrText text={node.id} />
+          </span>
+        )}
       </header>
 
       {open && (
@@ -483,7 +492,12 @@ export function Workbench({
                       className={`bench-chip${id === node?.id ? ' on' : ''}${canFill ? ' can-fill' : ''}`}
                     >
                       <button className="bench-chip-main" onClick={() => onPick(id)} title={chipTitle}>
-                        {obj ? <TexOrText text={mathLabel(obj).main} /> : id}
+                        {/*
+                         * ⚠️ 兜底也要**渲染**（2026-10-12）：有些节点是 derive 就地在画布上
+                         * 造的（作用的 Ω ⇒ `\alpha/Omega`），它们不在对象表里、这里查不到 ——
+                         * 原样贴 id 就是一屏反斜杠。查得到走数学身份，查不到至少渲染 id 本身。
+                         */}
+                        {obj ? <TexOrText text={mathLabel(obj).main} /> : <TexOrText text={id} />}
                       </button>
                       {/* `x` 是 ASCII（用户 2026-09-27 定的规矩：键盘打不出来的字符不许出现在文本流里）*/}
                       <button
@@ -527,18 +541,18 @@ export function Workbench({
                       <TexOrText text={ml?.main ?? node.def} />
                     </div>
                     <div className="bench-screen-sub">
-                      {[
-                        ml?.sub,
-                        /*
-                         * ⚠️ 副行的「- 阶 N」已撤（2026-10-10 用户点名：「'阶三'也是没必要显示的」）——
-                         * 阶在明细「基本」节第一行就有，显示屏副行别再重复。
-                         */
-                        pending
-                          ? `正在选参数：${pending.picked.length} / ${maxObjectArity(pending.op)}`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join('  -  ')}
+                      {/*
+                       * ⚠️ `ml.sub` 是**展示串**（`\alpha = customAction(G, 6, a\to …)`），
+                       * 2026-10-12 升渲染面：它走 `TexOrText` —— 纯 ASCII 的
+                       * `B = smallGroup(12, 3)` 仍走纯文本（视觉不变），带数学形态的才渲染。
+                       * 「正在选参数」那截含中文与计数，是**纯文本**，不丢进 KaTeX：
+                       * 两截分开渲染、分隔符照旧（`.filter.join` 的语义一字不动）。
+                       */}
+                      {ml?.sub && <TexOrText text={ml.sub} />}
+                      {ml?.sub && pending ? '  -  ' : null}
+                      {pending
+                        ? `正在选参数：${pending.picked.length} / ${maxObjectArity(pending.op)}`
+                        : null}
                     </div>
                     {/*
                      * pending 时显示屏写**算式**（2026-10-07 方案二）：
@@ -584,9 +598,14 @@ export function Workbench({
                       >
                         <span className="bench-slot-n">{i + 1}</span>
                         {obj ? (
+                          /* 2026-10-12 升渲染面：id / def 都可能是展示串（`\beta`、`a\to …`） */
                           <>
-                            <span className="bench-slot-id">{obj.id}</span>
-                            <span className="bench-slot-def">{obj.def}</span>
+                            <span className="bench-slot-id">
+                              <TexOrText text={obj.id} />
+                            </span>
+                            <span className="bench-slot-def">
+                              <TexOrText text={obj.def} />
+                            </span>
                           </>
                         ) : (
                           <span className="bench-slot-want">
@@ -604,9 +623,14 @@ export function Workbench({
                     <div className="bench-cands-title">填第 {slotIdx + 1} 位：</div>
                     <div className="bench-cands-list">
                       {cands.map((o) => (
+                        /* 2026-10-12 升渲染面：与槽位同一口径（id / def 都可能是展示串） */
                         <button key={o.id} className="bench-cand" onClick={() => onPick(o.id)}>
-                          <span className="bench-cand-id">{o.id}</span>
-                          <span className="bench-cand-def">{o.def}</span>
+                          <span className="bench-cand-id">
+                            <TexOrText text={o.id} />
+                          </span>
+                          <span className="bench-cand-def">
+                            <TexOrText text={o.def} />
+                          </span>
                         </button>
                       ))}
                     </div>
