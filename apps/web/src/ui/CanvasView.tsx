@@ -254,6 +254,8 @@ export function CanvasView({
   onToggleAutoFirstIso,
   onOpenSnapshot,
   onClearBoard,
+  toolsOpen = false,
+  onCloseTools,
 }: {
   /** 命令式把手（缺口 ⑫）：导出视图时读钉住与视口，导入时写回去 */
   ref?: Ref<CanvasHandle>
@@ -285,6 +287,14 @@ export function CanvasView({
   onOpenSnapshot?: () => void
   /** 清空画布（定义行归 App 管）；钉住与视口由这里的 `resetViewState` 一起清 */
   onClearBoard?: () => void
+  /**
+   * **画布工具面板开着没有**（W1.6，2026-10-12 用户裁定）。
+   * 右下角原来那条常驻工具条**整体收编**进右上角「设置」按钮展开的菜单——
+   * 按钮在 App（与主题 / 证明同排），**面板在本组件**（连线模式 / 钉住 / 视图
+   * 这些 state 都在这儿）；点任一项后由 `onCloseTools` 收起（菜单式交互）。
+   */
+  toolsOpen?: boolean
+  onCloseTools?: () => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -1715,73 +1725,104 @@ export function CanvasView({
         )}
       </svg>
 
-      {/* 视图工具条（右下）：**看得见**的视图状态 + 一键还原。
-          W1（2026-10-12）：分组（模式｜视图｜危险）+ 玻璃容器 + 键帽 + mini 显示屏读数。
-          W1.5（同日精修，用户点名"右下角一排按钮"）：**删掉常驻的「拖节点右侧圆点连线」
-          一行**——它挤在键之间像脚手架。那条说明仍在：①「连线」键的 title
-          ②节点把手 hover 可见 ③⊕ 球菜单里的连线族。 */}
-      <div className="canvas-toolbar">
-        <span className="canvas-zoom" title="滚轮缩放 -空白处拖动平移 -双击空白适应窗口">
-          {zoomPct}%
-        </span>
-        <span className="ct-sep" aria-hidden="true" />
-        <button
-          className={`ct-btn${connectMode ? ' on' : ''}`}
-          onClick={() => {
-            setConnectMode((v) => !v)
-            setConnect(null)
-          }}
-          title="连线模式：在对象上按下、拖到另一个对象上松手 ---- 这两个能做的事会列出来（拖节点右侧的圆点、或按住 Shift 拖，都是连线，不必开这个开关）"
-        >
-          连线{connectMode ? ' v' : ''}
-        </button>
-        <button
-          className={`ct-btn${autoFirstIso ? ' on' : ''}`}
-          onClick={() => onToggleAutoFirstIso?.()}
-          title="定义同态后自动补出第一同构定理的 G/ker 与 im 两个顶点（开着时画布自己把定理铺出来；手工搭图可以关掉它）"
-        >
-          自动补第一同构{autoFirstIso ? ' v' : ''}
-        </button>
-        <span className="ct-sep" aria-hidden="true" />
-        <button
-          className="ct-btn"
-          onClick={() => onOpenSnapshot?.()}
-          title="把当前视图存成一段文本（定义行 + 钉住的位置 + 视口），复制出去收好，下次贴回来就是这张图"
-        >
-          视图快照
-        </button>
-        <button
-          className="ct-btn"
-          onClick={() => setUserView(null)}
-          title="适应窗口：把整张图重新装进视口（双击空白同效）"
-        >
-          适应窗口
-        </button>
-        <button
-          className="ct-btn"
-          onClick={() => {
-            setPinned({})
-            setDrag(null)
-          }}
-          disabled={pinnedCount === 0}
-          title="清除手动摆放的位置，回到自动排版"
-        >
-          恢复自动布局{pinnedCount > 0 ? `（${pinnedCount}）` : ''}
-        </button>
-        <span className="ct-sep" aria-hidden="true" />
-        {/*
-          清空画布（2026-09-30）：定义行落盘之后，"刷新"不再等于"重来"——
-          想从零开始就得有个明面上的入口，否则用户只能去清浏览器数据。
-          连**钉住与视口**一起清（留着就是下一张图的孤儿数据）。
-        */}
-        <button
-          className="ct-btn ct-danger"
-          onClick={() => onClearBoard?.()}
-          title="删掉全部定义行，从空画布开始（钉住的位置与视口一并清掉；刷新不会恢复）"
-        >
-          清空画布
-        </button>
-      </div>
+      {/*
+        **画布工具面板**（W1.6，2026-10-12 用户裁定「给右下工具条完完全全优化掉——
+        右上角方格设置按钮，把所有工具按钮都收入进去」）。
+        - 常驻的右下工具条**整体删除**；面板从右上角 `.settings-btn` 展开（App 渲染按钮，
+          面板在这里渲染——连线 / 钉住 / 视图的 state 都在本组件）。
+        - 交互是**菜单式**：点任一项 → 执行 → `onCloseTools` 收起；点外部（scrim）关。
+        - 原有的按钮文本**一个字不改**（连线模式 / 自动补第一同构 / 视图快照 / 适应窗口 /
+          恢复自动布局（n）/ 清空画布）——8 套走查按文本认项。
+      */}
+      {toolsOpen && (
+        <>
+          <div className="settings-scrim" onClick={() => onCloseTools?.()} aria-hidden="true" />
+          <div className="settings-menu" role="menu">
+            <div className="settings-head">画布工具</div>
+            <button
+              className={`settings-item${connectMode ? ' on' : ''}`}
+              role="menuitem"
+              onClick={() => {
+                setConnectMode((v) => !v)
+                setConnect(null)
+                onCloseTools?.()
+              }}
+              title="连线模式：在对象上按下、拖到另一个对象上松手 ---- 这两个能做的事会列出来（拖节点右侧的圆点、或按住 Shift 拖，都是连线，不必开这个开关）"
+            >
+              <span>连线模式</span>
+              <span className="settings-state">{connectMode ? '开' : '关'}</span>
+            </button>
+            <button
+              className={`settings-item${autoFirstIso ? ' on' : ''}`}
+              role="menuitem"
+              onClick={() => {
+                onToggleAutoFirstIso?.()
+                onCloseTools?.()
+              }}
+              title="定义同态后自动补出第一同构定理的 G/ker 与 im 两个顶点（开着时画布自己把定理铺出来；手工搭图可以关掉它）"
+            >
+              <span>自动补第一同构</span>
+              <span className="settings-state">{autoFirstIso ? '开' : '关'}</span>
+            </button>
+            <div className="settings-sep" aria-hidden="true" />
+            <button
+              className="settings-item"
+              role="menuitem"
+              onClick={() => {
+                onOpenSnapshot?.()
+                onCloseTools?.()
+              }}
+              title="把当前视图存成一段文本（定义行 + 钉住的位置 + 视口），复制出去收好，下次贴回来就是这张图"
+            >
+              <span>视图快照</span>
+            </button>
+            <button
+              className="settings-item"
+              role="menuitem"
+              onClick={() => {
+                setUserView(null)
+                onCloseTools?.()
+              }}
+              title="适应窗口：把整张图重新装进视口（双击空白同效）"
+            >
+              <span>适应窗口</span>
+            </button>
+            <button
+              className="settings-item"
+              role="menuitem"
+              disabled={pinnedCount === 0}
+              onClick={() => {
+                setPinned({})
+                setDrag(null)
+                onCloseTools?.()
+              }}
+              title="清除手动摆放的位置，回到自动排版"
+            >
+              <span>恢复自动布局{pinnedCount > 0 ? `（${pinnedCount}）` : ''}</span>
+            </button>
+            <div className="settings-sep" aria-hidden="true" />
+            {/*
+              清空画布（2026-09-30）：定义行落盘之后，"刷新"不再等于"重来"——
+              想从零开始就得有个明面上的入口，否则用户只能去清浏览器数据。
+              连**钉住与视口**一起清（留着就是下一张图的孤儿数据）。
+            */}
+            <button
+              className="settings-item settings-danger"
+              role="menuitem"
+              onClick={() => {
+                onClearBoard?.()
+                onCloseTools?.()
+              }}
+              title="删掉全部定义行，从空画布开始（钉住的位置与视口一并清掉；刷新不会恢复）"
+            >
+              <span>清空画布</span>
+            </button>
+            <div className="settings-zoom" title="滚轮缩放 -空白处拖动平移 -双击空白适应窗口">
+              缩放 {zoomPct}%
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

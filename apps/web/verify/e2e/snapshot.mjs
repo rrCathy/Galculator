@@ -101,7 +101,10 @@ const drag = async (from, to) => {
 }
 
 const openSnap = async () => {
-  await page.click('button:has-text("视图快照")')
+  // W1.6：有图时入口在右上角「画布工具」菜单里（空画布时仍是引导区那颗）
+  await page.click('.settings-btn')
+  await page.waitForTimeout(240)
+  await page.click('.settings-item:has-text("视图快照")')
   await page.waitForSelector('.snap-card', { timeout: 10000 })
 }
 const clickIn = async (label) => {
@@ -123,8 +126,12 @@ await addLine('Q', 'G / K')
 await closeCard()
 await page.waitForTimeout(400)
 
-// 有了图之后入口回到工具条上（这一条钉的是"两个入场都够得着"）
-ok('有图时工具条上也有「视图快照」', (await page.locator('.canvas-toolbar button:has-text("视图快照")').count()) === 1)
+// 有了图之后入口回到右上角的「画布工具」菜单里（这一条钉的是"两个入场都够得着"）
+await page.click('.settings-btn')
+await page.waitForTimeout(260)
+ok('有图时「画布工具」菜单里也有「视图快照」', (await page.locator('.settings-item:has-text("视图快照")').count()) === 1)
+await page.click('.settings-scrim', { position: { x: 200, y: 300 } })
+await page.waitForTimeout(220)
 
 const built = await graphIds()
 ok('画布上长出了三个节点', built.length === 3, built.join(','))
@@ -146,7 +153,7 @@ const blank = await page.evaluate(() => {
     { x: w * 0.6, y: h * 0.78 },
   ]) {
     const el = document.elementFromPoint(p.x, p.y)
-    if (el && (el.closest('g.gnode') || el.closest('.canvas-toolbar') || el.closest('.dock-topleft') || el.closest('.snap-card'))) continue
+    if (el && (el.closest('g.gnode') || el.closest('.settings-menu') || el.closest('.dock-topleft') || el.closest('.snap-card'))) continue
     return p
   }
   return null

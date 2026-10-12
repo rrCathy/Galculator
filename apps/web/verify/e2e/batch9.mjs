@@ -152,8 +152,11 @@ await page.reload({ waitUntil: 'load' })
 await page.waitForTimeout(1200)
 {
   // 先清掉默认示范页（这会写下一份"空存档"），再从零摆两个对象
+  // （W1.6：工具收进右上角设置菜单——先开菜单再点）
+  await page.click('.settings-btn')
+  await page.waitForTimeout(260)
   await page.evaluate(() => {
-    const b = [...document.querySelectorAll('.canvas-toolbar .ct-btn')].find(
+    const b = [...document.querySelectorAll('.settings-item')].find(
       (x) => x.textContent.trim() === '清空画布',
     )
     b?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -181,15 +184,17 @@ await page.waitForTimeout(1200)
 console.log('')
 console.log('== ② 清空画布 ==')
 {
+  await page.click('.settings-btn')
+  await page.waitForTimeout(260)
   const clicked = await page.evaluate(() => {
-    const b = [...document.querySelectorAll('.canvas-toolbar .ct-btn')].find(
+    const b = [...document.querySelectorAll('.settings-item')].find(
       (x) => x.textContent.trim() === '清空画布',
     )
     if (!b) return false
     b.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     return true
   })
-  ok('工具条上有「清空画布」', clicked)
+  ok('工具菜单上有「清空画布」', clicked)
   await page.waitForTimeout(500)
   ok('画布空了', (await ui()).nodes.length === 0, (await ui()).nodes.join(' '))
 

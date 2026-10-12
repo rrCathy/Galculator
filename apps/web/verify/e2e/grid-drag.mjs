@@ -44,7 +44,7 @@ const canvasState = () =>
   page.evaluate(() => {
     const svg = document.querySelector('svg.canvas')
     // 没有图的时候 CanvasView 走**占位分支**，连 svg 都不渲染 —— 这不是异常，是"空画布"本身
-    if (!svg) return { dots: [], nodes: [], edgeD: '', zoom: '', buttons: [], snapRings: 0, empty: true }
+    if (!svg) return { dots: [], nodes: [], edgeD: '', snapRings: 0, empty: true }
     /** 元素的 viewBox 空间 bbox（不含 stroke —— 中心才是真中心） */
     const bb = (el) => {
       const b = el.getBBox()
@@ -63,12 +63,57 @@ const canvasState = () =>
       edgeD: [...svg.querySelectorAll('g.gedge')]
         .map((g) => [...g.querySelectorAll('path')].map((p) => p.getAttribute('d')).join('~'))
         .join('|'),
-      zoom: document.querySelector('.canvas-zoom')?.textContent?.trim() ?? '',
-      buttons: [...document.querySelectorAll('.ct-btn')].map((b) => b.textContent.trim()),
       snapRings: document.querySelectorAll('.snap-ring').length,
       empty: false,
     }
   })
+
+/*
+ * 画布工具（W1.6，2026-10-12 用户裁定）：右下工具条收进右上角「设置」菜单。
+ * 工具状态（开关 / 钉住计数 / 缩放读数）都从菜单里读——先开、读完关。
+ */
+const openTools = async () => {
+  if ((await page.locator('.settings-menu').count()) === 0) {
+    await page.click('.settings-btn')
+    await page.waitForTimeout(240)
+  }
+}
+const closeTools = async () => {
+  if (await page.locator('.settings-menu').count()) {
+    // 点菜单外的遮罩（左侧画布区）收起——再点按钮也行，但遮罩在按钮之上，
+    // 点"按钮的位置"实际命中的也是遮罩（行为对用户是一致的：再点就收）
+    await page.click('.settings-scrim', { position: { x: 200, y: 400 } })
+    await page.waitForTimeout(200)
+  }
+}
+/** 一次拿全：菜单各项文本 + 缩放读数（拼成一串，正则沿用旧工具条时代的写法） */
+const toolsText = async () => {
+  await openTools()
+  const t = await page.evaluate(
+    () =>
+      [...document.querySelectorAll('.settings-item')].map((b) => b.textContent.trim()).join(' | ') +
+      ' | ' +
+      (document.querySelector('.settings-zoom')?.textContent?.trim() ?? ''),
+  )
+  await closeTools()
+  return t
+}
+/** 缩放读数（纯值：'100%'） */
+const zoomText = async () => {
+  await openTools()
+  const t = await page.evaluate(
+    () =>
+      (document.querySelector('.settings-zoom')?.textContent?.trim() ?? '').replace(/^缩放\s*/, ''),
+  )
+  await closeTools()
+  return t
+}
+/** 在菜单里点一项（has-text 匹配名字）——点完菜单自动收 */
+const clickTool = async (name) => {
+  await openTools()
+  await page.click(`.settings-item:has-text("${name}")`)
+  await page.waitForTimeout(220)
+}
 
 /** 节点在**屏幕**坐标里的中心（拖动要用真鼠标，得给屏幕坐标） */
 const nodeScreen = (id) =>
@@ -282,8 +327,9 @@ let dragged = null
     }
     ok('其它节点纹丝不动（拖走一个不会引起重排）', maxShift < 0.5, `最大位移 ${maxShift.toFixed(3)}`)
 
-    // 钉住 \\to 工具条出现计数
-    ok('工具条出现「恢复自动布局（n）」', /恢复自动布局（\d+）/.test(after.buttons.join(' | ')), after.buttons.join(' | '))
+    // 钉住 \\to 工具菜单出现计数（W1.6：工具收进右上角设置菜单）
+    const toolsAfter = await toolsText()
+    ok('工具菜单出现「恢复自动布局（n）」', /恢复自动布局（\d+）/.test(toolsAfter), toolsAfter)
   }
 }
 
@@ -371,7 +417,7 @@ console.log('')
 console.log('== ⑤ 滚轮缩放 ==')
 {
   const before = await canvasState()
-  const zoom0 = parseInt(before.zoom, 10)
+  const zoom0 = parseInt(await zoomText(), 10)
   const focus = await pickClear()
   ok('有一个节点可以当"指针下的锚"', !!focus)
 
@@ -387,7 +433,7 @@ console.log('== ⑤ 滚轮缩放 ==')
     await page.waitForTimeout(320)
 
     const after = await canvasState()
-    const zoom1 = parseInt(after.zoom, 10)
+    const zoom1 = parseInt(await zoomText(), 10)
     ok('读数变大', zoom1 > zoom0, `${zoom0}% -> ${zoom1}%`)
 
     const spot1 = await nodeScreen(focus.id)
@@ -410,8 +456,8 @@ console.log('== ⑤ 滚轮缩放 ==')
     // 反向：向下滚 = 缩小
     await page.mouse.wheel(0, 400)
     await page.waitForTimeout(320)
-    const back = await canvasState()
-    ok('向下滚回去', parseInt(back.zoom, 10) < zoom1, `${zoom1}% -> ${back.zoom}`)
+    const backZoom = parseInt(await zoomText(), 10)
+    ok('向下滚回去', backZoom < zoom1, `${zoom1}% -> ${backZoom}%`)
   }
 }
 
@@ -424,7 +470,7 @@ console.log('== ⑥ 复位与钉住清除 ==')
   await page.mouse.move(720, 450)
   await page.mouse.wheel(0, -300)
   await page.waitForTimeout(300)
-  const zoomed = (await canvasState()).zoom
+  const zoomed = await zoomText()
   const blank = await page.evaluate(() => {
     const r = document.querySelector('svg.canvas').getBoundingClientRect()
     for (const [fx, fy] of [[0.75, 0.8], [0.85, 0.25], [0.7, 0.15]]) {
@@ -437,7 +483,7 @@ console.log('== ⑥ 复位与钉住清除 ==')
   if (blank) {
     await page.mouse.dblclick(blank.x, blank.y)
     await page.waitForTimeout(420)
-    const after = (await canvasState()).zoom
+    const after = await zoomText()
     ok('双击空白 -> 回到 100%（适应窗口）', after === '100%', `${zoomed} -> ${after}`)
   } else {
     ok('双击空白 -> 回到 100%（适应窗口）', false, '找不到空白处')
@@ -447,21 +493,23 @@ console.log('== ⑥ 复位与钉住清除 ==')
   await page.mouse.move(720, 450)
   await page.mouse.wheel(0, -300)
   await page.waitForTimeout(300)
-  await page.click('.ct-btn:has-text("适应窗口")')
+  await clickTool('适应窗口')
   await page.waitForTimeout(360)
-  const viaBtn = (await canvasState()).zoom
+  const viaBtn = await zoomText()
   ok('「适应窗口」按钮同效', viaBtn === '100%', viaBtn)
 
   // 「恢复自动布局」清掉钉住
   const beforeReset = await canvasState()
-  const pinned = /恢复自动布局（(\d+)）/.exec(beforeReset.buttons.join(' | '))
-  ok('此时确实有钉住的节点', !!pinned, beforeReset.buttons.join(' | '))
+  const toolsBeforeReset = await toolsText()
+  const pinned = /恢复自动布局（(\d+)）/.exec(toolsBeforeReset)
+  ok('此时确实有钉住的节点', !!pinned, toolsBeforeReset)
 
-  await page.click('.ct-btn:has-text("恢复自动布局")')
+  await clickTool('恢复自动布局')
   await page.waitForTimeout(460)
   const afterReset = await canvasState()
-  const stillPinned = /恢复自动布局（\d+）/.test(afterReset.buttons.join(' | '))
-  ok('点一下就全放回自动布局（计数消失）', !stillPinned, afterReset.buttons.join(' | '))
+  const toolsAfterReset = await toolsText()
+  const stillPinned = /恢复自动布局（\d+）/.test(toolsAfterReset)
+  ok('点一下就全放回自动布局（计数消失）', !stillPinned, toolsAfterReset)
   ok('节点仍在格点上（自动布局也量化）', afterReset.nodes.every((n) => nearestDot(afterReset.dots, n).dist < 0.5))
 
   // 放回去以后，位置应当回到"没被拖过"的排布
@@ -510,7 +558,7 @@ console.log('== ⑦ 钉住的持久化 ==')
       ok('存的是世界坐标 {x, y}', !!entry && typeof entry.x === 'number' && typeof entry.y === 'number', JSON.stringify(entry))
     }
 
-    await page.click('.ct-btn:has-text("恢复自动布局")')
+    await clickTool('恢复自动布局')
     await page.waitForTimeout(420)
     const cleared = await page.evaluate((k) => localStorage.getItem(k), PIN_KEY)
     ok('清空钉住后 key 被移除（不留空壳）', cleared === null, String(cleared))

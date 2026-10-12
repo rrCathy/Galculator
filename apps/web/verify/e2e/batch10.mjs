@@ -136,7 +136,10 @@ const menuMiss = () =>
 
 const linkOn = async () => {
   if ((await page.locator('.canvas.linking').count()) === 0) {
-    await page.click('.ct-btn:has-text("连线")', { timeout: 6000 })
+    // W1.6：连线开关在右上角「画布工具」菜单里
+    await page.click('.settings-btn', { timeout: 6000 })
+    await page.waitForTimeout(240)
+    await page.click('.settings-item:has-text("连线模式")')
     await page.waitForTimeout(220)
   }
 }

@@ -188,9 +188,11 @@ ok('也没弹菜单', (await page.locator('.connect-menu').count()) === 0)
 
 /* ── ② 多候选弹菜单：A₄ 拖到 S₄ 上（这次用底栏的「连线」开关） ── */
 
-await page.click('.ct-btn:has-text("连线")')
+await page.click('.settings-btn')
+await page.waitForTimeout(240)
+await page.click('.settings-item:has-text("连线模式")')
 await page.waitForTimeout(200)
-ok('底栏的「连线」开关打开了', (await page.locator('.canvas.linking').count()) === 1)
+ok('工具菜单里的「连线」开关打开了', (await page.locator('.canvas.linking').count()) === 1)
 
 const idsBefore = (await rowIds()).length
 const mid = await canvasState()
@@ -257,7 +259,9 @@ ok('没有错误行', (await rowErrs()).length === 0, JSON.stringify(await rowEr
 
 /* ── ④ 关掉连线模式后，普通拖动仍是"移动 + 钉住"（U10 零回归） ── */
 
-await page.click('.ct-btn:has-text("连线")')
+await page.click('.settings-btn')
+await page.waitForTimeout(240)
+await page.click('.settings-item:has-text("连线模式")')
 await page.waitForTimeout(200)
 ok('再点一下关掉了', (await page.locator('.canvas.linking').count()) === 0)
 /**
@@ -283,9 +287,13 @@ if (n1) await dragPointer(n1, { x: n1.x + 220, y: n1.y + 170 })
 ok('普通拖动仍是移动（没有连线菜单）', (await page.locator('.connect-menu').count()) === 0)
 // 判据取**钉住**而不是位移：松手要被吸附到最近的空格点，
 // 小位移会被拉回原点（那是对的行为），看位移会误判。
+await page.click('.settings-btn')
+await page.waitForTimeout(240)
 const pinCount = await page.evaluate(
-  () => [...document.querySelectorAll('.ct-btn')].map((b) => b.textContent).join(' | '),
+  () => [...document.querySelectorAll('.settings-item')].map((b) => b.textContent).join(' | '),
 )
+await page.click('.settings-scrim', { position: { x: 200, y: 300 } })
+await page.waitForTimeout(200)
 ok('拖动把它钉住了（U10 的行为一个像素没动）', /恢复自动布局（1）/.test(pinCount), pinCount)
 
 ok('控制台零错误', logs.length === 0, logs.join(' | '))

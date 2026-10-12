@@ -596,55 +596,128 @@ body {
 }
 
 /*
- * 视图工具条（右下）——**向工作台看齐（W1.5 精修，2026-10-12 用户点名）**：
- *   · 容器：玻璃（与工作台同一材质语言：--glass + blur + 内高光）；
- *   · 键：真"键帽"——键面 + 内高光 + hover 亮面蓝边（不再是裸的小方片）；
- *   · 缩放读数：**mini 显示屏**（浅蓝底 + 屏幕描边 + 深蓝 mono 字，呼应工作台显示屏）；
- *   · 开关态（连线 / 自动补）：信号蓝系，与工作台 tab 选中同一语言。
+ * 画布工具（W1.6，2026-10-12 用户裁定）——原右下角常驻工具条**整体收编**：
+ *   「给右下工具条完完全全优化掉——右上角方格设置按钮，把所有工具按钮都收入进去」。
+ * 按钮（九宫格，右上角与主题/证明同排）+ 菜单（fixed 从右上往下展开，菜单行语言：
+ * 左文字 / 右状态，hover 浅底；开关态蓝字）。交互菜单式：点项执行并收起。
  */
-.canvas-toolbar {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  z-index: 9;
+.settings-btn {
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 8px;
-  border: 1px solid var(--glass-edge);
-  border-radius: 14px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  backdrop-filter: blur(18px) saturate(160%);
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text-dim);
+  cursor: pointer;
   box-shadow:
     var(--shadow-card),
     inset 0 1px 0 var(--glass-top);
 }
 
-/* 缩放读数：mini 显示屏（工作台显示屏的"仪器读数"mini 版） */
-.canvas-zoom {
-  min-width: 46px;
-  padding: 4px 8px;
-  text-align: center;
-  color: var(--screen-text);
-  background: var(--screen-fill);
-  border: 1px solid var(--screen-edge);
-  border-radius: 8px;
-  font-family: var(--mono);
-  font-size: 11.5px;
-  line-height: 1.5;
+.settings-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 
-/* 分组竖线（模式 ｜ 视图 ｜ 危险） */
-.ct-sep {
-  flex: none;
-  width: 1px;
-  height: 18px;
-  margin: 0 3px;
+.settings-btn.on {
+  border-color: var(--blue);
+  background: var(--blue-fill);
+  color: var(--blue-text);
+}
+
+/* 点外面关（透明遮罩；z 要盖住台（14）与球（12）——它们是"外面"） */
+.settings-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+}
+
+.settings-menu {
+  position: fixed;
+  top: 58px;
+  right: 12px;
+  z-index: 15;
+  width: 232px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-solid);
+  box-shadow:
+    var(--shadow-pop),
+    inset 0 1px 0 var(--glass-top);
+}
+
+.settings-head {
+  padding: 6px 10px 5px;
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  color: var(--text-faint);
+}
+
+.settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.settings-item:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.settings-item.on {
+  color: var(--blue-text);
+}
+
+.settings-state {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.settings-item.on .settings-state {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.settings-sep {
+  height: 1px;
+  margin: 5px 8px;
   background: var(--border);
 }
 
-/* 键帽：整个应用"按一下"的次级按钮共用这一种形态（W1.5 统一） */
+.settings-item.settings-danger:hover:not(:disabled) {
+  color: var(--red-strong);
+}
+
+/* 缩放读数（收进来的那位）：淡一行，不再抢戏 */
+.settings-zoom {
+  margin-top: 5px;
+  padding: 7px 10px 5px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+/* 键帽：整个应用"按一下"的次级按钮共用这一种形态（W1.5 统一；空态「视图快照」仍用它） */
 .ct-btn {
   padding: 4px 10px;
   border: 1px solid var(--border-strong);
@@ -777,19 +850,20 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  /* W1 看齐：补 hover 底（与工作台收起按钮同一语言）。
-     padding 用负 margin 抵消 ⇒ 布局尺寸不变，只是给 hover 底留出扩边。 */
-  padding: 3px 6px;
-  margin: -3px -6px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
+  /* W1.6（用户整个主页面都优化）：抽屉头**键帽化**——不再是裸的白胶囊，
+     与工作台的键同一种构件（键面 + 强边 + 内高光 + hover 亮面蓝边）。 */
+  padding: 4px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--key-face);
   color: var(--text);
+  box-shadow: inset 0 1px 0 var(--glass-top);
   cursor: pointer;
 }
 
 .dock-toggle:hover {
-  background: var(--hover);
+  background: var(--key-hover);
+  border-color: var(--blue-line);
 }
 
 .dock-caret {
@@ -945,11 +1019,11 @@ body {
 
 
 .count {
-  padding: 0 5px;
-  border-radius: 8px;
-  background: var(--hover);
-  color: var(--text-dim);
-  font-size: 11.5px;
+  /* W1.6：计数徽标去底色（从前一块灰底压在键帽上很重）——淡字即可 */
+  padding: 0 2px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11px;
   font-weight: 400;
 }
 
@@ -957,6 +1031,15 @@ body {
   padding: 2px;
   color: var(--text-faint);
   font-size: 13px;
+}
+
+/* 空态提示里的示例（如数值抽屉的 `n = ord(G, r2)`）——样张语言（W1.6） */
+.empty code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--raise);
+  font-family: var(--mono);
+  font-size: 12px;
 }
 
 /* ── 对象行（单行紧凑：A = def ×，v3.1 二次收窄）──────────── */
@@ -3343,9 +3426,20 @@ body {
   background: var(--grip);
 }
 
-/* 收起时只要那条标题（body 不渲染，JSX 里已条件）*/
+/* 收起时只要那条标题（body 不渲染，JSX 里已条件）——
+   W1.6：**宽度也收到内容宽**（从前收起态仍是 850px 宽的玻璃横条，横在底部很别扭）。 */
 .bench:not(.open) {
   border-top-color: var(--border-strong);
+  width: auto;
+}
+
+/* 输入卡展开时，收起态的「工作台」条**让位**（W1.6）：
+   两者都在底部中央——卡（z15）会压住条上的按钮（真机量过：卡底 844 vs 条顶 808，
+   条收窄后不再有宽条左端避开卡的巧合庇护）。卡收起后条自动回来；
+   台升起时不冲突（卡固定在台顶上方、条是台头）。 */
+.app.composer-open .bench:not(.open) {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .bench-head {

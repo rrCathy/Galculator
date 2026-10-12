@@ -283,6 +283,12 @@ console.log('\n== 场景 2：收起 / 升起，画布当背景 ==')
     collapsed !== null && !/ open/.test(collapsed.cls) && !collapsed.hasBody, collapsed?.cls)
 
   const before = await canvasBox()
+  // W1.6：输入卡展开时，收起态的「工作台」条**让位隐藏**（两者都在底部中央，
+  // 卡会压住条上的按钮——真机量过：卡底 844 vs 条顶 808）——先把卡收掉再点「升起」
+  if ((await page.locator('.composer-card').count()) > 0) {
+    await page.click('.composer-orb .orb-center')
+    await page.waitForTimeout(320)
+  }
   await page.click('.bench-toggle')
   await page.waitForTimeout(520)
   const b = await bench()
@@ -305,8 +311,8 @@ console.log('\n== 场景 2：收起 / 升起，画布当背景 ==')
   /* 工作台占大半屏会盖住输入球 ⇒ App 拿 onHeight 把球抬到台顶之上（onHeight 的注释） */
   const orb = await clickable('.composer-orb .orb-center')
   ok('底部输入球 ✎ **点得到**（升台后被抬起来了）', orb.ok, orb.why)
-  const tools = await clickable('.canvas-tools .tool, .tools .tool, [class*="tool"]')
-  ok('底部工具条**点得到**', tools.ok, tools.why)
+  const tools = await clickable('.settings-btn')
+  ok('右上角「画布工具」按钮**点得到**（升台后不被挡）', tools.ok, tools.why)
 }
 
 /* ══ 场景 3：显示条 + 明细区（手算 S_4）═══════════════════════ */

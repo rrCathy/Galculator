@@ -275,6 +275,15 @@ export default function App() {
     saveTheme(next)
   }, [theme])
 
+  /* ── 画布工具面板（W1.6，2026-10-12 用户裁定）────────────────────
+   *
+   * 「给右下工具条完完全全优化掉——右上角方格设置按钮，把所有工具按钮都收入进去」。
+   * 常驻工具条已成历史；按钮（.settings-btn，九宫格）在右上角与主题/证明同排，
+   * **面板本体渲染在 CanvasView 里**（连线模式 / 钉住 / 视图这些 state 都在那边），
+   * 这里只持有开关。空画布（无定义行）不显示按钮——那些工具全是"对着一张图"的。
+   */
+  const [toolsOpen, setToolsOpen] = useState(false)
+
   /* ── 证明（M1）：step-through = 替用户一行行写定义 ─────────
    *
    * 证明的每一步携带一整行定义；「下一步」= 把它写进 `lines`。
@@ -1072,6 +1081,11 @@ export default function App() {
         }
       }
       if (e.key !== 'Escape') return
+      // W1.6：画布工具菜单是最上层的浮层——Esc 先关它（一条即可，不动别的状态）
+      if (toolsOpen) {
+        setToolsOpen(false)
+        return
+      }
       if (inter.kind === 'pending' || inter.kind === 'fill' || inter.kind === 'editor') reset()
       // 连线菜单最先关：它是"刚松手"的那一层，不该连带把选中也取消掉
       else if (connectMenu) {
@@ -1085,7 +1099,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [inter, pendOp, runOp, orbStage, multiOpen, composerOpen, connectMenu, reset])
+  }, [inter, pendOp, runOp, orbStage, multiOpen, composerOpen, connectMenu, reset, toolsOpen])
 
   /* ── 数值区 ────────────────────────────────────────── */
 
@@ -1249,7 +1263,7 @@ export default function App() {
 
   return (
     <div
-      className={`app${benchOpen && benchH > 0 ? ' bench-open' : ''}`}
+      className={`app${benchOpen && benchH > 0 ? ' bench-open' : ''}${composerOpen ? ' composer-open' : ''}`}
       style={
         {
           /*
@@ -1305,6 +1319,8 @@ export default function App() {
         onToggleAutoFirstIso={() => setAutoFirstIso((v) => !v)}
         onOpenSnapshot={() => setSnapshotOpen(true)}
         onClearBoard={clearBoard}
+        toolsOpen={toolsOpen}
+        onCloseTools={() => setToolsOpen(false)}
       />
 
       {/*
@@ -1455,6 +1471,31 @@ export default function App() {
           onRestart={() => proofGoto(0)}
           onExit={proofExit}
         />
+        {/*
+          **画布工具**（W1.6，2026-10-12 用户裁定）：九宫格按钮在右上角最右端，
+          展开的面板在 CanvasView 里渲染（`.settings-menu`，fixed 对齐右上）。
+          空画布（无定义行）不显示——工具全是"对着一张图"的。面板开着时按钮亮起。
+        */}
+        {lines.length > 0 && (
+          <button
+            className={`settings-btn${toolsOpen ? ' on' : ''}`}
+            onClick={() => setToolsOpen((v) => !v)}
+            title="画布工具（连线 / 自动补 / 视图 / 清空）"
+            aria-label="画布工具"
+          >
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="currentColor">
+              <rect x="1.5" y="1.5" width="3.6" height="3.6" rx="1.1" />
+              <rect x="6.2" y="1.5" width="3.6" height="3.6" rx="1.1" />
+              <rect x="10.9" y="1.5" width="3.6" height="3.6" rx="1.1" />
+              <rect x="1.5" y="6.2" width="3.6" height="3.6" rx="1.1" />
+              <rect x="6.2" y="6.2" width="3.6" height="3.6" rx="1.1" />
+              <rect x="10.9" y="6.2" width="3.6" height="3.6" rx="1.1" />
+              <rect x="1.5" y="10.9" width="3.6" height="3.6" rx="1.1" />
+              <rect x="6.2" y="10.9" width="3.6" height="3.6" rx="1.1" />
+              <rect x="10.9" y="10.9" width="3.6" height="3.6" rx="1.1" />
+            </svg>
+          </button>
+        )}
       </div>
 
       <ComposerOrb
