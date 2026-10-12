@@ -351,6 +351,10 @@ if ((await page.locator('.bench.open').count()) > 0) {
 
 /* ── 证明面板：走到最后一步（它是最长的文案面）── */
 {
+  /* 2026-10-12（W1，用户拍板）：证明面板**默认收起** —— 先点开（否则本段静默跳过、
+     覆盖丢失：`hit?.` 那条可选链会让"没卡可点"一声不响地过去）。 */
+  await page.click('.dock-topright .dock-toggle')
+  await page.waitForTimeout(420)
   await page.evaluate(() => {
     const cards = [...document.querySelectorAll('.proof-item')]
     const hit = cards.find((c) => /同构|轨道|Sylow/.test(c.textContent ?? ''))

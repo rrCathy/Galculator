@@ -49,6 +49,8 @@ import type { InfoTab } from './ui/InfoDock'
 import { TexOrText } from './ui/Tex'
 import { NumericDock } from './ui/NumericDock'
 import type { GalValue, NormalizedSubgroup } from './gal/value'
+// 主题（W1，2026-10-12 拍板：默认浅色、手动切换）—— 机制与持久化见 `theme.ts`
+import { applyTheme, loadTheme, saveTheme, type Theme } from './theme'
 
 /**
  * 默认示范（U0–U2 能力清单）：
@@ -258,13 +260,33 @@ export default function App() {
     })
   }, [])
 
+  /* ── 主题（W1）：**默认浅色，手动切换**（2026-10-12 用户拍板）────
+   *
+   * 初始值在 `main.tsx` 挂载前已应用（防闪烁）；这里只镜像状态供按钮显示。
+   * 切换 = `<html data-theme>` 同步改 + 本地持久化（独立 key，见 `theme.ts`）。
+   * 走查可用 `?theme=dark` 强制深色（不写本地）。
+   */
+  const [theme, setTheme] = useState<Theme>(() => loadTheme())
+  const toggleTheme = useCallback(() => {
+    // 副作用放 updater 外面：严格模式下 updater 会被 double-invoke，纯函数更稳
+    const next: Theme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    applyTheme(next)
+    saveTheme(next)
+  }, [theme])
+
   /* ── 证明（M1）：step-through = 替用户一行行写定义 ─────────
    *
    * 证明的每一步携带一整行定义；「下一步」= 把它写进 `lines`。
    * 于是走完一遍，画布上就长出了完整的证明图——**走的是同一个求值器**，
    * 与手打、与点出来的操作完全等价（设计说明见 `gal/proof.ts` 顶部）。
+   *
+   * **2026-10-12 用户拍板：默认收起** —— 证明是高级功能，初次进入先把画布
+   * 让给"造对象"这条主线；想走定理的人点一下「证明」胶囊就展开。
+   * ⚠️ 6 套 prove 走查（proof-step / proof-m3 / proof-params / proof-sylow3 /
+   * narrow-docks / no-unicode-leak）已同步补「点开证明」步骤。
    */
-  const [proofOpen, setProofOpen] = useState(true)
+  const [proofOpen, setProofOpen] = useState(false)
   /**
    * **工作台 × 证明：互斥**（2026-10-09 用户拍板）。
    *
@@ -1404,6 +1426,22 @@ export default function App() {
       />
 
       <div className="dock-topright">
+        {/*
+        **主题切换**（W1，2026-10-12 拍板）：右上角、证明胶囊的左侧。
+        文字 = **目标主题**（浅色时写「深色」：点了就变深）；title 给完整说明。
+        位置选这里：右上角是"应用级"功能区（与「证明」同区），不占画布、不占工作台。
+      */}
+        <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          title={
+            theme === 'dark'
+              ? '切换到浅色模式（当前是深色）'
+              : '切换到深色模式（仪器台，当前是浅色）'
+          }
+        >
+          {theme === 'dark' ? '浅色' : '深色'}
+        </button>
         <ProofDock
           open={proofOpen}
           onToggle={() => setProofOpen((v) => !v)}

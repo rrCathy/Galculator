@@ -19,6 +19,272 @@
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /*
+   * ── 语义扩展（W1 · 2026-10-12）────────────────────────────────
+   * 把散落在组件规则里的硬编码色收编成变量。**浅色值 = 现状原值**
+   * （视觉零变化）；深色块 `:root[data-theme='dark']` 只覆盖这批变量、
+   * 不改组件规则 —— 这是"换肤不破走查"的结构前提。
+   * 命名按用途，不按颜色。
+   */
+
+  /* 面与底 */
+  --card: rgba(255, 255, 255, 0.96); /* 抽屉 / 顶栏卡底 */
+  --card-solid: rgba(255, 255, 255, 0.98); /* 浮卡（菜单 / 快照 / 输入卡） */
+  --card-dim: rgba(255, 255, 255, 0.94); /* 工具条（最透一档） */
+  --sheet: rgba(255, 255, 255, 0.92); /* 面板内小面（＋面板） */
+  --hover: #eceae3; /* 通用 hover 底 */
+  --raise: #f3f1ea; /* 内嵌块底（code / 小方块） */
+  --shade: rgba(0, 0, 0, 0.06); /* 浅压暗（拖动位） */
+  --shade-soft: rgba(0, 0, 0, 0.02);
+  --text-strong: #201f1d; /* 正文加深一档（工作台作用域用） */
+  --divider: #f0eee7; /* 极浅分隔线 */
+
+  /* 画布 */
+  --grid-dot: #b3ac99; /* 格点 */
+  --snap: #c2410c; /* 吸附预览环（独立橙色信号，不并进蓝体系） */
+  --snap-fill: rgba(194, 65, 12, 0.05);
+  --handle-fill: #ffffff; /* 连线把手小圆点 */
+  --label-halo: #ffffff; /* 画布标签的 4 向描边底（在深线上把字托起来） */
+
+  /* 画布节点与边（W1）—— CanvasView.tsx 的视觉族常量取这组 */
+  --node-input-fill: #e6f1fb;
+  --node-input-stroke: #185fa5;
+  --node-input-text: #0c447c;
+  --node-derived-fill: #eeedfe;
+  --node-derived-stroke: #534ab7;
+  --node-derived-text: #3c3489;
+  --node-action-fill: #e1f5ee;
+  --node-action-stroke: #0f6e56;
+  --node-action-text: #0a5744;
+  --node-input-body: rgba(24, 95, 165, 0.07); /* 符号托底（常态） */
+  --node-input-body-strong: rgba(24, 95, 165, 0.16); /* 选中态 */
+  --node-derived-body: rgba(83, 74, 183, 0.07);
+  --node-derived-body-strong: rgba(83, 74, 183, 0.16);
+  --node-action-body: rgba(15, 110, 86, 0.07);
+  --node-round-stroke: rgba(83, 74, 183, 0.3); /* 集合圆的描边 */
+  --edge-prov: #b9b6ad;
+  --edge-map: #2c2c2a;
+  --edge-alongside: #4a6fa5;
+  --pick: #c2410c; /* 选中高亮（橙） */
+
+  /* 蓝系分层 */
+  --blue-deep: #0a3560; /* 屏幕主字 / 实心按钮深 */
+  --blue-line: #85b7eb; /* 高亮边线（hover 边 / 虚线 / 内阴影条） */
+  --blue-chip-fill: #e8eef7;
+  --blue-chip-text: #3f5b82;
+  --blue-soft: #f2f8fd;
+  --blue-soft-line: #b9c9dd;
+  --blue-veil: rgba(24, 95, 165, 0.09); /* 透明蓝底（叠在任意面上） */
+  --blue-haze: rgba(24, 95, 165, 0.13);
+  --focus-ring: rgba(24, 95, 165, 0.1);
+
+  /* 紫系分层 */
+  --purple-soft: #fbfaff; /* 紫调浅底（hover / 高亮行） */
+  --purple-line: #c9c4ea;
+  --purple-chip-fill: #eae7f6;
+  --purple-tint: rgba(83, 74, 183, 0.12); /* 透明紫底（开关态） */
+  --purple-veil: rgba(83, 74, 183, 0.1);
+  --purple-haze: rgba(83, 74, 183, 0.07);
+  --purple-ring: rgba(83, 74, 183, 0.35);
+
+  /* 值类型 chip：映射 / 数值（群蓝 / 集合绿 / 作用绿 / 结构紫走各自色系变量） */
+  --chip-map-fill: #eceae3;
+  --chip-map-text: #5a5850;
+  --chip-number-fill: #f1efe8;
+  --chip-number-text: #77756d;
+
+  /* 绿系（合法 / 成功） */
+  --green: #0f6e56;
+  --green-deep: #0a5744;
+  --green-fill: #e1f5ee;
+  --green-soft: #d8f0e7;
+  --green-ink: #1a7f4b;
+
+  /* 黄系（提示 / 注意） */
+  --warn: #d08a2e;
+  --amber: #8a6d1f;
+  --amber-deep: #7a5c14;
+  --amber-fill: #fdf7e8;
+  --amber-line: #e0d2ab;
+  --builder-struct: #b45309; /* 结构编辑器左侧实线 */
+
+  /* 红系分层 */
+  --danger-line: #e6c3c3;
+  --danger-soft: rgba(163, 45, 45, 0.12);
+  --danger-tint: rgba(163, 45, 45, 0.08);
+  --red-deep: #b5352a;
+  --red-strong: #b91c1c;
+  --red-ink: #c0392b;
+
+  /* 工作台：屏与键 */
+  --screen-fill: rgba(230, 241, 251, 0.72);
+  --screen-edge: rgba(133, 183, 235, 0.5);
+  --screen-dash: rgba(133, 183, 235, 0.55);
+  --screen-text: #0a3560;
+  --screen-text-2: #185fa5;
+  --screen-text-3: #0c447c;
+  --key-face: rgba(255, 255, 255, 0.86);
+  --key-face-2: rgba(255, 255, 255, 0.8);
+  --key-hover: #ffffff;
+  --well-fill: rgba(255, 255, 255, 0.72); /* 算式空格 / 屏内小格 */
+  --tab-on-fill: rgba(230, 241, 251, 0.95);
+  --plus-fill: #0c447c;
+  --plus-hover: #0a3560;
+  --plus-on-line: #85b7eb;
+
+  /* 玻璃（工作台 / 大浮层） */
+  --glass: rgba(252, 252, 255, 0.62);
+  --glass-edge: rgba(255, 255, 255, 0.72);
+  --glass-top: rgba(255, 255, 255, 0.8); /* 内高光 */
+  --grip: rgba(0, 0, 0, 0.14);
+
+  /* 影（三档，全应用收敛到这三档） */
+  --shadow-card: 0 3px 14px rgba(0, 0, 0, 0.08);
+  --shadow-pop: 0 8px 26px rgba(0, 0, 0, 0.16);
+  --shadow-float: 0 -8px 40px rgba(0, 0, 0, 0.14);
+}
+
+/*
+ * ── 深色 · 仪器台（W1）──────────────────────────────────────
+ * 色板见 PROPOSAL-ui-refresh §3：石墨机身 + 丝印奶油 + 信号蓝。
+ * 只覆盖变量；组件规则一律消费 var() —— 深色下线不碰 DOM、不碰规则。
+ * 切换机制见 `src/theme.ts`（默认浅色，手动切换；`?theme=dark` 走查用）。
+ */
+:root[data-theme='dark'] {
+  --bg: #14161a;
+  --surface: #1e2126;
+  --panel: #262a30;
+  --border: rgba(231, 227, 216, 0.12);
+  --border-strong: rgba(231, 227, 216, 0.22);
+  --text: #e7e3d8;
+  --text-dim: #a5a196;
+  --text-faint: #767368;
+  --blue: #5ca8ff;
+  --blue-fill: rgba(92, 168, 255, 0.14);
+  --blue-text: #9ccbff;
+  --purple: #b08cff;
+  --purple-fill: rgba(176, 140, 255, 0.16);
+  --purple-text: #cdb9ff;
+  --danger: #ff6b6b;
+  --danger-fill: rgba(255, 107, 107, 0.14);
+  --ink: #e7e3d8;
+
+  /* 面与底 */
+  --card: rgba(30, 33, 38, 0.92);
+  --card-solid: rgba(30, 33, 38, 0.96);
+  --card-dim: rgba(30, 33, 38, 0.88);
+  --sheet: rgba(38, 42, 48, 0.92);
+  --hover: rgba(231, 227, 216, 0.08);
+  --raise: rgba(231, 227, 216, 0.06);
+  --shade: rgba(0, 0, 0, 0.3);
+  --shade-soft: rgba(0, 0, 0, 0.15);
+  --text-strong: #f0ece1;
+  --divider: rgba(231, 227, 216, 0.09);
+
+  /* 画布 */
+  --grid-dot: rgba(231, 227, 216, 0.22);
+  --snap: #ff8a5c;
+  --snap-fill: rgba(255, 138, 92, 0.08);
+  --handle-fill: #e7e3d8;
+  --label-halo: #14161a;
+
+  /* 画布节点与边（W1）：深色下用"信号色淡底 + 亮描边 + 亮字" */
+  --node-input-fill: rgba(92, 168, 255, 0.2);
+  --node-input-stroke: #5ca8ff;
+  --node-input-text: #b8dcff;
+  --node-derived-fill: rgba(176, 140, 255, 0.2);
+  --node-derived-stroke: #b08cff;
+  --node-derived-text: #d7c5ff;
+  --node-action-fill: rgba(88, 201, 139, 0.18);
+  --node-action-stroke: #58c98b;
+  --node-action-text: #a4e8c4;
+  --node-input-body: rgba(92, 168, 255, 0.12);
+  --node-input-body-strong: rgba(92, 168, 255, 0.26);
+  --node-derived-body: rgba(176, 140, 255, 0.12);
+  --node-derived-body-strong: rgba(176, 140, 255, 0.26);
+  --node-action-body: rgba(88, 201, 139, 0.12);
+  --node-round-stroke: rgba(176, 140, 255, 0.4);
+  --edge-prov: rgba(231, 227, 216, 0.35);
+  --edge-map: #d8d4c8;
+  --edge-alongside: #7a9cc9;
+  --pick: #ff8a5c;
+
+  /* 蓝系 */
+  --blue-deep: #cfe6ff;
+  --blue-line: rgba(92, 168, 255, 0.45);
+  --blue-chip-fill: rgba(92, 168, 255, 0.12);
+  --blue-chip-text: #9ccbff;
+  --blue-soft: rgba(92, 168, 255, 0.08);
+  --blue-soft-line: rgba(92, 168, 255, 0.3);
+  --blue-veil: rgba(92, 168, 255, 0.1);
+  --blue-haze: rgba(92, 168, 255, 0.16);
+  --focus-ring: rgba(92, 168, 255, 0.18);
+
+  /* 紫系 */
+  --purple-soft: rgba(176, 140, 255, 0.08);
+  --purple-line: rgba(176, 140, 255, 0.35);
+  --purple-chip-fill: rgba(176, 140, 255, 0.14);
+  --purple-tint: rgba(176, 140, 255, 0.14);
+  --purple-veil: rgba(176, 140, 255, 0.12);
+  --purple-haze: rgba(176, 140, 255, 0.08);
+  --purple-ring: rgba(176, 140, 255, 0.4);
+
+  /* 值类型 chip：映射 / 数值 */
+  --chip-map-fill: rgba(231, 227, 216, 0.1);
+  --chip-map-text: #c9c5b8;
+  --chip-number-fill: rgba(231, 227, 216, 0.07);
+  --chip-number-text: #b0ac9f;
+
+  /* 绿系 */
+  --green: #58c98b;
+  --green-deep: #7fdca6;
+  --green-fill: rgba(88, 201, 139, 0.13);
+  --green-soft: rgba(88, 201, 139, 0.09);
+  --green-ink: #58c98b;
+
+  /* 黄系 */
+  --warn: #e8b84b;
+  --amber: #e8b84b;
+  --amber-deep: #f0c96a;
+  --amber-fill: rgba(232, 184, 75, 0.1);
+  --amber-line: rgba(232, 184, 75, 0.3);
+  --builder-struct: #f0a05a;
+
+  /* 红系 */
+  --danger-line: rgba(255, 107, 107, 0.35);
+  --danger-soft: rgba(255, 107, 107, 0.14);
+  --danger-tint: rgba(255, 107, 107, 0.1);
+  --red-deep: #ff8f8f;
+  --red-strong: #ff6b6b;
+  --red-ink: #ff8f8f;
+
+  /* 工作台：屏与键 */
+  --screen-fill: rgba(92, 168, 255, 0.1);
+  --screen-edge: rgba(92, 168, 255, 0.35);
+  --screen-dash: rgba(92, 168, 255, 0.32);
+  --screen-text: #dcebff;
+  --screen-text-2: #9ccbff;
+  --screen-text-3: #cfe6ff;
+  --key-face: rgba(231, 227, 216, 0.07);
+  --key-face-2: rgba(231, 227, 216, 0.05);
+  --key-hover: rgba(92, 168, 255, 0.16);
+  --well-fill: rgba(20, 22, 26, 0.5);
+  --tab-on-fill: rgba(92, 168, 255, 0.16);
+  --plus-fill: #2f6df6; /* 全台唯一实心色：信号蓝 */
+  --plus-hover: #4c86ff;
+  --plus-on-line: #9ccbff;
+
+  /* 玻璃 */
+  --glass: rgba(20, 23, 28, 0.72);
+  --glass-edge: rgba(231, 227, 216, 0.14);
+  --glass-top: rgba(231, 227, 216, 0.08);
+  --grip: rgba(231, 227, 216, 0.2);
+
+  /* 影（深色下更黑） */
+  --shadow-card: 0 3px 14px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 8px 26px rgba(0, 0, 0, 0.55);
+  --shadow-float: 0 -8px 40px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -170,7 +436,7 @@ body {
 }
 
 .gnode-handle-dot {
-  fill: #ffffff;
+  fill: var(--handle-fill);
   stroke: var(--purple);
   stroke-width: 1.4;
 }
@@ -216,8 +482,8 @@ body {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.16);
+  background: var(--card-solid);
+  box-shadow: var(--shadow-pop);
 }
 
 .connect-head {
@@ -258,7 +524,7 @@ body {
 
 .connect-item:hover {
   border-color: var(--purple);
-  background: #fbfaff;
+  background: var(--purple-soft);
 }
 
 .connect-label {
@@ -301,15 +567,15 @@ body {
 /* 格点 = 列中心 × 行中心的交点。对象只能停在这些点上，
    拖动时松手就往最近的空格点吸附（见 gal/grid.ts）*/
 .grid-dot {
-  fill: #b3ac99;
+  fill: var(--grid-dot);
   opacity: 0.85;
   pointer-events: none;
 }
 
 /* 拖动中的吸附预览环：告诉用户"松手会落在这儿"*/
 .snap-ring {
-  fill: rgba(194, 65, 12, 0.05);
-  stroke: #c2410c;
+  fill: var(--snap-fill);
+  stroke: var(--snap);
   stroke-width: 1.6;
   stroke-dasharray: 5 4;
   pointer-events: none;
@@ -339,9 +605,19 @@ body {
   gap: 6px;
   padding: 5px 8px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+  /* W1（2026-10-12）：10 → 12，与抽屉 / 主题胶囊的圆角语言统一 */
+  border-radius: 12px;
+  background: var(--card-dim);
+  box-shadow: var(--shadow-card);
+}
+
+/* 分组竖线（W1 工具条分组：模式 ｜ 视图 ｜ 危险）——0.5px 视觉的细线 */
+.ct-sep {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--border);
 }
 
 .canvas-zoom {
@@ -364,8 +640,8 @@ body {
 }
 
 .ct-btn:hover:not(:disabled) {
-  border-color: #c2410c;
-  color: #c2410c;
+  border-color: var(--blue);
+  color: var(--blue);
 }
 
 .ct-btn:disabled {
@@ -378,14 +654,14 @@ body {
 .ct-btn.on,
 .ct-btn.on:hover:not(:disabled) {
   border-color: var(--purple);
-  background: rgba(83, 74, 183, 0.12);
+  background: var(--purple-tint);
   color: var(--purple);
 }
 
 /* 破坏性按钮（清空画布）：hover 才露警示色，静息时与普通按钮一致 */
 .ct-btn.ct-danger:hover:not(:disabled) {
-  border-color: #b91c1c;
-  color: #b91c1c;
+  border-color: var(--red-strong);
+  color: var(--red-strong);
 }
 
 /* ── 浮层抽屉 ──────────────────────────────────────────── */
@@ -447,8 +723,8 @@ body {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.08);
+  background: var(--card);
+  box-shadow: var(--shadow-card);
 }
 
 .dock-up {
@@ -477,11 +753,19 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0;
+  /* W1 看齐：补 hover 底（与工作台收起按钮同一语言）。
+     padding 用负 margin 抵消 ⇒ 布局尺寸不变，只是给 hover 底留出扩边。 */
+  padding: 3px 6px;
+  margin: -3px -6px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   cursor: pointer;
+}
+
+.dock-toggle:hover {
+  background: var(--hover);
 }
 
 .dock-caret {
@@ -639,7 +923,7 @@ body {
 .count {
   padding: 0 5px;
   border-radius: 8px;
-  background: #eceae3;
+  background: var(--hover);
   color: var(--text-dim);
   font-size: 11.5px;
   font-weight: 400;
@@ -766,7 +1050,7 @@ body {
 }
 
 .edit:hover {
-  background: #eceae3;
+  background: var(--hover);
   color: var(--blue);
   text-decoration: underline;
 }
@@ -825,7 +1109,7 @@ body {
 }
 
 .x:hover {
-  background: #eceae3;
+  background: var(--hover);
   color: var(--text);
 }
 
@@ -841,49 +1125,49 @@ body {
 }
 
 .chip-set {
-  background: #e1f5ee;
-  color: #0f6e56;
+  background: var(--green-fill);
+  color: var(--green);
 }
 
 .chip-elements,
 .chip-subgroups {
-  background: #e1f5ee;
-  color: #0f6e56;
+  background: var(--green-fill);
+  color: var(--green);
 }
 
 .chip-action {
-  background: #d8f0e7;
-  color: #0a5744;
+  background: var(--green-soft);
+  color: var(--green-deep);
 }
 
 .chip-map {
-  background: #eceae3;
-  color: #5a5850;
+  background: var(--chip-map-fill);
+  color: var(--chip-map-text);
 }
 
 /* 关系（U20）：与映射同属"边"，但用蓝底区分它是**声明的结构关系** */
 .chip-relation {
-  background: #e8eef7;
-  color: #3f5b82;
+  background: var(--blue-chip-fill);
+  color: var(--blue-chip-text);
 }
 
 .chip-number {
-  background: #f1efe8;
-  color: #77756d;
+  background: var(--chip-number-fill);
+  color: var(--chip-number-text);
 }
 
 /* 代数结构（S2c）：它是**运算的产物**（与"运算结果偏紫"同一套来源色），
    但比群淡一档 —— 非群的结构还没"升格"，底色不该抢。 */
 .chip-structure {
-  background: #eae7f6;
-  color: #534ab7;
+  background: var(--purple-chip-fill);
+  color: var(--purple);
 }
 
 /* 结构伴生箭头（缺口 ⑧）：与映射 / 关系同属"边"，但它是**派生出来的** ——
    底色取画布上那条蓝灰线（ALONGSIDE_EDGE）的浅版，一眼看出同一种东西。 */
 .chip-structural {
-  background: #e8eef7;
-  color: #3f5b82;
+  background: var(--blue-chip-fill);
+  color: var(--blue-chip-text);
 }
 
 .sub-tag {
@@ -893,7 +1177,7 @@ body {
   padding: 2px 7px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #faf9f6;
+  background: var(--card);
   font-family: var(--mono);
   font-size: 12.5px;
 }
@@ -911,7 +1195,7 @@ body {
 }
 
 .sub-tag b.syl {
-  color: #0f6e56;
+  color: var(--green);
 }
 
 /* F7：「这一项就是 G 自己」（normalSubgroups 含 G 自身，Sub / maximalSubgroups 不含）。
@@ -933,7 +1217,7 @@ body {
 
 .sub-tag-btn:hover {
   border-color: var(--blue);
-  background: #f2f8fd;
+  background: var(--blue-soft);
   color: var(--blue);
 }
 
@@ -973,8 +1257,8 @@ body {
   transform: translateX(-50%);
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.14);
+  background: var(--card-solid);
+  box-shadow: var(--shadow-pop);
 }
 
 .composer-row {
@@ -983,7 +1267,14 @@ body {
   gap: 5px;
 }
 
-.composer input {
+/*
+ * ⚠️ 2026-10-12（W1）修正：这几个选择器从前写作 `.composer input` / `.composer button`
+ * ——而 DOM 里根本没有 `class="composer"` 的元素（只有 `.composer-orb` / `.composer-card`），
+ * **规则从未生效过**：输入框与按钮一直吃的是浏览器默认样式（浅色下恰好白底，
+ * 所以多年没人发现；深色主题一切换当场露馅——输入框还是一块纯白）。
+ * 选择器按真实 DOM 改成 `.composer-card`。
+ */
+.composer-card input {
   min-width: 0;
   padding: 7px 9px;
   border: 1px solid var(--border-strong);
@@ -1010,12 +1301,12 @@ body {
   color: var(--text-faint);
 }
 
-.composer input:focus {
+.composer-card input:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(24, 95, 165, 0.1);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
-.composer button {
+.composer-card button {
   flex: none;
   padding: 7px 11px;
   border: 1px solid var(--border-strong);
@@ -1027,12 +1318,12 @@ body {
   cursor: pointer;
 }
 
-.composer button:hover:not(:disabled) {
+.composer-card button:hover:not(:disabled) {
   border-color: var(--blue);
   color: var(--blue);
 }
 
-.composer button:disabled {
+.composer-card button:disabled {
   color: var(--text-faint);
   cursor: default;
   opacity: 0.65;
@@ -1053,7 +1344,7 @@ body {
 }
 
 .composer-status.warn {
-  color: #8a6d1f;
+  color: var(--amber);
 }
 
 .composer-status.good {
@@ -1065,7 +1356,7 @@ body {
 }
 
 .composer-status .ok-mark {
-  color: #0f6e56;
+  color: var(--green);
 }
 
 .composer-status .status-label {
@@ -1268,7 +1559,7 @@ body {
 
 .sub-group-head.on {
   border-color: var(--purple);
-  background: rgba(83, 74, 183, 0.1);
+  background: var(--purple-veil);
   color: var(--purple);
 }
 
@@ -1466,7 +1757,7 @@ body {
   border: none;
   border-radius: 50%;
   background: var(--ink);
-  color: #fff;
+  color: var(--bg);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
@@ -1520,12 +1811,12 @@ body {
 }
 
 .orb-info {
-  border-color: #b9c9dd;
+  border-color: var(--blue-soft-line);
   color: var(--blue-text);
 }
 
 .orb-ops {
-  border-color: #c9c4ea;
+  border-color: var(--purple-line);
   color: var(--purple-text);
 }
 
@@ -1538,8 +1829,8 @@ body {
   padding: 8px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.14);
+  background: var(--card-solid);
+  box-shadow: var(--shadow-pop);
 }
 
 /*
@@ -1586,7 +1877,7 @@ body {
 
 .orb-op:hover {
   border-color: var(--purple);
-  background: #fbfaff;
+  background: var(--purple-soft);
 }
 
 .orb-op-label {
@@ -1626,14 +1917,14 @@ body {
   max-width: calc(100% - 24px);
   padding: 7px 12px;
   transform: translateX(-50%);
-  border: 1px solid #e0d2ab;
+  border: 1px solid var(--amber-line);
   border-radius: 10px;
-  background: #fdf7e8;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  background: var(--amber-fill);
+  box-shadow: var(--shadow-card);
 }
 
 .pending-hint {
-  color: #7a5c14;
+  color: var(--amber-deep);
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
@@ -1713,12 +2004,12 @@ body {
   max-width: calc(100% - 24px);
   padding: 7px 10px 7px 12px;
   transform: translateX(-50%);
-  border: 1px solid #e6c3c3;
+  border: 1px solid var(--danger-line);
   border-radius: 10px;
   background: var(--danger-fill);
   color: var(--danger);
   font-size: 13px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-card);
   /* 提示条与底部输入球同处 `bottom: 12px` 的中央，且它 z-index 更高 ——
      于是"提示一出现，输入球就点不动"（实测：导出快照的提示正好挡住 * 那颗球）。
      它是一条**通知**而不是一层浮层，所以整条不接收指针；只有关闭按钮要能点。 */
@@ -1741,7 +2032,7 @@ body {
 }
 
 .notice button:hover {
-  background: rgba(163, 45, 45, 0.12);
+  background: var(--danger-soft);
 }
 
 /* ── 映射构建器（U3 对象编辑器）────────────────────────── */
@@ -1773,7 +2064,7 @@ body {
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--card-solid);
   /* 视觉锚点：**左边一道实线**（颜色跟 op 的 chip 走，三个编辑器各自不同）——
      没有它，卡片会读成"右列里随便一坨"；有了它读成"这里停着一个编辑器"。 */
   border-left: 3px solid var(--purple);
@@ -1781,11 +2072,11 @@ body {
 
 /* 三种编辑器各自的主色（与 `chip-*` 对齐，一处定义两处用）。 */
 .map-builder.action-builder {
-  border-left-color: #0f6e56;
+  border-left-color: var(--green);
 }
 
 .map-builder.struct-builder {
-  border-left-color: #b45309;
+  border-left-color: var(--builder-struct);
 }
 
 .mb-head {
@@ -1817,7 +2108,7 @@ body {
 }
 
 .mb-x:hover {
-  background: #eceae3;
+  background: var(--hover);
   color: var(--text);
 }
 
@@ -1899,8 +2190,8 @@ body {
 }
 
 .mb-check.ok {
-  background: #e1f5ee;
-  color: #0a5744;
+  background: var(--green-fill);
+  color: var(--green-deep);
 }
 
 .mb-check.bad {
@@ -1909,7 +2200,7 @@ body {
 }
 
 .mb-ok-mark {
-  color: #0f6e56;
+  color: var(--green);
 }
 
 .mb-bad-mark {
@@ -2086,7 +2377,7 @@ body {
 }
 
 .sb-ax.bad .sb-ax-v {
-  color: #b5352a;
+  color: var(--red-deep);
 }
 
 /* 结论行：层级 + "就差一步"。**这一行是头号场景的答案**，字号给足 */
@@ -2097,7 +2388,7 @@ body {
   margin-top: 4px;
   padding: 5px 8px;
   border-radius: 8px;
-  background: rgba(83, 74, 183, 0.07);
+  background: var(--purple-haze);
   font-size: 13px;
 }
 
@@ -2113,13 +2404,13 @@ body {
 
 .sb-verdict-gap {
   margin-left: auto;
-  color: #b5352a;
+  color: var(--red-deep);
   font-size: 12px;
 }
 
 /* 够格成群：结论行转成"群的输入蓝"色系，与画布上的方框呼应 */
 .sb-verdict.verdict-group {
-  background: rgba(24, 95, 165, 0.09);
+  background: var(--blue-veil);
 }
 
 .sb-verdict.verdict-group .sb-verdict-gap {
@@ -2171,8 +2462,8 @@ body {
 }
 
 .insight-key {
-  border-color: #b9c9dd;
-  background: #f4f9fd;
+  border-color: var(--blue-soft-line);
+  background: var(--blue-soft);
 }
 
 .insight-note {
@@ -2282,10 +2573,10 @@ body {
   white-space: nowrap;
   user-select: none;
   text-shadow:
-    0 0 3px #fff,
-    0 0 3px #fff,
-    0 0 3px #fff,
-    0 0 3px #fff;
+    0 0 3px var(--label-halo),
+    0 0 3px var(--label-halo),
+    0 0 3px var(--label-halo),
+    0 0 3px var(--label-halo);
 }
 
 .gedge-label .katex {
@@ -2308,7 +2599,7 @@ body {
 }
 
 .gnode:hover .gnode-hit {
-  fill: rgba(24, 95, 165, 0.13);
+  fill: var(--blue-haze);
 }
 
 /* ── 证明面板（M1）：step-through ─────────────────────────── */
@@ -2319,6 +2610,36 @@ body {
   right: 12px;
   z-index: 10;
   max-width: calc(100% - 24px);
+  /*
+   * W1（2026-10-12）：右上角多了**主题切换**胶囊（证明左侧）⇒ 这里从"单块"改 flex 横排。
+   * 窄窗（≤1080px）由下面的媒体查询各占半宽；`wrap` 让两个东西放进不了一行时
+   * 证明折到第二行（按钮保持第一行右侧），不会横向溢出 50% 的封顶。
+   */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* 主题切换（W1）：白胶囊，与证明收起态同一视觉语言（边框 + 轻影 + 12 圆角） */
+.theme-toggle {
+  flex: none;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 12.5px;
+  line-height: 1.4;
+  cursor: pointer;
+  box-shadow: var(--shadow-card, 0 3px 14px rgba(0, 0, 0, 0.08));
+}
+
+.theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 
 /*
@@ -2545,7 +2866,7 @@ body {
 
 .proof-start:hover:not(:disabled) {
   background: var(--purple);
-  color: #fff;
+  color: var(--bg);
 }
 
 .proof-start:disabled {
@@ -2621,7 +2942,7 @@ body {
 .proof-step.on {
   background: var(--purple-fill);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px rgba(83, 74, 183, 0.35);
+  box-shadow: inset 0 0 0 1px var(--purple-ring);
 }
 
 /* 还没走到：淡（一眼看出走到哪了） */
@@ -2704,8 +3025,8 @@ body {
   transform: translate(-50%, -50%);
   border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
+  background: var(--card-solid);
+  box-shadow: var(--shadow-pop);
 }
 
 .snap-head {
@@ -2733,7 +3054,7 @@ body {
 }
 
 .snap-x:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--shade);
 }
 
 .snap-hint {
@@ -2747,7 +3068,7 @@ body {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--shade-soft);
   color: var(--text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
@@ -2785,8 +3106,8 @@ body {
 .snap-err {
   padding: 6px 8px;
   border-radius: 6px;
-  background: rgba(163, 45, 45, 0.08);
-  color: #a32d2d;
+  background: var(--danger-tint);
+  color: var(--danger);
   font-size: 12px;
   line-height: 1.6;
 }
@@ -2939,7 +3260,7 @@ body {
    * 只有 ~20%，15px 中文字重在玻璃底上发灰、整台"平"。
    * 只在 `.bench` 作用域覆盖：台内所有 `var(--text)`（明细值 / 键名 / chip…）一起变实。
    */
-  --text: #201f1d;
+  --text: var(--text-strong);
   /*
    * **宽度**（工作台 v2 / W3）：用户 2026-10-06 定「工作台没必要那么小，
    * 占大半个屏幕没什么问题」。左侧 300px 让给左下「数值」抽屉（168px + 余量）。
@@ -2954,14 +3275,14 @@ body {
    * `height` / `max-height`：内联压过样式表，写了也不生效（本项目栽过一次，
    * 白重启了一轮 dev server）。
    */
-  background: rgba(252, 252, 255, 0.62);
+  background: var(--glass);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--glass-edge);
   border-radius: 20px;
   box-shadow:
-    0 -8px 40px rgba(0, 0, 0, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    var(--shadow-float),
+    inset 0 1px 0 var(--glass-top);
   overflow: hidden;
 }
 
@@ -2980,7 +3301,7 @@ body {
   height: 3px;
   margin: 2px auto 0;
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.14);
+  background: var(--grip);
 }
 
 /* 收起时只要那条标题（body 不渲染，JSX 里已条件）*/
@@ -3018,7 +3339,7 @@ body {
 }
 
 .bench-toggle:hover {
-  background: #eceae3;
+  background: var(--hover);
 }
 
 .bench-caret {
@@ -3102,7 +3423,7 @@ body {
 .bench-blank code {
   padding: 0 4px;
   border-radius: 3px;
-  background: #f3f1ea;
+  background: var(--raise);
   font-family: var(--mono);
   font-size: 11.5px;
 }
@@ -3215,7 +3536,7 @@ body {
 .bench-slot-head code {
   padding: 1px 5px;
   border-radius: 4px;
-  background: #f3f1ea;
+  background: var(--raise);
   font-family: var(--mono);
   font-size: 11.5px;
 }
@@ -3233,7 +3554,7 @@ body {
   padding: 5px 8px;
   border: 1px dashed var(--border);
   border-radius: 6px;
-  background: #faf9f5;
+  background: var(--shade-soft);
   font-size: 12px;
 }
 
@@ -3241,7 +3562,7 @@ body {
 .bench-slot.filled {
   border-style: solid;
   border-color: var(--border-strong);
-  background: #fff;
+  background: var(--surface);
 }
 
 /* 正等着填的那一位：紫色实边框（与任务按钮 `.bench-op.ed` 同一个视觉语言）*/
@@ -3266,7 +3587,7 @@ body {
 
 .bench-slot.filled .bench-slot-n {
   background: var(--purple-text);
-  color: #fff;
+  color: var(--bg);
 }
 
 .bench-slot-id {
@@ -3312,7 +3633,7 @@ body {
   padding: 4px 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--surface);
   color: var(--text);
   cursor: pointer;
 }
@@ -3357,7 +3678,7 @@ body {
   gap: 10px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #f3f1ea;
+  background: var(--raise);
   font-size: 12.5px;
 }
 
@@ -3384,7 +3705,7 @@ body {
 
 .conj-table td {
   padding: 4px 8px;
-  border-bottom: 1px solid #f0eee7;
+  border-bottom: 1px solid var(--divider);
 }
 
 .conj-table td.dim {
@@ -3420,8 +3741,8 @@ body {
   /* 2026-10-10 视觉版：屏幕块略微加大呼吸（12/16 + 圆角 14），与键盘拉开 */
   padding: 12px 16px;
   border-radius: 14px;
-  background: rgba(230, 241, 251, 0.72);
-  border: 1px solid rgba(133, 183, 235, 0.5);
+  background: var(--screen-fill);
+  border: 1px solid var(--screen-edge);
 }
 
 /* **全场唯一的大字**（视觉锚一号）：焦点对象的数学身份。
@@ -3435,7 +3756,7 @@ body {
   font-size: 22px;
   font-weight: 600;
   line-height: 1.25;
-  color: #0a3560;
+  color: var(--screen-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3451,7 +3772,7 @@ body {
 .bench-screen-sub {
   margin-top: 3px;
   font-size: 12.5px;
-  color: #185fa5;
+  color: var(--screen-text-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3465,10 +3786,10 @@ body {
   flex-wrap: wrap;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px dashed rgba(133, 183, 235, 0.55);
+  border-top: 1px dashed var(--screen-dash);
   /* 屏幕主行 22px 后，算式行升到次级 18px（视觉版 10-10）*/
   font-size: 18px;
-  color: #0c447c;
+  color: var(--screen-text-3);
 }
 
 /* 空格子：**无文本的样式盒**（`▢` 键盘打不出来，不能进文本流）*/
@@ -3476,13 +3797,13 @@ body {
   display: inline-block;
   width: 46px;
   height: 26px;
-  border: 1.5px dashed #85b7eb;
+  border: 1.5px dashed var(--blue-line);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--well-fill);
 }
 
 .bench-eq-tail {
-  color: #185fa5;
+  color: var(--screen-text-2);
 }
 
 /* `＋ 导入对象` —— 用户点名要的那枚按钮。
@@ -3497,22 +3818,22 @@ body {
   /* 2026-10-10 视觉版：全台**唯一的实心色**给唯一的"造对象"主入口——
      原来浅蓝底蓝字，跟 tab 选中/显示屏同一个色调分不出主次。 */
   padding: 8px 16px;
-  border: 1px solid #0c447c;
+  border: 1px solid var(--plus-fill);
   border-radius: 999px;
-  background: #0c447c;
+  background: var(--plus-fill);
   color: #fff;
   font-size: 13px;
   cursor: pointer;
 }
 
 .bench-plus:hover {
-  background: #0a3560;
-  border-color: #0a3560;
+  background: var(--plus-hover);
+  border-color: var(--plus-hover);
 }
 
 .bench-plus.on {
-  background: #0a3560;
-  border-color: #85b7eb;
+  background: var(--plus-hover);
+  border-color: var(--plus-on-line);
 }
 
 .bench-plus-glyph {
@@ -3538,7 +3859,7 @@ body {
   gap: 8px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--sheet);
   border: 1px solid var(--border-strong, var(--border));
 }
 
@@ -3615,14 +3936,14 @@ body {
   padding: 0 10px;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--key-face);
   color: var(--text);
   cursor: pointer;
 }
 
 .bench-key:hover {
-  background: #fff;
-  border-color: #85b7eb;
+  background: var(--key-hover);
+  border-color: var(--blue-line);
 }
 
 .bench-key-glyph {
@@ -3676,15 +3997,15 @@ body {
 }
 
 .bench-tab:hover {
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--well-fill);
 }
 
 .bench-tab.on {
-  background: rgba(230, 241, 251, 0.95);
-  color: #0c447c;
+  background: var(--tab-on-fill);
+  color: var(--screen-text-3);
   font-weight: 600;
   /* 阅读目录式的"当前节"标记：内阴影左条，不占布局（视觉版 10-10）*/
-  box-shadow: inset 2px 0 0 #85b7eb;
+  box-shadow: inset 2px 0 0 var(--blue-line);
 }
 
 /* 内容列：结论层（若有）在上、当前节在下 */
@@ -3812,15 +4133,15 @@ body {
   padding: 3px 8px;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--key-face);
   color: var(--text);
   font-size: 12px;
   cursor: pointer;
 }
 
 .plus-chip:hover {
-  background: #fff;
-  border-color: #85b7eb;
+  background: var(--key-hover);
+  border-color: var(--blue-line);
 }
 
 /* 面板里的三个表单：**输入框铺满** + 紧凑行（别留右边一片空）
@@ -3893,20 +4214,20 @@ body {
   justify-content: space-between;
   border: 1px solid var(--border-strong, var(--border));
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--key-face-2);
   overflow: hidden;
 }
 
 .bench-chip.on {
-  border-color: #85b7eb;
-  background: rgba(230, 241, 251, 0.95);
+  border-color: var(--blue-line);
+  background: var(--tab-on-fill);
 }
 
 /* pending 时"这一位能填"的 chip —— **虚线边**（"可以放到这"的停靠语义，
    2026-10-11）。判据与候选区同一份（`canPick`，经 Workbench 的 `cands`）。 */
 .bench-chip.can-fill {
   border-style: dashed;
-  border-color: #85b7eb;
+  border-color: var(--blue-line);
 }
 
 .bench-chip-main {
@@ -4005,7 +4326,7 @@ body {
   padding: 5px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #faf9f5;
+  background: var(--shade-soft);
   color: var(--text);
   font-size: 12px;
   text-align: left;
@@ -4014,7 +4335,7 @@ body {
 
 .plus-lib-head:hover {
   border-color: var(--border-strong);
-  background: #fff;
+  background: var(--key-hover);
 }
 
 .plus-lib-caret {

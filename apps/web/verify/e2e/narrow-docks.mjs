@@ -66,6 +66,13 @@ await page.waitForTimeout(650)
 await page.click('.composer-orb .orb-center')
 await page.waitForTimeout(300)
 
+/*
+ * 2026-10-12（W1，用户拍板）：证明面板**默认收起** —— 本套要测"证明开着时"的几何
+ * 与互斥（"台升起 ⇒ 证明自动收起"），所以**先点开**再往下走。
+ */
+await page.click('.dock-topright .dock-toggle')
+await page.waitForTimeout(420)
+
 /* ── ① 两块面板的几何：各占一半，互不重叠 ─────────────── */
 const geom = await page.evaluate(() => {
   const r = (sel) => {

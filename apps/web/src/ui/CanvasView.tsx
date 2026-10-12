@@ -25,27 +25,32 @@ const ACTION_H = 42
 const SET_MIN_R = 32
 const SET_MAX_R = 66
 
-const INPUT_FILL = '#E6F1FB'
-const INPUT_STROKE = '#185FA5'
-const INPUT_TEXT = '#0C447C'
-const DERIVED_FILL = '#EEEDFE'
-const DERIVED_STROKE = '#534AB7'
-const DERIVED_TEXT = '#3C3489'
-const ACTION_FILL = '#E1F5EE'
-const ACTION_STROKE = '#0F6E56'
-const ACTION_TEXT = '#0A5744'
+/**
+ * 节点 / 边的视觉族（W1 · 2026-10-12：**改取 CSS 变量**）。
+ *
+ * 从前这里有 13 条十六进制字面量（浅色专用）——深色主题下"深字 + 深底"全糊
+ * （节点几乎看不见）。现在一律 `var(--…)`，由 `App.css` 按 `data-theme` 给值；
+ * 主题切换时浏览器直接重算，React **不需要**重渲染。
+ *
+ * ⚠️ 使用处必须走**内联 `style`**（`fill={x}` 这种展示属性不吃 `var()`！），
+ * 这是本节唯一一条容易写错的事。变量定义见 App.css「画布节点与边（W1）」。
+ */
+const INPUT_FILL = 'var(--node-input-fill)'
+const INPUT_STROKE = 'var(--node-input-stroke)'
+const INPUT_TEXT = 'var(--node-input-text)'
+const DERIVED_FILL = 'var(--node-derived-fill)'
+const DERIVED_STROKE = 'var(--node-derived-stroke)'
+const DERIVED_TEXT = 'var(--node-derived-text)'
+const ACTION_FILL = 'var(--node-action-fill)'
+const ACTION_STROKE = 'var(--node-action-stroke)'
+const ACTION_TEXT = 'var(--node-action-text)'
 
-const PROV = '#B9B6AD'
-const ACTION_EDGE = '#0F6E56'
-const MAP_EDGE = '#2C2C2A'
+const PROV = 'var(--edge-prov)'
+const ACTION_EDGE = 'var(--node-action-stroke)'
+const MAP_EDGE = 'var(--edge-map)'
 /** 结构伴生箭头（pi / pi1 / 包含）：蓝灰，与映射对象的深色区分开 */
-const ALONGSIDE_EDGE = '#4A6FA5'
-const PICK_STROKE = '#C2410C'
-
-/** 格点（DIAGRAM_SPEC §1.1）：对象只允许停在列中心 × 行中心的交点上 */
-const GRID_DOT = '#C9C5B8'
-/** 拖动时的吸附预览环 */
-const SNAP_STROKE = '#C2410C'
+const ALONGSIDE_EDGE = 'var(--edge-alongside)'
+const PICK_STROKE = 'var(--pick)'
 
 /**
  * 视图变换：**世界坐标 → viewBox 坐标**（`screen = world * k + t`）。
@@ -1310,7 +1315,7 @@ export function CanvasView({
               >                <path
                   d="M2 1L8 5L2 9"
                   fill="none"
-                  stroke={st.color}
+                  style={{ stroke: st.color }}
                   strokeWidth="1.4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -1329,7 +1334,7 @@ export function CanvasView({
                 <path
                   d="M6 1L11 5L6 9M1 1L6 5L1 9"
                   fill="none"
-                  stroke={st.color}
+                  style={{ stroke: st.color }}
                   strokeWidth="1.4"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -1348,7 +1353,7 @@ export function CanvasView({
                 <path
                   d="M4 1.5L4 8.5"
                   fill="none"
-                  stroke={st.color}
+                  style={{ stroke: st.color }}
                   strokeWidth="1.5"
                   strokeLinecap="round"
                 />
@@ -1465,7 +1470,7 @@ export function CanvasView({
               <path
                 d={line}
                 fill="none"
-                stroke={isSelected ? PICK_STROKE : stroke}
+                style={{ stroke: isSelected ? PICK_STROKE : stroke }}
                 strokeWidth={
                   isSelected
                     ? 3.2
@@ -1587,20 +1592,20 @@ export function CanvasView({
           // 底色沿用「颜色 = 来源」：输入对象偏蓝、运算结果偏紫。
           const inputish = n.origin === 'input'
           const bodyFill = b.round
-            ? 'rgba(83, 74, 183, 0.07)'
+            ? 'var(--node-derived-body)'
             : n.shape === 'action'
-              ? 'rgba(15, 110, 86, 0.07)'
+              ? 'var(--node-action-body)'
               : selected || isPicked
                 ? inputish
-                  ? 'rgba(24, 95, 165, 0.16)'
-                  : 'rgba(83, 74, 183, 0.16)'
+                  ? 'var(--node-input-body-strong)'
+                  : 'var(--node-derived-body-strong)'
                 : inputish
-                  ? 'rgba(24, 95, 165, 0.07)'
-                  : 'rgba(83, 74, 183, 0.07)'
+                  ? 'var(--node-input-body)'
+                  : 'var(--node-derived-body)'
           const bodyStroke = b.round
             ? selected || isPicked
               ? edge
-              : 'rgba(83, 74, 183, 0.3)'
+              : 'var(--node-round-stroke)'
             : selected || isPicked || n.shape === 'action'
               ? edge
               : 'transparent'
@@ -1633,8 +1638,7 @@ export function CanvasView({
                   cx={p.x}
                   cy={p.y}
                   r={b.hw}
-                  fill={bodyFill}
-                  stroke={bodyStroke}
+                  style={{ fill: bodyFill, stroke: bodyStroke }}
                   strokeWidth={selected || isPicked ? 2 : 1}
                 />
               ) : (
@@ -1645,8 +1649,7 @@ export function CanvasView({
                   width={b.hw * 2}
                   height={b.hh * 2}
                   rx={9}
-                  fill={bodyFill}
-                  stroke={bodyStroke}
+                  style={{ fill: bodyFill, stroke: bodyStroke }}
                   strokeWidth={selected || isPicked ? 2 : 1.4}
                   strokeDasharray={n.shape === 'action' ? '5 4' : undefined}
                 />
@@ -1664,7 +1667,7 @@ export function CanvasView({
                   cy={p.y}
                   r={Math.max(6, b.hw - 5.5)}
                   fill="none"
-                  stroke={bodyStroke}
+                  style={{ stroke: bodyStroke }}
                   strokeWidth={1}
                   pointerEvents="none"
                 />
@@ -1712,7 +1715,10 @@ export function CanvasView({
         )}
       </svg>
 
-      {/* 视图工具条（右下）：**看得见**的视图状态 + 一键还原 */}
+      {/* 视图工具条（右下）：**看得见**的视图状态 + 一键还原。
+          W1（2026-10-12）：**分组**——模式（连线 / 自动补）｜视图（快照 / 适应 / 恢复）｜
+          危险（清空，挪到最右、与前面隔着线）。分组用 `.ct-sep` 细竖线，**按钮类名与
+          文本一律不动**（走查按 `:has-text` 认按钮，见 PROPOSAL-ui-refresh §7.5）。 */}
       <div className="canvas-toolbar">
         <span className="canvas-zoom" title="滚轮缩放 -空白处拖动平移 -双击空白适应窗口">
           {zoomPct}%
@@ -1720,6 +1726,7 @@ export function CanvasView({
         {/* 连线的第三个入口（缺口 ⑬）在节点上（右侧那颗小圆点）——
             这里写一行字把它说出来：工具条上的按钮与 Shift 都是"先按住再说"，没人猜得到 */}
         <span className="ct-hint">拖节点右侧圆点连线</span>
+        <span className="ct-sep" aria-hidden="true" />
         <button
           className={`ct-btn${connectMode ? ' on' : ''}`}
           onClick={() => {
@@ -1737,6 +1744,7 @@ export function CanvasView({
         >
           自动补第一同构{autoFirstIso ? ' v' : ''}
         </button>
+        <span className="ct-sep" aria-hidden="true" />
         <button
           className="ct-btn"
           onClick={() => onOpenSnapshot?.()}
@@ -1762,6 +1770,7 @@ export function CanvasView({
         >
           恢复自动布局{pinnedCount > 0 ? `（${pinnedCount}）` : ''}
         </button>
+        <span className="ct-sep" aria-hidden="true" />
         {/*
           清空画布（2026-09-30）：定义行落盘之后，"刷新"不再等于"重来"——
           想从零开始就得有个明面上的入口，否则用户只能去清浏览器数据。

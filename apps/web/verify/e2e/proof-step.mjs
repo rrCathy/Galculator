@@ -38,10 +38,13 @@ await page.waitForTimeout(1200)
 const snapshot = () =>
   page.evaluate(() => {
     const svg = document.querySelector('svg.canvas')
-    const nodes = [...svg.querySelectorAll('g.gnode')].map((g) => ({
-      id: g.dataset.id,
-      fill: g.querySelector('.gnode-hit')?.getAttribute('fill') ?? '',
-    }))
+    const nodes = [...svg.querySelectorAll('g.gnode')].map((g) => {
+      const hit = g.querySelector('.gnode-hit')
+      /* 2026-10-12（W1）：节点色改走内联 style 里的 CSS 变量（深色主题需要），
+         `getAttribute('fill')` 不再有值 ⇒ 读**计算样式**（解析后的 rgba）。 */
+      const fill = hit ? getComputedStyle(hit).fill : ''
+      return { id: g.dataset.id, fill }
+    })
     return {
       ids: nodes.map((n) => n.id).sort(),
       highlighted: nodes.filter((n) => /0\.16/.test(n.fill)).map((n) => n.id).sort(),
@@ -52,6 +55,14 @@ const snapshot = () =>
 
 // ── 面板：模板列表 ──
 ok('证明面板在画布上', (await page.locator('.dock-topright').count()) === 1)
+/*
+ * 2026-10-12（W1，用户拍板）：证明面板**默认收起** —— 先断言默认态，再点开。
+ * 点开这一步就是真实用户路径（走查以用户的手走）。
+ */
+ok('**默认收起**（`.proof-item` 一个不渲染）', (await page.locator('.proof-item').count()) === 0)
+await page.click('.dock-topright .dock-toggle')
+await page.waitForTimeout(420)
+ok('点「证明」胶囊能展开', (await page.locator('.proof-item').count()) >= 1)
 ok('列出至少一条模板', (await page.locator('.proof-item').count()) >= 1)
 const theoremTex = await page.locator('.proof-item-theorem').first().innerText()
 ok('模板显示了定理（TeX 已渲染，且不是字面反斜杠）', /p|G|H/.test(theoremTex) && !theoremTex.includes('\\'), theoremTex)

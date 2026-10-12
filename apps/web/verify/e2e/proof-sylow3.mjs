@@ -35,6 +35,10 @@ page.on('pageerror', (e) => logs.push('pageerror: ' + e.message))
 await page.goto(`${BASE}/?empty=1`, { waitUntil: 'load' })
 await page.waitForTimeout(1200)
 
+/* 2026-10-12（W1，用户拍板）：证明面板**默认收起** —— 先点开再用（真实用户路径） */
+await page.click('.dock-topright .dock-toggle')
+await page.waitForTimeout(420)
+
 const snapshot = () =>
   page.evaluate(() => {
     const svg = document.querySelector('svg.canvas')

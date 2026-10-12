@@ -4950,6 +4950,88 @@ MapBuilder 的状态行 / hint / 关系违反的 `label()` —— `prettySymbol`
 
 ---
 
+## 丙编补十四 · 2026-10-12 · W1：**主题机制 + 仪器台（深色）** —— 全应用第一次有第二张皮
+
+> 触发：用户「接下来准备优化主界面的 UI/UX，先探明情况」。侦察（真机 12 张截图 +
+> 文档账 + 代码现状，见 `.tmp-ui-audit/`）后拍板五条：**默认浅色手动切换 · 先 W1 ·
+> 证明默认关 · 草稿区暂缓 · 组件向工作台设计风格看齐**。全案与施工文案见
+> [PROPOSAL-ui-refresh.md](PROPOSAL-ui-refresh.md) §7。
+
+### ① 机制：`data-theme` + `?theme=` 参数
+
+- 新 `src/theme.ts`：`loadTheme()`（**URL 强制 > localStorage > 浅色**）/ `applyTheme()` / `saveTheme()`。
+- `main.tsx` **挂载前同步应用**（防首帧闪烁）；独立 key `galculator.theme:v1`
+  （**不动** `galculator.settings:v1`——那边是 `autoFirstIso`，共用 key 会互相覆盖）。
+- 切换入口：右上角「深色 / 浅色」胶囊（证明胶囊左侧）——`.dock-topright` 改 flex wrap；
+  走查 `?theme=dark` 强制深色且**不写**本地（与 `?empty=1` 同族纪律）。
+- 真机验过全链路：浅色默认 → 点击变深 + 写本地 + 徽标翻「浅色」→ 刷新保持。
+
+### ② L1：~90 处硬编码色收编 + 深色变量块
+
+- `:root` 扩 **~70 个语义变量**（面 / 画布 / 蓝紫绿黄红分层 / 屏键 / 玻璃 / 影三档）；
+  `[data-theme='dark']` **只覆盖变量、不改组件规则**——深色不碰 DOM（换肤不破走查的结构前提）。
+- 浅色值 = 现状原值（视觉零变化基线）；深色色板 = PROPOSAL §3 仪器台（石墨 / 丝印奶油 / 信号蓝）。
+- 全 CSS `grep` 后**只剩 3 处字面量**（刻意保留）：球的黑色阴影 ×2、蓝底白字 —— 两主题下都成立。
+- 级联核对：`@groupviz/react/theme.css` 与本表**仅** `--text` / `--text-dim` 重名——
+  `:root[data-theme='dark']`（0,2,0）压过它的 `[data-theme="dark"]`（0,1,0），真机计算值验过是我们赢。
+
+### ③ ★ 挖出真 bug：`.composer input` 五条规则**从未匹配**
+
+- 病灶：选择器写 `.composer`，而 DOM 里根本没有 `class="composer"`（只有
+  `.composer-orb` / `.composer-card`）⇒ **规则历年从未生效**；浅色下输入框与「添加」按钮
+  一直吃**浏览器默认样式**（恰好白底，蒙混多年），深色主题一切换当场露馅（输入框一块纯白）。
+- 修：按真实 DOM 改 `.composer-card input` / `button`（含 `:focus` / `:hover` / `:disabled`），
+  注释标注。浅色下视觉变化 = 输入框/按钮从"浏览器默认"回到设计样式（本批"看齐"的一部分）。
+
+### ④ 画布节点/边：JS 常量 → CSS 变量（含一个真陷阱）
+
+- `CanvasView.tsx` 13 条十六进制常量 → `var(--node-*)` / `var(--edge-*)`；内联 rgba
+  （符号托底 / 选中态 / 圆描边）一并变量化。
+- ⚠️ **坑：SVG 展示属性（`fill={x}`）不吃 `var()`** —— 不报错、静静保留原色。8 处
+  usage 改**内联 style**（`style={{ fill: x }}`）；两条读属性的走查断言同步改
+  `getComputedStyle`（proof-step 的 fill / structural-edges 的 stroke，后者断言值改 rgb 形态）。
+- 删死代码 `GRID_DOT` / `SNAP_STROKE`（全 src 零消费者）。
+
+### ⑤ 看齐（用户第 ⑤ 条）+ L3 小件
+
+- 工具条**分组**：`.ct-sep` 细竖线 —— 模式（连线 / 自动补）｜视图（快照 / 适应 / 恢复）｜
+  危险（清空挪最右）；按钮类名与文本**一律保留**（走查按 `:has-text` 认按钮）；
+  hover 从橙 `#c2410c` 收进蓝体系；工具条圆角 10 → 12 对齐抽屉语言。
+- `.dock-toggle` 补 hover 底（负 margin 抵消 padding，布局尺寸不变）。
+- **证明面板默认关**（用户拍板）：`useState(false)`。
+- **7 套走查适配**：6 套补「点开证明」步骤（proof-step / proof-m3 / proof-params /
+  proof-sylow3 / narrow-docks / no-unicode-leak）；proof-step 另**新增 2 条**断言
+  （"默认收起" + "点开能展开"）——本批唯一加条。
+
+### ⑥ 新回归：`e2e/dark-contrast.mjs`（12 条）
+
+- `PROPOSAL-ui-refresh §6` 承诺的"深色对比度巡检"落地：**合成 alpha 后**扫
+  ① 过亮底（亮度 > 140，白名单 orb / bench-plus / snap-ring / bench-slot-n / katex）
+  ② 低对比字（对比度 < 1.8）。5 状态（初始 / 双群 / 工作台 / pending / 目录）全扫。
+- 已挂 `verify:e2e` 链尾 + verify/README 登记。
+
+### 读数
+
+- `tsc` **0** · 语义层 **2483 / 0**（不受影响）· 走查 **36 套 1365 / 0**
+  （上批 35 套 1351 + proof-step 新增 2 条 + 新套件 12 条）。
+  ⚠️ 台账跑到一半 `idspace` 在导航后 UI 未起（30s 超时）——那是**dev server 跑久疲惫**
+  （同一套件在前一轮全量里 31/0 全绿），重启后复跑 **31 / 0**；总数按复跑计 1365。
+- 真机截图（docs/assets/）：`w1-dark-bench.png` · `w1-dark-canvas.png` ·
+  `w1-dark-pending.png` · `w1-light-home.png`；巡检脚本留 `.tmp-ui-audit/`。
+
+### 教训
+
+1. **"从未生效的选择器"可以潜伏多年**：浅色下被浏览器默认样式蒙混（白底恰好"看起来对"），
+   只有换主题才照出来。**换肤批的隐性价值 = 把全应用的浅色假设打出来**。
+2. **深色把"写死的浅色"一个个照出来**：本批共打出 4 类（输入框白底 / 节点深字 / 边色 / chip 色）。
+   "写得完"的判据：全 CSS grep 后剩几条字面量、每条为什么留。
+3. **SVG 属性 vs style 是真陷阱**：属性不吃 `var()`、还**不报错**——用变量时必须同时问
+   "这个颜色的应用点是属性还是 style"。
+4. **台账 ≠ 权威，复跑才是**：`idspace` 那条最终归宿是"重启后 31/0"——把"服务疲惫"
+   误判成"代码坏了"会白查半天（REFERENCE §8 的"跑走查前重启 dev server"再次应验）。
+
+---
+
 ## 丁一 · 交换图布局的诊断与修复
 
 > 来自 DIAGRAM_SPEC.md §2（原「现状诊断」）。规范本体见 [DIAGRAM_SPEC.md](DIAGRAM_SPEC.md) §1。

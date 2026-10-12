@@ -50,7 +50,9 @@ const edgesState = () =>
         structural: g.dataset.structural ?? '',
         label: g.dataset.label ?? '',
         hit: !!g.querySelector('.gedge-hit'),
-        stroke: path?.getAttribute('stroke') ?? '',
+        /* 2026-10-12（W1）：边色改走内联 style 里的 CSS 变量（深色主题需要），
+           `getAttribute('stroke')` 不再有值 ⇒ 读**计算样式**（解析后的 rgb）。 */
+        stroke: path ? getComputedStyle(path).stroke : '',
       }
     })
   })
@@ -96,8 +98,9 @@ await page.waitForTimeout(900)
   ok('一条是 =（轨道吃下整个 Omega，即传递）', !!eq1 && eq1.label === '=', JSON.stringify(str.map((e) => `${e.label}:${e.structural}`)))
   ok('一条是 ↪（稳定子挂到 G）', !!incl && incl.label === '\\hookrightarrow', JSON.stringify(str.map((e) => `${e.label}:${e.structural}`)))
   ok('两条都有命中层（可点）', str.every((e) => e.hit))
-  // 视觉身份不变：伴生边仍是蓝灰细线（ALONGSIDE_EDGE #4A6FA5），不是用户画的主角（#2C2C2A）
-  ok('伴生边仍是蓝灰（不抢用户画的主角）', str.every((e) => e.stroke === '#4A6FA5'), JSON.stringify(str.map((e) => e.stroke)))
+  // 视觉身份不变：伴生边仍是蓝灰细线（--edge-alongside #4a6fa5 → rgb(74, 111, 165)），
+  // 不是用户画的主角（--edge-map #2c2c2a）。2026-10-12（W1）起读计算样式，比值用 rgb 形态。
+  ok('伴生边仍是蓝灰（不抢用户画的主角）', str.every((e) => e.stroke === 'rgb(74, 111, 165)'), JSON.stringify(str.map((e) => e.stroke)))
 }
 
 /* ── 点 N ↪ G：面板给出类型 / 两端 / 指数 / 正规性 ── */

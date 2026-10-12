@@ -57,6 +57,7 @@ node verify/e2e/action-omega.mjs      # 群作用这件事本身：Ω 能选 / �
 node verify/e2e/set-menu.mjs          # 集合那一侧的菜单不撒谎：asSet/closure 收窄（U59）
 node verify/e2e/map-builder.mjs       # 映射构建器的卡片形态（三编辑器包壳）
 node verify/e2e/workbench.mjs         # 工作台 v2.2：显示屏（级别词 / 无阶副行）/ 对象槽（最左竖列）/ 键盘随焦点变 / 竖排节导航 / 槽位 / ＋导入 / 编辑器嵌入 / 文字禁选
+node verify/e2e/dark-contrast.mjs     # 深色仪器台对比度巡检：过亮底 + 低对比字（W1，`?theme=dark`）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
