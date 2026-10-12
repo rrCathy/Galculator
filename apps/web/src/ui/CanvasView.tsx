@@ -1716,16 +1716,14 @@ export function CanvasView({
       </svg>
 
       {/* 视图工具条（右下）：**看得见**的视图状态 + 一键还原。
-          W1（2026-10-12）：**分组**——模式（连线 / 自动补）｜视图（快照 / 适应 / 恢复）｜
-          危险（清空，挪到最右、与前面隔着线）。分组用 `.ct-sep` 细竖线，**按钮类名与
-          文本一律不动**（走查按 `:has-text` 认按钮，见 PROPOSAL-ui-refresh §7.5）。 */}
+          W1（2026-10-12）：分组（模式｜视图｜危险）+ 玻璃容器 + 键帽 + mini 显示屏读数。
+          W1.5（同日精修，用户点名"右下角一排按钮"）：**删掉常驻的「拖节点右侧圆点连线」
+          一行**——它挤在键之间像脚手架。那条说明仍在：①「连线」键的 title
+          ②节点把手 hover 可见 ③⊕ 球菜单里的连线族。 */}
       <div className="canvas-toolbar">
         <span className="canvas-zoom" title="滚轮缩放 -空白处拖动平移 -双击空白适应窗口">
           {zoomPct}%
         </span>
-        {/* 连线的第三个入口（缺口 ⑬）在节点上（右侧那颗小圆点）——
-            这里写一行字把它说出来：工具条上的按钮与 Shift 都是"先按住再说"，没人猜得到 */}
-        <span className="ct-hint">拖节点右侧圆点连线</span>
         <span className="ct-sep" aria-hidden="true" />
         <button
           className={`ct-btn${connectMode ? ' on' : ''}`}
