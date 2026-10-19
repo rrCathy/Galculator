@@ -109,11 +109,12 @@ ok('画布上的对象点得中（没被证明面板挡住）', hit?.hitId === '
 await page.mouse.click(hit.x, hit.y)
 await page.waitForTimeout(500)
 // ⚠️ T3（2026-10-05）加了「共轭类」一节 ⇒ 3 节变 4 节。
+// ⚠️ 2026-10-19 又加了「表示」（`<S|R>`）⇒ 4 节变 5 节。
 // 这条**数节数**是有意的：它守的是"工作台明细真的渲染出来了"，
 // 所以节数变了要跟着改，而不是改成 `>= 3`（那样半坏也过得去）。
 // （2026-10-08：点节点 ⇒ 工作台**自动升起** —— 信息面板并入后的行为。）
-ok('点完之后**工作台自动升起**（竖排节导航 4 节：基本/元素/共轭类/子群）',
-  (await page.locator('.bench-tab').count()) === 4)
+ok('点完之后**工作台自动升起**（竖排节导航 5 节：基本/表示/元素/共轭类/子群）',
+  (await page.locator('.bench-tab').count()) === 5)
 
 /*
  * 2026-10-09 用户拍板：**台升起 ⇒ 证明自动收起**（互斥）。
@@ -158,8 +159,8 @@ const tabsHit = await page.evaluate(() =>
   }),
 )
 ok(
-  '四个节标签都点得中（互斥后没有别的东西盖它们）',
-  tabsHit.length === 4 && tabsHit.every((t) => t.reachable),
+  '五个节标签都点得中（互斥后没有别的东西盖它们）',
+  tabsHit.length === 5 && tabsHit.every((t) => t.reachable),
   JSON.stringify(tabsHit),
 )
 

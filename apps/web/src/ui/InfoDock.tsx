@@ -42,6 +42,7 @@ import { chainText, factorsText, STRUCTURE_CAP, structureFacts } from '../gal/st
 import { isKnownGroup, knownFacts, knownGroupInfo } from '../gal/known'
 import { Tex, TexList, TexOrText } from './Tex'
 import { ElementsTable } from './ElementsTable'
+import { PresentationTab } from './PresentationTab'
 import { subgroupClassCount, SUB_COUNT_CAP } from './infoHelpers'
 // 共轭类（T3，2026-10-05）：数据层**复用**元素表那份（`buildElementTable`）——
 // 同一群在「元素」节看到的 classIndex/classSize 与「共轭类」节必须完全一致
@@ -51,10 +52,16 @@ import type { GalEdge, GalObject, StructuralEdge } from '../gal/types'
 
 const ENUM_CAP = 144
 
-export type InfoTab = 'basic' | 'elements' | 'conj' | 'subgroups' | 'axioms' | 'table'
+export type InfoTab = 'basic' | 'presentation' | 'elements' | 'conj' | 'subgroups' | 'axioms' | 'table'
 
 export const INFO_SECTIONS: { id: InfoTab; label: string }[] = [
   { id: 'basic', label: '基本' },
+  /*
+   * 「表示」（2026-10-19）：群的 `<S | R>`。用户原话「为什么没看见群展示 `<S|R>`」——
+   * core 从 2.x 起就有 `presentationOf` / `discoverPresentation` 一整套，应用层一直没接。
+   * 紧跟在「基本」后面：它回答的是同一类问题（"这个群是什么"），而且只有一行。
+   */
+  { id: 'presentation', label: '表示' },
   { id: 'elements', label: '元素' },
   /*
    * 「共轭类」（T3，2026-10-05）：紧跟在「元素」后面 —— 它就是**元素的划分**。
@@ -424,6 +431,7 @@ export function SectionBody({
   onExtract?: (sub: NormalizedSubgroup) => void
 }) {
   if (section === 'basic' && group && node) return <BasicTab group={group} node={node} />
+  if (section === 'presentation' && group) return <PresentationTab group={group} />
   if (section === 'elements' && group) return <ElementsTable group={group} />
   if (section === 'conj' && group) return <ConjugacyTab group={group} />
   if (section === 'subgroups' && group) return <SubgroupsTab group={group} />

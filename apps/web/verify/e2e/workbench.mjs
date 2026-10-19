@@ -328,10 +328,11 @@ console.log('\n== 场景 3：显示条与明细区 ==')
      阶在明细「基本」节第一行就有）。断言反着写：副行里**不许再出现「阶」字**。 */
   ok('显示条副行不再报阶（2026-10-10 用户点名去掉）', !/阶/.test(clean(b?.screenSub)), clean(b?.screenSub))
 
-  ok('明细区是**竖排**节导航：基本 / 元素 / 共轭类 / 子群（这个顺序）',
-    JSON.stringify(b?.tabs) === JSON.stringify(['basic', 'elements', 'conj', 'subgroups']), JSON.stringify(b?.tabs))
+  /* 2026-10-19：「表示」节（`<S|R>`）插在「基本」之后 —— 五节，顺序是契约的一部分 */
+  ok('明细区是**竖排**节导航：基本 / 表示 / 元素 / 共轭类 / 子群（这个顺序）',
+    JSON.stringify(b?.tabs) === JSON.stringify(['basic', 'presentation', 'elements', 'conj', 'subgroups']), JSON.stringify(b?.tabs))
   ok('节标签**只写名字**（副文案全砍——用户：「基本就是基本，还写什么『基本 |G|=3，交换』」）',
-    JSON.stringify(b?.tabLabels) === JSON.stringify(['基本', '元素', '共轭类', '子群']), JSON.stringify(b?.tabLabels))
+    JSON.stringify(b?.tabLabels) === JSON.stringify(['基本', '表示', '元素', '共轭类', '子群']), JSON.stringify(b?.tabLabels))
   ok('导航条是**竖的**（宽 < 高：一列，不是一行）',
     (b?.tabVertical?.w ?? 999) < (b?.tabVertical?.h ?? 0),
     JSON.stringify(b?.tabVertical))

@@ -5170,6 +5170,52 @@ core 现在给 `C_4` 的 id 是 `e0…e3`、`V_4` 是 `e,a,b,c`。但判据的�
 
 ---
 
+## 丙编补十六 · 2026-10-19 · 工作台加「表示」节：**群的 `<S|R>` 终于看得见**
+
+**用户原话**：「为什么没看见群展示 `<S|R>`」——上一轮我答成了缓存与元素 id，跑偏了。
+
+### 事实：core 有全套，应用层零调用
+
+| core 导出 | 作用 | 之前 |
+|---|---|---|
+| `presentationOf(g)` | 标准表示（C / D / S / A / Q₈ / 直积 / 半直积…） | 0 调用 |
+| `formatPresentation(gen, rel)` | 拼成 `\langle a \mid a^{4} \rangle` | 0 调用 |
+| `discoverPresentation(g)` | Todd-Coxeter 反推（无现成表示时） | 0 调用 |
+| `parsePresentation` / `buildGroupFromPresentation` | 解析与建群 | 0 调用 |
+
+于是界面上只看得见群的名字，看不见生成元与关系。
+
+### 做法
+
+| 层 | 文件 | 内容 |
+|---|---|---|
+| 数据 | `gal/presentation.ts` | `standardPresentation`（WeakMap 缓存）· `discoverGroupPresentation`（重活，按群对象缓存）· `presentationBlockedReason` / `canDiscoverPresentation`（`PRESENTATION_MAX_ORDER=240`、`DISCOVERER_MAX_ORDER=144`） |
+| UI | `ui/PresentationTab.tsx` | 「表示」行（`<S\|R>`，KaTeX）· 生成元 · 关系条数 · 逐条关系 |
+| 接入 | `ui/InfoDock.tsx` | `InfoTab` 加 `'presentation'`，`INFO_SECTIONS` 插在「基本」之后 |
+
+### 两条成本闸门
+
+1. **反推不放进渲染路径**：实测 16 阶 `SmallGroup(16,3)` 反推 **1.7s**。`presentationOf` 返回 null
+   时只显示「尝试反推表示」按钮，点了才跑（`setTimeout(0)` 先让"正在反推…"上屏）。
+2. **反推结果折叠**：Todd-Coxeter 给的关系**未化简**（16 阶实测 32 条、极端能到 80+）。
+   超过 8 条只显示前 3 条 + 总数，另给「展开全部」。标准表示不受影响（S₄ 6 条、D₄ 3 条）。
+
+### 读数
+
+- 语义层 **2526 / 0**（新增 `suites/presentation.ts` **20 条**：C₄/V₄/D₄/S₄/A₄ 的手写表示、
+  Import 群按结构推表示、`GL(2,3)` 没有现成表示而允许反推、4 阶反推跑通）。
+- 走查：`workbench` 与 `narrow-docks` 的节导航契约 **4 节 → 5 节**（顺序：基本 / 表示 / 元素 / 共轭类 / 子群）；
+  全量 36 套**通过**（`&&` 链跑完，末套 `dark-contrast` 12/0 收尾）。验收图 `docs/assets/pres-s4.png`。
+- 真机读数（`S_4`）：`⟨σ₁,σ₂,σ₃ | σ₁²,σ₂²,σ₃²,(σ₁σ₂)³,(σ₂σ₃)³,(σ₁σ₃)²⟩`，6 条关系。
+
+### 边界
+
+- **表示不是身份**：同一个群有无数种表示，两个不同群也可能写出很像的关系。判"是不是同一个群"
+  仍走 `parents#sameGroup`（对拍乘法表）。
+- `presentationOf` 不挑来源：`Import(4)` 的 V₄ 表也能按结构推出标准表示；`GL(2,3)` 这类才是真的 null。
+
+---
+
 ## 丁一 · 交换图布局的诊断与修复
 
 > 来自 DIAGRAM_SPEC.md §2（原「现状诊断」）。规范本体见 [DIAGRAM_SPEC.md](DIAGRAM_SPEC.md) §1。
