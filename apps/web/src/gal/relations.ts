@@ -5,7 +5,7 @@ import {
   type Group,
   type GroupElement,
 } from '@groupviz/core'
-import { groupFingerprint } from './identity'
+import { idsComparable } from './parents'
 import { elementSemanticKey } from './semantic'
 import { ENUM_LIMIT, hasCosetElements, isomorphicSubgroupsIn } from './embedding'
 
@@ -30,14 +30,16 @@ const ENUM_CAP = 144
 
 /* ── 正规性：同群只算一次 ──────────────────────────────── */
 
-const normalKeysCache = new Map<string, Set<string> | null>()
+const normalKeysCache = new WeakMap<Group, Set<string> | null>()
 
 /**
  * 群 G 的全部正规子群的「集合键」。超枚举守卫 / 算不动 → `null`（= 不判定，不是"不正规"）。
+ *
+ * ⚠️ 缓存按**群对象**（WeakMap），不按字符串指纹（2026-10-19）。指纹 = 符号 + 阶 + 元素 id，
+ * 两张同标号不同表的群指纹会撞（`Import(4)` 的 C₄ 表与 V₄ 表）⇒ 正规子群表互相污染。
  */
 function normalKeys(G: Group): Set<string> | null {
-  const key = groupFingerprint(G)
-  const hit = normalKeysCache.get(key)
+  const hit = normalKeysCache.get(G)
   if (hit !== undefined) return hit
   let out: Set<string> | null = null
   if (G.order > 1 && G.order <= ENUM_CAP) {
@@ -47,11 +49,12 @@ function normalKeys(G: Group): Set<string> | null {
       out = null
     }
   }
-  normalKeysCache.set(key, out)
+  normalKeysCache.set(G, out)
   return out
 }
 
-const containmentCache = new Map<string, Containment | null>()
+/** 包含判定缓存：按**两个群对象**（WeakMap），理由同 `normalKeys`。 */
+const containmentCache = new WeakMap<Group, WeakMap<Group, Containment | null>>()
 
 export interface Containment {
   /** |H|（校验通过时它一定等于 H.order） */
@@ -97,18 +100,32 @@ export interface Containment {
  * 不能借第二关混进来）。
  */
 export function containment(H: Group, G: Group): Containment | null {
-  const key = `${groupFingerprint(H)}<-${groupFingerprint(G)}`
-  const hit = containmentCache.get(key)
+  const hit = containmentCache.get(H)?.get(G)
   if (hit !== undefined) return hit
 
   const out = literalContainment(H, G) ?? embeddingContainment(H, G)
-  containmentCache.set(key, out)
+  let row = containmentCache.get(H)
+  if (!row) {
+    row = new WeakMap()
+    containmentCache.set(H, row)
+  }
+  row.set(G, out)
   return out
 }
 
-/** 第一关：元素 id 空间对得上时的**字面包含**（行为与 U19 起完全一致）。 */
+/** 第一关：元素 id 空间对得上时的**字面包含**（行为与 U19 起完全一致）。
+ *
+ * ⚠️ **跨世界必须先关门**（2026-10-19）：普通元素的语义键就是 `elt:<id>`，而 id 是
+ * **群内编号**。两张同标号的表（手写结构的 `Import(4)` C₄ 表 / V₄ 表、小群表的
+ * `SmallGroup(16,3)` / `(16,4)`）每一个元素 id 都相同 —— 不放行就能判出"元素完全相同，
+ * 就是同一个群"这种假话。判据 `idsComparable`：同一条母群链，或两边都是自证式 id（置换）。
+ *
+ * **陪集层豁免**：商群元素的语义键是成员名单（`coset:...`），跨母群可比 ——
+ * 第三同构 `A₄/N ≤ S₄/N` 靠的就是这条（U35），不能被这道门误杀。
+ */
 function literalContainment(H: Group, G: Group): Containment | null {
   if (H.order <= 0 || H.order > G.order) return null
+  if (!hasCosetElements(H) && !hasCosetElements(G) && !idsComparable(H, G)) return null
   const byKey = new Map<string, GroupElement>()
   for (const e of G.elements) byKey.set(elementSemanticKey(e), e)
   const aligned = H.elements.map((e) => byKey.get(elementSemanticKey(e)))

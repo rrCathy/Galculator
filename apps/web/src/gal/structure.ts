@@ -65,12 +65,7 @@ export interface StructureFacts {
   indecomposableReason: string | null
 }
 
-const cache = new Map<string, StructureFacts | null>()
-
-/** 群指纹：记号 + 阶 + 元素 id 列表（U26：key 必须决定"是谁"，不是"叫什么"）。 */
-function fingerprint(group: Group): string {
-  return `${group.symbol}#${group.order}#${group.elements.map((e) => e.id).join(',')}`
-}
+const cache = new WeakMap<Group, StructureFacts | null>()
 
 /** φ 是否恒为恒等自同构（是 ⟹ 这个分解其实是直积）。 */
 function isTrivialAction(phiMap: { map: Map<string, string> }[]): boolean {
@@ -133,8 +128,7 @@ export function structureFacts(group: Group): StructureFacts | null {
   // 「已知群」没有元素表（U48）—— 合成列 / 半直积分解全都要遍历元素，直接说没算
   if (isKnownGroup(group)) return null
   if (group.order > STRUCTURE_CAP) return null
-  const key = fingerprint(group)
-  const hit = cache.get(key)
+  const hit = cache.get(group)
   if (hit !== undefined) return hit
   let out: StructureFacts | null = null
   try {
@@ -142,7 +136,7 @@ export function structureFacts(group: Group): StructureFacts | null {
   } catch {
     out = null
   }
-  cache.set(key, out)
+  cache.set(group, out)
   return out
 }
 

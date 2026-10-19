@@ -1,4 +1,4 @@
-import type { Group } from '@groupviz/core'
+import type { Group, GroupElement } from '@groupviz/core'
 
 /**
  * 「母群指针」——app 侧的账外索引（core 的 `Group` 没有这个字段）。
@@ -42,14 +42,91 @@ export function rootOf(g: Group): Group {
   return cur
 }
 
-/** 两个群是不是"同一个群"：引用相等最快；否则要**符号 + 阶 + 元素 id** 全对得上。 */
+/**
+ * 两个群是不是"同一个群"：引用相等最快；否则要**符号 + 阶 + 元素 id** 全对得上，
+ * 再**对拍乘法表**。
+ *
+ * ## 为什么要对表（2026-10-19）
+ *
+ * 从前这条只比 `符号 + 阶 + 元素 id`，注释里还写着"符号是会撒谎的"——可真正会撒谎的是
+ * **元素 id**：core 的 `createGroupFromImport` 给任何导入群的元素一律起 `g0…g(n-1)`，
+ * 符号一律 `Import(n)`。于是用户在结构面板手写两张 4 阶表（一张 C₄、一张 V₄，标号都是
+ * 1…4），两边的指纹**一模一样**：`sameGroup` 判 true ⇒ `sameWorld` / `idsComparable`
+ * 全放行 ⇒ 包含说"元素完全相同，就是同一个群"、识别把 V₄ 认成 C₄、同构判定说它们同构。
+ *
+ * 真值只有乘法表：**表不同就是两个群**，哪怕名字与编号全一样。
+ *
+ * ## 顺序与成本
+ *
+ * ① 引用 → ② 符号/阶 → ③ 元素 id 集合：都是 O(1)/O(n)，绝大多数比较死在这里。
+ * ④ 只有前三关全过才可能对表 —— 先比**生成元那一行**（O(k·n)，C₄ vs V₄ 当场分开），
+ *    全过再比全表（O(n²)，只在这种"疑似同一个群"的少数情形付一次）。
+ * ⑤ 两边都是**自证式 id**（置换群的 `1,2,3,4` 就是那个置换）时免检：id 相同 ⟹ 元素相同、
+ *    合成相同。这一条保住"两个独立构造的 S₄ / A₄ 仍能直接互比"的老行为。
+ */
 export function sameGroup(a: Group, b: Group): boolean {
   if (a === b) return true
   if (a.symbol !== b.symbol || a.order !== b.order) return false
   // 同符号同阶还不够：**元素 id 也要对得上**。符号是会撒谎的（两个各自构造的群
   // 可以被起成同一个记号），拿"看着一样"当"就是同一个"会让上下文群选错。
   const ids = new Set(a.elements.map((e) => e.id))
-  return b.elements.every((e) => ids.has(e.id))
+  if (!b.elements.every((e) => ids.has(e.id))) return false
+  // 置换 id 自证：id 就是元素本身，表由合成唯一决定 —— 免检。
+  if (idsAreSelfDescribing(a) && idsAreSelfDescribing(b)) return true
+  return tableEqual(a, b)
+}
+
+/** `sameGroup` 的对表结果（WeakMap：群对象回收，记录跟着走）。 */
+const TABLE_EQ = new WeakMap<Group, WeakMap<Group, boolean>>()
+
+/** 两张表是否逐格相同（元素按 id 一一对应）。成本见 `sameGroup` 的注释。 */
+function tableEqual(a: Group, b: Group): boolean {
+  const hit = TABLE_EQ.get(a)?.get(b)
+  if (hit !== undefined) return hit
+
+  const eq = computeTableEqual(a, b)
+  let row = TABLE_EQ.get(a)
+  if (!row) {
+    row = new WeakMap()
+    TABLE_EQ.set(a, row)
+  }
+  row.set(b, eq)
+  return eq
+}
+
+function computeTableEqual(a: Group, b: Group): boolean {
+  const byId = new Map<string, GroupElement>()
+  for (const e of b.elements) byId.set(e.id, e)
+  const pairs: [GroupElement, GroupElement][] = []
+  for (const e of a.elements) {
+    const bx = byId.get(e.id)
+    if (!bx) return false
+    pairs.push([e, bx])
+  }
+
+  // ④-快筛：生成元那一行。生成元少（通常 2 个），C₄/V₄ 这类当场分开。
+  for (const gen of a.generators) {
+    let ga: GroupElement | null = null
+    try {
+      ga = gen.apply(a.identity)
+    } catch {
+      ga = null
+    }
+    if (!ga) continue
+    const gb = byId.get(ga.id)
+    if (!gb) return false
+    for (const [x, bx] of pairs) {
+      if (a.multiply(ga, x).id !== b.multiply(gb, bx).id) return false
+    }
+  }
+
+  // ④-全表
+  for (const [x, bx] of pairs) {
+    for (const [y, by] of pairs) {
+      if (a.multiply(x, y).id !== b.multiply(bx, by).id) return false
+    }
+  }
+  return true
 }
 
 /**

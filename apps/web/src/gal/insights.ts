@@ -11,7 +11,6 @@ import {
   type Subgroup,
 } from '@groupviz/core'
 import { prettySymbol, superscript } from './pretty'
-import { groupFingerprint } from './identity'
 // 小群表（U55）：识别结果给的 `SmallGroup(阶, 编号)` 坐标必须与 op `smallGroup(n, i)`
 // **同一个口径**（GAP 的 1 起编号），否则印出来的坐标抄进去会拿到另一个群。
 import { gapNumberOf } from './smallGroups'
@@ -36,8 +35,11 @@ import type { GalObject } from './types'
 
 /* ── 同构识别 ─────────────────────────────────────────── */
 
-/** 识别是枚举类的重活；同一个群（同符号同阶）只算一次 */
-const isoCache = new Map<string, string | null>()
+/** 识别是枚举类的重活；同一个群对象只算一次。
+ *
+ * ⚠️ 按**群对象**缓存（WeakMap），不按字符串指纹（2026-10-19）：指纹 = 符号 + 阶 + 元素 id，
+ * 两张同标号的表（`Import(4)` 的 C₄ 表 / V₄ 表）指纹相同，会把识别结果串成同一个。 */
+const isoCache = new WeakMap<Group, string | null>()
 
 /**
  * 同构类的**别名**：core 用 `D_{3}` 表示三阶对称群，而教学语境里 `S_{3}` 更常见。
@@ -135,10 +137,8 @@ function smallGroupEntry(order: number, iso: string): { order: number; index: nu
 export function identifyGroup(group: Group): string | null {
   // 「已知群」没有元素表（U48）：识别要按不变量匹配小群库，空元素表上没意义 —— 直接说不认识
   if (isKnownGroup(group)) return null
-  // 缓存 key 用**群身份指纹**（含元素 id），不是 `symbol#order`——后者会串
-  // （同符号同阶的两个群可能是不同结构，见 `identity.groupFingerprint` 的说明）
-  const key = groupFingerprint(group)
-  const hit = isoCache.get(key)
+  // 缓存按**群对象**（WeakMap），不按指纹：同标号不同表的两群指纹会撞（见 `isoCache`）
+  const hit = isoCache.get(group)
   if (hit !== undefined) return hit
   let out: string | null = null
   try {
@@ -147,7 +147,7 @@ export function identifyGroup(group: Group): string | null {
   } catch {
     out = null
   }
-  isoCache.set(key, out)
+  isoCache.set(group, out)
   return out
 }
 
