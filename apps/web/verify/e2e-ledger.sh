@@ -7,8 +7,8 @@
 #   **shell 里的直接子进程才是正解。**
 #
 # 为什么不用 `npm run verify:e2e` 数条数：
-#   那条是 `&&` 链、常被接上 `| tail` ⇒ **退出码是 tail 的**，且它不报条数。
-#   批次收尾要的是"28 套各多少条、有没有 FAIL" —— 那是这个脚本的事。
+#   2026-10-20 起那条是 `run-all.mjs`（并发池），**已经会打印每套条数与总数**；
+#   这个台账脚本保留是因为它**串行**——失败时顺序稳定、日志不交错，排障时更好读。
 #
 # 用法（**cwd 必须是 apps/web**：截图的 path 相对 cwd，见 REFERENCE §8）：
 #   bash verify/e2e-ledger.sh                      # 全部（自动枚举 verify/e2e/*.mjs）
@@ -32,7 +32,11 @@ if [ "$#" -gt 0 ]; then
 else
   LIST=""
   for f in verify/e2e/*.mjs; do
-    LIST="$LIST $(basename "$f" .mjs)"
+    name=$(basename "$f" .mjs)
+    # ⚠️ run-all.mjs 是**并发跑器**（2026-10-20），不是套件 —— 枚举时必须排掉，
+    #    否则台账会把整圈走查再递归跑一遍。
+    [ "$name" = "run-all" ] && continue
+    LIST="$LIST $name"
   done
 fi
 

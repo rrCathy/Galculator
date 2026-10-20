@@ -253,8 +253,12 @@ console.log('\n== 场景 1b：常驻卡片形态（P0-1）==')
     const r = o.getBoundingClientRect()
     return { left: r.left, right: r.right, bottom: r.bottom, vw: window.innerWidth }
   })
-  ok('输入球**靠左停**（工作台升起 ⇒ `dockLeft`；卡片嵌入后不再需要 `dockRight` —— 两者不再重叠）',
-    orb !== null && orb.left < (box?.vw ?? 0) / 2, orb === null ? '' : `left=${Math.round(orb.left)} vw=${box?.vw}`)
+  /*
+   * 2026-10-20：停位由**左**改**右**（左整改右整的理由见 App 里 `dockRight` 的注释：
+   * 左停会压住左上那条栏）。判据仍是"离开中线、贴到边"，只是方向换了。
+   */
+  ok('输入球**靠右停**（工作台升起 ⇒ `dockRight`，2026-10-20 改）',
+    orb !== null && orb.right > (orb?.vw ?? 0) * 0.5, orb === null ? '' : `right=${Math.round(orb.right)} vw=${orb?.vw}`)
 
   // **点画布空白不关编辑器**（常驻的核心承诺：用户还要点画布看别的对象）
   await page.evaluate(() => {

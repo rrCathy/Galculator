@@ -24,6 +24,14 @@ node .tmp-verify/vout/run.js          # 有 FAIL 时退出码非 0
 
 # ② 几何层：先起 dev server，再跑走查
 node node_modules/vite/bin/vite.js . --port 5273 --host 127.0.0.1   # 后台
+
+# ── 2026-10-20 起：并发跑器（一圈 7 分钟 → 1.5 分钟）──────────────
+npm run verify:e2e -- --jobs=6        # 全部 36 套，6 路并发
+npm run verify:e2e:fast               # 只跑高频面 7 套（约 1 分钟）：改 UI/工作台/栏目时先跑这个
+npm run verify:e2e:serial             # 串行（排障用，顺序才有意义）
+node verify/e2e/run-all.mjs --only=workbench,dock-layout   # 自选套件
+
+# 单套（调试某一条断言时最省）：
 node verify/e2e/dock-layout.mjs       # 左上抽屉分列 + 两栏都展开时的封顶（U16）
 node verify/e2e/layout-spec.mjs       # 布局硬规范体检（三张图 + 截图）
 node verify/e2e/first-iso-square.mjs  # 第一同构正方形（G8）
@@ -37,7 +45,7 @@ node verify/e2e/usability-fixes.mjs   # 结论区不再沉默 / φ 能敲 / 报�
 node verify/e2e/relation-ops.mjs      # 子群像 f(H) 与声明包含 H ⊆ G（U20）
 node verify/e2e/connect.mjs           # 拖拽连线 + 对象列表「操作」（U21，真鼠标拖；U44 入口从面板挪到行上）
 node verify/e2e/grid-drag.mjs         # 格点 / 拖动吸附 / 平移 / 缩放 / 复位（U10 的补线，U22）
-node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）；⑪ 球靠左停 + 拖台高度解绑（固定位 / 碰到才让位，2026-10-10）
+node verify/e2e/radial-menu.mjs       # 对象悬浮球：球挂哪 · 环按值类型给 · 点一下真创建（U22）；⑪ 球靠**右**停 + 拖台高度解绑（2026-10-20 由左停改右停）
 node verify/e2e/copy-label.mjs        # 把画布上的记号抄回去：三条复制路径（U24）
 node verify/e2e/structural-edges.mjs  # 结构伴生边可点：π/↪/=/≅ 的账与三条纪律（U26）
 node verify/e2e/structure-ops.mjs     # gcd/lcm/phi · Burnside · 极大子群 · Inn · 「结构」节（U27）
@@ -56,12 +64,16 @@ node verify/e2e/action-entries.mjs    # 群作用的四条入口：⊕ 球 / 点
 node verify/e2e/action-omega.mjs      # 群作用这件事本身：Ω 能选 / 子群集当 Ω / 元素送到哪（U58）
 node verify/e2e/set-menu.mjs          # 集合那一侧的菜单不撒谎：asSet/closure 收窄（U59）
 node verify/e2e/map-builder.mjs       # 映射构建器的卡片形态（三编辑器包壳）
-node verify/e2e/workbench.mjs         # 工作台 v2.2：显示屏（级别词 / 无阶副行）/ 对象槽（最左竖列）/ 键盘随焦点变 / 竖排节导航 / 槽位 / ＋导入 / 编辑器嵌入 / 文字禁选
+node verify/e2e/workbench.mjs         # 工作台 v2.2：显示屏（级别词 / 无阶副行）/ 对象槽（2026-10-20 起＝台顶满宽横条）/ 键盘随焦点变 / 横排节导航 / 槽位 / ＋导入 / 编辑器嵌入 / 文字禁选
 node verify/e2e/dark-contrast.mjs     # 深色仪器台对比度巡检：过亮底 + 低对比字（W1，`?theme=dark`）
 # 等价：pnpm --filter @galculator/web verify:e2e
 ```
 
-**数条数 / 批次收尾用台账脚本**（`verify:e2e` 是 `&&` 链，被接上 `| tail` 时**退出码是 tail 的**、也不报条数）：
+**数条数 / 批次收尾用台账脚本**：
+
+> 2026-10-20 起 `verify:e2e` **不再是 `&&` 链**，而是 `verify/e2e/run-all.mjs`（并发池）：
+> 每套一行结果、失败套件打 FAIL 摘录、退出码汇总，接 `| tail` 也不会丢判据。
+> 台账脚本仍然可用（它按 `verify/e2e/*.mjs` 枚举，会**把 run-all.mjs 之外的都算上**）：
 
 ```bash
 cd apps/web
