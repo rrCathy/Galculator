@@ -220,7 +220,11 @@ ok('点得中 f(A) 顶点', await clickSvg('g.gnode[data-id="FA"] .gnode-hit'))
 await page.waitForTimeout(400)
 const fi = await infoState()
 ok('点 f(A) 看到的是群', fi.chip === '群', `${fi.chip} :: ${fi.head}`)
-ok('阶是 3（手算：A_4 的像 \\cong C_3）', fi.vals.some((v) => v.includes('|G| = 3')), JSON.stringify(fi.vals))
+ok(
+  '阶是 3（手算：A_4 的像 \\cong C_3）',
+  fi.vals.some((v) => v.includes('|G| = 3')),
+  JSON.stringify(fi.vals),
+)
 
 /* ── U38：D₄ 的包含现在真建得出来（旧判据下这条曾被当成"假声明"）── */
 

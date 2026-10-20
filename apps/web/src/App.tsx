@@ -151,7 +151,12 @@ export default function App() {
    * 93 个群的长列表，常驻会把画布压掉。
    */
   const [openCatalog, setOpenCatalog] = useState(false)
-  const [openNumeric, setOpenNumeric] = useState(true)
+  /*
+   * 数值抽屉**默认收起**（2026-10-20）：它常驻时是一块 170×119 的空面板，
+   * 里面只有一句"把面板里的数字拖进来"——没数字时纯占地方。
+   * 有数字第一次出现时自动展开一次（见 `numericEntries` 之后的 effect）。
+   */
+  const [openNumeric, setOpenNumeric] = useState(false)
   /**
    * **工作台**的升起 / 收起（P1，2026-10-05）。
    *
@@ -416,6 +421,18 @@ export default function App() {
     () => [...computedNumbers(objects), ...dragged],
     [objects, dragged],
   )
+
+  /**
+   * 抽屉默认收起（B2）⇒ 第一次「有数字」时替用户拉开一次，之后不再抢。
+   * 判据只看"空 → 非空"这一跳（`ref` 记住已经拉开过）。
+   */
+  const numericHadContent = useRef(false)
+  useEffect(() => {
+    if (numericEntries.length > 0 && !numericHadContent.current) {
+      numericHadContent.current = true
+      setOpenNumeric(true)
+    }
+  }, [numericEntries.length])
 
   const onAnchors = useCallback((a: NodeAnchor[], s: { w: number; h: number }) => {
     setAnchors(a)
@@ -1277,6 +1294,15 @@ export default function App() {
            * 注：旧变量 `--bench-h`（台高实时值）已删——自本条起没有 CSS 消费者。
            */
           '--bench-h-park': `${Math.round(canvasSize.h * BENCH_H_DEFAULT)}px`,
+          /*
+           * **左上栏的右边界**（2026-10-20）：`.bench` 用它钳住自己的左缘。
+           *
+           * 台宽是 `min(1240, 100vw-300)` 且居中 ⇒ 左缘**恒 150px**，与栏宽无关；
+           * 而栏展开时到 182 ⇒ 台把「目录」盖掉 32px（1024 窗口整条盖没）。
+           * 这里把量好的 `barriers.top`（正是 `.dock-topleft` 的 right）交给 CSS，
+           * 让台 "至少让到栏右侧 + 12"。栏收起时它是胶囊右缘，台仍可居中。
+           */
+          '--dock-w': `${barriers.top}px`,
         } as CSSProperties
       }
     >
@@ -1450,13 +1476,39 @@ export default function App() {
         <button
           className="theme-toggle"
           onClick={toggleTheme}
+          aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           title={
             theme === 'dark'
-              ? '切换到浅色模式（当前是深色）'
-              : '切换到深色模式（仪器台，当前是浅色）'
+              ? '当前：深色（仪器台），点按切到浅色'
+              : '当前：浅色（演算纸），点按切到深色'
           }
         >
-          {theme === 'dark' ? '浅色' : '深色'}
+          {/*
+           * 2026-10-20：文字改成**图标 + 当前态**。
+           * 从前按钮里写的是"深色"—— 那是**目标**，不是现状，第一眼很容易读反。
+           * 图标画的是"现在是什么"：太阳 = 浅色，月亮 = 深色。
+           * （用 SVG 不用 `☀`/`☾`：那些字符键盘打不出来，不许进文本流。）
+           */}
+          {theme === 'dark' ? (
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none">
+              <path
+                d="M13.2 9.6A5.4 5.4 0 0 1 6.4 2.8a5.4 5.4 0 1 0 6.8 6.8Z"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none">
+              <circle cx="8" cy="8" r="3.1" stroke="currentColor" strokeWidth="1.3" />
+              <path
+                d="M8 1.2v1.4M8 13.4v1.4M1.2 8h1.4M13.4 8h1.4M3.2 3.2l1 1M11.8 11.8l1 1M12.8 3.2l-1 1M4.2 11.8l-1 1"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+              />
+            </svg>
+          )}
         </button>
         <ProofDock
           open={proofOpen}
@@ -1510,17 +1562,13 @@ export default function App() {
         onAdd={(l) => (editing ? replaceLine(editing.index, l) : setLines((p) => [...p, l]))}
         minLeft={barriers.bottom}
         /*
-         * ⚠️ **`dockRight` 已撤**（2026-10-08）：它当年是给"贴底居中的编辑器卡片"让位用的
-         * —— 卡片已嵌进工作台右列（不占底部），输入球与它不再重叠，无需右侧让位。
-         * 现在只剩下面那条"工作台升起 ⇒ 靠左停"。
-         */
-        /*
-         * **工作台升起 ⇒ 输入球靠左停**（2026-10-06，用户实测第 3 条）。
+         * **工作台升起 ⇒ 输入球靠右停**（2026-10-20 改；原为靠左停）。
          *
-         * 用户原话：「工作台展开后上面一个输入口也太神秘了，不会挪个位置？比如放左边？」
-         * 上一版只治了遮挡（把球整体上移），没治语义 ⇒ 一个孤零零的球浮在台面上方。
+         * 左停是 2026-10-06 的裁定，当时只算了"别被台盖住"。真机量出来它压住了
+         * 左上那一列的「操作 / 目录」胶囊（球 12,194 · 12,234 vs 栏 12..182 × 12..277）
+         * —— 让开了台，却让不开栏。右边从顶到底只有证明抽屉（可收起），是真正空的。
          */
-        dockLeft={benchOpen}
+        dockRight={benchOpen}
       />
 
       {/*

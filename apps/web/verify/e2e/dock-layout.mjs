@@ -94,23 +94,25 @@ const readGeo = (page) =>
   ok('对象与操作**左边缘对齐**（同一列）', g.obj.x === g.op.x, `obj.x=${g.obj.x} op.x=${g.op.x}`)
   ok('对象与操作**等宽**', g.obj.w === g.op.w, `${g.obj.w} vs ${g.op.w}`)
   ok(
-    '操作**在对象下方**（间距 = 列 gap 8）',
-    g.op.y - g.obj.bottom === 8,
+    '操作**在对象正下方**（2026-10-20 起一条栏：节与节之间无 gap）',
+    g.op.y - g.obj.bottom === 0,
     `op.y=${g.op.y} obj.bottom=${g.obj.bottom}`,
   )
   ok('目录也在**同一列**（左边缘对齐；2026-10-08 信息栏砍后这一组就一列）',
     g.cat !== null && g.cat.x === g.obj.x, `cat.x=${g.cat?.x} obj.x=${g.obj.x}`)
   ok('整组不越出视口右边', g.colRight <= g.vw, `right=${g.colRight} vw=${g.vw}`)
   /*
-   * 列高 = 各项高度之和 + gap（即**没有多余空隙**）。
+   * 列高 = 各项高度之和（即**没有多余空隙**）。
    *
    * ⚠️ U56 起这一列有**三个**抽屉（对象 / 操作 / 目录）—— 原来只算两栏，
    * 多出来的「目录」胶囊就把这条读红了（col 343 = obj 78 + op 218 + cat 31 + 2 x 8）。
-   * 判据本身没变，变的只是成员个数。以后再加栏，记得同步这里。
+   *
+   * 2026-10-20：三张卡**接成一条栏**（左栏合并批），节与节之间 gap 归零
+   * ⇒ 列高 = 三节之和，不再加 `2 x 8`。判据本身（没有多余空隙）没变。
    */
   ok(
-    '「操作」单独一项时列高 = 三栏之和 + 2 个 gap',
-    g.col.h === g.obj.h + g.op.h + g.cat.h + 8 * 2,
+    '「操作」单独一项时列高 = 三节之和（一条栏，无 gap）',
+    Math.abs(g.col.h - (g.obj.h + g.op.h + g.cat.h)) <= 2,
     `col.h=${g.col.h} obj.h=${g.obj.h} op.h=${g.op.h} cat.h=${g.cat.h}`,
   )
 
@@ -125,7 +127,11 @@ const readGeo = (page) =>
     g2.obj.x === objBefore.x && g2.obj.y === objBefore.y,
     `${JSON.stringify(g2.obj)} vs ${JSON.stringify(objBefore)}`,
   )
-  ok('收起后仍是窄胶囊（宽度小于展开）', g2.op.w < g.op.w, `${g2.op.w} vs ${g.op.w}`)
+  /*
+   * 2026-10-20：收起态**不再缩成窄胶囊** —— 一条栏里三节同宽（200），
+   * 才读得出"这是同一张卡里的三节"。宽度不再随收展变，是这一批的**有意契约**。
+   */
+  ok('收起后宽度与展开一致（一条栏，三节同宽）', g2.op.w === g.op.w, `${g2.op.w} vs ${g.op.w}`)
 
   ok('控制台零错误', logs.length === 0, logs.join(' | '))
   await page.close()

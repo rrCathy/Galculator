@@ -143,6 +143,12 @@ console.log('== ① 选中一个对象 -> 球出现 ==')
   ok('球出现了', st.orb)
   ok('球是"收起"态（只露一个 \\cdot s）', !st.orbOn)
 
+  /*
+   * 2026-10-20：点节点会**自动升台**，台升起时球是"停位"（右下角），不是"挂节点旁"。
+   * 想量挂钩几何就得先把台收掉 —— 与 ⑨ 里同一手法。
+   */
+  await benchDown()
+  await page.waitForTimeout(320)
   // 挂在**左上角**：右侧与下方是出边的地方，球不该压在那儿
   const rel = await page.evaluate(() => {
     const orb = document.querySelector('.orb:not(.orb-center)')?.getBoundingClientRect()
@@ -422,17 +428,27 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
     if (!orb || !bench) return null
     const r = orb.getBoundingClientRect()
     const b = bench.getBoundingClientRect()
-    const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+    const benchEl = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
     return {
       x: Math.round(r.left),
+      right: Math.round(r.right),
       y: Math.round(r.top),
+      vw: window.innerWidth,
       benchTop: Math.round(b.top),
       benchOpen: bench.className.includes('open'),
-      docked: orb.className.includes('dock-left'),
-      reachable: !!(el && (el === orb || orb.contains(el))),
+      docked: orb.className.includes('dock-right'),
+      reachable: !!(benchEl && (benchEl === orb || orb.contains(benchEl))),
     }
   })
-  ok('台升起后球**靠左停**（盒左 = 12，带 dock-left）', st?.benchOpen === true && st?.x === 12 && st?.docked === true, JSON.stringify(st))
+  /*
+   * 2026-10-20：停位从**左**改**右**（左下被左上那条栏 + 两个球自己占着，
+   * 球停在 x=12 会压住「操作」「目录」）。判据：盒右 = 视口宽 - 12、带 dock-right。
+   */
+  ok(
+    '台升起后球**靠右停**（盒右 = 视口宽 - 12，带 dock-right）',
+    st?.benchOpen === true && st?.docked === true && st?.right === st?.vw - 12,
+    JSON.stringify(st),
+  )
   /* 2026-10-10 起球位**钉死**：与台顶的关系不再是判据（台左缘恒 ≥150、球 x=12，
      水平不重叠）——「不被盖」直接用命中测试说话。 */
   ok('球点得中、不被台盖（钉死位，2026-10-10）', st?.reachable === true, JSON.stringify(st))
@@ -452,7 +468,7 @@ console.log('== ⑪ 台升起，对象球靠左停 ==')
     }),
   )
   ok(
-    '环铺开且全部点得中（右侧半圈，不越出屏左缘）',
+    '环铺开且全部点得中（左侧半圈，不越出屏右缘）',
     ring.length >= 4 && ring.every((sEl) => sEl.reachable) && ring.every((sEl) => sEl.x >= 0),
     JSON.stringify(ring),
   )

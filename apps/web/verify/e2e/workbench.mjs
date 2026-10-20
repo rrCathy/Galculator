@@ -190,8 +190,8 @@ const bench = () =>
         const r = box.getBoundingClientRect()
         return { w: Math.round(r.width), h: Math.round(r.height) }
       })(),
-      /* 对象槽位置（2026-10-10 用户点名挪到**最左列竖放**）：
-         正查"在 .bench-body 直接子级"、反查"不在 .bench-left 里"，外加 chips 必须竖排 */
+      /* 对象槽位置（2026-10-20 改：台顶满宽横条）：
+         正查"在 .bench-body 直接子级"、反查"不在 .bench-left 里"，外加 chips 必须横排 */
       stageCol: !!el.querySelector('.bench-body > .bench-stage'),
       stageInLeft: !!el.querySelector('.bench-left .bench-stage'),
       stageDir: (() => {
@@ -329,12 +329,13 @@ console.log('\n== 场景 3：显示条与明细区 ==')
   ok('显示条副行不再报阶（2026-10-10 用户点名去掉）', !/阶/.test(clean(b?.screenSub)), clean(b?.screenSub))
 
   /* 2026-10-19：「表示」节（`<S|R>`）插在「基本」之后 —— 五节，顺序是契约的一部分 */
-  ok('明细区是**竖排**节导航：基本 / 表示 / 元素 / 共轭类 / 子群（这个顺序）',
+  ok('明细区**横排**节导航：基本 / 表示 / 元素 / 共轭类 / 子群（这个顺序；2026-10-20 竖 rail → 横 tab）',
     JSON.stringify(b?.tabs) === JSON.stringify(['basic', 'presentation', 'elements', 'conj', 'subgroups']), JSON.stringify(b?.tabs))
   ok('节标签**只写名字**（副文案全砍——用户：「基本就是基本，还写什么『基本 |G|=3，交换』」）',
     JSON.stringify(b?.tabLabels) === JSON.stringify(['基本', '表示', '元素', '共轭类', '子群']), JSON.stringify(b?.tabLabels))
-  ok('导航条是**竖的**（宽 < 高：一列，不是一行）',
-    (b?.tabVertical?.w ?? 999) < (b?.tabVertical?.h ?? 0),
+  /* 2026-10-20 契约变更：竖 rail（86px）→ 横排 tab。正文因此从 548 → 756。 */
+  ok('导航条是**横的**（宽 > 高：一行 tab，不再占一条竖带）',
+    (b?.tabVertical?.w ?? 0) > (b?.tabVertical?.h ?? 999),
     JSON.stringify(b?.tabVertical))
 
   /* 结论层按行读（KaTeX 零宽先抹掉，坑 19） */
@@ -496,8 +497,10 @@ console.log('\n== 场景 5：＋ 导入对象 ==')
   ok('键盘跟着换焦点（群键回来了）', (b?.keyOps.length ?? 0) > 20, `keys=${b?.keyOps.length}`)
   ok('新对象自动进对象槽（chip 在，且写数学名 S3）', (b?.stage.length ?? 0) === 1 && clean(b.stage[0].main) === 'S3',
     JSON.stringify(b?.stage.map((c) => clean(c.main))))
-  ok('对象槽在**最左列竖放**、标签写「对象槽」（2026-10-10 用户点名：「挪到工作台最左侧竖着放」）',
-    b?.stageCol === true && b?.stageInLeft === false && b?.stageDir === 'column' &&
+  /* 2026-10-20 契约变更：96px 竖列 → **台顶满宽横条**（对象槽只吃 28px 高，
+     正文因此多出 96px 宽）。仍要求它是 `.bench-body` 的直接子级、不在左列里。 */
+  ok('对象槽是**台顶的满宽横条**、标签写「对象槽」（2026-10-20 改：竖列 → 横条）',
+    b?.stageCol === true && b?.stageInLeft === false && b?.stageDir === 'row' &&
       b?.stageLabel === '对象槽',
     `col=${b?.stageCol} inLeft=${b?.stageInLeft} dir=${b?.stageDir} label=${b?.stageLabel}`)
 

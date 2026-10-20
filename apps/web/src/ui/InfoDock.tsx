@@ -476,6 +476,13 @@ function BasicTab({ group, node }: { group: Group; node: GalObject }) {
 
   return (
     <>
+      {/*
+       * 2026-10-20：这一行**留着**。本来想删（结论卡已经写「阶 |G| = 24 = 2³·3」，
+       * 这里再写「阶 |G| = 24」重复），但三个走查套件（relation-ops / structure-ops /
+       * semidirect-op）都拿它当"这个对象是多少阶"的判据 —— 事实表里保留原始读数，
+       * 结论卡负责**分解与含义**，两层各有职责，不算冗余。
+       * 显示屏标题行右端另加了「阶 24」（`bench-screen-order`），三级都看得见阶。
+       */}
       <Row k="阶">
         <span>|G| = {group.order}</span>
       </Row>

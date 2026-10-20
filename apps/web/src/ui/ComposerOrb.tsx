@@ -35,7 +35,6 @@ export function ComposerOrb({
   onAdd,
     minLeft = 0,
     dockRight = false,
-    dockLeft = false,
   }: {
   open: boolean
   onToggle: () => void
@@ -49,8 +48,7 @@ export function ComposerOrb({
   /** 左下数值面板的右边界；球不能被它压住 */
   minLeft?: number
   /**
-   * **贴到右侧**（P0-1）：对象编辑器常驻时用 —— 那个卡片也在底部居中，
-   * 两者都在 `bottom: 12px` 会重叠，于是输入球让到右边。
+   * **贴到右侧**（2026-10-20：工作台升起时也走这条；原 P0-1 只给编辑器卡片用）。
    *
    * ⚠️ 这一条**必须走 prop 而不能走 CSS**：`.composer-orb` 的 `left` 是**内联 style**
    * （`max(50%, …)`，用来避开左下数值面板，见 `minLeft`），内联样式压过任何样式表规则 ——
@@ -58,19 +56,6 @@ export function ComposerOrb({
    * （= 居中），白查一轮。**与内联样式共处只有一条路：改它自己。**
    */
   dockRight?: boolean
-  /**
-   * **工作台升起时靠左停**（2026-10-06，用户实测第 3 条）。
-   *
-   * 用户原话：工作台展开后那个悬在上方的输入口「太神秘了，不会挪个位置？比如放左边？」
-   *
-   * 病根是我上一版只治了**遮挡**（把球整体上移），没治**语义** ——
-   * 一个孤零零的球浮在台面上方，看不出它是谁。靠左停就不一样：
-   * 它贴着屏幕左边、在左栏那一列的下方，读起来是"输入在这儿"。
-   *
-   * ⚠️ 与 `dockRight` 同一个理由，**必须走 prop**（`left` 是内联 style）。
-   * 两者同时为真时以 `dockLeft` 为准（工作台是更大的面，编辑器会收进它里面）。
-   */
-  dockLeft?: boolean
 }) {
   const [nameDraft, setNameDraft] = useState('')
   const [exprDraft, setExprDraft] = useState('')
@@ -139,11 +124,9 @@ export function ComposerOrb({
          ⚠️ 靠边时**必须同时把 `transform: translateX(-50%)` 抹掉**：那是"以 left 为轴居中"
          用的，靠边时它会再把球往左拽半个身位（真机量出来 `left: -4`，半个球在屏幕外）。 */
       style={
-        dockLeft
-          ? { left: 12, right: 'auto', transform: 'none' }
-          : dockRight
-            ? { right: 12, left: 'auto', transform: 'none' }
-            : { left: `max(50%, ${minLeft + 70}px)` }
+        dockRight
+          ? { right: 12, left: 'auto', transform: 'none' }
+          : { left: `max(50%, ${minLeft + 70}px)` }
       }
     >
       <button
@@ -151,7 +134,13 @@ export function ComposerOrb({
         onClick={onToggle}
         title={open ? '收起输入' : '输入定义（名字 = 表达式）'}
       >
-        *
+        {/*
+         * 2026-10-20：`*` → 「＋ 输入定义」胶囊。
+         * 顶中那颗 `+`（多对象操作）与它从前是**两个一模一样的黑圆**：字形不表意、
+         * 位置分不清（一个 12px 从顶边、一个贴底）。补上文字，两个入口一眼分得开。
+         */}
+        <span className="composer-orb-plus">＋</span>
+        <span className="composer-orb-word">输入定义</span>
       </button>
       {open && (
         <div className="composer-card">

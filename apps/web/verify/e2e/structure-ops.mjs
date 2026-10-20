@@ -312,7 +312,11 @@ ok('点中 I', await clickRow('I'))
   const inf = await infoState()
   ok('工作台说这是群', inf.chip === '群', inf.chip)
   // 手算：Inn(D₄) ≅ D₄/Z(D₄)，|Z| = 2（{e, r²}）-> 4
-  ok('阶 = |G| / |Z| = 8 / 2 = 4', inf.rows.some((r) => r.k === '阶' && r.v.includes('4')), JSON.stringify(inf.rows))
+  ok(
+    '阶 = |G| / |Z| = 8 / 2 = 4',
+    inf.rows.some((r) => r.k === '阶' && r.v.includes('4')),
+    JSON.stringify(inf.rows),
+  )
   ok(
     '副行写着 |Inn| = 4 = |G| / |Z| = 8 / 2',
     (inf.def ?? '').includes('Inn(G)') && inf.rows.length > 0,

@@ -4,7 +4,6 @@ import { menuLabel } from '../gal/interaction'
 import type { GalValue } from '../gal/value'
 import type { NodeAnchor } from './CanvasView'
 import type { InfoTab } from './InfoDock'
-import { BENCH_H_DEFAULT } from './Workbench'
 
 export type OrbStage = 'closed' | 'ring' | 'ops'
 
@@ -151,11 +150,12 @@ export function ObjectOrb({
   containerW: number
   containerH: number
   /**
-   * **靠左停**（2026-10-09 用户拍板）——台升起时球不再贴着被台盖住的节点，
-   * 而是固定到左缘（与输入球同一条竖线、叠在它下面）。环与操作面板随向翻到右侧。
+   * **靠右停**（2026-10-20 由"左停"改来）——台升起时球不再贴着被台盖住的节点，
+   * 而是固定到**右下角、输入球正上方**（两球叠成一列，读作"动作在这儿"）。
+   * 环与操作面板随向翻到**左侧**。
    *
-   * ⚠️ 2026-10-10 起左停位**完全钉死**（不随台高动）⇒ 不再需要 `benchH` 传参：
-   * 台左缘恒 ≥150px、球在 x=12 ⇒ 水平不重叠，台永远盖不到它（见 `dockY` 注释）。
+   * ⚠️ 停位**完全钉死**（不随台高动，2026-10-10 用户两轮点名）⇒ 不需要 `benchH` 传参。
+   * 左停那些年压住的是左上抽屉列（球 12,194 vs 栏 12..277）—— 右缘才是常空的一块。
    */
   dock?: boolean
   onOpen: () => void
@@ -173,22 +173,30 @@ export function ObjectOrb({
 
   const isEdge = anchor.kind === 'edge'
   /*
-   * **左停位**（dock，2026-10-09）：中心 x=25（盒左 12，与输入球左缘同一条线）。
+   * **右停位**（2026-10-20 从"左停"改过来）。
    *
-   * **y 完全钉死**（2026-10-10，用户两轮点名）——
-   * 用户原话一：「当工作台上下拉高度时，对象球会跟着动。我要解绑这个，让对象球固定」；
-   * 原话二（看到"碰到才让位"成品后）：「啥意思啊，拖高过 68% 后球就跟着动了，我是这个意思吗？」
-   * ⇒ **任何台高度都不许动**（连同输入球）。
+   * 左停是 2026-10-09 的裁定，2026-10-10 又把 y 钉死 —— 那条几何推理只验证了
+   * "台盖不到球"（台居中共宽，左缘 ≥150），**没验证"球盖不到栏"**：
+   * 真机量出来球停在 x=12~38，正好落在左上抽屉列（12..182 × 12..277）里，
+   * 压住「操作」「目录」两个胶囊。右下角是全屏唯一常空的一块（证明抽屉可收起）。
    *
-   * ⚠️ 「让位」为什么根本不需要（此前判断失误的纠正）：台是**居中**的
-   * （宽 `min(1240px, 100vw-300px)`）⇒ 左缘恒在 **≥150px**；两球 dock 在 x=12~38
-   * ⇒ **水平不重叠、台永远盖不到球**。从前"贴台顶上方 41px"跟算出来的 y 其实只是
-   * 美观上的贴线，没有遮挡意义。钉死后球停在**默认台高（`BENCH_H_DEFAULT` = 68%）
-   * 时的停位**，拖台高度纹丝不动、也永不被盖。
+   * **y 仍然完全钉死**（2026-10-10 用户两轮点名，别改回跟台高走）：
+   * 钉在视口右下角，拖台任意高度纹丝不动。
    */
-  const dockX = 25
-  const dockY = Math.round(containerH * (1 - BENCH_H_DEFAULT) - 41)
-  // 节点左上角（沿对角线挪一点，别压在节点边上）；箭头挂在中点正上方；dock 固定左缘
+  const dockX = Math.round(containerW - 25)
+  /*
+   * 2026-10-20：y 改到**右下角、输入球正上方**（间距 26）。
+   * 从前是"默认台高顶线上方 41px"——那是给左停位算的，右停之后那条线在台右缘之外，
+   * 球会孤零零挂在屏幕右边缘。右下角与输入球叠成一列，读起来是"动作在这儿"。
+   * **仍然与台高无关**（拖拽不改位置），10-10 那条裁定保持不变。
+   */
+  /*
+   * 116 而不是 96：环的下缘要抬过输入胶囊（底 12 + 高 34）。
+   * `96 + RING_R(56) = 860` 正好压在胶囊上（走查实测第一颗卫星 `reachable:false`）；
+   * `116` 让环底停在 ~840，与胶囊留 14px。
+   */
+  const dockY = Math.round(containerH - 116)
+  // 节点左上角（沿对角线挪一点，别压在节点边上）；箭头挂在中点正上方；dock 固定右缘
   const orbX = dock ? dockX : clampX(isEdge ? anchor.x : anchor.x - anchor.r * 0.74)
   const orbY = dock ? dockY : clampY(isEdge ? anchor.y - 28 : anchor.y - anchor.r * 0.74)
   const ringR = dock ? RING_R_MIN : isEdge ? RING_R_EDGE : Math.max(RING_R_MIN, anchor.r + 22)
@@ -198,7 +206,7 @@ export function ObjectOrb({
   return (
     <>
       <button
-        className={`orb${stage !== 'closed' ? ' on' : ''}${dock ? ' dock-left' : ''}`}
+        className={`orb${stage !== 'closed' ? ' on' : ''}${dock ? ' dock-right' : ''}`}
         style={{ left: orbX, top: orbY }}
         title={stage === 'closed' ? '操作这个对象' : '收起'}
         onClick={(e) => {
@@ -215,15 +223,15 @@ export function ObjectOrb({
       {stage === 'ring' &&
         items.map((item, i) => {
           const t = ((dock ? angleAtDock(i, items.length) : angleAt(i, items.length)) * Math.PI) / 180
-          // dock 时只往**右侧半圈**铺（左侧是屏幕外）；x 再兜一道下限，别贴出左缘
+          // dock 时只往**左侧半圈**铺（右侧是屏幕外）；x 再兜一道上限，别贴出右缘
           const x = dock
-            ? Math.max(40, orbX + Math.cos(t) * ringR)
+            ? Math.min(containerW - 40, orbX + Math.cos(t) * ringR)
             : clampX(orbX + Math.cos(t) * ringR)
           const y = clampY(orbY + Math.sin(t) * ringR)
           return (
             <button
               key={item.key}
-              className={`orb-sat${item.tab ? ' orb-info' : ' orb-ops'}${dock ? ' dock-left' : ''}`}
+              className={`orb-sat${item.tab ? ' orb-info' : ' orb-ops'}${dock ? ' dock-right' : ''}`}
               data-op={item.opId}
               style={{ left: x, top: y }}
               title={item.title}
@@ -253,9 +261,11 @@ export function ObjectOrb({
 
       {stage === 'ops' && (
         <div
-          className={`orb-ops-panel${dock ? ' dock-left' : ''}`}
+          className={`orb-ops-panel${dock ? ' dock-right' : ''}`}
           style={{
-            left: dock ? 12 : Math.min(Math.max(orbX - 12, 12), Math.max(12, containerW - 260)),
+            left: dock
+              ? Math.max(12, dockX - 12 - 252)
+              : Math.min(Math.max(orbX - 12, 12), Math.max(12, containerW - 260)),
             top: dock
               ? Math.min(dockY + 34, Math.max(12, containerH - 330))
               : Math.min(orbY + 26, Math.max(12, containerH - 320)),
@@ -298,10 +308,10 @@ function angleAt(i: number, n: number): number {
 }
 
 /**
- * dock（球靠左停）时的环绕角度：**右侧半圈**（-90° 到 +90°）。
- * 球在屏幕左缘，左侧是屏幕外 —— 原版"上半圈 + 左侧"在这里会铺到屏幕外。
+ * dock（球靠右停）时的环绕角度：**左侧半圈**（+90° 经 180° 到 +270°）。
+ * 球在屏幕右缘，右侧是屏幕外 —— 原版"上半圈 + 左侧"在这里会铺到屏幕外或压在台上。
  */
 function angleAtDock(i: number, n: number): number {
-  if (n <= 1) return 0
-  return -90 + (i * 180) / (n - 1)
+  if (n <= 1) return 180
+  return 90 + (i * 180) / (n - 1)
 }

@@ -362,7 +362,28 @@ export function Workbench({
     return m
   }, [])
 
-  const h = viewportH ? Math.round(viewportH * (hRatio ?? BENCH_H_DEFAULT)) : undefined
+  /*
+   * 窄窗（≤1080）默认更高一档（2026-10-20）：那档布局是**上下两段**（键盘在上、明细在下），
+   * 68vh 里键盘一铺，明细只剩标题一行。抬到 78vh 才给得出一屏可读的明细。
+   * 判据与 CSS 的 1080 断点同值；窗口变宽时 `viewportH` 会重算、自动回落。
+   */
+  const narrow = typeof window !== 'undefined' && window.innerWidth <= 1080
+  const h = viewportH
+    ? Math.round(viewportH * (hRatio ?? (narrow ? 0.78 : BENCH_H_DEFAULT)))
+    : undefined
+
+  /*
+   * **窄窗里键盘默认收起**（2026-10-20）。
+   *
+   * 1024×768 的上下两段布局里，27 枚键铺满上半 ⇒ 明细区只剩标题一行。
+   * 键盘是"动手"，明细是"读"，窄窗两者抢不到地方时**先保阅读**：
+   * 屏下方给一枚「键盘」开关，点开才铺（铺开时左列封顶 44%、自己滚）。
+   * 宽窗不显示这枚开关（CSS 隐藏），行为与从前一字不差。
+   */
+  const [padOpen, setPadOpen] = useState(true)
+  useEffect(() => {
+    setPadOpen(!narrow)
+  }, [narrow])
 
   /** 显示条的标题/副行（数学身份 + 定义）。判据在 `gal/mathLabel.ts`。 */
   const ml = useMemo(() => (node ? mathLabel(node) : null), [node])
@@ -445,6 +466,21 @@ export function Workbench({
             <TexOrText text={node.id} />
           </span>
         )}
+        {/*
+         * `＋ 导入对象` 挪到**标题条右端**（2026-10-20）。
+         * 它原来钉在左列底部；键面加了中文副标后左列变高、可滚，
+         * 主按钮会被滚出视野 —— 主操作不该藏在滚动区里。
+         */}
+        {open && (
+          <button
+            className={`bench-plus${plusOpen ? ' on' : ''}`}
+            onClick={() => setPlusOpen((v) => !v)}
+            title="造对象（集合 / 群 / 结构）"
+          >
+            <span className="bench-plus-glyph">＋</span>
+            <span className="bench-plus-word">导入对象</span>
+          </button>
+        )}
       </header>
 
       {open && (
@@ -515,6 +551,7 @@ export function Workbench({
           )}
 
           {/* ══ 左列：显示屏 + 待选 + 键盘（或 ＋ 面板）+ ＋ 按钮 ══ */}
+          <div className="bench-cols">
           <div className="bench-left">
             {/* ── ① 显示屏（计算器的"显示屏"）──────────────────── */}
             <div className="bench-display">
@@ -571,8 +608,38 @@ export function Workbench({
                     )}
                   </>
                 ) : (
-                  /* 只报状态，不教操作（2026-10-07 用户：「你见过计算器还要标注『按数字按钮来计算』吗」）*/
-                  <div className="bench-screen-title">还没有对象</div>
+                  /*
+                   * **空态分家**（2026-10-20）：
+                   * 从前这里只有一句「还没有对象」，画布上明明摆着三个群也照说不误 ——
+                   * 它把"**没选中**"说成了"**没有**"（用户按台面标题升起来就撞上）。
+                   * 现在：真没对象才说"还没有对象"；有对象则报"还没选中"，并把对象列出来
+                   * 当入口（点一下 = `onPick` = `App#onNodeClick`，与画布节点同一条路）。
+                   */
+                  <>
+                    <div className="bench-screen-title">
+                      {objects.length === 0 ? '还没有对象' : '还没有选中对象'}
+                    </div>
+                    {objects.length === 0 ? null : (
+                      <div className="bench-pick">
+                        <span className="bench-pick-hint">点一个开始</span>
+                        <div className="bench-pick-list">
+                          {objects.slice(0, 8).map((o) => (
+                            <button
+                              key={o.id}
+                              className="bench-pick-chip"
+                              title={o.def}
+                              onClick={() => onPick(o.id)}
+                            >
+                              <TexOrText text={mathLabel(o).main} />
+                            </button>
+                          ))}
+                          {objects.length > 8 && (
+                            <span className="bench-pick-more">+{objects.length - 8}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -725,50 +792,55 @@ export function Workbench({
                 />
               </div>
             ) : (
-              <nav className="bench-pad" aria-label="工作台键盘">
-                {node ? (
-                  padCount === 0 ? (
-                    <p className="bench-pad-hint">没有可用的操作。</p>
-                  ) : (
-                    padFamilies.map((f) => (
-                    <div key={f.key} className="bench-pad-row" data-fam={f.key}>
-                      <span className="bench-pad-label">{f.label}</span>
-                      <div className="bench-pad-keys">
-                        {f.ops.map((op) => {
-                          const n = benchArity(op)
-                          return (
-                            <button
-                              key={op.id}
-                              className="bench-key"
-                              data-op={op.id}
-                              onClick={() => onRunOp(op)}
-                              title={`${menuLabel(op)}（${op.notation}）- ${howOf.get(op.id) ?? ''}\n${op.doc}`}
-                            >
-                              {/* 键面走 KaTeX：`×` `⋊` `≤` 这些字符键盘打不出来，
-                                  用户 2026-09-27 定的规矩是"不许出现在文本流里"——
-                                  显示只能靠排版（`opKey` 给 KaTeX 源，`keyAscii` 给纯文本替身）。 */}
-                              <Tex className="bench-key-glyph" tex={opKey(op).tex} />
-                              {n > 1 && <span className="bench-key-n">{n}</span>}
-                            </button>
-                          )
-                        })}
+              <>
+                {/* 窄窗才出现的「键盘」开关（宽窗 CSS 隐藏）*/}
+                <button
+                  className={`bench-pad-toggle${padOpen ? ' on' : ''}`}
+                  onClick={() => setPadOpen((v) => !v)}
+                  title={padOpen ? '收起键盘' : '展开键盘'}
+                >
+                  <span className="bench-pad-caret">{padOpen ? 'v' : '>'}</span> 键盘
+                </button>
+                <nav className={`bench-pad${padOpen ? '' : ' collapsed'}`} aria-label="工作台键盘">
+                  {node ? (
+                    padCount === 0 ? (
+                      <p className="bench-pad-hint">没有可用的操作。</p>
+                    ) : (
+                      padFamilies.map((f) => (
+                      <div key={f.key} className="bench-pad-row" data-fam={f.key}>
+                        <span className="bench-pad-label">{f.label}</span>
+                        <div className="bench-pad-keys">
+                          {f.ops.map((op) => {
+                            const n = benchArity(op)
+                            return (
+                              <button
+                                key={op.id}
+                                className="bench-key"
+                                data-op={op.id}
+                                onClick={() => onRunOp(op)}
+                                title={`${menuLabel(op)}（${op.notation}）- ${howOf.get(op.id) ?? ''}\n${op.doc}`}
+                              >
+                                {/* 键面走 KaTeX：`×` `⋊` `≤` 这些字符键盘打不出来，
+                                    用户 2026-09-27 定的规矩是"不许出现在文本流里"——
+                                    显示只能靠排版（`opKey` 给 KaTeX 源，`keyAscii` 给纯文本替身）。 */}
+                                <Tex className="bench-key-glyph" tex={opKey(op).tex} />
+                                {/* 中文副标（2026-10-20）：字形 + 名字。
+                                    名字直接用 `OP_LABEL`（菜单 / 球 / 断言的同一份），不新写文案。 */}
+                                <span className="bench-key-word">{menuLabel(op)}</span>
+                                {n > 1 && <span className="bench-key-n">{n}</span>}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                    ))
-                  )
-                ) : null}
-              </nav>
+                      ))
+                    )
+                  ) : null}
+                </nav>
+              </>
             )}
 
-            {/* `＋ 导入对象` —— 左列底部的主按钮（用户点名的那枚：「用『＋』按钮让用户来导入对象」）*/}
-            <button
-              className={`bench-plus${plusOpen ? ' on' : ''}`}
-              onClick={() => setPlusOpen((v) => !v)}
-              title="造对象（集合 / 群 / 结构）"
-            >
-              <span className="bench-plus-glyph">＋</span>
-              <span className="bench-plus-word">导入对象</span>
-            </button>
+            {/* `＋ 导入对象` 已挪到标题条右端（2026-10-20）——左列会滚，主按钮不能藏在滚动区 */}
           </div>
 
           {/* ══ 右列：明细大阅读区（按键盘 / 翻对象槽时纹丝不动）══ */}
@@ -858,6 +930,7 @@ export function Workbench({
                 </div>
               )}
             </div>
+          </div>
           </div>
         </div>
       )}

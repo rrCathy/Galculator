@@ -44,9 +44,7 @@ export function DockPanel({
         {open && actions}
       </header>
       {open && (
-        <div className="dock-body" style={bodyWidth ? { width: bodyWidth } : undefined}>
-          {children}
-        </div>
+        <div className={`dock-body${bodyWidth ? ' dock-body-wide' : ''}`}>{children}</div>
       )}
     </section>
   )
