@@ -21,11 +21,21 @@ function splitInline(s: string): { name: string; rhs: string } {
 }
 
 /**
- * 输入悬浮球（UI v3.1）：挂在**画面正下方中央**。
+ * 输入悬浮球（UI v3.1）：**恒定停在屏幕底部中央**（2026-10-21 钉死）。
  *
  * 输入框从「对象」面板里提出来——它不该藏在面板里，而是随手可及的常驻入口：
  * 点球展开一张输入卡片（向上弹，避开屏幕边缘），再点球或 Esc 收起。
  * 提交后卡片保持开着（连续声明多个对象很常见），输入清空。
+ *
+ * ## 位置为什么钉死（2026-10-21 用户：「不要一会居中一会放右边」）
+ *
+ * 从前停位跟工作台开合走：台收起 ⇒ `left: max(50%, …)` **居中**；台升起 ⇒
+ * `right: 12px` **靠右**。同一个按钮一天换两个位置，手记不住 ——
+ * 而且卡片（460 宽）以球为轴，球一换位，**整张输入卡也跟着从中间跳到右边**。
+ *
+ * 现在：位置只由 `App.css` 的 `.composer-orb` 决定（底部居中，不再有内联 `left`），
+ * **台反过来让位**（卡片展开时台抬到 160px，见 `.app.composer-open .bench.open`）。
+ * 第一版曾试"右下角常驻"，被用户否掉；别再往那个方向改。
  */
 export function ComposerOrb({
   open,
@@ -33,9 +43,7 @@ export function ComposerOrb({
   objects,
   editing = null,
   onAdd,
-    minLeft = 0,
-    dockRight = false,
-  }: {
+}: {
   open: boolean
   onToggle: () => void
   objects: GalObject[]
@@ -45,17 +53,6 @@ export function ComposerOrb({
    */
   editing?: { index: number; name: string; expr: string } | null
   onAdd: (line: string) => void
-  /** 左下数值面板的右边界；球不能被它压住 */
-  minLeft?: number
-  /**
-   * **贴到右侧**（2026-10-20：工作台升起时也走这条；原 P0-1 只给编辑器卡片用）。
-   *
-   * ⚠️ 这一条**必须走 prop 而不能走 CSS**：`.composer-orb` 的 `left` 是**内联 style**
-   * （`max(50%, …)`，用来避开左下数值面板，见 `minLeft`），内联样式压过任何样式表规则 ——
-   * 我第一版写了 `.app.editor-open .composer-orb { left: auto }`，浏览器里量出来仍是 `720px`
-   * （= 居中），白查一轮。**与内联样式共处只有一条路：改它自己。**
-   */
-  dockRight?: boolean
 }) {
   const [nameDraft, setNameDraft] = useState('')
   const [exprDraft, setExprDraft] = useState('')
@@ -117,18 +114,7 @@ export function ComposerOrb({
   }
 
   return (
-    <div
-      className="composer-orb"
-      /* ⚠️ `left` 走内联 style 是历史包袱（`max(50%, minLeft)` 要避开左下数值抽屉）——
-         所以"靠哪边停"只能在这里改，样式表碰不动（P0-1 栽过）。
-         ⚠️ 靠边时**必须同时把 `transform: translateX(-50%)` 抹掉**：那是"以 left 为轴居中"
-         用的，靠边时它会再把球往左拽半个身位（真机量出来 `left: -4`，半个球在屏幕外）。 */
-      style={
-        dockRight
-          ? { right: 12, left: 'auto', transform: 'none' }
-          : { left: `max(50%, ${minLeft + 70}px)` }
-      }
-    >
+    <div className="composer-orb">
       <button
         className={`orb orb-center${open ? ' on' : ''}`}
         onClick={onToggle}

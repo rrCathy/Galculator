@@ -42,7 +42,7 @@ import { StructureBuilder } from './ui/StructureBuilder'
 import type { CanvasNode } from './gal/types'
 import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
-import { BENCH_H_DEFAULT, Workbench } from './ui/Workbench'
+import { Workbench } from './ui/Workbench'
 import { OpDock } from './ui/OpDock'
 import { CatalogDock } from './ui/CatalogDock'
 import type { InfoTab } from './ui/InfoDock'
@@ -1284,16 +1284,12 @@ export default function App() {
       style={
         {
           /*
-           * **输入球的固定停位高度**（2026-10-10，用户两轮点名「解绑」后**完全钉死**：
-           * 先「把'*'输入球也解绑了」，看到"碰到才让位"成品后再否——
-           * 「拖高过 68% 后球就跟着动了，我是这个意思吗？」）。
-           * 按**默认台高**算（`BENCH_H_DEFAULT` 判据从 Workbench 导出，与对象球同一份）：
-           * 拖台任意高度输入球纹丝不动（CSS `.app.bench-open .composer-orb`；
-           * 台永远盖不到它——水平不重叠，判据在那条规则的注释里）。
-           *
-           * 注：旧变量 `--bench-h`（台高实时值）已删——自本条起没有 CSS 消费者。
+           * ⚠️ `--bench-h-park`（默认台高）**2026-10-21 已撤**：它唯一的消费者是
+           * `.app.bench-open .composer-card { position: fixed; bottom: … }`（"卡浮到台顶上方"），
+           * 那条规则和本次"输入卡贴着球、位置固定"冲突，已删。
+           * 现在输入球/卡的位置完全由 `App.css` 的 `.composer-orb` 决定 ——
+           * **不要再往这里塞"随台高算位置"的变量**。
            */
-          '--bench-h-park': `${Math.round(canvasSize.h * BENCH_H_DEFAULT)}px`,
           /*
            * **左上栏的右边界**（2026-10-20）：`.bench` 用它钳住自己的左缘。
            *
@@ -1560,15 +1556,13 @@ export default function App() {
         objects={objects}
         editing={editing}
         onAdd={(l) => (editing ? replaceLine(editing.index, l) : setLines((p) => [...p, l]))}
-        minLeft={barriers.bottom}
         /*
-         * **工作台升起 ⇒ 输入球靠右停**（2026-10-20 改；原为靠左停）。
-         *
-         * 左停是 2026-10-06 的裁定，当时只算了"别被台盖住"。真机量出来它压住了
-         * 左上那一列的「操作 / 目录」胶囊（球 12,194 · 12,234 vs 栏 12..182 × 12..277）
-         * —— 让开了台，却让不开栏。右边从顶到底只有证明抽屉（可收起），是真正空的。
+         * **停位已钉死在底部中央**（2026-10-21 第二版）：从前这里传 `dockRight={benchOpen}`，
+         * 台一开一合，球就在"居中 / 靠右"之间跳，展开的卡片跟着跳一整张。
+         * 现在位置只由 `App.css` 的 `.composer-orb` 决定；卡片展开时**台抬上去让位**
+         * （`.app.composer-open .bench.open` 的 `--bench-bottom: 160px`）。
+         * 不要再加"随状态换位"的 prop —— 第一版"右下常驻"已被用户否掉。
          */
-        dockRight={benchOpen}
       />
 
       {/*

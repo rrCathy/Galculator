@@ -427,8 +427,11 @@ export function Workbench({
     <section
       className={`bench${open ? ' open' : ''}${hasContent ? ' risen' : ''}`}
       /* ⚠️ 高度只在**展开时**给：收起态要缩回那条贴底胶囊（给了就一直 68vh，收不下去）。
-         高度是内联 style ⇒ CSS 里不许再写 height/max-height（内联压过样式表）。 */
-      style={open && h ? { height: `${h}px`, maxHeight: `${h}px` } : undefined}
+         **只写 `height`，不写内联 `maxHeight`**（2026-10-21）：输入卡展开时台要整体抬到
+         160px，88vh 会顶出屏幕上沿 ⇒ 上限交给 `App.css` 的
+         `.bench { max-height: calc(100vh - var(--bench-bottom) - 12px) }`。
+         内联 `maxHeight` 会压过那条规则，写回去就等于取消兜底。 */
+      style={open && h ? { height: `${h}px` } : undefined}
       data-node={node?.id ?? ''}
     >
       {/* 顶边抓手：拖高（收起态不显示）*/}

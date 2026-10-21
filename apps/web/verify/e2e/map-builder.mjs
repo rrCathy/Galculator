@@ -251,14 +251,18 @@ console.log('\n== 场景 1b：常驻卡片形态（P0-1）==')
     const o = document.querySelector('.composer-orb')
     if (!o) return null
     const r = o.getBoundingClientRect()
-    return { left: r.left, right: r.right, bottom: r.bottom, vw: window.innerWidth }
+    return { left: r.left, right: r.right, bottom: r.bottom, vw: window.innerWidth, vh: window.innerHeight }
   })
   /*
-   * 2026-10-20：停位由**左**改**右**（左整改右整的理由见 App 里 `dockRight` 的注释：
-   * 左停会压住左上那条栏）。判据仍是"离开中线、贴到边"，只是方向换了。
+   * 2026-10-21：停位**钉死在底部中央**（用户：「这个输入框的位置能不能固定一下，
+   * 不要一会居中一会放右边」）。判据从"贴到某一边"改成**"停在底部中线"** ——
+   * 这样一来，谁再把它改成随台开合换位（左停 / 右停 / 抬到台顶），这条直接红。
    */
-  ok('输入球**靠右停**（工作台升起 ⇒ `dockRight`，2026-10-20 改）',
-    orb !== null && orb.right > (orb?.vw ?? 0) * 0.5, orb === null ? '' : `right=${Math.round(orb.right)} vw=${orb?.vw}`)
+  ok('输入球**停在底部中央**（2026-10-21 钉死：不随工作台换位）',
+    orb !== null &&
+      Math.abs((orb.left + orb.right) / 2 - (orb?.vw ?? 0) / 2) < 8 &&
+      orb.bottom > (orb?.vh ?? 0) - 40,
+    orb === null ? '' : `center=${Math.round((orb.left + orb.right) / 2)} vw/2=${Math.round(orb.vw / 2)} bottom=${Math.round(orb.bottom)} vh=${orb.vh}`)
 
   // **点画布空白不关编辑器**（常驻的核心承诺：用户还要点画布看别的对象）
   await page.evaluate(() => {
