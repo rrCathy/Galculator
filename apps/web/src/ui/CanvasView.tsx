@@ -1370,7 +1370,72 @@ export function CanvasView({
               </marker>
             </g>
           ))}
+          {/*
+            **方格纸**（W2 演算纸，2026-10-21 修"方格与格点不对齐"）。
+
+            第一版把方格画成 `.canvas-wrap` 的 CSS 背景（120/24 px，静态）——
+            那是**屏幕像素**的网格，而格点是**世界坐标**的网格（`spec.x0/stepX`，
+            随缩放平移）⇒ 两者必然错位，用户一眼看出「别扭」。
+
+            现在方格与格点**同源**：pattern 的 tile 尺寸 = 世界格距 × 缩放 `k`，
+            平铺原点 = 格点原点映射到屏幕（`tx + x0*k`）。
+            ⇒ 每一条线都穿过一排格点，缩放 / 平移时一起动。
+            节奏：4 格一个粗格（外框），内部 3 条细线。
+            线宽用 `non-scaling-stroke` 钉死在 1px（否则 viewBox 缩放会把线放粗）。
+          */}
+          {(() => {
+            if (!view) return null
+            const baseW = view.grid.stepX * view.k
+            const baseH = view.grid.stepY * view.k
+            if (!(baseW > 4 && baseH > 4)) return null // 缩得太小：线会糊成一片，干脆不画
+            /*
+             * **细分到"屏幕密度恒定"**：一个吸附格在屏幕上可能是 20px 也可能是 200px
+             * （缩放走了 10 倍）。直接一格一线 ⇒ 放大后纸变稀、缩小后糊成一片。
+             * 所以每格再细分 `n` 等份（n 取 2 的幂，让细分与主格严格整除），
+             * 使细格落在 24~48px；**主格线仍压在主格上 = 格点上**，对齐不被破坏。
+             */
+            const n = Math.max(1, 2 ** Math.round(Math.log2(Math.max(baseW, baseH) / 34)))
+            const w = baseW / n
+            const h = baseH / n
+            let fineD = ''
+            for (let i = 1; i < n; i++) {
+              fineD += `M ${w * i} 0 V ${baseH} M 0 ${h * i} H ${baseW} `
+            }
+            return (
+              <pattern
+                id="paper-grid"
+                patternUnits="userSpaceOnUse"
+                x={view.tx + view.grid.x0 * view.k}
+                y={view.ty + view.grid.y0 * view.k}
+                width={baseW}
+                height={baseH}
+              >
+                {n > 1 && (
+                  <path
+                    d={fineD}
+                    fill="none"
+                    style={{ stroke: 'var(--paper-line)' }}
+                    strokeWidth="1"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+                <rect
+                  x="0"
+                  y="0"
+                  width={baseW}
+                  height={baseH}
+                  fill="none"
+                  style={{ stroke: 'var(--paper-line-strong)' }}
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </pattern>
+            )
+          })()}
         </defs>
+
+        {/* 纸底（方格 pattern 铺满整个 viewBox；深色下两条线是 transparent ⇒ 自动消失） */}
+        <rect x={0} y={0} width={VW} height={VH} fill="url(#paper-grid)" pointerEvents="none" />
 
         {/* 格点（DIAGRAM_SPEC §1.1）：一条**无限延伸**的规则网格，像坐标纸一样铺满画布。
             自动布局的行列中心量化到它上面，拖动松手也吸附到它上面----
@@ -1383,7 +1448,7 @@ export function CanvasView({
                 className="grid-dot"
                 cx={view.tx + p.x * view.k}
                 cy={view.ty + p.y * view.k}
-                r={2.6}
+                r={1.5}
               />
             ))}
           </g>
@@ -1612,13 +1677,25 @@ export function CanvasView({
                 : inputish
                   ? 'var(--node-input-body)'
                   : 'var(--node-derived-body)'
+          /*
+           * W2（演算纸）：**常态也画框** —— 从前常态 `stroke: transparent`，节点只是
+           * 一块淡蓝底 + 符号，读起来像"高亮块"；演算纸要的是**印刷框**：
+           * 细边（1.2）+ 纸白底，颜色仍是"颜色 = 来源"（群蓝 / 映射紫 / 作用绿）。
+           * 选中 / 待选时换成 `edge`（红笔）并加粗 —— 那才是"等你动作"。
+           */
+          const strokeVar =
+            n.shape === 'action'
+              ? 'var(--node-action-stroke)'
+              : inputish
+                ? 'var(--node-input-stroke)'
+                : 'var(--node-derived-stroke)'
           const bodyStroke = b.round
             ? selected || isPicked
               ? edge
               : 'var(--node-round-stroke)'
-            : selected || isPicked || n.shape === 'action'
+            : selected || isPicked
               ? edge
-              : 'transparent'
+              : strokeVar
 
           return (
             <g
@@ -1658,9 +1735,9 @@ export function CanvasView({
                   y={p.y - b.hh}
                   width={b.hw * 2}
                   height={b.hh * 2}
-                  rx={9}
+                  rx={3.5}
                   style={{ fill: bodyFill, stroke: bodyStroke }}
-                  strokeWidth={selected || isPicked ? 2 : 1.4}
+                  strokeWidth={selected || isPicked ? 2 : 1.2}
                   strokeDasharray={n.shape === 'action' ? '5 4' : undefined}
                 />
               )}
