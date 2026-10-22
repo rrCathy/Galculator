@@ -15,6 +15,8 @@ export function ObjectDock({
   onRemove,
   onEdit,
   onSelect,
+  draftedIds,
+  onToggleDraft,
 }: {
   open: boolean
   onToggle: () => void
@@ -24,6 +26,9 @@ export function ObjectDock({
   onEdit?: (index: number) => void
   /** 点行 = 选中对象，信息在「信息」面板看 */
   onSelect: (id: string) => void
+  /** 草稿区里的对象 id（P2 拍板第 9 条：**两边都留**，行上给标记） */
+  draftedIds?: ReadonlySet<string>
+  onToggleDraft?: (id: string) => void
 }) {
   const okRows = lineStates.filter((s) => s.ok && s.object)
   const inputs = okRows.filter(
@@ -41,6 +46,10 @@ export function ObjectDock({
           onRemove={onRemove}
           onEdit={onEdit}
           onSelect={onSelect}
+          drafted={draftedIds?.has(s.object!.id) ?? false}
+          onToggleDraft={
+            onToggleDraft ? () => onToggleDraft(s.object!.id) : undefined
+          }
         />
       ))}
 

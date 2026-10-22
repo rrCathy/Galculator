@@ -567,8 +567,10 @@ await page.waitForTimeout(320)
       notice: document.querySelector('.notice')?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
     }))
 
-  /* ① 左栏点不能填的行（W）——旧行为：无条件 selected（清掉 pending + 切焦点）*/
-  await page.click('.dock-topleft .row:has(.row-name:text-is("W"))')
+  /* ① 左栏点不能填的行（W）——旧行为：无条件 selected（清掉 pending + 切焦点）
+     ⚠️ 点 **`.row-name`** 而不是行中心：行尾现在有「存 / 改 / x」三颗按钮（P2 草稿区加的），
+     行中心可能正好落在按钮上（按钮 stopPropagation ⇒ 行根本收不到这次点击）。 */
+  await page.click('.dock-topleft .row:has(.row-name:text-is("W")) .row-name')
   await page.waitForTimeout(420)
   const b1 = await benchRead()
   ok('① 点 W 行：pending 没被清掉（槽位区还在）', b1.slots.length === 2, JSON.stringify(b1.slots))

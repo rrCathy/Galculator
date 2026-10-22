@@ -7,6 +7,9 @@ import { pairOps } from '../gal/interaction'
 import type { GalValue } from '../gal/value'
 import { labelTexHtml, measureTex } from './Tex'
 
+/** 右缘"草稿热区"宽度（容器像素）：面板 400 + 竖胶囊 31 + 间距 8 + 余量 ≈ 460 */
+const STASH_HOT_PX = 460
+
 /** 基础留白（viewBox 单位） */
 const BASE_PAD = 20
 const VW = 900
@@ -232,6 +235,11 @@ export interface CanvasHandle {
   applyViewState: (s: CanvasViewState) => void
   /** 清掉钉住与视口（清空画布时用；免得留着下一张图的孤儿数据） */
   resetViewState: () => void
+  /**
+   * 把某个节点**钉到世界坐标**（P2-e：草稿拖动扶正时"落在松手那一格"）。
+   * 幂等：先钉、后出现也行 —— `pinned` 按 id 存，节点渲染时读它。
+   */
+  pinAt: (id: string, world: { x: number; y: number }) => void
 }
 
 export interface CanvasViewState {
@@ -254,6 +262,9 @@ export function CanvasView({
   onToggleAutoFirstIso,
   onOpenSnapshot,
   onClearBoard,
+  onDropDraft,
+  onStash,
+  onStashHot,
   toolsOpen = false,
   onCloseTools,
 }: {
@@ -288,6 +299,21 @@ export function CanvasView({
   /** 清空画布（定义行归 App 管）；钉住与视口由这里的 `resetViewState` 一起清 */
   onClearBoard?: () => void
   /**
+   * **草稿拖进画布**（P2-e，2026-10-22）：松手点是哪一格就钉哪一格。
+   * 图还空着（`view === null`）时换算不出来 ⇒ 给 `null`，由布局接手。
+   */
+  onDropDraft?: (id: string, world: { x: number; y: number } | null) => void
+  /**
+   * **节点被拖到右侧草稿热区松手**（P2-c）——"从画布拖出去"的入口。
+   * 热区 = 右缘 360px（面板 400 与胶囊、边距）；只在真的拖动过时才算。
+   */
+  onStash?: (id: string) => void
+  /**
+   * **热区状态的即时反馈**（P2，2026-10-22）：指针进/出右缘草稿区时各调一次。
+   * 宿主据此把草稿面板点亮（松手即暂存），不让用户"盲拖"。
+   */
+  onStashHot?: (hot: boolean) => void
+  /**
    * **画布工具面板开着没有**（W1.6，2026-10-12 用户裁定）。
    * 右下角原来那条常驻工具条**整体收编**进右上角「设置」按钮展开的菜单——
    * 按钮在 App（与主题 / 证明同排），**面板在本组件**（连线模式 / 钉住 / 视图
@@ -308,6 +334,10 @@ export function CanvasView({
   /** 拖动中的世界坐标偏移（state 供渲染；ref 供 window 上的原生监听读最新值） */
   const [drag, setDrag] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
+  /** 指针是否在"右缘草稿热区"里（只在变化时通知宿主，别每帧 setState） */
+  const stashHotRef = useRef(false)
+  /** 有东西正被拖到画布上方（草稿行 HTML5 拖动）—— 给画布一圈虚线提示 */
+  const [dropHot, setDropHot] = useState(false)
   /**
    * 被**钉住**的节点（世界坐标）——决策 ④：拖动 = 钉住 + 吸附网格 + 一键恢复自动 + 持久化。
    * 钉住只覆盖**最终坐标**（布局照常算，它仍占着自己原来的行列），
@@ -341,6 +371,9 @@ export function CanvasView({
         setDrag(null)
         dragRef.current = null
         setUserView(null)
+      },
+      pinAt: (id, world) => {
+        setPinned((prev) => ({ ...prev, [id]: { x: world.x, y: world.y } }))
       },
     }),
     [pinned, userView],
@@ -1057,7 +1090,7 @@ export function CanvasView({
 
   if (!view) {
     return (
-      <div className="canvas-wrap" ref={wrapRef}>
+      <div className={`canvas-wrap${dropHot ? ' drop-hot' : ''}`} ref={wrapRef}>
         <div className="canvas-empty">
           <p>点下方的 * 输入一行定义，画布长出第一个对象</p>
           <code>G = D_4</code>
@@ -1197,6 +1230,19 @@ export function CanvasView({
         const d = { id: gs.id, dx: (q.x - gs.x) / view.k, dy: (q.y - gs.y) / view.k }
         dragRef.current = d
         setDrag(d)
+        /*
+         * **右缘热区反馈**（2026-10-22 用户：「拖到草稿区没有很好的反馈」）：
+         * 指针进到右缘 360px 就通知宿主把草稿区点亮（松手即暂存）。
+         * 用 ref 挡住重复通知 —— 每帧一次 setState 会拖慢拖动。
+         */
+        if (onStashHot) {
+          const wrap = wrapRef.current?.getBoundingClientRect()
+          const inHot = !!wrap && ev.clientX > wrap.right - STASH_HOT_PX
+          if (inHot !== stashHotRef.current) {
+            stashHotRef.current = inHot
+            onStashHot(inHot)
+          }
+        }
       } else if (gs.mode === 'connect') {
         const over = hitAt(q)
         connectHover.current = over
@@ -1213,6 +1259,11 @@ export function CanvasView({
       const gs = gesture.current
       gesture.current = null
       if (!gs) return
+      // 拖动结束（无论收进草稿还是摆位）⇒ 热区反馈一律熄掉
+      if (stashHotRef.current) {
+        stashHotRef.current = false
+        onStashHot?.(false)
+      }
       if (gs.mode === 'connect') {
         const q = toVB(ev.clientX, ev.clientY)
         /**
@@ -1239,6 +1290,21 @@ export function CanvasView({
       if (gs.mode === 'node') {
         const d = dragRef.current
         if (gs.moved && d) {
+          /*
+           * **拖到右侧草稿热区松手 = 暂存**（P2-c，2026-10-22 拍板第 3 条）。
+           *
+           * 热区取右缘 360px：草稿面板 320 + 胶囊 34 + 边距。只在**真的拖动过**
+           * （`gs.moved`）时才算，否则在右边缘点一下也会把对象收走。
+           * 判据放在吸附之前：收走就不该再写一个钉住位置（它在画布上已经不存在了）。
+           */
+          const wrap = wrapRef.current?.getBoundingClientRect()
+          if (onStash && wrap && ev.clientX > wrap.right - STASH_HOT_PX) {
+            suppressClick.current = true
+            onStash(gs.id)
+            dragRef.current = null
+            setDrag(null)
+            return
+          }
           // 松手 → 吸附到**最近的空格点**并钉住（决策 ④）：
           // 跳过已被别的节点占住的格点，免得两个节点叠在一起。
           suppressClick.current = true
@@ -1280,15 +1346,52 @@ export function CanvasView({
 
 
   return (
-    <div className="canvas-wrap" ref={wrapRef}>
+    <div className={`canvas-wrap${dropHot ? ' drop-hot' : ''}`} ref={wrapRef}>
       <svg
         ref={svgRef}
-        className={`canvas${pickable ? ' picking' : ''}${drag ? ' dragging' : ''}${connectMode ? ' linking' : ''}`}
+        className={`canvas${pickable ? ' picking' : ''}${drag ? ' dragging' : ''}${connectMode ? ' linking' : ''}${dropHot ? ' drop-hot' : ''}`}
         viewBox={`0 0 ${VW} ${VH}`}
         preserveAspectRatio="xMidYMid meet"
         role="img"
         aria-label="交换图画布"
         onPointerDown={beginGesture}
+        /* 草稿行拖进来（P2-e）：必须 preventDefault 才允许 drop */
+        onDragOver={(e) => {
+          if (!onDropDraft) return
+          if (e.dataTransfer.types.includes('text/plain')) {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            // 画布整块亮一圈：告诉用户"这里能放手"
+            if (!dropHot) setDropHot(true)
+          }
+        }}
+        onDragLeave={(e) => {
+          /*
+           * `dragleave` 在子元素之间穿行时会狂发 —— 只有真的离开 svg（relatedTarget
+           * 不在自己内部）才算。这是 HTML5 拖拽的老坑，别用计数器兜。
+           */
+          const to = e.relatedTarget as Node | null
+          if (!to || !e.currentTarget.contains(to)) setDropHot(false)
+        }}
+        onDrop={(e) => {
+          if (!onDropDraft) return
+          setDropHot(false)
+          const id = e.dataTransfer.getData('text/plain')
+          if (!id) return
+          e.preventDefault()
+          if (!view) {
+            // 图还空着：换算不出格点，交给布局
+            onDropDraft(id, null)
+            return
+          }
+          const vb = toVB(e.clientX, e.clientY)
+          const wx = (vb.x - view.tx) / view.k
+          const wy = (vb.y - view.ty) / view.k
+          /* 与松手吸附同一份计算：最近的**空格点**（草稿对象此时还不在图上，
+             所以不用排它自己，直接把现有的 gridAt 当占用表） */
+          const hit = snapToGrid(wx, wy, view.grid, view.gridAt)
+          onDropDraft(id, { x: hit.x, y: hit.y })
+        }}
         onDoubleClick={(e) => {
           // 双击空白 = 适应窗口（把整张图重新装进视口）
           if (e.target === e.currentTarget) setUserView(null)

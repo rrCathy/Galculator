@@ -26,6 +26,8 @@ import { renameRefs, nextAutoName } from './gal/naming'
 import { findExistingObject } from './gal/identity'
 import { parseSnapshot, serializeSnapshot, SNAPSHOT_VERSION } from './gal/snapshot'
 import { boardDisabled, loadBoardLines, saveBoardLines } from './gal/board'
+import { loadDrafts, saveDrafts } from './gal/drafts'
+import { DraftDock } from './ui/DraftDock'
 import { SnapshotCard } from './ui/SnapshotCard'
 import type { Group } from '@groupviz/core'
 import { opTemplate } from './gal/ops'
@@ -119,6 +121,24 @@ export default function App() {
     return loadBoardLines() ?? DEFAULT_LINES
   })
   const [inter, setInter] = useState<Interaction>(IDLE)
+  /**
+   * **草稿区的状态位**（三区 P2，2026-10-22 拍板）——一串对象 id。
+   *
+   * 它是**状态**不是归属：对象仍在 `lines` 派生的对象表里（能选中、能当参数），
+   * 只是**不占画布顶点**（`deriveCanvas` 吃的是过滤后的这批）。
+   * 判据与十条定案见 `docs/PROPOSAL-zones.md` §5 顶部；存取在 `gal/drafts.ts`。
+   *
+   * ⚠️ 别把它并进 `homeOf` 那类纯函数判据：草稿依赖用户操作，是可变的。
+   */
+  const [drafts, setDrafts] = useState<string[]>(() => loadDrafts() ?? [])
+  const draftSet = useMemo(() => new Set(drafts), [drafts])
+  /** 草稿面板是否滑出（收起 = 贴右中一条竖胶囊） */
+  const [draftOpen, setDraftOpen] = useState(false)
+  /**
+   * 画布正把节点拖进右缘热区（2026-10-22 用户：「拖到草稿区没有很好的反馈」）。
+   * 拖到热区上方时**顺手把草稿面板滑出来**并点亮 —— 用户看得见落点，不是盲拖。
+   */
+  const [draftHot, setDraftHot] = useState(false)
   const [orbStage, setOrbStage] = useState<OrbStage>('closed')
   const [multiOpen, setMultiOpen] = useState(false)
   const [anchors, setAnchors] = useState<NodeAnchor[]>([])
@@ -243,6 +263,16 @@ export default function App() {
   }, [lines])
 
   /**
+   * 草稿区状态**跟着落盘**（P2-a 第 8 条拍板：存起来）。
+   *
+   * 与定义行分两个 key：`lines` 是图的唯一真相，草稿只是"这些 id 此刻收在哪"，
+   * 任何一边写坏都不该带崩另一边（存取的校验在 `gal/drafts.ts`）。
+   */
+  useEffect(() => {
+    saveDrafts(drafts)
+  }, [drafts])
+
+  /**
    * 清空画布：定义行（App 的）+ 钉住 / 视口（画布的）一起清。
    * 只清定义行的话，钉住的位置会变成下一张图的**孤儿数据**——
    * 自动命名又从 `A` 开始，新对象会继承旧位置，画布一开就是歪的。
@@ -252,6 +282,8 @@ export default function App() {
    */
   const clearBoard = useCallback(() => {
     setLines([])
+    /* 草稿也清：`setLines([])` 之后那一串 id 全是孤儿，留着只会在草稿区显示空行。 */
+    setDrafts([])
     setInter(IDLE)
     setOrbStage('closed')
     setMultiOpen(false)
@@ -262,6 +294,43 @@ export default function App() {
     setNotice({
       text: '画布已清空',
       hint: '输入一行定义就能重新开始（默认示范页不会自己回来）',
+    })
+  }, [])
+
+  /* ── 草稿区（P2）：两个方向的开关 + 面板开合 ──────────────────
+   *
+   * 十条定案在 `docs/PROPOSAL-zones.md` §5 顶部。这里只管三件事：
+   *   · 进 / 出（同一个 id 的集合增删）；
+   *   · 暂存时若它正好是当前焦点 ⇒ 清掉焦点（对象已经从画布上消失了）；
+   *   · 草稿滑出 ⇒ **工作台自动收**（第 7 条：中间窗口宽度下两区同开会把台挤崩）。
+   */
+  const toggleDraft = useCallback(
+    (id: string) => {
+      const inDraft = drafts.includes(id)
+      setDrafts((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]))
+      if (!inDraft && focusId(inter) === id) setInter(IDLE)
+    },
+    [drafts, inter],
+  )
+  const undraft = useCallback((id: string) => {
+    setDrafts((prev) => prev.filter((d) => d !== id))
+  }, [])
+  /**
+   * 「拖出画布」的落点（P2-c）：拖到右缘松手 ⇒ 进草稿，并**把草稿区滑出来**当反馈
+   * （否则对象从画布上消失、右侧什么都没动，看着像丢了）。
+   */
+  const stash = useCallback(
+    (id: string) => {
+      setDrafts((prev) => (prev.includes(id) ? prev : [...prev, id]))
+      if (focusId(inter) === id) setInter(IDLE)
+      setDraftOpen(true)
+    },
+    [inter],
+  )
+  const toggleDraftDock = useCallback(() => {
+    setDraftOpen((v) => {
+      if (!v) setBenchOpen(false)
+      return !v
     })
   }, [])
 
@@ -343,7 +412,31 @@ export default function App() {
     () => buildLines(lines, { autoFirstIso }),
     [lines, autoFirstIso],
   )
-  const graph = useMemo(() => deriveCanvas(objects), [objects])
+  /**
+   * **画布只吃不在草稿里的对象**（P2-b）：草稿 = 「不占顶点」，不是「不存在」。
+   * 于是 `objects`（对象表）照旧是全量 —— 对象 / 操作抽屉、候选、参数判据都用它；
+   * 只有派发给画布的这一份被过滤，布局随之重排（`deriveCanvas` 是纯函数）。
+   *
+   * ⚠️ 被收起的对象如果还有下游（`Q = 商(G, N)` 里的 `N`），那条边的端点就不在图上 ——
+   * 由图侧按"端点必须都在"兜底跳过（见 `deriveCanvas`），不在这里递归连带收起。
+   */
+  const canvasObjects = useMemo(
+    () => objects.filter((o) => !draftSet.has(o.id)),
+    [objects, draftSet],
+  )
+  const graph = useMemo(() => deriveCanvas(canvasObjects), [canvasObjects])
+
+  /**
+   * 清掉**孤儿 id**：删掉一行定义 / 清空画布之后，草稿里那一串名字可能已经不存在。
+   * 不清理的话它们既不显示、又永远留在存储里（下次同名对象一出现会被"继承"成草稿）。
+   */
+  useEffect(() => {
+    const live = new Set(objects.map((o) => o.id))
+    setDrafts((prev) => {
+      const next = prev.filter((id) => live.has(id))
+      return next.length === prev.length ? prev : next
+    })
+  }, [objects])
   const byId = useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects])
   const valuesById = useMemo(() => new Map(objects.map((o) => [o.id, o.value])), [objects])
   const usedNames = useMemo(() => objects.map((o) => o.id), [objects])
@@ -491,14 +584,23 @@ export default function App() {
   const exportSnapshot = useCallback(() => {
     const vs = canvasRef.current?.getViewState() ?? { pins: {}, view: null }
     setSnapshotText(
-      serializeSnapshot({ v: SNAPSHOT_VERSION, lines, pins: vs.pins, view: vs.view, autoFirstIso }),
+      serializeSnapshot({
+        v: SNAPSHOT_VERSION,
+        lines,
+        pins: vs.pins,
+        view: vs.view,
+        autoFirstIso,
+        drafts,
+      }),
     )
     setSnapshotErr(null)
     setNotice({
-      text: `快照已写进框里：${lines.length} 行定义，${Object.keys(vs.pins).length} 个钉住的位置`,
+      text: `快照已写进框里：${lines.length} 行定义，${Object.keys(vs.pins).length} 个钉住的位置${
+        drafts.length > 0 ? `，${drafts.length} 个草稿` : ''
+      }`,
       hint: '复制走收好；下次贴回来点「应用快照」',
     })
-  }, [lines, autoFirstIso])
+  }, [lines, autoFirstIso, drafts])
 
   /** 导入：照文本重建视图。**坏快照只报错，不动当前的图**。 */
   const applySnapshot = useCallback(() => {
@@ -509,6 +611,8 @@ export default function App() {
     }
     const s = r.snapshot
     setLines(s.lines)
+    /* 草稿跟着快照走：旧快照没有这一项 ⇒ 清空（不继承上一张图的草稿）。 */
+    setDrafts(s.drafts ?? [])
     reset()
     setEditing(null)
     setSnapshotErr(null)
@@ -1305,7 +1409,8 @@ export default function App() {
       <CanvasView
         ref={canvasRef}
         graph={graph}
-        objects={objects}
+        /* P2：画布只拿到「不在草稿里」的那批（`canvasObjects`），对象表本身不动。 */
+        objects={canvasObjects}
         selectedId={busy ? null : focus}
         onSelect={onNodeClick}
         onBackgroundClick={() => {
@@ -1341,6 +1446,18 @@ export default function App() {
         onToggleAutoFirstIso={() => setAutoFirstIso((v) => !v)}
         onOpenSnapshot={() => setSnapshotOpen(true)}
         onClearBoard={clearBoard}
+        /* 草稿区两个方向（P2-c / P2-e，2026-10-22）：
+           拖出右缘 ⇒ 暂存；从草稿拖进来 ⇒ 扶正并钉在松手那一格。 */
+        onStash={stash}
+        onStashHot={(hot) => {
+          setDraftHot(hot)
+          // 拖进热区就把面板滑出来（看得见落点）；松开后保持开着 —— 对象确实在那儿
+          if (hot) setDraftOpen(true)
+        }}
+        onDropDraft={(id, world) => {
+          undraft(id)
+          if (world) canvasRef.current?.pinAt(id, world)
+        }}
         toolsOpen={toolsOpen}
         onCloseTools={() => setToolsOpen(false)}
       />
@@ -1432,6 +1549,8 @@ export default function App() {
             onRemove={removeLine}
             onEdit={startEdit}
             onSelect={onNodeClick}
+            draftedIds={draftSet}
+            onToggleDraft={toggleDraft}
           />
           <OpDock
             open={openOps}
@@ -1442,6 +1561,8 @@ export default function App() {
             onSelect={onNodeClick}
             // 不上画布的对象（子群集）只有这条路能跑操作 —— 它们没有悬浮球
             onRunOp={(op, id) => startOp(op, id)}
+            draftedIds={draftSet}
+            onToggleDraft={toggleDraft}
           />
           <CatalogDock
             open={openCatalog}
@@ -1545,6 +1666,19 @@ export default function App() {
           </button>
         )}
       </div>
+
+      {/*
+        **草稿区**（P2）：从右侧滑出。它与工作台互斥（草稿开 ⇒ 台自动收，见 `toggleDraftDock`）。
+      */}
+      <DraftDock
+        open={draftOpen}
+        onToggle={toggleDraftDock}
+        lineStates={lineStates}
+        draftedIds={draftSet}
+        hot={draftHot}
+        onSelect={onNodeClick}
+        onUndraft={undraft}
+      />
 
       <ComposerOrb
         open={composerOpen}

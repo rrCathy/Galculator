@@ -29,6 +29,8 @@ export function OpDock({
   onEdit,
   onSelect,
   onRunOp,
+  draftedIds,
+  onToggleDraft,
 }: {
   open: boolean
   onToggle: () => void
@@ -40,6 +42,9 @@ export function OpDock({
   onSelect: (id: string) => void
   /** 跑这个对象的单对象操作（`id` 是它自己，不是当前焦点——列表里每行都能点）*/
   onRunOp?: (op: OpDef, id: string) => void
+  /** 草稿区里的对象 id（P2 拍板第 9 条：**两边都留**，行上给标记） */
+  draftedIds?: ReadonlySet<string>
+  onToggleDraft?: (id: string) => void
 }) {
   const rows = lineStates.filter(
     (s) => s.ok && s.object && s.object.value.type !== 'number' && s.object.origin === 'derived',
@@ -61,6 +66,8 @@ export function OpDock({
             onSelect={onSelect}
             ops={ops}
             onRunOp={onRunOp ? (op) => onRunOp(op, o.id) : undefined}
+            drafted={draftedIds?.has(o.id) ?? false}
+            onToggleDraft={onToggleDraft ? () => onToggleDraft(o.id) : undefined}
           />
         )
       })}

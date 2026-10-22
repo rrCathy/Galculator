@@ -30,6 +30,8 @@ export function ObjectRow({
   onSelect,
   ops = [],
   onRunOp,
+  drafted = false,
+  onToggleDraft,
 }: {
   state: LineState
   onRemove: (index: number) => void
@@ -40,6 +42,15 @@ export function ObjectRow({
   /** 这个对象能立刻做的单对象操作（只有**不上画布**的对象才给，见文件头） */
   ops?: OpDef[]
   onRunOp?: (op: OpDef) => void
+  /**
+   * **草稿区**（P2，2026-10-22）。`drafted` = 这个对象此刻收在草稿区。
+   *
+   * 两个入口都要（拍板第 3、10 条）：行上的按钮在这里；拖拽在画布与草稿面板之间。
+   * 按钮文案随状态换：不在草稿 ⇒「暂存」，在草稿 ⇒「扶正」——
+   * 同一个按钮两个方向，比两颗按钮更省地方，也不会看错自己在哪边。
+   */
+  drafted?: boolean
+  onToggleDraft?: () => void
 }) {
   const o = state.object!
   const [openOps, setOpenOps] = useState(false)
@@ -68,6 +79,11 @@ export function ObjectRow({
          * 展示面要"好看的名字"看对象槽 chip（`mathLabel`）与工作台显示屏。
          */}
         <span className="row-name">{o.id}</span>
+        {drafted && (
+          <span className="row-draft-flag" title="这个对象收在草稿区（不占画布，仍可当参数）">
+            草稿
+          </span>
+        )}
         <span className="row-eq">=</span>
         <span className="row-def">
           <TexOrText text={o.def} />
@@ -83,6 +99,25 @@ export function ObjectRow({
             }}
           >
             操作
+          </button>
+        )}
+        {onToggleDraft && (
+          <button
+            className={`draft${drafted ? ' on' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleDraft()
+            }}
+            title={
+              drafted
+                ? '扶正：放回画布（拖动这一行到画布上也能扶正，落点就是松手那一格）'
+                : '暂存到右侧草稿区（不占画布，仍可当参数用）'
+            }
+          >
+            {/* 行只有 200 宽（name + 定义 + 三颗按钮），两字「暂存」会把「改 / x」挤出去
+                ⇒ 一个单字按钮切换两个方向：「存」= 暂存到右侧，「取」= 取回画布。
+                完整说法在 title 里；在草稿时按钮同时着琥珀色（`.on`）并带一枚小圆点。 */}
+            {drafted ? '取' : '存'}
           </button>
         )}
         {onEdit && (

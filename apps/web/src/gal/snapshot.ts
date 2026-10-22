@@ -35,6 +35,11 @@ export interface Snapshot {
   pins: Record<string, SnapshotPin>
   view: SnapshotView | null
   autoFirstIso?: boolean
+  /**
+   * **草稿区里的对象 id**（P2-a 第 8 条拍板：快照也要带走草稿）。
+   * 旧快照没有这一项 ⇒ 当空数组读（而不是报错）—— 向后兼容是这里唯一的要求。
+   */
+  drafts?: string[]
 }
 
 export const SNAPSHOT_VERSION = 1
@@ -118,5 +123,12 @@ export function parseSnapshot(text: string): ParseResult {
     view,
   }
   if (typeof o.autoFirstIso === 'boolean') snapshot.autoFirstIso = o.autoFirstIso
+  /* 草稿（可选）：旧快照没有这一项 = 空；有就必须是干净的字符串数组。 */
+  if (o.drafts !== undefined) {
+    if (!Array.isArray(o.drafts) || o.drafts.some((d) => typeof d !== 'string')) {
+      return { ok: false, error: 'drafts 应该是对象名的数组（没有草稿就整项不写）' }
+    }
+    snapshot.drafts = o.drafts as string[]
+  }
   return { ok: true, snapshot }
 }

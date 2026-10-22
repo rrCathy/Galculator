@@ -38,6 +38,7 @@ import { run as u60 } from './suites/u60'
 import { run as f2f3 } from './suites/f2f3'
 import { run as identity } from './suites/identity'
 import { run as presentation } from './suites/presentation'
+import { run as drafts } from './suites/drafts'
 
 diagram()
 firstIso()
@@ -68,6 +69,7 @@ u60()
 f2f3()
 identity()
 presentation()
+drafts()
 
 const failed = summary()
 if (failed > 0) process.exitCode = 1
