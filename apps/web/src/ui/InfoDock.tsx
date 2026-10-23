@@ -30,6 +30,8 @@ import { groupName } from '../gal/mathLabel'
 import { STRUCTURAL_LABEL } from '../gal/derive'
 import { elementNotation } from '../gal/ops'
 import { labelWritable } from '../gal/pointSet'
+// 元素集**本身是不是子群**（U9）：判据只有一份，见 `gal/subgroupCheck.ts`
+import { subgroupVerdict } from '../gal/subgroupCheck'
 import { STRUCTURE_LEVEL_LABEL } from '../gal/algebra'
 // 公理读数行（S2c）：与表格编辑器**同一份**排版 —— 两个面不许各写一份
 import { axiomRows, verdictText } from './axiomReadout'
@@ -420,6 +422,7 @@ export function SectionBody({
   active,
   subCount,
   onExtract,
+  onLift,
 }: {
   section: InfoTab
   group: Group | null
@@ -429,6 +432,8 @@ export function SectionBody({
   active: Set<InfoTab> | null
   subCount: number | null
   onExtract?: (sub: NormalizedSubgroup) => void
+  /** 「升格为群」（U9）：元素集自己就是子群时，给一条落到 `closure(...)` 的路 */
+  onLift?: (id: string) => void
 }) {
   if (section === 'basic' && group && node) return <BasicTab group={group} node={node} />
   if (section === 'presentation' && group) return <PresentationTab group={group} />
@@ -439,7 +444,7 @@ export function SectionBody({
   if (section === 'table' && struct) return <StructureTable structure={struct} />
   void active
   void subCount
-  return node ? <OtherTab node={node} onExtract={onExtract} /> : null
+  return node ? <OtherTab node={node} onExtract={onExtract} onLift={onLift} /> : null
 }
 
 function BasicTab({ group, node }: { group: Group; node: GalObject }) {
@@ -1254,25 +1259,78 @@ function StructureTable({ structure }: { structure: GalStructure }) {
   )
 }
 
+/**
+ * **元素集**（`{x in A_4 : x^2 = e}` 这类筛出来的东西）。
+ *
+ * 光写「基数 + 元素串」不够 —— 用户 2026-10-23 看图质问：
+ * 「只是一个元素集吗，实际上它明显可以升格为一个群（新对象）」。
+ * 他看的那 4 个元素确实是 `V_4`，而界面上一个字都没说。
+ *
+ * 三件纪律：
+ *   ① 判定走 `subgroupVerdict`（**一处判据**）—— 面板敢说"是子群"，按钮点下去就得真能成，
+ *      两件事必须是同一个函数；
+ *   ② `subgroupStructureSymbol` 是 O(|H|²)，core 注释明说"不进主渲染循环"
+ *      ⇒ 按 `v` 记忆（焦点对象换了才重算，不是每次渲染都算）；
+ *   ③ 按钮**不走新路**：它调 `onLift`，App 那边落到 `commitExpr('closure(...)')` ——
+ *      与用户自己敲出一条 closure 行完全同一种产物（可读、可改、可被别的操作引用）。
+ *
+ * `data-subgroup="yes"` 是给走查的钩子（`filter-set.mjs` 用它判断"判定行真的出现了"）。
+ */
+function ElementsOther({ node, onLift }: { node: GalObject; onLift?: (id: string) => void }) {
+  const v = node.value
+  const verdict = useMemo(
+    () => (v.type === 'elements' ? subgroupVerdict(v.group, v.elements) : null),
+    [v],
+  )
+  if (v.type !== 'elements') return null
+  const sym = verdict?.symbol ?? null
+  return (
+    <>
+      <Row k="基数">
+        <span>{v.elements.length}</span>
+      </Row>
+      {verdict?.isSubgroup && (
+        <Row k="判定">
+          <span className="insp-subgroup" data-subgroup="yes">
+            在母群的乘法下封闭 -&gt; 这本身就是一个子群
+            {sym && (
+              <>
+                {' '}
+                <Tex tex={sym} />
+              </>
+            )}
+          </span>
+          {onLift && (
+            <button
+              type="button"
+              className="insp-lift"
+              onClick={() => onLift(node.id)}
+              title="落一行 closure(...)，得到群对象（与手敲同一条路）"
+            >
+              升格为群
+            </button>
+          )}
+        </Row>
+      )}
+      <TexList className="insp-elems" items={v.elements.map((e) => e.label)} sep=" " />
+    </>
+  )
+}
+
 export function OtherTab({
   node,
   onExtract,
+  onLift,
 }: {
   node: GalObject
   onExtract?: (sub: NormalizedSubgroup) => void
+  onLift?: (id: string) => void
 }) {
 
   const v = node.value
   switch (v.type) {
     case 'elements':
-      return (
-        <>
-          <Row k="基数">
-            <span>{v.elements.length}</span>
-          </Row>
-          <TexList className="insp-elems" items={v.elements.map((e) => e.label)} sep=" " />
-        </>
-      )
+      return <ElementsOther node={node} onLift={onLift} />
     case 'subgroups':
       return (
         <SubgroupTagList

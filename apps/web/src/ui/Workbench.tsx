@@ -106,6 +106,8 @@ export interface WorkbenchProps {
   /** **跳转请求**（球菜单的「元素 / 子群」入口）：`jumpTo.seq` 变化 ⇒ 切到 `jumpTo.tab` 那一节 */
   jumpTo?: { tab: InfoTab; seq: number } | null
   onExtract?: (sub: NormalizedSubgroup) => void
+  /** 『升格为群』（U9）：元素集自己就是子群时，App 那边落一行 closure(...) */
+  onLift?: (id: string) => void
   /** 视口尺寸（算升起高度用；不给就按 CSS 的 max-height 走）*/
   viewportH?: number
   /**
@@ -178,6 +180,7 @@ export function Workbench({
   edge,
   jumpTo,
   onExtract,
+  onLift,
   viewportH,
   onHeight,
   onAdd,
@@ -890,6 +893,7 @@ export function Workbench({
                           active={null}
                           subCount={subCount}
                           onExtract={onExtract}
+                          onLift={onLift}
                         />
                       </div>
                     </div>
@@ -913,7 +917,7 @@ export function Workbench({
                         <MapCorrespondence map={node.value.map} />
                       </>
                     ) : (
-                      <OtherTab node={node} onExtract={onExtract} />
+                      <OtherTab node={node} onExtract={onExtract} onLift={onLift} />
                     )}
                   </div>
                 )

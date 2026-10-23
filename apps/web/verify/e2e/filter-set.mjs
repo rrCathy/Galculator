@@ -19,7 +19,11 @@
  *   ⑤ 两种错定向：变量名对不上（`z` vs `x`）、超 144 阶（规模问题不是条件问题）；
  *   ⑥ 老写法一条不改：`{a, b, c}` 仍是按标号造；
  *   ⑦ 筛出来的能直接喂 `closure`（这就是选 `elements` 而不是 `set` 的理由）；
- *   ⑧ 文案纪律：新增文案里不许有键盘打不出的字符（判据与 `no-unicode-leak` 逐字相同）。
+ *   ⑧ 文案纪律：新增文案里不许有键盘打不出的字符（判据与 `no-unicode-leak` 逐字相同）；
+ *   ⑨ **筛出来的可能是子群**（2026-10-23 用户看图质问「只是一个元素集吗，
+ *      它明显可以升格为一个群」）：X 那 4 个元素确实是 V_4 ⇒ 面板必须**说出结论**
+ *      并给一颗「升格为群」；而 Y（3 个双换位，缺单位元）**一个"子群"字都不许提** ——
+ *      判据若在这里撒谎，用户会照着按钮点下去得到一个不是群的群。
  *
  * 期望值全部来自 `suites/u9.ts` 里那批**手算 + 真跑对拍**过的数字（`A_4` 的
  * `x^2=e` = 4、`ord(x)=2` = 3、`ord(x)=6` = 0）。
@@ -267,6 +271,58 @@ ok('键盘里有「筛选」这一枚', bench?.keys.includes('filter') === true,
 ok('键面写中文（筛选），不是 ASCII op 名', /筛选/.test(bench?.filterLabel ?? ''), bench?.filterLabel)
 ok('title 是能照抄的写法（含 in 与 x^2）', /in /.test(bench?.filterTitle ?? '') && /\^/.test(bench?.filterTitle ?? ''), bench?.filterTitle)
 ok('键面与 title 都零泄漏', badChars(bench?.filterLabel ?? '').length === 0 && badChars(bench?.filterTitle ?? '').length === 0)
+
+/* ══ 场景 7：元素集"本身就是子群"要说出来，并给一格出口 ══════
+ *
+ * 用户 2026-10-23 看图质问：「只是一个元素集吗，实际上它明显可以升格为一个群」。
+ * 他看的是 X = 4 个元素 —— 那确实是 V_4。所以面板必须
+ *   ① 说出结论（`data-subgroup="yes"` 那行）；
+ *   ② 给一颗「升格为群」，点了落一行 `closure(X)`（与手敲同一条路）。
+ *
+ * Y 是**反向判据**：3 个双换位，对乘法封闭但**缺单位元** ⇒ 不是子群 ⇒
+ * 面板一个字都不许提"子群"。判据若撒谎，用户会照着按钮点下去得到一个不是群的群。
+ */
+
+const xJudge = await page.evaluate(() => {
+  const el = document.querySelector('.bench [data-subgroup="yes"]')
+  return {
+    text: el?.textContent ?? '',
+    hasBtn: !!document.querySelector('.bench .insp-lift'),
+    btnText: document.querySelector('.bench .insp-lift')?.textContent?.trim() ?? '',
+  }
+})
+ok('X（4 个元素，含 e）被认成子群：面板说出结论', /子群/.test(xJudge.text), JSON.stringify(xJudge))
+ok('…并给出「升格为群」按钮', xJudge.hasBtn && /升格/.test(xJudge.btnText), JSON.stringify(xJudge))
+
+const beforeLift = (await nodeIds()).length
+await page.click('.bench .insp-lift')
+await page.waitForTimeout(700)
+const afterLift = await nodeIds()
+ok('点「升格为群」画布多一个对象', afterLift.length === beforeLift + 1, `${beforeLift} -> ${afterLift.length}`)
+
+await setDock('操作', true)
+const defs = await page.evaluate(() =>
+  [...document.querySelectorAll('.dock .row')].map((r) => ({
+    name: r.querySelector('.row-name')?.textContent?.trim() ?? '',
+    def: r.querySelector('.row-def')?.textContent ?? '',
+  })),
+)
+ok(
+  '…落成一行 closure(...) 定义（可读可改，与手敲同一条路）',
+  defs.some((d) => /closure/.test(d.def)),
+  JSON.stringify(defs),
+)
+await setDock('操作', false)
+
+/* ══ 场景 8：不是子群就一个字都别说 ═══════════════════════ */
+
+await focusNode('Y')
+await page.waitForTimeout(500)
+const yJudge = await page.evaluate(() => ({
+  mark: !!document.querySelector('.bench [data-subgroup="yes"]'),
+  btn: !!document.querySelector('.bench .insp-lift'),
+}))
+ok('Y（3 个双换位，缺单位元）不显示子群判定', !yJudge.mark && !yJudge.btn, JSON.stringify(yJudge))
 
 /* ══ 场景 7：全程无 console 错误 ══════════════════════════ */
 

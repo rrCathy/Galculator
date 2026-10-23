@@ -813,6 +813,25 @@ export default function App() {
     [byId, objects, usedNames],
   )
 
+  /**
+   * **升格为群**（U9）—— 元素集自己就是子群时，面板上那颗按钮走这里。
+   *
+   * 为什么是 `closure(id)` 而不是新开一条"建子群"的路：
+   *   · `closure` 对"已经闭合的集合"返回**同阶**的子群（`closeUnderMultiply` 不再增长），
+   *     所以它天然就是"认出来"，不需要第二个判定；
+   *   · 落下来的还是一行**可读可改**的定义（`K = closure(J)`），与用户自己敲的一模一样 ——
+   *     这正是 `compose.ts` 立的规矩：执行层只认定义行。
+   *
+   * 判定（"它到底是不是子群"）不在这里 —— 在 `gal/subgroupCheck.ts`，
+   * 面板敢显示那颗按钮，就说明判定已经过了。
+   */
+  const liftElements = useCallback(
+    (id: string) => {
+      commitExpr(`closure(${id})`)
+    },
+    [commitExpr],
+  )
+
   const runOp = useCallback(
     (op: OpDef, picked: string[], scalars: (string | null)[] = []) => {
       const args: (string | null)[] = op.params.map((_, i) => scalars[i] ?? null)
@@ -1798,6 +1817,7 @@ export default function App() {
         jumpTo={benchJump}
         viewportH={canvasSize.h}
         onExtract={extractSubgroup}
+        onLift={liftElements}
         /* 工作台把升起高度报上来 ⇒ App 拾起输入球让位（见 `benchH` 的注释）*/
         onHeight={setBenchH}
         /* **台面上的对象**（第 2 条）：存 id、与画布同一份数据；点槽位走同一个 `onNodeClick` */

@@ -1699,6 +1699,39 @@ body {
   word-break: break-all;
 }
 
+/*
+ * 元素集的「它本身是子群」判定行（U9，2026-10-23）。
+ *
+ * 用户看图问「只是一个元素集吗，它明显可以升格为一个群」—— 所以这一行要
+ * **说结论**（文字）+ **给出口**（按钮），两者紧挨着，别让按钮单独飘到右边。
+ * 按钮走胶囊形（与 `.row-op` / `.cat-go` 一族的形态），但更小：
+ * 它是"顺势可选"，不是每页都该抢眼的主按钮。
+ */
+.insp-subgroup {
+  color: var(--text-dim);
+}
+
+.insp-lift {
+  margin-left: 10px;
+  padding: 2px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  white-space: nowrap;
+  /* 与文字同一基线：按钮放大时别把整行顶高 */
+  vertical-align: baseline;
+}
+
+.insp-lift:hover {
+  border-color: var(--text-dim);
+  color: var(--text-strong);
+}
+
 .insp-line {
   color: var(--text-dim);
   font-size: 13.5px;
