@@ -647,7 +647,8 @@ body {
  * 按钮（九宫格，右上角与主题/证明同排）+ 菜单（fixed 从右上往下展开，菜单行语言：
  * 左文字 / 右状态，hover 浅底；开关态蓝字）。交互菜单式：点项执行并收起。
  */
-.settings-btn {
+.settings-btn,
+.optable-btn {
   flex: none;
   display: flex;
   align-items: center;
@@ -665,12 +666,14 @@ body {
     inset 0 1px 0 var(--glass-top);
 }
 
-.settings-btn:hover {
+.settings-btn:hover,
+.optable-btn:hover {
   color: var(--text);
   border-color: var(--border-strong);
 }
 
-.settings-btn.on {
+.settings-btn.on,
+.optable-btn.on {
   border-color: var(--blue);
   background: var(--blue-fill);
   color: var(--blue-text);
@@ -724,6 +727,188 @@ body {
 
 .settings-item:hover:not(:disabled) {
   background: var(--hover);
+}
+
+/*
+ * **操作表**（U8-a，2026-10-23）—— 右上角按钮弹出的全量目录。
+ *
+ * 与 `.settings-menu` 同一族（`fixed` + `--card-solid` + `--shadow-pop`），
+ * 但它**居中**而不是贴右上：46 条要三列（名称 / 记号 / 状态）才读得顺，
+ * 232 宽那个位置放不下（`PROPOSAL-u8-u9.md` §2 的形态对比）。
+ *
+ * z-index 21：高于工作台（14）与悬浮球（15）—— 它是模态，开着的时候别的都该让位。
+ */
+.optable-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  /* 极淡压暗：够表明"这是一个浮层"，又不至于让人以为整页都不可用 */
+  background: rgba(20, 22, 26, 0.08);
+}
+
+.optable {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 21;
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 48px));
+  max-height: min(74vh, 760px);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-solid);
+  box-shadow:
+    var(--shadow-pop),
+    inset 0 1px 0 var(--glass-top);
+  overflow: hidden;
+}
+
+.optable-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 标题与副标同一行，副标先让位（窄窗时宁可挤副标，不挤"操作表"三个字） */
+.optable-head-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.optable-title {
+  flex: none;
+  font-size: 15px;
+  color: var(--text-strong);
+}
+
+.optable-sub {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.optable-head-right {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.optable-focus {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.optable-focus b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.optable-close {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: var(--font);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.optable-close:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.optable-body {
+  padding: 4px 8px 12px;
+  overflow: auto;
+}
+
+.optable-group {
+  padding-top: 6px;
+}
+
+.optable-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 8px 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* 组里的条数：比组名淡一档，别让人读成"原子构造21" */
+.optable-group-head .count {
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+/* 行：三列固定宽度 —— 名称 / 记号 / 状态。记号那列吃剩下的宽度并截断 */
+.optable-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) 86px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+
+.optable-row:hover {
+  background: var(--hover);
+}
+
+.optable-name {
+  font-size: 13.5px;
+  /* 不用 `--text-dim`：46 行全灰读起来像整表禁用（截图看过一版） */
+  color: var(--text);
+}
+
+/* 能用的那批：名字提亮一档（不整行加底色 —— 46 行全带底色等于没强调） */
+.optable-row.on .optable-name {
+  color: var(--text-strong);
+}
+
+.optable-sig {
+  font-size: 12px;
+  /* 记号是"照抄参考"，比名字弱一档但仍要看得清 */
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optable-state {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.optable-state.ready {
+  color: var(--text-strong);
+}
+
+.optable-state.build {
+  color: var(--text-dim);
 }
 
 .settings-item:disabled {

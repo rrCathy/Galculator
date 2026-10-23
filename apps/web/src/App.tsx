@@ -31,6 +31,8 @@ import { DraftDock } from './ui/DraftDock'
 import { SnapshotCard } from './ui/SnapshotCard'
 import type { Group } from '@groupviz/core'
 import { opTemplate } from './gal/ops'
+// 操作表（U8-a）：一行要不要 dispatch，看它"吃几个对象" —— 判据与工作台键盘同源
+import { benchArity } from './gal/workbench'
 import { proofHighlight, proofLines, type ProofParams, type ProofTemplate } from './gal/proof'
 import { CanvasView, type CanvasHandle, type NodeAnchor } from './ui/CanvasView'
 import { ObjectOrb, type OrbStage } from './ui/ObjectOrb'
@@ -45,6 +47,7 @@ import type { CanvasNode } from './gal/types'
 import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
 import { Workbench } from './ui/Workbench'
+import { OpTable } from './ui/OpTable'
 import { OpDock } from './ui/OpDock'
 import { CatalogDock } from './ui/CatalogDock'
 import type { InfoTab } from './ui/InfoDock'
@@ -357,6 +360,8 @@ export default function App() {
    * 这里只持有开关。空画布（无定义行）不显示按钮——那些工具全是"对着一张图"的。
    */
   const [toolsOpen, setToolsOpen] = useState(false)
+  /** 操作表浮层（U8-a）：右上角按钮开合，`Esc` 关 */
+  const [opTableOpen, setOpTableOpen] = useState(false)
 
   /* ── 证明（M1）：step-through = 替用户一行行写定义 ─────────
    *
@@ -936,6 +941,33 @@ export default function App() {
   )
 
   const startOp = useCallback((op: OpDef, from: string) => dispatchOp(op, [from]), [dispatchOp])
+
+  /**
+   * **操作表里点了一行**（U8-a）。
+   *
+   * 走的是 `dispatchOp` —— 与球菜单 / 拖拽 / 工作台键盘**同一条执行路径**
+   * （四态分支：pending / fill / editor / 直接执行都在那边）。操作表只是第四个请求方，
+   * 不新增执行逻辑。
+   *
+   * 唯一的例外是"**一个对象都不吃**"的三条（`pointSet` / `labeledSet` / `smallGroup`）：
+   * 硬 dispatch 会走到 `runOp` 然后报"至少要给一个"—— 那不是用户的错。
+   * 它们的正规入口是工作台的 `＋` 面板，所以这里给一句指路，不做假动作。
+   */
+  const pickFromTable = useCallback(
+    (op: OpDef) => {
+      setOpTableOpen(false)
+      if (benchArity(op) === 0) {
+        setNotice({
+          text: `${menuLabel(op)} 不需要任何对象`,
+          hint: `它的入口在工作台标题条上的「＋ 导入对象」，或直接在输入框敲（如 pointSet(5)）`,
+        })
+        return
+      }
+      dispatchOp(op, focusedObj ? [focusedObj.id] : [])
+    },
+    [dispatchOp, focusedObj],
+  )
+
 
   const dispatchPairOp = useCallback(
     (op: OpDef, from: string, to: string, swappedPref = false) => {
@@ -1595,6 +1627,14 @@ export default function App() {
         </div>
       </div>
 
+      {/* 操作表浮层（U8-a）：固定居中，`Esc` / 点空白 / 点一行都会关 */}
+      <OpTable
+        open={opTableOpen}
+        onClose={() => setOpTableOpen(false)}
+        focused={focusedObj ?? null}
+        onPick={pickFromTable}
+      />
+
       <MultiOrb
         open={multiOpen}
         onToggle={() => setMultiOpen((v) => !v)}
@@ -1645,6 +1685,29 @@ export default function App() {
               />
             </svg>
           )}
+        </button>
+        {/*
+          **操作表**（U8-a，2026-10-23 用户拍板「列表就做成按钮弹出来」）。
+          与主题 / 证明 / 画布工具同区（右上角＝应用级功能）。
+          它**常驻**（不像画布工具那样要有对象才出现）—— "这工具能做什么"在空画布上也该答得出。
+        */}
+        <button
+          className={`optable-btn${opTableOpen ? ' on' : ''}`}
+          onClick={() => setOpTableOpen((v) => !v)}
+          title="操作表：这个工具一共能做什么（也可以按 Esc 关）"
+          aria-label="操作表"
+        >
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="none">
+            <path
+              d="M5.6 4h7.9M5.6 8h7.9M5.6 12h7.9"
+              stroke="currentColor"
+              strokeWidth="1.3"
+              strokeLinecap="round"
+            />
+            <circle cx="2.6" cy="4" r="1" fill="currentColor" />
+            <circle cx="2.6" cy="8" r="1" fill="currentColor" />
+            <circle cx="2.6" cy="12" r="1" fill="currentColor" />
+          </svg>
         </button>
         <ProofDock
           open={proofOpen}
