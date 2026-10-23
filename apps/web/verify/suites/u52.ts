@@ -545,7 +545,7 @@ export function run(): void {
   suite('u52 \\cdot 注册表')
   {
     // U51 的 40 条 + U52 的「自定义作用」= 41；U53 又加「点集」「集合」= 43；U55 的「小群表」= 44
-    ok('注册表 45 条（U52 加自定义作用，U53 加点集/集合，U55 加小群表，U60 加代数结构）', OPS.length === 45, String(OPS.length))
+    ok('注册表 46 条（U52 加自定义作用，U53 加点集/集合，U55 加小群表，U60 加代数结构，U9 加筛选）', OPS.length === 46, String(OPS.length))
     const op = opById('customAction')
     eq('params 长度 == arity + optional', op?.params.length, (op?.arity ?? 0) + (op?.optional ?? 0))
     ok('别名里没有裸 `action`（那会遮住别的东西）', !(op?.call ?? []).includes('action'))

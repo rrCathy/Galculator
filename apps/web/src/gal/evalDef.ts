@@ -95,6 +95,27 @@ function normalizeAngle(s: string): string {
 }
 
 /**
+ * 集合建构式里的分隔冒号位置：取**最后一个**顶层 `:`（不在括号里）。
+ *
+ * 为什么是最后一个：`S` 那半边可能自带 `:` —— `{x in C_2^2:C_3 : x^2 = e}` 里
+ * 前一个 `:` 是**半直积运算符**，后一个才是"使得"。取第一个会把 S 切成两半。
+ * （条件那半边不可能有 `:`：谓词语法里没有这个字符，见 `predicate.ts` 的关键词表。）
+ *
+ * 返回 `-1` 表示没有顶层冒号 ⇒ 不是集合建构式。
+ */
+function lastTopLevelColon(s: string): number {
+  let depth = 0
+  let at = -1
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]
+    if (c === '(') depth++
+    else if (c === ')') depth = Math.max(0, depth - 1)
+    else if (c === ':' && depth === 0) at = i
+  }
+  return at
+}
+
+/**
  * `{a, b, c}` → `labeledSet(a, b, c)`（**花括号糖**，2026-10-07 用户点名）。
  *
  * > 用户原话：「什么叫 labeledSet(a, b, c)？你不能直接写 {a, b, c}？」
@@ -104,9 +125,23 @@ function normalizeAngle(s: string): string {
  *   · 在 `splitCall` 折参数**之前**执行 ⇒ `{a, b}` 里的逗号不会把它当两个实参拆开；
  *   · 非嵌套、有收尾的 `{…}` 一律转；没有收尾的（`{a, b`）原样留着走普通报错。
  *
- * ⚠️ `labeledSet` 仍是一等公民（老写法一条不改）；糖只是**多一条腿**。
- * `{5}` 这种单整数会撞上 `planLabeledPointSet` 的歧义关（不许猜），报错照旧指路
- * `pointSet(5)`。
+ * ## 两条腿（U9 加了第二条）
+ *
+ * | 写法 | 转成 | 判据 |
+ * |---|---|---|
+ * | `{a, b, c}` | `labeledSet(a, b, c)` | 没有顶层 `:` |
+ * | `{x in A_4 : x^2 = e}` | `filter(A_4, x, x^2 = e)` | 有顶层 `:`，且左边是 `<变量> in <集合>` |
+ *
+ * 两条腿都留着是必须的：`labeledSet` 仍是**一等公民**（老写法一条不改），
+ * 糖只是多一条路。反过来，若把建构式也塞给 `labeledSet`，用户看到的报错会是
+ * 「点标号「x in A_4 : x^2 = e」写不进循环记号」—— **指错了方向**（真实原因是
+ * 这门语法当时还不存在）。
+ *
+ * ## 为什么 `:` 在这里被吃掉是安全的
+ *
+ * `:` 在外面是**半直积运算符**（`evalSemidirectNotation`）。但糖在**规范化阶段**
+ * 就把整个 `{…}` 换成了 `filter(...)`，等半直积解析器醒来时，那个 `:` 早已不在
+ * 串里了。顺序即隔离 —— 不需要给 `:` 加任何转义。
  *
  * ⚠️ **三种前缀豁免**（notation.ts 的 `\alpha_{2}` 教的）：`_` / `^` / `\` 后面的花括号
  * 是**元素记号的下标语法**（`ord(A, \alpha_{2})` 与 `ord(A, \alpha_2)` 必须同值）
@@ -123,6 +158,25 @@ function normalizeBraces(s: string): string {
       if (prev !== '_' && prev !== '^' && prev !== '\\' && end > i) {
         const inner = s.slice(i + 1, end)
         if (!/[{}]/.test(inner)) {
+          // ① 集合建构式：`{x in S : cond}`
+          const colon = lastTopLevelColon(inner)
+          if (colon > 0) {
+            const left = inner.slice(0, colon).trim()
+            const cond = inner.slice(colon + 1).trim()
+            /**
+             * `in` 两侧必须有空白：`xin A_4` 不是建构式。
+             * 变量名与 `filter` 的 `variable` 校验同一套（`[A-Za-z][A-Za-z0-9]*`），
+             * 不合格就落回 `labeledSet`，由它报"标号写不进循环记号" —— 那条报错
+             * 对"标号里塞了空格"这种情形**是对的**。
+             */
+            const m = /^([A-Za-z][A-Za-z0-9]*)\s+in\s+(.+)$/.exec(left)
+            if (m && cond) {
+              out += `filter(${m[2].trim()}, ${m[1]}, ${cond})`
+              i = end + 1
+              continue
+            }
+          }
+          // ② 按标号造：`{a, b, c}`
           out += `labeledSet(${inner.trim()})`
           i = end + 1
           continue

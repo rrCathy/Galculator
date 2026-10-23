@@ -172,6 +172,8 @@ export const PARAM_LABEL: Record<ParamType, string> = {
   prime: '素数',
   int: '整数',
   genImage: '生成元 -> 像',
+  // U9：原样文本（`filter` 的变量名与条件）—— 补参条上就是个文本框
+  expr: '表达式',
 }
 
 /** 该操作凑齐对象参数后要不要弹编辑器（映射构建器）。 */

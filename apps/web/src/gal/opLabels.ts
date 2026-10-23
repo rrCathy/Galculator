@@ -89,6 +89,12 @@ export const OP_LABEL: Record<string, string> = {
   difference: '差',
   productSet: '积集',
   underlyingSet: '底层集合',
+  /**
+   * **筛选**（U9）—— 不叫「过滤」也不叫「条件」：`filter` 的中文名要与
+   * `{x in S : …}` 这个数学写法一眼对得上，而"筛选"是这两个字里最不带歧义的。
+   * 注意解析器**只认 `filter`** —— 这里只是显示名（U54：中文不进解析）。
+   */
+  filter: '筛选',
 
   /* ── 凭空造 / 关系 / 算术（不在工作台，但也要有名字）── */
   pointSet: '造点集',

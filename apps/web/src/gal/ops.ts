@@ -83,6 +83,9 @@ import {
   planSemidirect,
   semidirectBlockedReason,
 } from './semidirect'
+// 元素谓词（U9）：`{x in A_4 : x^2 = e}` 里冒号右边那半 —— 一门独立的小语言，
+// 不并进 evalDef 的理由见 `predicate.ts` 模块头（`^` 在那边已经有两个身份）。
+import { filterElements, type ElementResolver } from './predicate'
 // 已知结论层（U48）：课本有闭式的族**先查表再谈计算** —— `Aut(S_6) = 1440` 是背下来的结论，
 // 不是现场搜索出来的（用户：「说 S6 搜不动我不是很认可」）
 import { isKnownGroup, knownFacts, realizeKnownGroup, type KnownGroupSpec } from './known'
@@ -183,6 +186,18 @@ export type ParamType =
   | 'prime'
   | 'int'
   | 'genImage'
+  /**
+   * **原样文本**（U9）—— 不解析、不查对象表，整串交给 op 自己解释。
+   *
+   * 目前只有 `filter(S, x, cond)` 的两个尾参用它：变量名 `x` 与条件 `x^2 = e`。
+   * 这两个都**不能**走 `element` 档 —— 那一档会把 `x` 当元素记号去群里解析，
+   * 而谓词里的 `x` 是**绑定变量**（`predicate.ts` 的关键词表第 5 条）。
+   *
+   * 之所以能这样落地：`resolveArg` 的兜底本来就是 `{ kind: 'literal', text }`
+   * （`evalDef.ts:301`），所以 `x^2 = e` 这种既不是对象名也不是纯字母的串，
+   * 会**原样**到达 `run`，不再需要新的求值分支。
+   */
+  | 'expr'
 
 /**
  * 画布上选不出来的参数（须由文本 / 编辑器补），`opsFor` 视作"可后补"。
@@ -198,7 +213,14 @@ export type ParamType =
  * ⇒ 所以 `opsFor` 的前缀匹配**不能**再拿 `isScalarParam` 当"画布给不了"的替身，
  * 必须交给 `paramAccepts` 逐项真判（见那里的注释）。
  */
-export const SCALAR_PARAM_TYPES: ParamType[] = ['element', 'prime', 'int', 'genImage', 'omegaOrInt']
+export const SCALAR_PARAM_TYPES: ParamType[] = [
+  'element',
+  'prime',
+  'int',
+  'genImage',
+  'omegaOrInt',
+  'expr',
+]
 
 export function isScalarParam(t: ParamType): boolean {
   return SCALAR_PARAM_TYPES.includes(t)
@@ -3636,6 +3658,130 @@ export const OPS: OpDef[] = [
     },
   },
 
+  /*
+   * ── 筛选（U9）：集合建构式 `{x in S : cond}` 的操作形态 ────────────
+   *
+   * ## 它补的是哪一层
+   *
+   * `asSet(S)` 是**整体取**（忘记结构，把所有成员搬到一起），不能筛、不能挑。
+   * 于是"`S_3` 去掉 `(12)`，还是群吗？"这个教材场景在第一步就断了
+   * （`docs/DEVPLAN-algebra-structures.md` 场景 3）。
+   *
+   * ## 为什么是三个参数而不是两个
+   *
+   * 第二参是**变量名**。数学写法 `{x in A_4 : x^2 = e}` 里那个 `x` 必须有个落点 ——
+   * 不然条件里的 `x` 就成了一条"凭空出现的自由变量"，报错时也没法说清
+   * "左边写了 x、条件里写了 y"这种错（`predicate.ts#compilePredicate`）。
+   *
+   * ## 三个参数都收不住画布
+   *
+   * 第 1 位是对象（`subset`），第 2、3 位是 `expr`（原样文本，画布给不了）。
+   * 效果：**选中一个集合/群** 时菜单里就能列出「筛选」，补两个文本框即可 ——
+   * 这正是"点着做也能行"的那条路（U8-b 会给这两个框配候选）。
+   *
+   * ## 结果为什么是 `elements` 而不是 `set`
+   *
+   * `elements` 有母群、成员带元素 id ⇒ 能直接喂 `closure` / `conjOn` / `asSet`，
+   * 也能当 `structure` 的载体（场景 3 要的就是这个）。`set` 只能当 Ω。
+   */
+  {
+    id: 'filter',
+    notation: 'filter(S, x, cond)',
+    mechanism: 'enumerate',
+    primitive: false,
+    doc: '筛：把集合里满足条件的元素挑出来 ---- 写法如 {x in S_3 : x^2 = e}（也可 filter(S_3, x, x^2 = e)）',
+    recipe: '枚举(S) + 谓词求值',
+    impl: 'gal/predicate 的 filterElements',
+    call: ['filter'],
+    /**
+     * ⚠️ **不给 `where` 别名**（`PROPOSAL-u8-u9.md` §3 关键词表"明确不做"第 1 条）：
+     * `filter` 与 `where` 双写法会逼用户猜哪个才是正解。只留一条路。
+     */
+    params: [
+      { name: 'S', type: 'subset' },
+      { name: 'x', type: 'expr' },
+      { name: 'cond', type: 'expr' },
+    ],
+    arity: 3,
+    result: 'elements',
+    run: (a) => {
+      const S = subgroupArgOf(a[0])
+      if (!S) {
+        return fail(
+          'filter 需要一个集合（元素集 / 群 / 底集）',
+          '写法如 filter(S_3, x, x^2 = e) 或 {x in S_3 : x^2 = e}',
+        )
+      }
+      const group = S.group
+      /**
+       * 门：与子群枚举同一条线（`ENUMERATION_LIMIT` = 144）。
+       *
+       * 谓词要对每个元素算一遍，超门不是"算得慢"而是"算不完"。
+       * 报错要说清是**规模**问题，别让用户以为条件写错了。
+       */
+      if (group.elements.length > ENUMERATION_LIMIT) {
+        return fail(
+          `|${prettySymbol(group.symbol)}| = ${group.elements.length} 超过逐元素求值的上限 ${ENUMERATION_LIMIT}`,
+          '筛选要把条件在每个元素上算一遍；这个规模本地跑不完',
+        )
+      }
+
+      const variable = textOf(a[1]).trim()
+      const cond = textOf(a[2]).trim()
+
+      /**
+       * 与生产同一份判据：**先精确、再宽松**。
+       * `V_4` 的元素 `a` 是精确命中（放行），`C_6` 里写 `y` 只是生成元回退（`predicate` 会拦）。
+       */
+      const resolver: ElementResolver = (t) => {
+        const exact = resolveElement(group, t)
+        if (exact) return { el: exact, exact: true }
+        const loose = resolveElementLoose(group, t)
+        return loose ? { el: loose, exact: false } : null
+      }
+
+      const r = filterElements(group, S.elements, variable, cond, resolver)
+      if (!r.ok) return fail(r.error, r.hint)
+
+      /**
+       * 标签用**用户能照抄**的形态（`{x in A : x^2 = e}`），不用 `filter(A, x, …)` ——
+       * 数学写法是这门语法的正脸（`evalDef#normalizeBraces` 也正是把前者当糖）。
+       * 画布节点上显示什么由 `mathLabel` 决定（`elements` 一律排成 `\{…\}`）。
+       */
+      /**
+       * 标签用**数学写法**（TeX）：`\{x \in A_4 : x^2 = e\}` 排出来就是
+       * `{x ∈ A₄ : x² = e}` —— 一个集合建构式的正脸。
+       *
+       * 为什么不给它 ASCII 原文：画布节点**直接吃 `label`**（`derive.ts` 把 GalObject
+       * 铺进节点），而节点是圆的、有直径上限。ASCII 原文 `{x in A_4 : x^2 = e}`
+       * 在节点上会被挤成 `{xinA4:x2=e}` —— 实测（`verify/e2e/filter-set.mjs` 第一版
+       * 就抓到这个），比不显示还难认。TeX 形态由 KaTeX 排出，`3` 行内算式宽约 110px。
+       *
+       * 与 `closure` 的 `\langle r2, s \rangle` 同一套惯例：**画布上写数学，
+       * 对象栏那一行写能照抄的定义**（后者由 `def` 负责，不是这里）。
+       */
+      const srcName = refText(a[0])
+      return {
+        ok: true,
+        value: { type: 'elements', group, elements: r.kept },
+        /**
+         * `srcName` 不额外转义：它本来就是群记号（`A_4` / `S_4` / `C_2^2:C_3`），
+         * 在 TeX 里是合法写法；用户自己起的名字（`G` / `Y`）也是。
+         */
+        label: `\\{${variable} \\in ${srcName} : ${cond}\\}`,
+        sub: `|S| = ${r.kept.length}（从 ${S.elements.length} 个里筛）`,
+        /*
+         * 空集是**合法结果**（`A_4` 里 `ord(x) = 6` 就该是空集），不报错。
+         * 但一句说明值得给 —— 否则用户看到空圆节点会以为筛坏了。
+         */
+        note:
+          r.kept.length === 0
+            ? '这个条件下一个元素都不满足（空集也是答案，不是算错）'
+            : undefined,
+      }
+    },
+  },
+
   /* ══ 属性 ══════════════════════════════════════════════ */
   {
     id: 'elementOrder',
@@ -4073,6 +4219,9 @@ export function paramAccepts(t: ParamType, v: GalValue, earlier: GalValue[], op?
     case 'int':
     case 'genImage':
       return false // 画布上选不出来（由文本 / 编辑器补）
+    case 'expr':
+      // 原样文本（U9）：画布上更选不出来 —— 它不是任何对象，是"要写的一句话"
+      return false
   }
 }
 
@@ -4174,6 +4323,9 @@ const TEMPLATES: Record<string, string> = {
   // U53：凭空造集合的两条 —— 它们不需要任何对象，所以只可能在"照这个敲"的地方露面
   pointSet: 'pointSet(5)',
   labeledSet: 'labeledSet(a, b, c)',
+  // U9：筛选给**数学写法**而不是 `filter(G, x, …)` —— 前者是这门语法的正脸，
+  // 后者是它的展开形态。照这个敲就能跑。
+  filter: '{x in G : x^2 = e}',
   automorphismGroup: 'Aut(G)',
   intersection: 'A \\cap B',
   union: 'A \\cup B',

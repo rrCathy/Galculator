@@ -238,7 +238,9 @@ export function run(): void {
 
   const singleTotal = IDS.reduce((n, id) => n + singleOpsFor(val(id)).length, 0)
   // 改后 = 改前 + 1：F5 给 `orbitCount`（burnside）补了手势入口，它只作用对象上有。
-  ok('单对象候选 = 69（改前 68，F5 给 burnside 补了作用线上的入口）', singleTotal === 69, `got=${singleTotal}`)
+  // 69 -> 74：U9 的 `filter` 第一位吃 `subset`，于是 3 个群（G/A/C6）+ 元素集 O + 升格集合 E
+  // 各多一条候选。5 条都是真的能跑的（补两个文本参数即可），不是撒谎。
+  ok('单对象候选 = 74（改前 69，U9 的 filter 让 5 个集合/群值各多一条）', singleTotal === 74, `got=${singleTotal}`)
 
   /* ── F5：轨道条数不再零入口 ────────────────────────────────── */
 
