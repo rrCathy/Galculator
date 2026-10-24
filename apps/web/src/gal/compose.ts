@@ -1,4 +1,6 @@
 import { isScalarParam, takesCanvasObject, type OpDef } from './ops'
+// 元素位的默认值要给单位元记号 `e`（任何群都认），别给 `1`
+import { IDENTITY_TOKEN } from './customAction'
 
 /**
  * 从「注册表操作 + 实参」组装出一行可求值的表达式（U2）。
@@ -58,7 +60,20 @@ export function scalarSlots(op: OpDef): number[] {
 
 /** 标量参数的默认值（补参条上的初值，省一次输入）。 */
 export function scalarDefault(op: OpDef, index: number): string {
-  return op.params[index]?.type === 'prime' ? '2' : '1'
+  const t = op.params[index]?.type
+  if (t === 'prime') return '2'
+  /**
+   * **元素位给 `e`，不给 `1`**（U8-b 修的老账）。
+   *
+   * `1` 只在少数群里是个元素（`C_6` 叫 `1`、`Z_8` 叫 `1`）；`S_3` 的元素是
+   * `(12)/(123)`、`V_4` 是 `a/b/c` —— 那里 `ord(G, 1)` 点「执行」直接报
+   * 「没有元素 1」。而 `e` 是 `UNIT_TOKENS` 认的通用记号，**任何群都成立**。
+   *
+   * 从前看不出这个问题，是因为补参条只有空 input、"1" 只是框里的初值；
+   * 现在 chips 摆出来了，默认值与候选对不上会一眼看出（`e` 没高亮）。
+   */
+  if (t === 'element') return IDENTITY_TOKEN
+  return '1'
 }
 
 /**

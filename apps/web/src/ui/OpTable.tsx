@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { menuLabel, needsEditor } from '../gal/interaction'
 import { MECHANISM_LABEL, OPS, opsFor, type OpDef } from '../gal/ops'
+import { scalarSlots } from '../gal/compose'
 import { BENCH_EXCLUDED, BENCH_FAMILIES, BENCH_PLUS, benchArity, familyOps } from '../gal/workbench'
 import type { GalObject } from '../gal/types'
 import { Tex } from './Tex'
@@ -38,9 +39,6 @@ import { Tex } from './Tex'
  * （pending / fill / editor / 直接执行）是现成的，三条入口共用同一处。
  * 本组件只是**第四个请求方**，不新增执行路径。
  */
-
-/** `＋` 面板那三条（入口真的在那儿）—— 状态列与分组共用这一份 */
-const PLUS_IDS = new Set(BENCH_PLUS)
 
 export function OpTable({
   open,
@@ -155,14 +153,19 @@ export function OpTable({
                 const can = ready.has(op.id)
                 const need = benchArity(op)
                 /**
-                 * "＋ 面板造"的判据是**它在那三条名单里**（`BENCH_PLUS`），
-                 * 不是 `benchArity === 0`。两者不等价：
-                 * `gcd(12, 18)` / `phi(n)` 这类纯算术也是 0 个对象，
-                 * 但它们的入口是**输入框**，跟 `＋` 面板（只有造点集 / 按标号造 / 造结构三个表单）
-                 * 毫无关系 —— 第一版用 arity 判，9 行都写着"＋ 面板造"，是撒谎。
+                 * 零对象那批要分**两种**，因为点下去的去处不同：
+                 *   · 有标量位的（`pointSet(n)` / `gcd(a,b)` / `smallGroup(阶,编号)`）
+                 *     ⇒ 点了**进补参条填**（`dispatchOp(op, [])` 的既有行为）；
+                 *   · 一个位都没有的（`labeledSet` 是可变的标号列表）
+                 *     ⇒ 只能从 `＋` 面板造。
+                 *
+                 * 第一版用 `benchArity === 0` 一刀切，把 `gcd` 那 6 条纯算术也写成
+                 * "＋ 面板造"—— 而 `＋` 面板里根本没有它们（只有造点集 / 按标号造 / 造结构）。
+                 * 走查当场抓到的撒谎。
                  */
-                const buildOnly = PLUS_IDS.has(op.id)
-                const arithOnly = !buildOnly && need === 0
+                const slots = scalarSlots(op).length
+                const buildOnly = need === 0 && slots === 0
+                const fillOnly = need === 0 && slots > 0
                 /**
                  * 状态文案的三档（**没有焦点是单独一档**）。
                  *
@@ -177,8 +180,8 @@ export function OpTable({
                     : '现在能用'
                   : buildOnly
                     ? '＋ 面板造'
-                    : arithOnly
-                      ? '输入框敲'
+                    : fillOnly
+                      ? '填参数'
                       : focused
                         ? `还差 ${need} 个对象`
                         : `选 ${need} 个对象`
@@ -187,7 +190,7 @@ export function OpTable({
                     key={op.id}
                     className={`optable-row${can ? ' on' : ''}`}
                     data-op={op.id}
-                    data-state={can ? 'ready' : buildOnly ? 'build' : 'need'}
+                    data-state={can ? 'ready' : buildOnly ? 'build' : fillOnly ? 'fill' : 'need'}
                     onClick={() => onPick(op)}
                     title={`${op.doc}\n照这个敲：${op.notation}\n内核机制：${MECHANISM_LABEL[op.mechanism]}`}
                   >

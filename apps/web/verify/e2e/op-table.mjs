@@ -111,8 +111,20 @@ ok(
  * 但也不许整表空着：三条"凭空造"要标出来。
  */
 ok('没焦点时没有一行谎称"现在能用"', (info?.by.ready ?? 0) === 0, JSON.stringify(info?.by))
-ok('没焦点时仍列出"凭空造"那三条（标 ＋ 面板造）', (info?.by.build ?? 0) === 3, JSON.stringify(info?.by))
-ok('纯算术那几条不许冒充"＋ 面板造"（它们的入口是输入框）', (info?.states ?? []).includes('输入框敲'), JSON.stringify(info?.states))
+/**
+ * 零对象那批分两种（U8-b 收紧）：有标量位的「填参数」（点了进补参条），
+ * 一个位都没有的才「＋ 面板造」。`pointSet` / `smallGroup` 属于前者，
+ * 只有 `labeledSet`（标号是可变列表）属于后者。
+ */
+ok('没焦点时"＋ 面板造"只剩 labeledSet 一条', (info?.by.build ?? 0) === 1, JSON.stringify(info?.by))
+ok('…其余零对象 op 标「填参数」（8 条：pointSet/smallGroup + 6 条算术）', (info?.by.fill ?? 0) === 8, JSON.stringify(info?.by))
+/**
+ * 零对象那批要分两种（U8-b 收紧）：有标量位的写「填参数」（点进补参条就能填），
+ * 只有 `labeledSet` 那种"一个位都没有"的才是「＋ 面板造」。
+ * 第一版把 `gcd` 那 6 条也写成"＋ 面板造" —— 而 ＋ 面板里根本没有它们。
+ */
+ok('零对象但可填参数的标「填参数」（不是"＋ 面板造"）', (info?.states ?? []).includes('填参数'), JSON.stringify(info?.states))
+
 ok(
   '其余行说的是"选 N 个对象"（不是一片灰/不可点）',
   (info?.states ?? []).some((s) => /^选 \d+ 个对象$/.test(s)),

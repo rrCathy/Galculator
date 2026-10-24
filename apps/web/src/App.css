@@ -2477,6 +2477,100 @@ body {
   border-color: var(--blue);
 }
 
+/*
+ * 补参条的**标量候选**（U8-b，2026-10-23）。
+ *
+ * 从前的痛点是"选了操作，却要手打 `12` 才知道 S₃ 的对换叫什么"——
+ * 候选把那串记号**摆在眼前**，点一下就是填好。
+ *
+ * 布局：field 变竖排（上面 label + 输入框 + 搜索，下面 chips 区），
+ * chips 区限宽限高、内部滚 —— 144 个元素的群不许把补参条顶出屏幕。
+ */
+.fill-field.fill-elem,
+.fill-field.fill-prime {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.fill-elem-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 搜索框比记号框宽一档（它要输的是"片段"，不是最终值） */
+.fill-elem-head .fill-search {
+  width: 58px;
+}
+
+.fill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 460px;
+  max-height: 76px;
+  overflow-y: auto;
+  padding: 2px 1px;
+}
+
+.fill-chip {
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fill-chip:hover {
+  border-color: var(--blue-line);
+  background: var(--blue-fill);
+}
+
+.fill-chip.on {
+  border-color: var(--blue);
+  background: var(--blue-fill);
+  color: var(--blue-deep);
+}
+
+/* 候选没列全时的说明（"还有 N 个，用搜索"）—— 不是按钮，别做成可点的样子 */
+.fill-more {
+  align-self: center;
+  padding: 0 4px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+/* int 位的 − / + 步进 */
+.fill-step {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.fill-step button {
+  width: 17px;
+  height: 19px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fill-step button:hover {
+  border-color: var(--blue-line);
+  color: var(--text);
+}
+
 /* ── 兜底提示 ──────────────────────────────────────────── */
 
 .notice {

@@ -48,12 +48,15 @@ import { ProofDock } from './ui/ProofDock'
 import { ObjectDock } from './ui/ObjectDock'
 import { Workbench } from './ui/Workbench'
 import { OpTable } from './ui/OpTable'
+import { ScalarFill } from './ui/ScalarFill'
 import { OpDock } from './ui/OpDock'
 import { CatalogDock } from './ui/CatalogDock'
 import type { InfoTab } from './ui/InfoDock'
 import { TexOrText } from './ui/Tex'
 import { NumericDock } from './ui/NumericDock'
-import type { GalValue, NormalizedSubgroup } from './gal/value'
+// `contextGroup`（U8-b）：补参条的元素 / 素数候选要知道「这批东西属于哪个群」，
+// 判据与集合运算找共同母群**同一份**，不另写一个
+import { contextGroup, type GalValue, type NormalizedSubgroup } from './gal/value'
 // 主题（W1，2026-10-12 拍板：默认浅色、手动切换）—— 机制与持久化见 `theme.ts`
 import { applyTheme, loadTheme, saveTheme, type Theme } from './theme'
 
@@ -957,9 +960,19 @@ export default function App() {
     (op: OpDef) => {
       setOpTableOpen(false)
       if (benchArity(op) === 0) {
+        /**
+         * 零对象那批分两种（与 `OpTable` 的状态列同一份判据）：
+         *   · 有标量位 ⇒ **进补参条填**（`pointSet(n)` / `gcd(a,b)` / `smallGroup(阶,编号)`）；
+         *   · 一个位都没有（`labeledSet` 的标号是可变列表）⇒ 只能指路。
+         * 从前一刀切给提示，把"点了能填"的那批也挡在门外了。
+         */
+        if (scalarSlots(op).length > 0) {
+          dispatchOp(op, [])
+          return
+        }
         setNotice({
-          text: `${menuLabel(op)} 不需要任何对象`,
-          hint: `它的入口在工作台标题条上的「＋ 导入对象」，或直接在输入框敲（如 pointSet(5)）`,
+          text: `${menuLabel(op)} 不需要任何对象，要逐个给标号`,
+          hint: `它的入口在工作台标题条上的「＋ 导入对象」，或直接在输入框敲（如 {a, b, c}）`,
         })
         return
       }
@@ -1297,6 +1310,42 @@ export default function App() {
     setOpenNumeric(true)
   }, [])
 
+  /**
+   * 补参条的**上下文群**（U8-b）—— 元素 / 素数候选从哪儿列。
+   *
+   * 判据是 `value.ts#contextGroup`（群给自己、元素集给母群、作用给作用群…），
+   * 与集合运算"找共同母群"用的是同一份。推不出来就 `null`，候选区不渲染 —— **不猜**。
+   *
+   * ⚠️ 必须是 hook（下面 `banner` 那个 IIFE 里不能有 hook），所以在这里算一次。
+   */
+  const fillGroup = useMemo(() => {
+    if (inter.kind !== 'fill') return null
+    for (const id of inter.picked) {
+      const o = byId.get(id)
+      if (!o) continue
+      const g = contextGroup(o.value)
+      if (g) return g
+    }
+    return null
+  }, [inter, byId])
+
+  /**
+   * 点一个候选：填进去，**单标量位就顺手执行**。
+   *
+   * 为什么单标量位要直接跑：`ord(G, ▢)` / `Syl(G, ▢)` / `pointSet(▢)` 这类
+   * 只有一位，点一下就是把这件事做完了；再逼用户去点「执行」是多一步。
+   * 两位的（`smallGroup(阶, 编号)`）只填值 —— 另一半还没填呢。
+   */
+  const commitScalar = useCallback(
+    (slot: number, v: string) => {
+      if (inter.kind !== 'fill' || !pendOp) return
+      const next = inter.scalars.map((x, i) => (i === slot ? v : x))
+      setInter({ ...inter, scalars: next })
+      if (scalarSlots(pendOp).length === 1) runOp(pendOp, inter.picked, next)
+    },
+    [inter, pendOp, runOp],
+  )
+
   /* ── 待选 / 补参提示条 ─────────────────────────────── */
 
   const banner = (() => {
@@ -1364,23 +1413,23 @@ export default function App() {
             {menuLabel(pendOp)}
           </code>
           {slots.map((s) => (
-            <label key={s} className="fill-field">
-              <span>{pendOp.params[s].name}</span>
-              <input
-                value={inter.scalars[s] ?? ''}
-                onChange={(e) =>
-                  setInter({
-                    ...inter,
-                    scalars: inter.scalars.map((v, i) => (i === s ? e.target.value : v)),
-                  })
-                }
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') runOp(pendOp, inter.picked, inter.scalars)
-                }}
-                spellCheck={false}
-                autoComplete="off"
-              />
-            </label>
+            <ScalarFill
+              key={s}
+              op={pendOp}
+              index={s}
+              value={inter.scalars[s] ?? ''}
+              group={fillGroup}
+              onChange={(v) =>
+                setInter({
+                  ...inter,
+                  scalars: inter.scalars.map((x, i) => (i === s ? v : x)),
+                })
+              }
+              onPickCommit={(v) => commitScalar(s, v)}
+              commitOnPick={slots.length === 1}
+              /* 回车提交：与补参条第一批起的行为逐字一致（`radial-menu.mjs` 守着） */
+              onSubmit={() => runOp(pendOp, inter.picked, inter.scalars)}
+            />
           ))}
           <button
             className="pending-btn primary"
