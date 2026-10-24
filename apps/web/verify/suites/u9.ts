@@ -184,6 +184,22 @@ export function run(): void {
     (line([], 'X = {z in S_3 : x^2 = e}')?.error ?? '').includes('不是变量'),
     String(line([], 'X = {z in S_3 : x^2 = e}')?.error ?? ''),
   )
+  /* ── ⑧ elementSet（U9-c 的手挑子集）────────────────── */
+  const es = (pre: string[], probe: string) => build([...pre, probe]).line(probe.split('=')[0].trim())
+  ok('elementSet(S_3, (12), (13)) 能挑出 2 个', es([], 'X = elementSet(S_3, (12), (13))')?.ok === true,
+    String(es([], 'X = elementSet(S_3, (12), (13))')?.error ?? ''))
+  eq('…正是那两个', elemsOf([], 'X = elementSet(S_3, (12), (13))'), 2)
+  eq('同一个元素写两遍只算一个', elemsOf([], 'X = elementSet(S_3, (12), (12))'), 1)
+  eq('S_4 的双换位也能挑（(12)(34) 这种标号 labeledSet 收不了）', elemsOf([], 'X = elementSet(S_4, (12)(34))'), 1)
+  ok('一个都不挑要报错（不是静默造空集）',
+    (es([], 'X = elementSet(S_3)')?.error ?? '').includes('至少要挑一个'),
+    String(es([], 'X = elementSet(S_3)')?.error ?? ''))
+  ok('挑不存在的元素要点名',
+    (es([], 'X = elementSet(S_3, zz)')?.error ?? '').includes('没有元素'),
+    String(es([], 'X = elementSet(S_3, zz)')?.error ?? ''))
+  ok('挑出来的能喂 closure（它是 elements 不是 set）',
+    es(['Y = elementSet(S_3, (12), (13))'], 'X = closure(Y)')?.ok === true)
+
   ok(
     '超 144 阶报规模问题（不是条件问题）',
     (line([], 'X = {x in S_6 : x^2 = e}')?.error ?? '').includes('超过'),

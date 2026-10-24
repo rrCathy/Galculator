@@ -298,7 +298,7 @@ export function run(): void {
     const tpl = op ? opTemplate(op) : ''
     ok('opTemplate 里含 smallGroup(', tpl.includes('smallGroup('), tpl)
     ok('opTemplate 照抄能跑（纯 ASCII）', leakChars(tpl).length === 0, leakChars(tpl).join(' '))
-    eq('注册表 46 条（U55 加小群表，U60 加代数结构，U9 加筛选）', OPS.length, 46)
+    eq('注册表 47 条（U55 加小群表，U60 加代数结构，U9 加筛选/挑元素）', OPS.length, 47)
   }
 
   /* ══ ⑤ 跑真表达式：能敲出来、错得明白、与手写共享 id 空间 ════════ */

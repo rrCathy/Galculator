@@ -12,7 +12,7 @@
  *      2026-10-08 起**点画布对象也自动升起**（信息面板并入工作台，点对象=想看它）；
  *   ② **显示屏写数学身份**（`S₄` 不是 `smallGroup(12,3)`），副行才是定义；
  *   ③ **明细区一页铺开**（竖排节导航，不是手风琴），节标签**只写名字**（「基本」就「基本」）；
- *   ④ **键盘随焦点变**（P7）：焦点是群 28 键 **3 块**（造新东西 6 / 读它的结构 12 /
+ *   ④ **键盘随焦点变**（P7）：焦点是群 29 键 **3 块**（造新东西 6 / 读它的结构 12 /
  *      作用与集合 9），是集合只剩「造新东西」里的「造结构」1 键；
  *      关系 op（`contains` / `isomorphism`）**不在**键盘（T2：关系归画布）；
  *   ⑤ **键盘键发起的 op 能在自己台内凑齐参数**（T1 槽位）—— 工作台升起时画布节点全被盖住，
@@ -391,18 +391,19 @@ console.log('\n== 场景 4：符号键盘随焦点变 ==')
   await focusViaNode('G') // 焦点 = S_4（先收台再点节点，避开遮挡）
 
   let b = await bench()
-  // 27 -> 28：U9 的 filter 进了「作用与集合」族（它第一参吃一个现成集合/群）。
-  ok('群焦点：28 枚键（实测注册表里"第一参吃画布对象"且 canPick 放行的全部）',
-    b?.keyOps.length === 28, `keys=${b?.keyOps.length}`)
+  // 27 -> 28 -> 29：U9 的 filter 与 U9-c 的 elementSet 都进了「作用与集合」族
+  // （第一参都吃一个现成集合/群）。
+  ok('群焦点：29 枚键（实测注册表里"第一参吃画布对象"且 canPick 放行的全部）',
+    b?.keyOps.length === 29, `keys=${b?.keyOps.length}`)
   ok('分成 3 块（造新东西 / 读它的结构 / 作用与集合 —— 2026-10-07 方案二重排）',
     b?.padLabels.length === 3 &&
       /造新东西/.test(b.padLabels.join('|')) && /读它的结构/.test(b.padLabels.join('|')) &&
       /作用与集合/.test(b.padLabels.join('|')), JSON.stringify(b?.padLabels))
-  ok('块的键数手算全对（造 6 / 读 12 / 作用与集合 10；6+12+10 = 28）',
-    JSON.stringify(b?.famKeys) === JSON.stringify([['build', 6], ['read', 12], ['actset', 10]]),
+  ok('块的键数手算全对（造 6 / 读 12 / 作用与集合 11；6+12+11 = 29）',
+    JSON.stringify(b?.famKeys) === JSON.stringify([['build', 6], ['read', 12], ['actset', 11]]),
     JSON.stringify(b?.famKeys))
   ok('键集里有用户要的核心动作（Z / Sub / Syl / 直积 / 商 / 共轭作用 / 底集）',
-    ['center', 'subgroups', 'sylow', 'directProduct', 'quotient', 'conjugationAction', 'underlyingSet', 'filter']
+    ['center', 'subgroups', 'sylow', 'directProduct', 'quotient', 'conjugationAction', 'underlyingSet', 'filter', 'elementSet']
       .every((op) => b.keyOps.includes(op)), JSON.stringify(b?.keyOps))
   ok('关系 op **不在**键盘（contains / isomorphism 归画布，T2）',
     !b.keyOps.includes('contains') && !b.keyOps.includes('isomorphism'))
@@ -567,9 +568,9 @@ console.log('\n== 场景 6：槽位凑参数与直接执行 ==')
   await page.keyboard.press('Escape')
   await page.waitForTimeout(300)
   let b0 = await bench()
-  ok('Esc 关掉面板**且不动焦点**（显示条仍是 S_4、键盘仍是 28 键）',
+  ok('Esc 关掉面板**且不动焦点**（显示条仍是 S_4、键盘仍是 29 键）',
     (await page.locator('.bench-plus-panel').count()) === 0 && clean(b0?.screenTitle) === 'S4' &&
-      (b0?.keyOps.length ?? 0) === 28,
+      (b0?.keyOps.length ?? 0) === 29,
     `title=${clean(b0?.screenTitle)} keys=${b0?.keyOps.length}`)
   await page.click('.bench-plus')
   await page.waitForTimeout(400)
@@ -595,7 +596,7 @@ console.log('\n== 场景 6：槽位凑参数与直接执行 ==')
      2026-10-10 起副行不再拼「阶 24」（去阶批），这里只验选参数进度。 */
   ok('显示条保持焦点并报进度（正在选参数：1 / 2）',
     /正在选参数：1 \/ 2/.test(clean(b?.screenSub)), clean(b?.screenSub))
-  ok('键盘在 pending 时仍可用（焦点没被掐掉）', (b?.keyOps.length ?? 0) === 28, `keys=${b?.keyOps.length}`)
+  ok('键盘在 pending 时仍可用（焦点没被掐掉）', (b?.keyOps.length ?? 0) === 29, `keys=${b?.keyOps.length}`)
   ok('候选里有 C_6（Q）', b?.cands.includes('Q'), JSON.stringify(b?.cands))
 
   ok('点槽位候选（真实鼠标）', await clickCand('Q'))
@@ -694,9 +695,9 @@ console.log('\n== 场景 8：文案纪律（工作台各态）==')
         .filter((r) => r.bad.length > 0)
     }, ALLOWED_SRC)
 
-  /* 态 1：焦点在群（键盘 28 键的 title 全在被扫之列） */
+  /* 态 1：焦点在群（键盘 29 键的 title 全在被扫之列） */
   let leaks = await scan()
-  ok('焦点群（28 键全挂 title）：无键盘打不出的字符', leaks.length === 0,
+  ok('焦点群（29 键全挂 title）：无键盘打不出的字符', leaks.length === 0,
     leaks.slice(0, 3).map((l) => `${l.bad.join('')} @ ${l.where}: ${l.text.slice(0, 40)}`).join(' | '))
 
   /* 态 2：pending（槽位区 + 显示条「正在选参数」） */

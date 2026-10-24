@@ -194,9 +194,15 @@ const el = await page.evaluate(() => {
 ok('元素表逐元素一行（S_4 是 24 行，不再折成 5 个共轭类）', el?.rows === 24, JSON.stringify(el))
 ok('每一行行首就是那个元素（单个元素信息看得见）', !!el?.firstRow, el?.firstRow)
 ok('明细区能滚得完（纵向交给它滚；表格横向在 wrap 内自滚）', el?.scrollable === true, JSON.stringify(el))
+/**
+ * 7 列 = 勾选列 + 原来那六列（U9-c 加的分面勾选，表头是空的）。
+ *
+ * 窄面板（≤1080）下这一列只占 24px —— 下面那条"滚动容器不横向越出"会盯住它，
+ * 加列不能把右边两列挤出去（U43 那次就是右边两列被裁）。
+ */
 ok(
-  '六列一列不少（元素 / 阶 / inZ / 共轭类 / 类大小 / 中心化子）',
-  el?.heads.length === 6,
+  '七列一列不少（勾选 / 元素 / 阶 / inZ / 共轭类 / 类大小 / 中心化子）',
+  el?.heads.length === 7 && el.heads[0] === '' && el.heads[1] === '元素',
   JSON.stringify(el?.heads),
 )
 ok(

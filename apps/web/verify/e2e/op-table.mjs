@@ -98,7 +98,7 @@ ok('空画布上右上角也有「操作表」按钮', (await page.locator('[ari
 await openTable()
 let info = await tableInfo()
 ok('点开就出现浮层', info !== null, JSON.stringify(info))
-ok('全量 46 条', info?.rows === 46, String(info?.rows))
+ok('全量 47 条（U9-c 加了 elementSet）', info?.rows === 47, String(info?.rows))
 ok(
   '5 组，且分组名与工作台键盘同一份任务表',
   JSON.stringify(info?.groups) ===

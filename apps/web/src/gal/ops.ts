@@ -3782,6 +3782,76 @@ export const OPS: OpDef[] = [
     },
   },
 
+  /*
+   * ── 挑元素（U9-c）：手挑一个子集 ───────────────────────────────
+   *
+   * ## 为什么必须补这一条
+   *
+   * 「从群里挑几个元素」这件事，之前**三条路都走不通**（实测）：
+   *   · `asSet(G)` —— 整体取，不能筛、不能挑；
+   *   · `closure(G, 元素…)` —— 是**生成**，产物是子群（会变大）；
+   *   · `{12, 13}`（labeledSet）—— 标号必须是"写得进循环记号"的，
+   *     `S_3` 的标号是 `(12)`（带括号）⇒ 直接报「点标号写不进循环记号」；
+   *   · `filter(G, x, x = 12 or x = 13)` —— 只在标号**可写**时成立，
+   *     `S_4` 的双换位标号是 `(12)(34)`，谓词层不认（括号是分组）。
+   *
+   * 而工作台的元素表勾选（U9-c）恰恰要"用户挑哪几个就是哪几个"。
+   * 所以这是一个**真实的原子构造缺口**，不是给 UI 开的后门。
+   *
+   * ## 为什么不复用 `labeledSet`
+   *
+   * `labeledSet` 是**凭空**造点（不属于任何群，`group === null`）；
+   * 这里产出的是**某个群里的元素**，要带母群与元素 id（能喂 `closure` /
+   * 当 Ω / 造结构）。两件事，两个 op。
+   */
+  {
+    id: 'elementSet',
+    notation: 'elementSet(G, g_1, ...)',
+    mechanism: 'atomic',
+    primitive: false,
+    doc: '从群里挑几个元素组成元素集 ---- 手挑子集（底集是整体取，闭包是生成，都不是挑）',
+    recipe: '原子构造（挑元素）',
+    impl: '本地（elementArgOf \\to GalValue elements）',
+    call: ['elementSet', 'pick'],
+    params: [{ name: 'G', type: 'group' }],
+    variadic: { name: 'g', type: 'element' },
+    arity: 1,
+    result: 'elements',
+    run: (a) => {
+      const G = groupOf(a[0])
+      if (!G) return fail('挑元素要先给一个群', 'elementSet(S_4, (12), (34))')
+      if (a.length === 1) {
+        return fail(
+          '至少要挑一个元素',
+          `如 elementSet(${prettySymbol(G.symbol)}, ${G.identity.label})；要全体元素请用 asSet(G)`,
+        )
+      }
+      const picked: GroupElement[] = []
+      const seen = new Set<string>()
+      const texts: string[] = []
+      for (let i = 1; i < a.length; i++) {
+        const el = elementArgOf(a[i], G)
+        if (!el) {
+          return fail(
+            `${prettySymbol(G.symbol)} 里没有元素 ${textOf(a[i])}`,
+            `元素：${elementListHint(G)}`,
+          )
+        }
+        /* 同一个元素写两遍是同一个元素 —— 集合没有重复，静默去重（不是报错） */
+        if (seen.has(el.id)) continue
+        seen.add(el.id)
+        picked.push(el)
+        texts.push(textOf(a[i]))
+      }
+      return {
+        ok: true,
+        value: { type: 'elements', group: G, elements: picked },
+        label: `\\{${texts.join(', ')}\\}`,
+        sub: `|S| = ${picked.length}（从 ${G.elements.length} 个里挑的）`,
+      }
+    },
+  },
+
   /* ══ 属性 ══════════════════════════════════════════════ */
   {
     id: 'elementOrder',

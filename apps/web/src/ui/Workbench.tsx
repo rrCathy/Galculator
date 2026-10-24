@@ -894,6 +894,7 @@ export function Workbench({
                           subCount={subCount}
                           onExtract={onExtract}
                           onLift={onLift}
+                          onAdd={onAdd}
                         />
                       </div>
                     </div>

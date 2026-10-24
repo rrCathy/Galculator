@@ -95,6 +95,8 @@ export const OP_LABEL: Record<string, string> = {
    * 注意解析器**只认 `filter`** —— 这里只是显示名（U54：中文不进解析）。
    */
   filter: '筛选',
+  /* 挑元素：手挑子集（底集是整体取、闭包是生成，都不是挑） */
+  elementSet: '挑元素',
 
   /* ── 凭空造 / 关系 / 算术（不在工作台，但也要有名字）── */
   pointSet: '造点集',

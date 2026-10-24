@@ -423,6 +423,7 @@ export function SectionBody({
   subCount,
   onExtract,
   onLift,
+  onAdd,
 }: {
   section: InfoTab
   group: Group | null
@@ -434,10 +435,27 @@ export function SectionBody({
   onExtract?: (sub: NormalizedSubgroup) => void
   /** 「升格为群」（U9）：元素集自己就是子群时，给一条落到 `closure(...)` 的路 */
   onLift?: (id: string) => void
+  /** 落一行定义（U9-c 元素表勾选造集合）—— 与输入球 / 目录同一个 `commitExpr` */
+  onAdd?: (expr: string) => void
 }) {
   if (section === 'basic' && group && node) return <BasicTab group={group} node={node} />
   if (section === 'presentation' && group) return <PresentationTab group={group} />
-  if (section === 'elements' && group) return <ElementsTable group={group} />
+  /**
+   * 元素表（U9-c）：勾选 / 点某阶 → 造元素集。
+   *
+   * `groupRef` 只在**焦点就是那个群**时给 —— 焦点若是"够格成群的结构"，
+   * `node.id` 是结构的名字（`M`），拿它去写 `elementSet(M, …)` 会求值失败。
+   * 拿不到就不给按钮（`ElementsTable` 里 `canMake` 会禁用），不猜。
+   */
+  if (section === 'elements' && group) {
+    return (
+      <ElementsTable
+        group={group}
+        groupRef={node?.value.type === 'group' ? node.id : undefined}
+        onAdd={onAdd}
+      />
+    )
+  }
   if (section === 'conj' && group) return <ConjugacyTab group={group} />
   if (section === 'subgroups' && group) return <SubgroupsTab group={group} />
   if (section === 'axioms' && struct) return <AxiomArchive structure={struct} />

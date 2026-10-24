@@ -2093,6 +2093,89 @@ body {
   background: var(--surface);
 }
 
+/*
+ * 分面表格（U9-c，2026-10-24）：勾选列 + 可点的「阶」+ 底部造集合条。
+ *
+ * 「阶」是**唯一**可点的列 —— 它是唯一能落成谓词的条件（`ord(x) = n`）。
+ * 别的列点了也只能造 `{…}`，做成看起来能点却没反应更糟，所以不做。
+ */
+.etable-pick-head {
+  width: 24px;
+}
+
+.etable-pick {
+  padding: 0 2px;
+  text-align: center;
+}
+
+.etable-pick input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--blue);
+}
+
+.etable-order {
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.etable-order:hover {
+  background: var(--blue-fill);
+  color: var(--blue-deep);
+}
+
+.etable-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 2px 2px;
+}
+
+.etable-count {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.etable-make,
+.etable-clear {
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12.5px;
+  line-height: 1.6;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.etable-make {
+  border-color: var(--blue-line);
+  color: var(--blue-deep);
+}
+
+.etable-make:hover:not(:disabled) {
+  background: var(--blue-fill);
+}
+
+.etable-make:disabled {
+  border-color: var(--border);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.etable-clear {
+  color: var(--text-dim);
+}
+
+.etable-clear:hover {
+  color: var(--text);
+}
+
 .etable {
   border-collapse: collapse;
   font-family: var(--mono);
