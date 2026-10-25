@@ -1,0 +1,73 @@
+# 构建 apps/web 并发布到 **rrcathy.github.io** 仓库的 `Galculator/` 子目录。
+#
+# 与 `rrCathy/blog` 的 deploy.yml 同一套做法（用户既有模式）：源码仓库只管构建，
+# 产物推进用户页仓库，站点 = https://rrCathy.github.io/Galculator/
+#
+# 一次性设置：本仓库 Settings → Secrets and variables → Actions 里要有 **PAGES_TOKEN**
+# （对 rrcathy.github.io 有 contents:write 的 PAT）。blog 仓库里同样用它。
+#
+# ⚠️ 部署目录名必须与 `apps/web/vite.config.ts` 的 `base` 一致（都是 `Galculator`），
+# 任一边大小写走样 = 线上白屏。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-galculator
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & deploy to rrcathy.github.io/Galculator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # apps/web 的 build 脚本 = `tsc --noEmit && vite build`，CI 顺带守类型
+      - name: Build
+        run: pnpm --filter @galculator/web build
+
+      - name: Checkout user Pages repo
+        uses: actions/checkout@v4
+        with:
+          repository: rrCathy/rrcathy.github.io
+          token: ${{ secrets.PAGES_TOKEN }}
+          path: pages-site
+
+      - name: Replace Galculator/ directory with new build
+        run: |
+          rm -rf pages-site/Galculator
+          mkdir -p pages-site/Galculator
+          cp -r apps/web/dist/* pages-site/Galculator/
+          touch pages-site/Galculator/.nojekyll
+
+      - name: Commit & push to rrcathy.github.io
+        run: |
+          cd pages-site
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to deploy"
+            exit 0
+          fi
+          git commit -m "Deploy Galculator from rrCathy/Galcalculator @ ${{ github.sha }}"
+          git push
