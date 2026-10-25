@@ -142,8 +142,28 @@ pnpm dev                                  # 另开一个终端起 dev server
 pnpm --filter @galculator/web verify:e2e  # 真浏览器走查：几何、marker、命中测试
 ```
 
-当前 **2478 条语义断言 + 1318 条走查断言（35 套）全绿**（2026-10-09）。
+当前 **2600 条语义断言 + 1476 条走查断言（41 套）全绿**（2026-10-25）。
 约定：期望值一律来自**手算**的数学值，不从运行结果里抄。跑法细节见 [apps/web/verify/README.md](apps/web/verify/README.md)。
+
+## 部署
+
+站点：<https://rrCathy.github.io/Galcalculator/>
+
+与 blog / grouplo / GroupViz **同一套做法**：源码仓库只管构建，产物推进**发布仓库**
+`rrCathy/rrcathy.github.io` 的 `Galculator/` 子目录（那个仓库的根就是 `rrCathy.github.io`，
+每个项目一个目录）。push 到 `main` 即自动发布，见 [.github/workflows/deploy.yml](.github/workflows/deploy.yml)。
+
+两个前置，漏一个就发不出去：
+
+1. **`base` 与目录名同字同大小写**：`apps/web/vite.config.ts` 里构建时 `base = '/Galculator/'`，
+   workflow 里 `pages-site/Galculator`。任一边走样 = 线上白屏（资源 404）。
+2. **`PAGES_TOKEN`**：本仓库 Settings → Secrets and variables → Actions 里配一个 fine-grained PAT，
+   只授 `rrcathy.github.io` 的 **Contents: Read and write**（blog 仓库用的是同一个名字）。
+   没有它 workflow 会卡在 `Checkout user Pages repo` 这一步。
+
+本地验生产形态：`pnpm build` 之后把 `apps/web/dist` 挂在 `/Galculator/` 子路径下打开。
+⚠️ `vite preview` **不能用来验**：它按 `command === 'serve'` 取 base（`/`），与产物的
+`/Galculator/...` 对不上，必然 404。
 
 ## 文档
 
