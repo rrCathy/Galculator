@@ -1,13 +1,9 @@
-<div align="center">
-
 # Galculator
 
 **群论计算器** —— 敲一行定义，算它的阶、结构、子群、同态、轨道。
 每一步运算都留在画布上，变成下一步的输入。
 
 [**在线试用**](https://rrCathy.github.io/Galculator/) · [文档](docs/README.md) · [问题反馈](https://github.com/rrCathy/Galculator/issues)
-
-</div>
 
 ![Galculator：S₄ 的轨道–稳定子计算](docs/assets/readme-hero.png)
 
