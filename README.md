@@ -147,7 +147,7 @@ pnpm --filter @galculator/web verify:e2e  # 真浏览器走查：几何、marker
 
 ## 部署
 
-站点：<https://rrCathy.github.io/Galcalculator/>
+站点：<https://rrCathy.github.io/Galculator/>
 
 与 blog / grouplo / GroupViz **同一套做法**：源码仓库只管构建，产物推进**发布仓库**
 `rrCathy/rrcathy.github.io` 的 `Galculator/` 子目录（那个仓库的根就是 `rrCathy.github.io`，
