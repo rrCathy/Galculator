@@ -55,13 +55,17 @@ export function OpTable({
 }) {
   /**
    * 分组走**工作台那张任务表**（`BENCH_FAMILIES` / `BENCH_PLUS` / `BENCH_EXCLUDED`），
-   * 不用 `opsByMechanism()`。
+   * **不按 `op.mechanism` 分**。
    *
-   * 为什么换：机制分组是**内核视角**（`atomic` / `enumerate`），用户在里面会看到
+   * 为什么不用机制：机制分组是**内核视角**（`atomic` / `enumerate`），用户在里面会看到
    * 「共轭作用」落在「原子构造」下 —— 实测截图看着就是错的。而任务表中的分组
    * （造新东西 / 读它的结构 / 作用与集合）与工作台键盘**是同一份**，
    * 用户在两个面看到的位置永远一致；完备性另有 `workbench.ts#assertPartition`
    * 在模块加载时断言（分组 ∪ 排除 = 全部 op），所以这里不必再自查。
+   *
+   * 机制元数据本身还活着（`OpDef.mechanism` + `MECHANISM_LABEL`，本文件第 195 行
+   * 的 tooltip 在用）；死掉的是**按机制分组**那条路 —— 原来那个
+   * `opsByMechanism()` 已删，别让它长回来。
    *
    * 后两组是工作台里"按不到键"的那两批：
    *   · `＋` 面板造 —— 实参全是标量，键盘按不出来；

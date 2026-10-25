@@ -120,6 +120,18 @@ export type Mechanism =
   | 'arithmetic' // 算术库：纯数值
   | 'identify' // 识别：收集属性 + 匹配小群库
 
+/**
+ * 机制的展示名。
+ *
+ * **只作元数据的翻译**：`OpDef.mechanism` 是"这个操作怎么造出来"的架构标注（§3），
+ * 现在唯一的消费者是操作表里的 tooltip（`ui/OpTable.tsx`「内核机制：…」）。
+ *
+ * ⚠️ **别拿它做分组**。曾经有个 `opsByMechanism()` 按它分组喂"操作面板"，
+ * 2026-10-24 上操作表时实测被否：机制是内核视角，用户不这么想事 ——
+ * 「共轭作用」会被归到「原子构造」底下。分组现在走**工作台任务表**
+ * （`gal/workbench.ts` 的 `BENCH_FAMILIES` / `BENCH_PLUS` / `BENCH_EXCLUDED`），
+ * 与工作台键盘同源。那条分组函数已删，别再长回来。
+ */
 export const MECHANISM_LABEL: Record<Mechanism, string> = {
   atomic: '原子构造',
   action: '作用导出',
@@ -129,16 +141,6 @@ export const MECHANISM_LABEL: Record<Mechanism, string> = {
   arithmetic: '算术',
   identify: '识别',
 }
-
-export const MECHANISM_ORDER: Mechanism[] = [
-  'atomic',
-  'action',
-  'enumerate',
-  'iterate',
-  'property',
-  'arithmetic',
-  'identify',
-]
 
 /* ── 参数与结果协议 ────────────────────────────────────── */
 
@@ -4363,15 +4365,6 @@ export const INFIX_TABLE: { sym: string; op: OpDef }[] = OPS.flatMap((o) =>
 export const INFIX_SYMBOLS: string[] = [...new Set(INFIX_TABLE.map((x) => x.sym))].sort(
   (a, b) => b.length - a.length,
 )
-
-/** 操作面板：按机制分组（§3 的四个机制 + 三个库）。 */
-export function opsByMechanism(): { mechanism: Mechanism; label: string; ops: OpDef[] }[] {
-  return MECHANISM_ORDER.map((m) => ({
-    mechanism: m,
-    label: MECHANISM_LABEL[m],
-    ops: OPS.filter((o) => o.mechanism === m),
-  })).filter((g) => g.ops.length > 0)
-}
 
 /**
  * 面板点击后插进输入框的模板。
