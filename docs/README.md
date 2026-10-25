@@ -48,7 +48,9 @@
 | 文档 | 回答什么问题 |
 |---|---|
 | [PROPOSAL-algebra-structures.md](PROPOSAL-algebra-structures.md) | 集 → 半群 → 幺半群 → 群这一层怎么做的（**已落地**，规范在 ARCHITECTURE §3.7 / `gal/algebra.ts`）|
-| [PROPOSAL-zones.md](PROPOSAL-zones.md) | 工作台 / 画布 / 草稿区三区（**部分落地**：P0/P1 工作台已落地，P2 草稿区待拍板，P3 画布减法未做）|
+| [PROPOSAL-zones.md](PROPOSAL-zones.md) | 工作台 / 画布 / 草稿区三区（**已落地**：P0/P1 工作台 + **P2 草稿区**；P3 画布减法已关闭）|
+| [PROPOSAL-main-ui.md](PROPOSAL-main-ui.md) | 主界面 UI 批：几何 / 栏目 / 工作台重排（**A/B/C 已落地**；D1/D2 未做，均非缺口，见 §7）|
+| [PROPOSAL-u8-u9.md](PROPOSAL-u8-u9.md) | U8 操作表 + 标量候选 / U9 描述式集合构造器（**已全部落地**；U8-c 通栏按拍板砍掉。**§3 关键词表仍有约束力**）|
 | [PROPOSAL-workbench-v2.md](PROPOSAL-workbench-v2.md) | 工作台重做：**玻璃「计算器」**（符号键盘 + `＋`导入 + 明细区，键盘随焦点变）（**已落地**，现行规范在 INTERACTION §4.9）|
 | [PROPOSAL-ui-refresh.md](PROPOSAL-ui-refresh.md) | 界面三方向：静水 / 仪器台 / 演算纸（**主题已定调**：深色=仪器台、浅色=演算纸，换肤另批）|
 | [PROPOSAL-workbench-ux.md](PROPOSAL-workbench-ux.md) | 工作台内部优化：显示 / 键盘 / `＋`手风琴 / 引导 的摆放（**已落地**：方案二「横排计算器」+ 紧凑手风琴；后续 v2.2（2026-10-08）对象槽 / 竖排节导航 / 信息面板并入 / 卡片嵌入，见 HISTORY 丙编补七。规范在 INTERACTION §4.9）|
